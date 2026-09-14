@@ -3,13 +3,11 @@ import type { Metadata } from 'next'
 import { ActivityPerformanceChart } from '@/components/charts/activity-performance-chart'
 import { ChannelDonutChart } from '@/components/charts/channel-donut-chart'
 import { PageHeader } from '@/components/dashboard/page-header'
-import { ActivityFeed } from '@/components/dashboard/overview/activity-feed'
 import { InsightsPanel } from '@/components/dashboard/overview/insights-panel'
 import { KpiRow } from '@/components/dashboard/overview/kpi-row'
 import { QuickActions, OverviewHeaderActions } from '@/components/dashboard/overview/quick-actions'
 import { RecentBookings } from '@/components/dashboard/overview/recent-bookings'
 import { RevenuePanel } from '@/components/dashboard/overview/revenue-panel'
-import { TodaysDepartures, type StaffLite } from '@/components/dashboard/overview/todays-departures'
 import { Reveal } from '@/components/motion/reveal'
 import {
   CHANNEL_LABELS,
@@ -18,7 +16,6 @@ import {
   NOW,
   TODAY_KEY,
   getDashboardOverview,
-  getUsersByTenant,
 } from '@/lib/demo'
 import { formatDateLong, formatNumber, pluralize } from '@/lib/utils'
 
@@ -47,13 +44,6 @@ function greeting(hour: number): string {
 export default function DashboardOverviewPage() {
   const tenant = CURRENT_TENANT
   const overview = getDashboardOverview(tenant.id)
-
-  const staff: Record<string, StaffLite> = Object.fromEntries(
-    getUsersByTenant(tenant.id).map((user) => [
-      user.id,
-      { name: user.name, avatarUrl: user.avatarUrl },
-    ]),
-  )
 
   const firstName = CURRENT_USER.name.split(' ')[0]
   const todayGuests = overview.todayDepartures.reduce((acc, e) => acc + e.departure.booked, 0)
@@ -90,21 +80,6 @@ export default function DashboardOverviewPage() {
 
       {/* ---- jump-off points ----------------------------------------------- */}
       <QuickActions />
-
-      {/* ---- operations ---------------------------------------------------- */}
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
-        <Reveal className="min-w-0 xl:col-span-7" distance={18}>
-          <TodaysDepartures
-            events={overview.todayDepartures}
-            staff={staff}
-            nowIso={NOW_ISO}
-            className="xl:max-h-[44rem]"
-          />
-        </Reveal>
-        <Reveal className="min-w-0 xl:col-span-5" delay={0.08} distance={18}>
-          <ActivityFeed items={overview.feed} nowIso={NOW_ISO} className="xl:max-h-[44rem]" />
-        </Reveal>
-      </div>
 
       {/* ---- the money ------------------------------------------------------ */}
       <Reveal distance={18}>
