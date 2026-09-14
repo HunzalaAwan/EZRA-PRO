@@ -159,10 +159,19 @@ export function StoryHero({ className }: { className?: string }) {
             </span>
           </motion.div>
 
-          <h1 className="mt-6 font-display text-[clamp(2.75rem,7.2vw,5.75rem)] leading-[0.98] font-semibold tracking-[-0.035em] text-white text-balance">
-            <AnimatedText text="Built for operators," as="span" delay={0.15} stagger={0.06} blur className="block" />
-            <span className="mt-1 block font-serif text-[clamp(2.9rem,7.6vw,6.2rem)] font-normal tracking-[-0.02em] text-primary italic">
-              <AnimatedText text="not accountants." as="span" delay={0.45} stagger={0.06} blur className="block" />
+          <h1 className="mt-6 font-display text-[clamp(2.85rem,7.5vw,6rem)] leading-[0.98] font-semibold tracking-[-0.035em] text-white text-balance">
+            <AnimatedText
+              text="Built to Sell Experiences."
+              as="span"
+              delay={0.15}
+              stagger={0.06}
+              blur
+              className="block text-white drop-shadow-sm"
+            />
+            <span className="mt-2 block font-serif text-[clamp(2.95rem,7.8vw,6.4rem)] font-normal tracking-[-0.02em] italic">
+              <span className="bg-gradient-to-r from-teal-200 via-emerald-300 to-cyan-200 bg-clip-text text-transparent drop-shadow-md">
+                Engineered to Scale Them.
+              </span>
             </span>
           </h1>
 
@@ -172,8 +181,9 @@ export function StoryHero({ className }: { className?: string }) {
             transition={{ delay: 0.85, duration: 0.7, ease: EASE_OUT_EXPO }}
             className="mt-6 max-w-xl text-base leading-relaxed text-ink-100/90 sm:text-lg"
           >
-            EZRA Pro runs availability, real-time checkout, staff rosters and next-day payouts
-            for tours, activities, attractions and adventure businesses worldwide.
+            EZRA Pro is the mission-critical booking and operations platform for tour, activity, attraction
+            and adventure operators worldwide. Real-time OTA synchronization, offline field manifests,
+            and guaranteed next-day bank payouts.
           </motion.p>
 
           <motion.div

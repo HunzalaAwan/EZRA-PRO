@@ -42,7 +42,7 @@ export const PHOTOS = {
   },
   /** Zipline canopy adventure through lush forest. */
   ziplineCanopy: {
-    id: 'photo-1530866495561-507c58b85993',
+    id: 'photo-1519904981063-b0cf448d479e',
     alt: 'An adventurer soaring through a forest canopy on a high-speed zipline',
     focus: '50% 50%',
   },
@@ -132,7 +132,7 @@ export const PHOTOS = {
     focus: '55% 45%',
   },
   coralGarden: {
-    id: 'photo-1530866495561-507c58b85993',
+    id: 'photo-1519904981063-b0cf448d479e',
     alt: 'An adventurer soaring through a forest canopy on a high-speed zipline',
     focus: '50% 50%',
   },

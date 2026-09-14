@@ -2,7 +2,7 @@
 
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowUpRight } from 'lucide-react'
+import { ArrowUpRight, CheckCircle2, Compass, Sparkles } from 'lucide-react'
 
 import { StaggerGroup, StaggerItem } from '@/components/motion/stagger'
 import { VERTICAL_PITCHES } from '@/content/marketing'
@@ -12,67 +12,58 @@ import { PHOTOS, photoUrl, type Photo } from './photos'
 
 /* ==========================================================================
    VerticalsGrid — who this is for, as photographs rather than generic icons.
-
-   An asymmetric grid showcasing the core verticals EZRA Pro powers.
    ========================================================================== */
 
 interface Tile {
   key: VerticalKey
+  tag: string
   label: string
   detail: string
   photo: Photo
-  span: string
-  aspect: string
 }
 
 const TILES: Tile[] = [
   {
     key: 'adventure',
-    label: 'Alpine & Outdoor Adventure',
-    detail: 'Weight and age safety gating, gear allocations, automated condition holds',
+    tag: 'Outdoor Adventure',
+    label: 'Alpine & Canopy Adventures',
+    detail: 'Weight & age gating, gear allocations, real-time weather threshold holds',
     photo: PHOTOS.ziplineCanopy,
-    span: 'col-span-1',
-    aspect: 'aspect-[4/3]',
   },
   {
     key: 'tours',
-    label: 'Sightseeing & Guided Tours',
-    detail: 'Guide rostering, pickup lists by hotel, private and group tier pricing',
+    tag: 'Guided Experiences',
+    label: 'Sightseeing & Cultural Tours',
+    detail: 'Guide rostering, hotel pickup lists, multi-language & private group tiers',
     photo: PHOTOS.fujiPagoda,
-    span: 'col-span-1',
-    aspect: 'aspect-[4/3]',
   },
   {
     key: 'island',
+    tag: 'Attractions & Parks',
     label: 'Resorts & Landmark Attractions',
-    detail: 'One centralized desk selling dozens of activities, automated commission tracking',
+    detail: 'Central desk selling 20+ operators, automated partner commissions',
     photo: PHOTOS.aerialAttraction,
-    span: 'col-span-1',
-    aspect: 'aspect-[4/3]',
   },
   {
     key: 'watersports',
-    label: 'Outdoor & Marine Recreation',
-    detail: 'Per-vessel capacity, certifications at checkout, condition alerts in one tap',
+    tag: 'Active Recreation',
+    label: 'Outdoor & Marine Expeditions',
+    detail: 'Per-vessel capacity limits, digital waivers, instant condition holds',
     photo: PHOTOS.rockClimbing,
-    span: 'col-span-1',
-    aspect: 'aspect-[4/3]',
   },
   {
     key: 'restaurants',
-    label: 'Culinary & Dining Experiences',
-    detail: 'Timed seatings, deposits that eliminate no-shows, dietary notes on the pass',
+    tag: 'Culinary Hospitality',
+    label: 'Fine Dining & Food Walks',
+    detail: 'Timed seatings, deposit protection against no-shows, allergen tagging',
     photo: PHOTOS.plated,
-    span: 'col-span-1',
-    aspect: 'aspect-[4/3]',
   },
   {
     key: 'wellness',
-    label: 'Wellness & Retreats',
-    detail: 'Class passes, memberships, multi-day retreat packages with instalment plans',
+    tag: 'Retreats & Studios',
+    label: 'Wellness & Mindfulness Retreats',
+    detail: 'Multi-day packages, recurring class packs, structured instalment plans',
     photo: PHOTOS.waterTemple,
-    span: 'col-span-1',
-    aspect: 'aspect-[4/3]',
   },
 ]
 
@@ -82,71 +73,85 @@ export function VerticalsGrid({ className }: { className?: string }) {
       <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-10">
         <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
           <div className="max-w-2xl">
-            <p className="text-[0.75rem] font-semibold tracking-[0.14em] text-primary uppercase">
-              Tailored for Every Operator
-            </p>
+            <div className="flex items-center gap-2 text-[0.75rem] font-semibold tracking-[0.14em] text-primary uppercase">
+              <Compass className="size-4" />
+              Tailored for Every Operator Vertical
+            </div>
             <h2
               id="verticals-title"
-              className="mt-3 font-display text-[clamp(2rem,4vw,3.25rem)] leading-[1.05] font-semibold tracking-[-0.03em] text-foreground text-balance"
+              className="mt-3 font-display text-[clamp(2.25rem,4.2vw,3.5rem)] leading-[1.04] font-semibold tracking-[-0.03em] text-foreground text-balance"
             >
               Every category of experience. One unified booking platform.
             </h2>
           </div>
-          <p className="max-w-sm text-[0.9375rem] leading-relaxed text-muted">
+          <p className="max-w-md text-base leading-relaxed text-muted">
             From alpine ziplines and historic walking tours to tasting menus and wellness retreats.
-            Built with each vertical&rsquo;s operational constraints out of the box.
+            Engineered with each vertical’s specific operational rules out of the box.
           </p>
         </div>
 
-        <StaggerGroup as="ul" stagger={0.08} className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <StaggerGroup as="ul" stagger={0.08} className="mt-14 grid grid-cols-1 gap-7 sm:grid-cols-2 lg:grid-cols-3">
           {TILES.map((tile) => {
             const pitch = VERTICAL_PITCHES[tile.key]
             return (
-              <StaggerItem as="li" key={tile.key} distance={18} className={cn('min-w-0', tile.span)}>
+              <StaggerItem as="li" key={tile.key} distance={18} className="min-w-0">
                 <Link
                   href={`/solutions/${tile.key}`}
                   className={cn(
-                    'group relative block h-full overflow-hidden rounded-3xl bg-ink-950 text-white shadow-md hover:shadow-xl transition-shadow',
+                    'group relative flex flex-col justify-between overflow-hidden rounded-[2rem] bg-ink-950 text-white shadow-xl transition-all duration-300',
+                    'min-h-[380px] sm:min-h-[420px] p-6 sm:p-7 border border-line/40 hover:border-primary/50 hover:shadow-2xl hover:-translate-y-1.5',
                     'focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary',
-                    tile.aspect,
                   )}
                 >
                   <Image
                     src={photoUrl(tile.photo, 1400)}
                     alt={tile.photo.alt}
                     fill
-                    sizes="(min-width: 768px) 60vw, 100vw"
-                    className="object-cover transition-transform duration-[1200ms] ease-[var(--ease-out-expo)] group-hover:scale-[1.05] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+                    sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                    className="object-cover transition-transform duration-[1200ms] ease-[var(--ease-out-expo)] group-hover:scale-108 motion-reduce:transition-none motion-reduce:group-hover:scale-100"
                     style={{ objectPosition: tile.photo.focus }}
                   />
-                  {/* Subtle dark scrim that darkens gently on hover for readability */}
+
+                  {/* Multi-stop cinematic gradient for guaranteed text readability */}
                   <span
                     aria-hidden="true"
-                    className="absolute inset-0 bg-gradient-to-t from-ink-950/90 via-ink-950/40 to-transparent transition-opacity duration-300 group-hover:opacity-95"
+                    className="absolute inset-0 bg-gradient-to-t from-ink-950 via-ink-950/60 to-ink-950/25 transition-opacity duration-300 group-hover:from-ink-950 group-hover:via-ink-950/70"
                   />
 
-                  <span className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 p-5 sm:p-6">
-                    <span className="min-w-0">
-                      <span className="block font-display text-lg font-semibold tracking-[-0.015em] sm:text-xl text-white">
-                        {tile.label}
-                      </span>
-                      <span className="mt-1 block max-w-md text-[0.8125rem] leading-snug text-white/85">
-                        {tile.detail}
-                      </span>
-                      <span className="mt-2 block text-[0.6875rem] font-semibold text-primary tabular-nums">
-                        {pitch.proofStat} {pitch.proofLabel}
-                      </span>
+                  {/* Top pill badge */}
+                  <div className="relative z-10 flex items-center justify-between">
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-ink-950/60 px-3 py-1 font-mono text-[0.6875rem] font-semibold text-white/90 backdrop-blur-md shadow-sm">
+                      <span className="size-1.5 rounded-full bg-primary" />
+                      {tile.tag}
                     </span>
+                  </div>
+
+                  {/* Bottom details */}
+                  <div className="relative z-10 mt-auto flex items-end justify-between gap-4 pt-8">
+                    <div className="min-w-0">
+                      <h3 className="font-display text-xl font-semibold tracking-[-0.02em] sm:text-2xl text-white group-hover:text-primary transition-colors">
+                        {tile.label}
+                      </h3>
+                      <p className="mt-2 block max-w-sm text-[0.875rem] leading-relaxed text-white/80">
+                        {tile.detail}
+                      </p>
+                      <div className="mt-3.5 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-teal-300 backdrop-blur-sm">
+                        <CheckCircle2 className="size-3.5" />
+                        <span>{pitch.proofStat}</span>
+                        <span className="text-white/70 font-normal">{pitch.proofLabel}</span>
+                      </div>
+                    </div>
+
                     <span
                       className={cn(
-                        'grid size-10 shrink-0 place-items-center rounded-full bg-white text-ink-950 shadow-md',
-                        'transition-transform duration-300 ease-[var(--ease-out-expo)] group-hover:-translate-y-1 group-hover:translate-x-1 group-hover:bg-primary group-hover:text-white',
+                        'grid size-11 shrink-0 place-items-center rounded-full bg-white text-ink-950 shadow-xl',
+                        'transition-all duration-300 ease-[var(--ease-out-expo)] group-hover:bg-primary group-hover:text-white group-hover:scale-110 group-hover:-translate-y-1',
                         'motion-reduce:transition-none',
                       )}
                     >
-                      <ArrowUpRight aria-hidden="true" className="size-4" strokeWidth={2.25} />
+                      <ArrowUpRight aria-hidden="true" className="size-5" strokeWidth={2.2} />
                     </span>
-                  </span>
+                  </div>
                 </Link>
               </StaggerItem>
             )

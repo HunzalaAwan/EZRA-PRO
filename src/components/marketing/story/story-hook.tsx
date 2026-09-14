@@ -31,7 +31,7 @@ const MORNINGS = [
     time: 'Day 9',
     badge: 'Cashflow Drag',
     title: 'Payout still marked "Processing"',
-    body: 'Last week\u2019s tours, this week\u2019s payroll. Your capital sits in legacy platforms for 10 days while you cover fuel, guides and gear.',
+    body: "Last week's tours, this week's payroll. Your capital sits in legacy platforms for 10 days while you cover fuel, guides and gear.",
   },
 ] as const
 
@@ -46,9 +46,9 @@ export function StoryHook({ className }: { className?: string }) {
           <div className="mt-4">
             <ScrollRevealText
               as="h2"
-              text="You don\u2019t just run an experience company. You juggle live availability, guide rosters, four sales channels, weather alerts and endless guest inquiries. Your booking software should carry that load."
+              text="You don't just run an experience company. You coordinate live availability, guide rosters, four sales channels, weather alerts, and guest check-ins. Your booking software should carry that load."
               offset={['start 0.85', 'end 0.45']}
-              className="font-display text-[clamp(1.75rem,3.6vw,3rem)] leading-[1.18] font-semibold tracking-[-0.025em] text-balance text-foreground"
+              className="font-display text-[clamp(1.75rem,3.6vw,3rem)] leading-[1.2] font-semibold tracking-[-0.025em] text-balance text-foreground"
             />
           </div>
         </div>
