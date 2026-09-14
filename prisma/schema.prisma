@@ -1,0 +1,692 @@
+// EZRA Pro — production data model.
+//
+// The running app is backed by a seeded in-memory store behind `src/lib/queries.ts`
+// so it boots with zero infrastructure. This schema is the real target: every model
+// below mirrors an interface in `src/types/index.ts`, so swapping the query layer
+// over to Prisma is a per-function change, not a rewrite.
+//
+// TENANCY MODEL: shared database, shared schema, discriminated by `tenantId`.
+// Every tenant-owned table carries `tenantId` with an index, and every composite
+// uniqueness constraint is scoped by it. Enforce isolation at the query layer and,
+// in production, with Postgres row-level security policies keyed on a session GUC
+// (`current_setting('app.tenant_id')`).
+//
+//   npx prisma migrate dev --name init
+//   npx prisma generate
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum PlanTier {
+  starter
+  growth
+  scale
+  enterprise
+}
+
+enum TenantStatus {
+  active
+  trialing
+  past_due
+  paused
+}
+
+enum VerticalKey {
+  watersports
+  tours
+  restaurants
+  adventure
+  island
+  wellness
+}
+
+enum Role {
+  owner
+  admin
+  manager
+  staff
+  guide
+  viewer
+}
+
+enum UserStatus {
+  active
+  invited
+  suspended
+}
+
+enum CurrencyCode {
+  USD
+  EUR
+  GBP
+  AUD
+  NZD
+  CAD
+}
+
+enum ActivityStatus {
+  draft
+  live
+  paused
+  archived
+}
+
+enum PricingModel {
+  per_person
+  per_group
+  per_unit
+  tiered
+}
+
+enum DifficultyLevel {
+  easy
+  moderate
+  challenging
+  extreme
+}
+
+enum RecurrenceFreq {
+  daily
+  weekly
+  monthly
+  none
+}
+
+enum DepartureStatus {
+  scheduled
+  confirmed
+  sold_out
+  cancelled
+  completed
+  weather_hold
+}
+
+enum ResourceKind {
+  vessel
+  vehicle
+  equipment
+  table
+  room
+  guide
+}
+
+enum ResourceStatus {
+  available
+  maintenance
+  retired
+}
+
+enum CustomerSegment {
+  new
+  returning
+  vip
+  lapsed
+}
+
+enum BookingStatus {
+  pending
+  confirmed
+  checked_in
+  completed
+  cancelled
+  no_show
+  refunded
+}
+
+enum PaymentStatus {
+  unpaid
+  deposit_paid
+  paid
+  partially_refunded
+  refunded
+  failed
+}
+
+enum BookingChannel {
+  direct
+  website_widget
+  phone
+  walk_in
+  ota
+  reseller
+  concierge
+  google
+}
+
+enum LineItemKind {
+  ticket
+  addon
+  fee
+  discount
+  tax
+}
+
+enum PaymentMethod {
+  card
+  apple_pay
+  google_pay
+  cash
+  bank_transfer
+  gift_card
+}
+
+enum PaymentRecordStatus {
+  succeeded
+  pending
+  failed
+  refunded
+}
+
+enum MediaType {
+  image
+  video
+}
+
+// ============================================================================
+// TENANCY & IDENTITY
+// ============================================================================
+
+model Tenant {
+  id        String       @id @default(cuid())
+  slug      String       @unique
+  name      String
+  legalName String
+  vertical  VerticalKey
+  plan      PlanTier     @default(starter)
+  status    TenantStatus @default(trialing)
+  currency  CurrencyCode @default(USD)
+  timezone  String       @default("UTC")
+  locale    String       @default("en-US")
+  country   String
+  city      String
+
+  // Branding
+  primaryColor String @default("#0d9488")
+  accentColor  String @default("#f4693c")
+  logoText     String
+  coverImage   String?
+
+  // Contact
+  contactEmail String
+  contactPhone String
+  website      String
+  addressLine  String
+
+  // Feature flags. Defaults model the Starter plan; the app resolves the
+  // effective set from plan tier plus these per-tenant overrides.
+  featAdvancedAnalytics  Boolean @default(false)
+  featResourceScheduling Boolean @default(false)
+  featMultiLocation      Boolean @default(false)
+  featApiAccess          Boolean @default(false)
+  featCustomBranding     Boolean @default(false)
+  featWaitlists          Boolean @default(false)
+  featDynamicPricing     Boolean @default(false)
+  featChannelManager     Boolean @default(false)
+  featGiftCards          Boolean @default(false)
+  featMemberships        Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users             User[]
+  activities        Activity[]
+  departures        Departure[]
+  bookings          Booking[]
+  customers         Customer[]
+  resources         Resource[]
+  payments          Payment[]
+  scheduleTemplates ScheduleTemplate[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+
+  @@index([status])
+  @@index([vertical])
+  @@map("tenants")
+}
+
+model User {
+  id             String     @id @default(cuid())
+  tenantId       String
+  name           String
+  email          String
+  role           Role       @default(staff)
+  title          String
+  phone          String?
+  avatarUrl      String
+  status         UserStatus @default(active)
+  isBookable     Boolean    @default(false)
+  certifications String[]   @default([])
+  lastActiveAt   DateTime   @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant             Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignedDepartures Departure[] @relation("DepartureStaff")
+
+  // Email is unique per tenant, not globally — the same person may work for two operators.
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([tenantId, role])
+  @@map("users")
+}
+
+// ============================================================================
+// CATALOG
+// ============================================================================
+
+model Activity {
+  id          String @id @default(cuid())
+  tenantId    String
+  slug        String
+  name        String
+  tagline     String
+  description String @db.Text
+
+  highlights   String[] @default([])
+  included     String[] @default([])
+  excluded     String[] @default([])
+  requirements String[] @default([])
+  meetingPoint String
+
+  category   VerticalKey
+  status     ActivityStatus  @default(draft)
+  difficulty DifficultyLevel @default(easy)
+
+  durationMinutes Int
+  minAge          Int          @default(0)
+  maxCapacity     Int
+  minParticipants Int          @default(1)
+  pricingModel    PricingModel @default(per_person)
+  basePrice       Int // minor units
+  currency        CurrencyCode @default(USD)
+
+  colorKey String @default("lagoon")
+  featured Boolean @default(false)
+
+  // Cancellation policy
+  freeCancellationHours Int    @default(24)
+  lateRefundPercent     Int    @default(0)
+  policySummary         String
+
+  rating        Float @default(0)
+  reviewCount   Int   @default(0)
+  totalBookings Int   @default(0)
+
+  seoTitle       String?
+  seoDescription String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  priceTiers        PriceTier[]
+  addOns            AddOn[]
+  media             ActivityMedia[]
+  departures        Departure[]
+  bookings          Booking[]
+  scheduleTemplates ScheduleTemplate[]
+  requiredResources Resource[]         @relation("ActivityResources")
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, category])
+  @@map("activities")
+}
+
+model PriceTier {
+  id                    String  @id @default(cuid())
+  activityId            String
+  label                 String
+  price                 Int
+  compareAtPrice        Int?
+  minQuantity           Int     @default(0)
+  maxQuantity           Int     @default(20)
+  description           String?
+  countsTowardCapacity  Boolean @default(true)
+  sortOrder             Int     @default(0)
+
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@index([activityId])
+  @@map("price_tiers")
+}
+
+model AddOn {
+  id            String  @id @default(cuid())
+  activityId    String
+  label         String
+  price         Int
+  description   String
+  maxPerBooking Int?
+  required      Boolean @default(false)
+  icon          String?
+  sortOrder     Int     @default(0)
+
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@index([activityId])
+  @@map("add_ons")
+}
+
+model ActivityMedia {
+  id         String    @id @default(cuid())
+  activityId String
+  url        String
+  alt        String
+  type       MediaType @default(image)
+  isPrimary  Boolean   @default(false)
+  sortOrder  Int       @default(0)
+
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@index([activityId])
+  @@map("activity_media")
+}
+
+model Resource {
+  id       String         @id @default(cuid())
+  tenantId String
+  name     String
+  kind     ResourceKind
+  capacity Int
+  quantity Int            @default(1)
+  status   ResourceStatus @default(available)
+  location String?
+  notes    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  activities Activity[]  @relation("ActivityResources")
+  departures Departure[] @relation("DepartureResources")
+
+  @@index([tenantId])
+  @@index([tenantId, kind])
+  @@map("resources")
+}
+
+// ============================================================================
+// SCHEDULING
+// ============================================================================
+
+model ScheduleTemplate {
+  id         String @id @default(cuid())
+  tenantId   String
+  activityId String
+  label      String
+
+  /// "HH:mm" local to the tenant timezone.
+  startTimes String[] @default([])
+
+  recurrenceFreq     RecurrenceFreq @default(weekly)
+  recurrenceWeekdays Int[]          @default([])
+  recurrenceInterval Int            @default(1)
+  recurrenceUntil    DateTime?
+
+  capacity    Int
+  seasonStart DateTime
+  seasonEnd   DateTime
+  active      Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([activityId])
+  @@map("schedule_templates")
+}
+
+model Departure {
+  id         String @id @default(cuid())
+  tenantId   String
+  activityId String
+
+  startsAt DateTime
+  endsAt   DateTime
+
+  capacity Int
+  /// Denormalised seat count. Kept correct by the booking transaction, which
+  /// takes a row lock on the departure before writing — this is the field that
+  /// prevents overselling under concurrent checkouts.
+  booked   Int             @default(0)
+  /// Seats reserved by in-flight carts; expired holds are swept by a cron job.
+  held     Int             @default(0)
+  status   DepartureStatus @default(scheduled)
+
+  notes           String?
+  priceOverride   Int?
+  priceMultiplier Float?
+
+  // Weather snapshot
+  weatherCondition    String?
+  weatherTempC        Float?
+  weatherWindKts      Float?
+  weatherSwellM       Float?
+  weatherGoConfidence Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant            Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  activity          Activity   @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  bookings          Booking[]
+  assignedStaff     User[]     @relation("DepartureStaff")
+  assignedResources Resource[] @relation("DepartureResources")
+
+  // The hot path: "what is on the calendar for this tenant in this window".
+  @@index([tenantId, startsAt])
+  @@index([activityId, startsAt])
+  @@index([tenantId, status])
+  @@map("departures")
+}
+
+// ============================================================================
+// CUSTOMERS & BOOKINGS
+// ============================================================================
+
+model Customer {
+  id        String  @id @default(cuid())
+  tenantId  String
+  firstName String
+  lastName  String
+  email     String
+  phone     String
+  country   String
+  avatarUrl String?
+
+  totalBookings Int             @default(0)
+  lifetimeValue Int             @default(0)
+  lastBookingAt DateTime?
+  segment       CustomerSegment @default(new)
+  tags          String[]        @default([])
+  marketingOptIn Boolean        @default(false)
+  notes         String?         @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  bookings Booking[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([tenantId, segment])
+  @@map("customers")
+}
+
+model Booking {
+  id          String @id @default(cuid())
+  tenantId    String
+  /// Human-facing confirmation code, e.g. "EZR-8KQ2M".
+  reference   String
+  activityId  String
+  departureId String
+  customerId  String
+
+  status        BookingStatus  @default(pending)
+  paymentStatus PaymentStatus  @default(unpaid)
+  channel       BookingChannel @default(direct)
+
+  partySize Int
+
+  subtotal      Int
+  discountTotal Int          @default(0)
+  taxTotal      Int          @default(0)
+  feeTotal      Int          @default(0)
+  total         Int
+  amountPaid    Int          @default(0)
+  currency      CurrencyCode @default(USD)
+
+  /// Denormalised from the departure so booking lists sort without a join.
+  departureAt DateTime
+
+  notes         String? @db.Text
+  internalNotes String? @db.Text
+  source        String?
+  promoCode     String?
+
+  cancelledAt        DateTime?
+  cancellationReason String?
+  refundAmount       Int?
+
+  rating     Int?
+  reviewText String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant       Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  activity     Activity          @relation(fields: [activityId], references: [id])
+  departure    Departure         @relation(fields: [departureId], references: [id])
+  customer     Customer          @relation(fields: [customerId], references: [id])
+  lineItems    BookingLineItem[]
+  participants Participant[]
+  payments     Payment[]
+
+  @@unique([tenantId, reference])
+  @@index([tenantId, departureAt])
+  @@index([tenantId, status])
+  @@index([tenantId, channel])
+  @@index([departureId])
+  @@index([customerId])
+  @@map("bookings")
+}
+
+model BookingLineItem {
+  id        String       @id @default(cuid())
+  bookingId String
+  label     String
+  kind      LineItemKind
+  quantity  Int
+  unitPrice Int
+  /// quantity * unitPrice, negative for discounts.
+  total     Int
+  sortOrder Int          @default(0)
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@map("booking_line_items")
+}
+
+model Participant {
+  id           String  @id @default(cuid())
+  bookingId    String
+  firstName    String
+  lastName     String
+  age          Int?
+  notes        String?
+  waiverSigned Boolean @default(false)
+  tierLabel    String
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId])
+  @@map("participants")
+}
+
+model Payment {
+  id        String @id @default(cuid())
+  tenantId  String
+  bookingId String
+
+  amount       Int
+  currency     CurrencyCode        @default(USD)
+  method       PaymentMethod       @default(card)
+  status       PaymentRecordStatus @default(pending)
+  processorFee Int                 @default(0)
+  netAmount    Int
+
+  last4 String?
+  brand String?
+
+  /// Payment-processor identifier; unique so webhook replays are idempotent.
+  processorRef String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([bookingId])
+  @@map("payments")
+}
+
+// ============================================================================
+// PLATFORM
+// ============================================================================
+
+model Notification {
+  id        String   @id @default(cuid())
+  tenantId  String
+  kind      String
+  severity  String   @default("info")
+  title     String
+  body      String   @db.Text
+  href      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, read, createdAt])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  tenantId   String
+  actorId    String?
+  actorName  String
+  action     String
+  entityType String
+  entityId   String
+  /// Before/after diff for the changed fields.
+  metadata   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, entityType, entityId])
+  @@map("audit_logs")
+}

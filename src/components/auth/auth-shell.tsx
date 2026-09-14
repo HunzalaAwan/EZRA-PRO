@@ -1,0 +1,411 @@
+'use client'
+
+import * as React from 'react'
+import Link from 'next/link'
+import { AnimatePresence, motion } from 'motion/react'
+import { Quote, Star } from 'lucide-react'
+
+import { cn } from '@/lib/utils'
+import { DURATION, EASE_OUT_EXPO } from '@/lib/motion'
+import { SITE } from '@/lib/site-config'
+import { NOW } from '@/lib/data/constants'
+import { STATS, TESTIMONIALS } from '@/content/marketing'
+import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
+import { AuroraBackground, GlowOrb, NoiseOverlay } from '@/components/motion/backgrounds'
+import { Avatar } from '@/components/ui/avatar'
+
+/* ==========================================================================
+   WORDMARK
+   ========================================================================== */
+
+export interface AuthWordmarkProps {
+  /** `brand` inverts the lockup for the dark panel. */
+  tone?: 'default' | 'brand'
+  className?: string
+}
+
+/**
+ * The EZRA mark: a rounded tile carrying a swell line. Drawn inline so it
+ * tints itself from the surrounding text colour on the dark brand panel.
+ */
+export function AuthWordmark({ tone = 'default', className }: AuthWordmarkProps) {
+  const brand = tone === 'brand'
+
+  return (
+    <span className={cn('inline-flex items-center gap-2.5', className)}>
+      <span
+        aria-hidden="true"
+        className={cn(
+          'relative flex size-9 items-center justify-center rounded-xl',
+          brand
+            ? 'bg-lagoon-400/18 text-lagoon-100 ring-1 ring-lagoon-200/25'
+            : 'bg-[linear-gradient(145deg,var(--color-lagoon-500),var(--color-lagoon-700))] text-on-primary shadow-[0_6px_18px_-8px_color-mix(in_oklab,var(--primary)_80%,transparent)]',
+        )}
+      >
+        <svg viewBox="0 0 24 24" className="size-5" fill="none" focusable="false">
+          <path
+            d="M3 15.2c2.1-2.6 4.2-2.6 6.3 0s4.2 2.6 6.3 0 4.2-2.6 5.4-.9"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
+          <path
+            d="M5.5 9.2c1.7-2.1 3.4-2.1 5.1 0s3.4 2.1 5.1 0 3.4-2.1 4.3-.7"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            opacity="0.55"
+          />
+        </svg>
+      </span>
+      <span
+        className={cn(
+          'font-display text-[0.9375rem] font-semibold tracking-[-0.02em]',
+          brand ? 'text-lagoon-50' : 'text-foreground',
+        )}
+      >
+        {SITE.name}
+      </span>
+    </span>
+  )
+}
+
+/* ==========================================================================
+   BRAND PANEL
+   ========================================================================== */
+
+/** The marketing copy carries typographic entities; the panel renders text. */
+const ENTITIES: Record<string, string> = {
+  '&rsquo;': '’',
+  '&lsquo;': '‘',
+  '&rdquo;': '”',
+  '&ldquo;': '“',
+  '&mdash;': '—',
+  '&ndash;': '–',
+  '&hellip;': '…',
+  '&amp;': '&',
+}
+
+function decodeEntities(input: string) {
+  return input.replace(/&(?:rsquo|lsquo|rdquo|ldquo|mdash|ndash|hellip|amp);/g, (match) => ENTITIES[match] ?? match)
+}
+
+/** Four operators, one per vertical family, so the rotation never repeats a story. */
+const PANEL_TESTIMONIAL_IDS = ['tst-1', 'tst-2', 'tst-4', 'tst-6'] as const
+
+const TRUST_STAT_LABELS = [
+  'Processed for operators',
+  'Experiences live',
+  'Checkout uptime',
+] as const
+
+const ROTATE_MS = 7600
+
+function BrandPanel() {
+  const reducedMotion = useReducedMotionSafe()
+
+  const quotes = React.useMemo(
+    () =>
+      PANEL_TESTIMONIAL_IDS.map((id) => TESTIMONIALS.find((t) => t.id === id)).filter(
+        (t): t is (typeof TESTIMONIALS)[number] => Boolean(t),
+      ),
+    [],
+  )
+
+  const trustPoints = React.useMemo(
+    () =>
+      TRUST_STAT_LABELS.map((label) => STATS.find((s) => s.label === label)).filter(
+        (s): s is (typeof STATS)[number] => Boolean(s),
+      ),
+    [],
+  )
+
+  const [index, setIndex] = React.useState(0)
+
+  React.useEffect(() => {
+    // Paused entirely under prefers-reduced-motion — an auto-advancing panel is
+    // motion whether or not it is animated.
+    if (reducedMotion || quotes.length < 2) return
+    const timer = window.setInterval(() => {
+      setIndex((current) => (current + 1) % quotes.length)
+    }, ROTATE_MS)
+    return () => window.clearInterval(timer)
+  }, [reducedMotion, quotes.length])
+
+  const active = quotes[index] ?? quotes[0]
+  if (!active) return null
+
+  const transition = reducedMotion
+    ? { duration: 0 }
+    : { duration: DURATION.slow, ease: EASE_OUT_EXPO }
+
+  return (
+    <div className="relative isolate flex h-full flex-col justify-between overflow-hidden bg-[linear-gradient(155deg,var(--color-lagoon-950)_0%,var(--color-lagoon-900)_38%,var(--color-reef-950)_100%)] px-10 py-12 xl:px-14 xl:py-14">
+      <AuroraBackground
+        seed="ezra-auth-panel"
+        blobs={5}
+        intensity="vivid"
+        palette={['lagoon', 'reef', 'coral']}
+      />
+      <GlowOrb color="lagoon" size={520} opacity={0.28} blur={110} className="-top-32 -left-24" />
+      <GlowOrb color="coral" size={360} opacity={0.18} blur={100} float={false} className="right-[-6rem] bottom-24" />
+      <NoiseOverlay opacity={0.05} />
+
+      {/* Hairline grid, drawn from the brand ramp so it survives both themes. */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 -z-10 mask-fade-b opacity-[0.14]"
+        style={{
+          backgroundImage:
+            'linear-gradient(to right, var(--color-lagoon-200) 1px, transparent 1px), linear-gradient(to bottom, var(--color-lagoon-200) 1px, transparent 1px)',
+          backgroundSize: '72px 72px',
+        }}
+      />
+
+      <div className="relative flex items-center justify-between gap-4">
+        <Link
+          href="/"
+          className="rounded-lg focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-lagoon-200 focus-visible:ring-offset-2 focus-visible:ring-offset-lagoon-950"
+        >
+          <AuthWordmark tone="brand" />
+          <span className="sr-only">{`${SITE.name} home`}</span>
+        </Link>
+
+        <span className="inline-flex items-center gap-2 rounded-full border border-lagoon-200/20 bg-lagoon-950/40 px-3 py-1.5 text-[0.6875rem] font-medium tracking-[0.04em] text-lagoon-100/85 uppercase backdrop-blur-sm">
+          <span aria-hidden="true" className="relative flex size-1.5">
+            <span className="absolute inset-0 rounded-full bg-lagoon-300" />
+            {!reducedMotion ? (
+              <span className="absolute inset-0 animate-pulse-ring rounded-full bg-lagoon-300" />
+            ) : null}
+          </span>
+          Live in a weekend
+        </span>
+      </div>
+
+      {/* ---------- Rotating testimonial ---------- */}
+      <div className="relative flex flex-1 items-center py-12">
+        <div className="w-full max-w-xl">
+          <Quote
+            aria-hidden="true"
+            className="mb-6 size-9 text-lagoon-300/40"
+            strokeWidth={1.5}
+          />
+
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.figure
+              key={active.id}
+              initial={{ opacity: 0, y: 16, filter: 'blur(8px)' }}
+              animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, y: -14, filter: 'blur(8px)' }}
+              transition={transition}
+              className="gpu"
+            >
+              <blockquote className="font-display text-[1.375rem] leading-[1.45] font-medium tracking-[-0.02em] text-balance text-lagoon-50 xl:text-2xl">
+                {decodeEntities(active.quote)}
+              </blockquote>
+
+              <figcaption className="mt-7 flex flex-wrap items-center gap-x-4 gap-y-3">
+                <Avatar
+                  name={active.author}
+                  src={active.avatarUrl}
+                  size="md"
+                  className="ring-2 ring-lagoon-200/25"
+                />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-lagoon-50">{active.author}</p>
+                  <p className="truncate text-xs text-lagoon-100/70">
+                    {active.role} · {active.company}
+                  </p>
+                </div>
+
+                {active.metric ? (
+                  <div className="ml-auto shrink-0 rounded-xl border border-lagoon-200/15 bg-lagoon-950/40 px-3.5 py-2 text-right backdrop-blur-sm">
+                    <p className="font-display text-lg leading-none font-semibold tracking-[-0.02em] text-lagoon-100 tabular">
+                      {active.metric.value}
+                    </p>
+                    <p className="mt-1 text-[0.625rem] leading-tight text-lagoon-100/60">
+                      {active.metric.label}
+                    </p>
+                  </div>
+                ) : null}
+              </figcaption>
+
+              <div className="mt-5 flex items-center gap-1" aria-label={`Rated ${active.rating} out of 5`}>
+                {Array.from({ length: 5 }, (_, i) => (
+                  <Star
+                    key={i}
+                    aria-hidden="true"
+                    className={cn(
+                      'size-3.5',
+                      i < active.rating ? 'fill-sunset-400 text-sunset-400' : 'text-lagoon-200/25',
+                    )}
+                  />
+                ))}
+              </div>
+            </motion.figure>
+          </AnimatePresence>
+
+          {quotes.length > 1 ? (
+            <div className="mt-8 flex items-center gap-2">
+              {quotes.map((quote, i) => (
+                <button
+                  key={quote.id}
+                  type="button"
+                  onClick={() => setIndex(i)}
+                  aria-label={`Show the story from ${quote.company}`}
+                  aria-current={i === index || undefined}
+                  className={cn(
+                    'h-1 rounded-full transition-all duration-500 ease-[var(--ease-out-expo)]',
+                    'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-lagoon-200 focus-visible:ring-offset-4 focus-visible:ring-offset-lagoon-950',
+                    i === index
+                      ? 'w-10 bg-lagoon-200'
+                      : 'w-4 bg-lagoon-200/25 hover:bg-lagoon-200/50',
+                  )}
+                />
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {/* ---------- Trust points ---------- */}
+      <dl className="relative grid grid-cols-3 gap-6 border-t border-lagoon-200/15 pt-8">
+        {trustPoints.map((stat) => (
+          <div key={stat.label} className="min-w-0">
+            <dt className="sr-only">{stat.label}</dt>
+            <dd>
+              <span className="block font-display text-xl leading-none font-semibold tracking-[-0.025em] text-lagoon-50 tabular xl:text-2xl">
+                {stat.value}
+              </span>
+              <span className="mt-2 block text-xs leading-snug text-lagoon-100/65">
+                {stat.label}
+              </span>
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  )
+}
+
+/* ==========================================================================
+   SHELL
+   ========================================================================== */
+
+export interface AuthShellProps {
+  /** The page's h1. */
+  title: React.ReactNode
+  subtitle?: React.ReactNode
+  /** Small caps line above the title. */
+  eyebrow?: React.ReactNode
+  /** The form. */
+  children: React.ReactNode
+  /** Replaces the default legal line under the form column. */
+  footer?: React.ReactNode
+  /** Replaces the whole brand panel on the right. */
+  side?: React.ReactNode
+  className?: string
+}
+
+/**
+ * The split-screen surface behind sign in, sign up and password recovery.
+ *
+ * Left: a quiet, single-column form on the app's own background, so the moment
+ * the operator lands in the dashboard nothing about the chrome changes.
+ * Right (lg and up): the brand, doing the selling — drifting aurora, a rotating
+ * customer story, and the three numbers that matter.
+ */
+export function AuthShell({
+  title,
+  subtitle,
+  eyebrow,
+  children,
+  footer,
+  side,
+  className,
+}: AuthShellProps) {
+  // Sourced from the demo clock so the footer never disagrees with the data.
+  const year = NOW.getFullYear()
+
+  return (
+    <div
+      className={cn(
+        'min-h-dvh bg-background lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]',
+        className,
+      )}
+    >
+      {/* ---------- Form column ---------- */}
+      <div className="relative isolate flex min-h-dvh flex-col px-5 py-6 sm:px-8 lg:min-h-0 lg:px-12 xl:px-16">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-72 bg-[radial-gradient(70%_100%_at_50%_0%,var(--primary-soft),transparent_70%)] opacity-60 lg:hidden"
+        />
+
+        <header className="flex items-center justify-between gap-4">
+          <Link
+            href="/"
+            className="-m-1 rounded-lg p-1 transition-opacity duration-200 hover:opacity-80"
+          >
+            <AuthWordmark />
+            <span className="sr-only">{`${SITE.name} home`}</span>
+          </Link>
+        </header>
+
+        <main className="flex flex-1 items-center justify-center py-12 sm:py-16">
+          <div className="w-full max-w-md">
+            {eyebrow ? (
+              <p className="mb-3 text-[0.6875rem] font-semibold tracking-[0.12em] text-primary uppercase">
+                {eyebrow}
+              </p>
+            ) : null}
+
+            <h1 className="font-display text-[1.75rem] leading-[1.15] font-semibold tracking-[-0.03em] text-balance text-foreground sm:text-[2rem]">
+              {title}
+            </h1>
+
+            {subtitle ? (
+              <p className="mt-3 text-sm leading-relaxed text-pretty text-muted">{subtitle}</p>
+            ) : null}
+
+            <div className="mt-8">{children}</div>
+          </div>
+        </main>
+
+        <footer className="flex flex-col items-center gap-2 text-center sm:flex-row sm:justify-between sm:text-left">
+          {footer ?? (
+            <>
+              <p className="text-xs text-faint">
+                © {year} {SITE.name}. All rights reserved.
+              </p>
+              <nav aria-label="Legal" className="flex items-center gap-4">
+                <Link
+                  href="/legal/privacy"
+                  className="text-xs text-faint transition-colors duration-200 hover:text-foreground"
+                >
+                  Privacy
+                </Link>
+                <Link
+                  href="/legal/terms"
+                  className="text-xs text-faint transition-colors duration-200 hover:text-foreground"
+                >
+                  Terms
+                </Link>
+                <Link
+                  href="/help"
+                  className="text-xs text-faint transition-colors duration-200 hover:text-foreground"
+                >
+                  Help
+                </Link>
+              </nav>
+            </>
+          )}
+        </footer>
+      </div>
+
+      {/* ---------- Brand column ---------- */}
+      <aside className="relative hidden lg:block" aria-label="Why operators switch to EZRA Pro">
+        <div className="sticky top-0 h-dvh">{side ?? <BrandPanel />}</div>
+      </aside>
+    </div>
+  )
+}

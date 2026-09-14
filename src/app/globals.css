@@ -1,0 +1,486 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ============================================================================
+   EZRA PRO - DESIGN SYSTEM
+   Brand: ocean / island DNA, enterprise discipline.
+   Lagoon (primary teal) / Coral (accent) / Sunset (gold) / Reef (violet)
+   on Deep-Sea ink neutrals. OKLCH throughout for perceptual uniformity.
+   ========================================================================== */
+
+@theme {
+  /* ---------- Brand: Lagoon (primary) ---------- */
+  --color-lagoon-50:  oklch(0.980 0.018 190);
+  --color-lagoon-100: oklch(0.952 0.040 190);
+  --color-lagoon-200: oklch(0.906 0.072 191);
+  --color-lagoon-300: oklch(0.846 0.101 192);
+  --color-lagoon-400: oklch(0.771 0.117 193);
+  --color-lagoon-500: oklch(0.706 0.122 194);
+  --color-lagoon-600: oklch(0.615 0.113 196);
+  --color-lagoon-700: oklch(0.520 0.096 198);
+  --color-lagoon-800: oklch(0.436 0.078 200);
+  --color-lagoon-900: oklch(0.376 0.063 202);
+  --color-lagoon-950: oklch(0.258 0.046 204);
+
+  /* ---------- Accent: Coral ---------- */
+  --color-coral-50:  oklch(0.972 0.017 40);
+  --color-coral-100: oklch(0.941 0.037 39);
+  --color-coral-200: oklch(0.888 0.070 38);
+  --color-coral-300: oklch(0.822 0.110 37);
+  --color-coral-400: oklch(0.756 0.148 36);
+  --color-coral-500: oklch(0.700 0.176 35);
+  --color-coral-600: oklch(0.627 0.186 32);
+  --color-coral-700: oklch(0.536 0.166 30);
+  --color-coral-800: oklch(0.451 0.135 29);
+  --color-coral-900: oklch(0.392 0.110 30);
+  --color-coral-950: oklch(0.258 0.075 30);
+
+  /* ---------- Highlight: Sunset (gold) ---------- */
+  --color-sunset-50:  oklch(0.982 0.019 90);
+  --color-sunset-100: oklch(0.958 0.047 90);
+  --color-sunset-200: oklch(0.918 0.090 89);
+  --color-sunset-300: oklch(0.872 0.128 86);
+  --color-sunset-400: oklch(0.828 0.152 82);
+  --color-sunset-500: oklch(0.786 0.157 76);
+  --color-sunset-600: oklch(0.700 0.149 62);
+  --color-sunset-700: oklch(0.585 0.128 52);
+  --color-sunset-800: oklch(0.490 0.102 48);
+  --color-sunset-900: oklch(0.424 0.084 47);
+  --color-sunset-950: oklch(0.276 0.058 46);
+
+  /* ---------- Supporting: Reef (violet) ---------- */
+  --color-reef-50:  oklch(0.977 0.014 305);
+  --color-reef-100: oklch(0.949 0.031 304);
+  --color-reef-200: oklch(0.901 0.060 303);
+  --color-reef-300: oklch(0.830 0.098 302);
+  --color-reef-400: oklch(0.746 0.144 301);
+  --color-reef-500: oklch(0.669 0.180 300);
+  --color-reef-600: oklch(0.588 0.199 299);
+  --color-reef-700: oklch(0.505 0.180 299);
+  --color-reef-800: oklch(0.429 0.148 299);
+  --color-reef-900: oklch(0.375 0.120 299);
+  --color-reef-950: oklch(0.259 0.086 300);
+
+  /* ---------- Neutrals: Deep Sea ink (cool-cast slate) ---------- */
+  --color-ink-50:  oklch(0.985 0.002 220);
+  --color-ink-100: oklch(0.968 0.004 220);
+  --color-ink-200: oklch(0.928 0.007 220);
+  --color-ink-300: oklch(0.870 0.011 220);
+  --color-ink-400: oklch(0.708 0.017 221);
+  --color-ink-500: oklch(0.562 0.021 222);
+  --color-ink-600: oklch(0.452 0.022 223);
+  --color-ink-700: oklch(0.376 0.023 224);
+  --color-ink-800: oklch(0.286 0.024 226);
+  --color-ink-900: oklch(0.221 0.024 228);
+  --color-ink-925: oklch(0.183 0.023 230);
+  --color-ink-950: oklch(0.148 0.021 232);
+  --color-ink-975: oklch(0.115 0.018 234);
+
+  /* ---------- Typography ---------- */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: var(--font-sora), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, monospace;
+
+  /* Fluid display scale */
+  --text-display-sm: clamp(1.875rem, 1.55rem + 1.6vw, 2.75rem);
+  --text-display-sm--line-height: 1.1;
+  --text-display-sm--letter-spacing: -0.022em;
+  --text-display-md: clamp(2.25rem, 1.7rem + 2.7vw, 3.75rem);
+  --text-display-md--line-height: 1.05;
+  --text-display-md--letter-spacing: -0.028em;
+  --text-display-lg: clamp(2.75rem, 1.85rem + 4.4vw, 5rem);
+  --text-display-lg--line-height: 1.02;
+  --text-display-lg--letter-spacing: -0.034em;
+  --text-display-xl: clamp(3.25rem, 1.9rem + 6.4vw, 6.5rem);
+  --text-display-xl--line-height: 0.98;
+  --text-display-xl--letter-spacing: -0.040em;
+
+  /* ---------- Radii ---------- */
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+  --radius-3xl: 1.75rem;
+  --radius-4xl: 2.25rem;
+
+  /* ---------- Elevation (soft, layered, brand-tinted) ---------- */
+  --shadow-xs: 0 1px 2px 0 oklch(0.221 0.024 228 / 0.05);
+  --shadow-sm: 0 1px 3px 0 oklch(0.221 0.024 228 / 0.07), 0 1px 2px -1px oklch(0.221 0.024 228 / 0.05);
+  --shadow-md: 0 4px 12px -2px oklch(0.221 0.024 228 / 0.08), 0 2px 4px -2px oklch(0.221 0.024 228 / 0.05);
+  --shadow-lg: 0 12px 28px -6px oklch(0.221 0.024 228 / 0.10), 0 4px 10px -4px oklch(0.221 0.024 228 / 0.06);
+  --shadow-xl: 0 24px 48px -12px oklch(0.221 0.024 228 / 0.16), 0 8px 18px -8px oklch(0.221 0.024 228 / 0.08);
+  --shadow-2xl: 0 40px 80px -20px oklch(0.221 0.024 228 / 0.24);
+  --shadow-glow-lagoon: 0 0 0 1px oklch(0.706 0.122 194 / 0.18), 0 8px 32px -8px oklch(0.706 0.122 194 / 0.36);
+  --shadow-glow-coral: 0 0 0 1px oklch(0.700 0.176 35 / 0.20), 0 8px 32px -8px oklch(0.700 0.176 35 / 0.40);
+
+  /* ---------- Motion ---------- */
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --animate-aurora: aurora 22s var(--ease-in-out-quart) infinite;
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-float-slow: float 11s ease-in-out infinite;
+  --animate-shimmer: shimmer 2.4s linear infinite;
+  --animate-marquee: marquee 42s linear infinite;
+  --animate-marquee-reverse: marquee-reverse 42s linear infinite;
+  --animate-pulse-ring: pulse-ring 2.6s var(--ease-out-quint) infinite;
+  --animate-gradient-pan: gradient-pan 9s ease infinite;
+  --animate-caret: caret 1.05s steps(1) infinite;
+  --animate-tide: tide 14s ease-in-out infinite;
+  --animate-spin-slow: spin 14s linear infinite;
+
+  @keyframes aurora {
+    0%, 100% { transform: translate3d(0,0,0) rotate(0deg) scale(1); opacity: 0.55; }
+    33%      { transform: translate3d(6%,-8%,0) rotate(42deg) scale(1.18); opacity: 0.78; }
+    66%      { transform: translate3d(-7%,5%,0) rotate(-28deg) scale(0.92); opacity: 0.62; }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-14px); }
+  }
+  @keyframes shimmer {
+    0%   { background-position: -180% 0; }
+    100% { background-position: 180% 0; }
+  }
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+  @keyframes marquee-reverse {
+    from { transform: translateX(-50%); }
+    to   { transform: translateX(0); }
+  }
+  @keyframes pulse-ring {
+    0%   { transform: scale(0.82); opacity: 0.75; }
+    70%  { transform: scale(1.9);  opacity: 0; }
+    100% { transform: scale(1.9);  opacity: 0; }
+  }
+  @keyframes gradient-pan {
+    0%, 100% { background-position: 0% 50%; }
+    50%      { background-position: 100% 50%; }
+  }
+  @keyframes caret {
+    0%, 49%   { opacity: 1; }
+    50%, 100% { opacity: 0; }
+  }
+  @keyframes tide {
+    0%, 100% { transform: translateX(0) translateZ(0); }
+    50%      { transform: translateX(-24px) translateZ(0); }
+  }
+}
+
+/* ============================================================================
+   SEMANTIC TOKENS - flip with theme, consumed as Tailwind utilities
+   e.g. bg-surface, text-muted, border-line, bg-primary, text-on-primary
+   ========================================================================== */
+@theme inline {
+  --color-background:        var(--bg);
+  --color-background-subtle: var(--bg-subtle);
+  --color-surface:           var(--surface);
+  --color-surface-raised:    var(--surface-raised);
+  --color-surface-sunken:    var(--surface-sunken);
+  --color-overlay:           var(--overlay);
+
+  --color-foreground:        var(--fg);
+  --color-muted:             var(--fg-muted);
+  --color-subtle:            var(--fg-subtle);
+  --color-faint:             var(--fg-faint);
+
+  --color-line:              var(--border);
+  --color-line-strong:       var(--border-strong);
+  --color-line-subtle:       var(--border-subtle);
+
+  --color-primary:           var(--primary);
+  --color-primary-hover:     var(--primary-hover);
+  --color-primary-soft:      var(--primary-soft);
+  --color-on-primary:        var(--on-primary);
+
+  --color-accent:            var(--accent);
+  --color-accent-hover:      var(--accent-hover);
+  --color-accent-soft:       var(--accent-soft);
+  --color-on-accent:         var(--on-accent);
+
+  --color-success:           var(--success);
+  --color-success-soft:      var(--success-soft);
+  --color-warning:           var(--warning);
+  --color-warning-soft:      var(--warning-soft);
+  --color-danger:            var(--danger);
+  --color-danger-soft:       var(--danger-soft);
+  --color-info:              var(--info);
+  --color-info-soft:         var(--info-soft);
+
+  /* Data-viz ramp - ordered for maximum adjacent separation */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+  --color-chart-8: var(--chart-8);
+}
+
+:root {
+  color-scheme: light;
+
+  --bg:             oklch(0.993 0.002 220);
+  --bg-subtle:      oklch(0.975 0.004 218);
+  --surface:        oklch(1 0 0);
+  --surface-raised: oklch(1 0 0);
+  --surface-sunken: oklch(0.968 0.005 218);
+  --overlay:        oklch(0.221 0.024 228 / 0.42);
+
+  --fg:             oklch(0.205 0.024 230);
+  --fg-muted:       oklch(0.452 0.022 223);
+  --fg-subtle:      oklch(0.562 0.021 222);
+  --fg-faint:       oklch(0.708 0.017 221);
+
+  --border:         oklch(0.912 0.008 220);
+  --border-strong:  oklch(0.855 0.012 220);
+  --border-subtle:  oklch(0.948 0.005 220);
+
+  --primary:        oklch(0.520 0.096 198);
+  --primary-hover:  oklch(0.452 0.086 200);
+  --primary-soft:   oklch(0.952 0.040 190);
+  --on-primary:     oklch(1 0 0);
+
+  --accent:         oklch(0.627 0.186 32);
+  --accent-hover:   oklch(0.556 0.176 31);
+  --accent-soft:    oklch(0.952 0.032 38);
+  --on-accent:      oklch(1 0 0);
+
+  --success:        oklch(0.556 0.128 156);
+  --success-soft:   oklch(0.950 0.036 158);
+  --warning:        oklch(0.680 0.145 62);
+  --warning-soft:   oklch(0.960 0.044 82);
+  --danger:         oklch(0.567 0.198 22);
+  --danger-soft:    oklch(0.952 0.032 20);
+  --info:           oklch(0.580 0.132 240);
+  --info-soft:      oklch(0.950 0.032 240);
+
+  --chart-1: oklch(0.615 0.113 196);
+  --chart-2: oklch(0.627 0.186 32);
+  --chart-3: oklch(0.588 0.199 299);
+  --chart-4: oklch(0.756 0.152 82);
+  --chart-5: oklch(0.580 0.132 240);
+  --chart-6: oklch(0.606 0.132 156);
+  --chart-7: oklch(0.640 0.150 350);
+  --chart-8: oklch(0.548 0.088 216);
+}
+
+.dark {
+  color-scheme: dark;
+
+  --bg:             oklch(0.128 0.020 233);
+  --bg-subtle:      oklch(0.148 0.021 232);
+  --surface:        oklch(0.172 0.022 231);
+  --surface-raised: oklch(0.202 0.023 230);
+  --surface-sunken: oklch(0.112 0.018 234);
+  --overlay:        oklch(0.085 0.016 236 / 0.70);
+
+  --fg:             oklch(0.968 0.004 220);
+  --fg-muted:       oklch(0.740 0.016 221);
+  --fg-subtle:      oklch(0.630 0.019 222);
+  --fg-faint:       oklch(0.500 0.021 223);
+
+  --border:         oklch(0.276 0.024 228);
+  --border-strong:  oklch(0.348 0.025 226);
+  --border-subtle:  oklch(0.222 0.023 230);
+
+  --primary:        oklch(0.771 0.117 193);
+  --primary-hover:  oklch(0.846 0.101 192);
+  --primary-soft:   oklch(0.300 0.055 200);
+  --on-primary:     oklch(0.148 0.032 214);
+
+  --accent:         oklch(0.726 0.166 36);
+  --accent-hover:   oklch(0.788 0.140 38);
+  --accent-soft:    oklch(0.310 0.082 32);
+  --on-accent:      oklch(0.160 0.038 30);
+
+  --success:        oklch(0.740 0.140 158);
+  --success-soft:   oklch(0.292 0.062 158);
+  --warning:        oklch(0.812 0.148 80);
+  --warning-soft:   oklch(0.318 0.062 70);
+  --danger:         oklch(0.700 0.180 20);
+  --danger-soft:    oklch(0.312 0.080 20);
+  --info:           oklch(0.732 0.128 240);
+  --info-soft:      oklch(0.300 0.060 242);
+
+  --chart-1: oklch(0.771 0.117 193);
+  --chart-2: oklch(0.726 0.166 36);
+  --chart-3: oklch(0.746 0.144 301);
+  --chart-4: oklch(0.828 0.152 82);
+  --chart-5: oklch(0.700 0.130 242);
+  --chart-6: oklch(0.750 0.138 158);
+  --chart-7: oklch(0.742 0.140 350);
+  --chart-8: oklch(0.680 0.070 214);
+}
+
+/* ============================================================================
+   BASE
+   ========================================================================== */
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+    scroll-padding-top: 7rem;
+  }
+
+  body {
+    background-color: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  ::selection {
+    background: oklch(0.706 0.122 194 / 0.28);
+    color: var(--fg);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  /* Numeric alignment in every data surface */
+  table,
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border-radius: 9999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--fg-faint);
+    background-clip: content-box;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* ============================================================================
+   UTILITIES
+   ========================================================================== */
+@layer utilities {
+  /*
+   * Brand emphasis text.
+   * Deliberately SOLID, not a gradient: multi-hue gradient text is a recognised
+   * anti-pattern for professional B2B SaaS (it reads as consumer/AI-generic and
+   * routinely fails the 4.5:1 contrast floor across its own colour ramp).
+   * Emphasis here comes from weight and colour, not decoration.
+   */
+  .text-gradient-brand {
+    color: var(--primary);
+    background-image: none;
+    -webkit-background-clip: border-box;
+    background-clip: border-box;
+  }
+  .text-gradient-lagoon {
+    color: var(--primary);
+    background-image: none;
+    -webkit-background-clip: border-box;
+    background-clip: border-box;
+  }
+
+  /* Glass surface - works on both themes */
+  .glass {
+    background: color-mix(in oklab, var(--surface) 72%, transparent);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+  }
+  .glass-strong {
+    background: color-mix(in oklab, var(--surface) 88%, transparent);
+    backdrop-filter: blur(24px) saturate(190%);
+    -webkit-backdrop-filter: blur(24px) saturate(190%);
+    border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+  }
+
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, color-mix(in oklab, var(--border) 55%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in oklab, var(--border) 55%, transparent) 1px, transparent 1px);
+    background-size: 56px 56px;
+  }
+  .bg-dots {
+    background-image: radial-gradient(color-mix(in oklab, var(--border-strong) 80%, transparent) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+
+  .mask-fade-b { mask-image: linear-gradient(to bottom, black 55%, transparent 100%); }
+  .mask-fade-y { mask-image: linear-gradient(to bottom, transparent, black 12%, black 88%, transparent); }
+  .mask-fade-x { mask-image: linear-gradient(to right, transparent, black 8%, black 92%, transparent); }
+  .mask-radial { mask-image: radial-gradient(ellipse 62% 58% at 50% 42%, black 38%, transparent 100%); }
+
+  .shimmer {
+    background-image: linear-gradient(100deg,
+      transparent 20%,
+      color-mix(in oklab, var(--fg) 8%, transparent) 42%,
+      color-mix(in oklab, var(--fg) 14%, transparent) 50%,
+      color-mix(in oklab, var(--fg) 8%, transparent) 58%,
+      transparent 80%);
+    background-size: 220% 100%;
+    animation: shimmer 2.4s linear infinite;
+  }
+
+  @keyframes in-up {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: none; }
+  }
+  .animate-in-up { animation: in-up 0.6s var(--ease-out-expo) both; }
+
+  .perspective-1000 { perspective: 1000px; }
+  .preserve-3d { transform-style: preserve-3d; }
+  .backface-hidden { backface-visibility: hidden; }
+
+  /* Stable GPU layer for heavy animated decor */
+  .gpu { transform: translateZ(0); will-change: transform, opacity; }
+
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}
