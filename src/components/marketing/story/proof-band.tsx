@@ -13,21 +13,17 @@ import { cn } from '@/lib/utils'
 import { PHOTOS, photoUrl } from './photos'
 
 /* ==========================================================================
-   ProofBand — the numbers, on the water.
-
-   A dark band with the underwater frame drifting behind it. One operator's
-   own words set in the serif, four figures that count up as they arrive.
+   ProofBand — platform proof and operator outcomes.
    ========================================================================== */
 
 const FIGURES = [
-  { value: 2.4, decimals: 1, prefix: '$', suffix: 'B+', label: 'processed for operators', hint: 'gross booking value, last 12 months' },
-  { value: 11800, decimals: 0, prefix: '', suffix: '+', label: 'experiences live', hint: 'activities selling today' },
-  { value: 31, decimals: 0, prefix: '+', suffix: '%', label: 'lift in direct bookings', hint: 'median, first six months' },
-  { value: 99.98, decimals: 2, prefix: '', suffix: '%', label: 'checkout uptime', hint: 'rolling 90 days' },
+  { value: 2.4, decimals: 1, prefix: '$', suffix: 'B+', label: 'processed for operators', hint: 'gross booking volume processed' },
+  { value: 11800, decimals: 0, prefix: '', suffix: '+', label: 'experiences live', hint: 'active tours & activities globally' },
+  { value: 31, decimals: 0, prefix: '+', suffix: '%', label: 'lift in direct bookings', hint: 'median operator increase in 6 mo' },
+  { value: 99.98, decimals: 2, prefix: '', suffix: '%', label: 'checkout uptime', hint: 'rolling 90-day availability' },
 ] as const
 
-/** The heatmap story — specific, and about a decision, not a feeling. */
-const QUOTE = TESTIMONIALS.find((t) => t.id === 'tst-2') ?? TESTIMONIALS[0]
+const QUOTE = TESTIMONIALS.find((t) => t.id === 'tst-4') ?? TESTIMONIALS[0]
 
 function decode(input: string) {
   return input.replace(/&rsquo;/g, '’').replace(/&amp;/g, '&')
@@ -47,16 +43,16 @@ export function ProofBand({ className }: { className?: string }) {
     >
       <motion.div style={{ y }} className="absolute -inset-y-[12%] inset-x-0 -z-20">
         <Image
-          src={photoUrl(PHOTOS.underwaterLight, 2000, 70)}
-          alt=""
+          src={photoUrl(PHOTOS.balloonSunrise, 2000, 70)}
+          alt="Sunrise landscape"
           aria-hidden="true"
           fill
           sizes="100vw"
           className="object-cover"
-          style={{ objectPosition: PHOTOS.underwaterLight.focus }}
+          style={{ objectPosition: PHOTOS.balloonSunrise.focus }}
         />
       </motion.div>
-      <div aria-hidden="true" className="absolute inset-0 -z-10 bg-ink-950/70" />
+      <div aria-hidden="true" className="absolute inset-0 -z-10 bg-ink-950/75 backdrop-blur-[2px]" />
 
       <div className="mx-auto grid max-w-7xl grid-cols-1 gap-14 px-6 sm:px-8 lg:grid-cols-12 lg:gap-10 lg:px-10">
         <Reveal className="lg:col-span-7" distance={16}>
@@ -70,7 +66,7 @@ export function ProofBand({ className }: { className?: string }) {
             <footer className="mt-8 flex items-center gap-4">
               <Image
                 src={QUOTE.avatarUrl}
-                alt=""
+                alt={QUOTE.author}
                 width={48}
                 height={48}
                 className="size-12 rounded-full object-cover ring-2 ring-white/20"
@@ -83,7 +79,7 @@ export function ProofBand({ className }: { className?: string }) {
               </div>
               {QUOTE.metric ? (
                 <div className="ml-auto hidden text-right sm:block">
-                  <p className="font-display text-2xl font-semibold tracking-[-0.03em] text-lagoon-200 tabular-nums">
+                  <p className="font-display text-2xl font-semibold tracking-[-0.03em] text-primary tabular-nums">
                     {QUOTE.metric.value}
                   </p>
                   <p className="text-[0.6875rem] text-white/70">{QUOTE.metric.label}</p>
@@ -101,7 +97,7 @@ export function ProofBand({ className }: { className?: string }) {
           {FIGURES.map((f) => (
             <StaggerItem as="div" key={f.label} distance={14}>
               <dt className="order-2 text-[0.8125rem] text-white/75">{f.label}</dt>
-              <dd className="order-1 font-display text-[clamp(2rem,3.4vw,2.75rem)] leading-none font-semibold tracking-[-0.035em] tabular-nums">
+              <dd className="order-1 font-display text-[clamp(2rem,3.4vw,2.75rem)] leading-none font-semibold tracking-[-0.035em] tabular-nums text-white">
                 <CountUp
                   value={f.value}
                   decimals={f.decimals}

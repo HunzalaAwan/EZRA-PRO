@@ -11,11 +11,9 @@ import type { VerticalKey } from '@/types'
 import { PHOTOS, photoUrl, type Photo } from './photos'
 
 /* ==========================================================================
-   VerticalsGrid — who this is for, as photographs rather than icons.
+   VerticalsGrid — who this is for, as photographs rather than generic icons.
 
-   An asymmetric twelve-column grid: two wide frames, four narrower ones,
-   nothing centred. Each tile carries one specific operational line — the
-   detail an operator in that vertical would recognise as theirs.
+   An asymmetric grid showcasing the core verticals EZRA Pro powers.
    ========================================================================== */
 
 interface Tile {
@@ -29,41 +27,41 @@ interface Tile {
 
 const TILES: Tile[] = [
   {
-    key: 'watersports',
-    label: 'Watersports & Marine',
-    detail: 'Per-vessel capacity, certs at checkout, weather holds in one tap',
-    photo: PHOTOS.barrel,
-    span: 'col-span-1',
-    aspect: 'aspect-[4/3]',
-  },
-  {
-    key: 'island',
-    label: 'Island & Resort Experiences',
-    detail: 'One desk selling twenty operators, commission tracked per partner',
-    photo: PHOTOS.atoll,
+    key: 'adventure',
+    label: 'Alpine & Outdoor Adventure',
+    detail: 'Weight and age safety gating, gear allocations, automated condition holds',
+    photo: PHOTOS.ziplineCanopy,
     span: 'col-span-1',
     aspect: 'aspect-[4/3]',
   },
   {
     key: 'tours',
     label: 'Sightseeing & Guided Tours',
-    detail: 'Guide rostering, pickup lists by hotel, private and group pricing',
+    detail: 'Guide rostering, pickup lists by hotel, private and group tier pricing',
     photo: PHOTOS.fujiPagoda,
     span: 'col-span-1',
     aspect: 'aspect-[4/3]',
   },
   {
-    key: 'adventure',
-    label: 'Alpine & Outdoor Adventure',
-    detail: 'Weight and age gating, equipment per participant, condition holds',
-    photo: PHOTOS.cloudSea,
+    key: 'island',
+    label: 'Resorts & Landmark Attractions',
+    detail: 'One centralized desk selling dozens of activities, automated commission tracking',
+    photo: PHOTOS.aerialAttraction,
+    span: 'col-span-1',
+    aspect: 'aspect-[4/3]',
+  },
+  {
+    key: 'watersports',
+    label: 'Outdoor & Marine Recreation',
+    detail: 'Per-vessel capacity, certifications at checkout, condition alerts in one tap',
+    photo: PHOTOS.rockClimbing,
     span: 'col-span-1',
     aspect: 'aspect-[4/3]',
   },
   {
     key: 'restaurants',
-    label: 'Dining & Hospitality',
-    detail: 'Timed seatings, deposits that end no-shows, allergies on the pass',
+    label: 'Culinary & Dining Experiences',
+    detail: 'Timed seatings, deposits that eliminate no-shows, dietary notes on the pass',
     photo: PHOTOS.plated,
     span: 'col-span-1',
     aspect: 'aspect-[4/3]',
@@ -71,7 +69,7 @@ const TILES: Tile[] = [
   {
     key: 'wellness',
     label: 'Wellness & Retreats',
-    detail: 'Class packs, memberships, multi-day retreats on instalments',
+    detail: 'Class passes, memberships, multi-day retreat packages with instalment plans',
     photo: PHOTOS.waterTemple,
     span: 'col-span-1',
     aspect: 'aspect-[4/3]',
@@ -85,18 +83,18 @@ export function VerticalsGrid({ className }: { className?: string }) {
         <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
           <div className="max-w-2xl">
             <p className="text-[0.75rem] font-semibold tracking-[0.14em] text-primary uppercase">
-              Built for Every Operator Vertical
+              Tailored for Every Operator
             </p>
             <h2
               id="verticals-title"
               className="mt-3 font-display text-[clamp(2rem,4vw,3.25rem)] leading-[1.05] font-semibold tracking-[-0.03em] text-foreground text-balance"
             >
-              Six kinds of experiences. One unified booking platform.
+              Every category of experience. One unified booking platform.
             </h2>
           </div>
           <p className="max-w-sm text-[0.9375rem] leading-relaxed text-muted">
-            From dive charters and scenic flights to tasting menus and wellness retreats.
-            The software ships with each industry's specific workflow rules pre-configured.
+            From alpine ziplines and historic walking tours to tasting menus and wellness retreats.
+            Built with each vertical&rsquo;s operational constraints out of the box.
           </p>
         </div>
 
@@ -108,7 +106,7 @@ export function VerticalsGrid({ className }: { className?: string }) {
                 <Link
                   href={`/solutions/${tile.key}`}
                   className={cn(
-                    'group relative block h-full overflow-hidden rounded-3xl bg-ink-950 text-white',
+                    'group relative block h-full overflow-hidden rounded-3xl bg-ink-950 text-white shadow-md hover:shadow-xl transition-shadow',
                     'focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary',
                     tile.aspect,
                   )}
@@ -118,31 +116,31 @@ export function VerticalsGrid({ className }: { className?: string }) {
                     alt={tile.photo.alt}
                     fill
                     sizes="(min-width: 768px) 60vw, 100vw"
-                    className="object-cover transition-transform duration-[1200ms] ease-[var(--ease-out-expo)] group-hover:scale-[1.04] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+                    className="object-cover transition-transform duration-[1200ms] ease-[var(--ease-out-expo)] group-hover:scale-[1.05] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
                     style={{ objectPosition: tile.photo.focus }}
                   />
-                  {/* flat scrim, stronger on hover so the detail line reads */}
+                  {/* Subtle dark scrim that darkens gently on hover for readability */}
                   <span
                     aria-hidden="true"
-                    className="absolute inset-0 bg-ink-950/35 transition-colors duration-500 group-hover:bg-ink-950/55"
+                    className="absolute inset-0 bg-gradient-to-t from-ink-950/90 via-ink-950/40 to-transparent transition-opacity duration-300 group-hover:opacity-95"
                   />
 
                   <span className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-4 p-5 sm:p-6">
                     <span className="min-w-0">
-                      <span className="block font-display text-lg font-semibold tracking-[-0.015em] sm:text-xl">
+                      <span className="block font-display text-lg font-semibold tracking-[-0.015em] sm:text-xl text-white">
                         {tile.label}
                       </span>
-                      <span className="mt-1 block max-w-md text-[0.8125rem] leading-snug text-white/80">
+                      <span className="mt-1 block max-w-md text-[0.8125rem] leading-snug text-white/85">
                         {tile.detail}
                       </span>
-                      <span className="mt-2 block text-[0.6875rem] font-semibold text-lagoon-200 tabular-nums">
+                      <span className="mt-2 block text-[0.6875rem] font-semibold text-primary tabular-nums">
                         {pitch.proofStat} {pitch.proofLabel}
                       </span>
                     </span>
                     <span
                       className={cn(
-                        'grid size-10 shrink-0 place-items-center rounded-full bg-white text-ink-950',
-                        'transition-transform duration-300 ease-[var(--ease-out-expo)] group-hover:-translate-y-0.5 group-hover:translate-x-0.5',
+                        'grid size-10 shrink-0 place-items-center rounded-full bg-white text-ink-950 shadow-md',
+                        'transition-transform duration-300 ease-[var(--ease-out-expo)] group-hover:-translate-y-1 group-hover:translate-x-1 group-hover:bg-primary group-hover:text-white',
                         'motion-reduce:transition-none',
                       )}
                     >

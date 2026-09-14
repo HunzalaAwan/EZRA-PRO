@@ -32,29 +32,29 @@ export function PhotoCta({ className }: { className?: string }) {
     >
       <motion.div style={{ y }} className="absolute -inset-y-[10%] inset-x-0 -z-20">
         <Image
-          src={photoUrl(PHOTOS.sunsetShore, 2000, 72)}
-          alt=""
+          src={photoUrl(PHOTOS.cloudSea, 2000, 72)}
+          alt="Scenic alpine mountain vista above clouds"
           aria-hidden="true"
           fill
           sizes="100vw"
           className="object-cover"
-          style={{ objectPosition: PHOTOS.sunsetShore.focus }}
+          style={{ objectPosition: PHOTOS.cloudSea.focus }}
         />
       </motion.div>
-      <div aria-hidden="true" className="absolute inset-0 -z-10 bg-ink-950/55" />
+      <div aria-hidden="true" className="absolute inset-0 -z-10 bg-ink-950/65" />
 
       <div className="mx-auto max-w-7xl px-6 sm:px-8 lg:px-10">
         <Reveal distance={18} className="max-w-3xl">
-          <p className="text-[0.75rem] font-semibold tracking-[0.14em] text-lagoon-200 uppercase">
+          <p className="text-[0.75rem] font-semibold tracking-[0.14em] text-primary uppercase">
             {FINAL_CTA.eyebrow}
           </p>
           <h2
             id="cta-title"
-            className="mt-4 font-display text-[clamp(2.25rem,5.2vw,4.5rem)] leading-[1.02] font-semibold tracking-[-0.035em] text-balance"
+            className="mt-4 font-display text-[clamp(2.25rem,5.2vw,4.5rem)] leading-[1.02] font-semibold tracking-[-0.035em] text-balance text-white"
           >
             {FINAL_CTA.headline}
           </h2>
-          <p className="mt-6 max-w-xl text-base leading-relaxed text-white/80 sm:text-lg">{FINAL_CTA.body}</p>
+          <p className="mt-6 max-w-xl text-base leading-relaxed text-white/85 sm:text-lg">{FINAL_CTA.body}</p>
 
           <div className="mt-9 flex flex-wrap items-center gap-3">
             <Button asChild size="lg" variant="primary" rightIcon={<ArrowRight />}>
@@ -64,7 +64,7 @@ export function PhotoCta({ className }: { className?: string }) {
               href={FINAL_CTA.secondary.href}
               className={cn(
                 'inline-flex h-12 items-center rounded-full border border-white/25 bg-white/10 px-5 text-sm font-semibold text-white backdrop-blur-sm',
-                'transition-colors duration-200 hover:bg-white/16',
+                'transition-colors duration-200 hover:bg-white/20',
                 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white',
               )}
             >
@@ -75,7 +75,7 @@ export function PhotoCta({ className }: { className?: string }) {
           <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-[0.8125rem] text-white/80">
             {FINAL_CTA.reassurance.map((r) => (
               <li key={r} className="inline-flex items-center gap-1.5">
-                <Check aria-hidden="true" className="size-3.5 text-lagoon-200" strokeWidth={3} />
+                <Check aria-hidden="true" className="size-3.5 text-primary" strokeWidth={3} />
                 {r}
               </li>
             ))}
