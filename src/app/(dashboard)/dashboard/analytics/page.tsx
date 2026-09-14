@@ -3,6 +3,8 @@ import type { Metadata } from 'next'
 import { CURRENT_TENANT, getAnalytics } from '@/lib/demo'
 import { AnalyticsShell } from '@/components/dashboard/analytics/analytics-shell'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'Analytics',
   description:

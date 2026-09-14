@@ -4,6 +4,8 @@ import { CURRENT_TENANT, NOW, getManifest } from '@/lib/demo'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { ManifestView } from '@/components/dashboard/bookings/manifest-view'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'Daily manifest · EZRA Pro',
   description:

@@ -5,6 +5,8 @@ import { addDays } from '@/lib/utils'
 import { ResourcesPageClient } from '@/components/dashboard/resources/resources-page-client'
 import { deriveResourceDependents, deriveUpcomingResourceUse } from '@/components/dashboard/resources/derive'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'Resources',
   description: 'Vessels, vehicles and equipment — what you have and what depends on it.',

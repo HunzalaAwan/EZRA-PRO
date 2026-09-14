@@ -14,6 +14,8 @@ import { CURRENT_TENANT, NOW, getBookingsByCustomer, getCustomersByTenant } from
 import { addDays, percentChange, sum } from '@/lib/utils'
 import type { Customer } from '@/types'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'Guests',
   description:

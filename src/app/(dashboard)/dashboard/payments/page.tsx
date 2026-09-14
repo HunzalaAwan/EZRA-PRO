@@ -34,6 +34,8 @@ import {
 } from '@/lib/utils'
 import type { Booking, CurrencyCode, Payment } from '@/types'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'Payments',
   description:

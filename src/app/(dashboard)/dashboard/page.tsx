@@ -22,6 +22,8 @@ import {
 } from '@/lib/demo'
 import { formatDateLong, formatNumber, pluralize } from '@/lib/utils'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'Overview',
   description: 'Revenue, today’s departures and what needs your attention — at a glance.',

@@ -490,7 +490,7 @@ for (const [tenantId, specs] of SPEC_BY_TENANT) {
   const taxRate = TAX_RATE[tenantId] ?? 0
   const taxLabel = TAX_LABEL[tenantId] ?? 'Tax'
   const isPrimary = tenantId === CURRENT_TENANT.id
-  const back = isPrimary ? 150 : 60
+  const back = isPrimary ? 60 : 45
   const fwd = isPrimary ? 60 : 45
   const staff = bookableByTenant.get(tenantId) ?? []
   const websiteHost = tenant.contact.website.replace(/^https?:\/\//, '')
@@ -1253,16 +1253,16 @@ function toBookingRow(booking: Booking): BookingRow | undefined {
 }
 
 /** All bookings for a tenant as joined rows, newest booking first. Memoised. */
-export function getBookingRows(tenantId: string): BookingRow[] {
+export function getBookingRows(tenantId: string, limit?: number): BookingRow[] {
   const cached = bookingRowCache.get(tenantId)
-  if (cached) return cached
+  if (cached) return limit ? cached.slice(0, limit) : cached
   const rows: BookingRow[] = []
   for (const b of bookingsByTenant.get(tenantId) ?? []) {
     const row = toBookingRow(b)
     if (row) rows.push(row)
   }
   bookingRowCache.set(tenantId, rows)
-  return rows
+  return limit ? rows.slice(0, limit) : rows
 }
 
 export function getBookingDetail(

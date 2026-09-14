@@ -13,6 +13,8 @@ import {
 } from '@/components/dashboard/activities/activity-data'
 import { ActivityCatalog } from '@/components/dashboard/activities/activity-grid'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'Activities',
   description: 'Every experience you sell — pricing, availability and performance in one catalog.',

@@ -5,6 +5,8 @@ import { addDays } from '@/lib/utils'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { CalendarShell } from '@/components/dashboard/calendar/calendar-shell'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'Calendar',
   description:

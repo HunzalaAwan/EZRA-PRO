@@ -16,6 +16,8 @@ import { CHANNEL_LABELS, CURRENT_TENANT, CURRENT_USER, NOW, getBookingRows } fro
 import { addDays, average, formatDateShort, startOfWeek, toDateKey } from '@/lib/utils'
 import type { BookingRow } from '@/lib/demo'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'Reviews',
   description:

@@ -11,6 +11,8 @@ import { addDays } from '@/lib/utils'
 import { AvailabilityPageClient } from '@/components/dashboard/availability/availability-page-client'
 import { deriveObservedHours, deriveScheduleTemplates } from '@/components/dashboard/availability/derive'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'Availability',
   description: 'The recurring rhythm behind your calendar, and what the next fortnight looks like.',
