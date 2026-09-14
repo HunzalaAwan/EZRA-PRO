@@ -1923,8 +1923,20 @@ function buildInsights(ctx: {
         id: 'ins_slot_gap',
         severity: 'positive',
         title: `${WEEKDAY_NAMES[best.weekday]} ${hourLabel(best.hour)} runs at ${best.occupancy.toFixed(0)}% while ${WEEKDAY_NAMES[worst.weekday]} ${hourLabel(worst.hour)} sits at ${worst.occupancy.toFixed(0)}%`,
-        body: `Across the last 90 days the ${WEEKDAY_NAMES[best.weekday]} ${hourLabel(best.hour)} slot filled ${gap.toFixed(0)} points higher than ${WEEKDAY_NAMES[worst.weekday]} ${hourLabel(worst.hour)}. Moving one ${WEEKDAY_NAMES[worst.weekday]} departure into the ${WEEKDAY_NAMES[best.weekday]} window would recover roughly ${formatCurrency(monthlyUplift, currency)} a month at your current average seat value.`,
+        body: `Move one ${WEEKDAY_NAMES[worst.weekday]} departure into the ${WEEKDAY_NAMES[best.weekday]} window.`,
         metric: `+${formatCurrency(monthlyUplift, currency, { compact: true })}/mo`,
+        impact: {
+          value: formatCurrency(monthlyUplift, currency, { compact: true }),
+          unit: '/mo',
+          caption: 'recoverable at your current seat value',
+          direction: 'up',
+        },
+        visual: {
+          kind: 'comparison',
+          a: { label: `${WEEKDAY_NAMES[best.weekday]} ${hourLabel(best.hour)}`, value: best.occupancy },
+          b: { label: `${WEEKDAY_NAMES[worst.weekday]} ${hourLabel(worst.hour)}`, value: worst.occupancy },
+          unit: '%',
+        },
         href: '/dashboard/calendar',
         actionLabel: 'Open the calendar',
       })
@@ -1946,8 +1958,20 @@ function buildInsights(ctx: {
       id: 'ins_sellout',
       severity: 'warning',
       title: `${activity.name} sold out ${pressure.soldOut} of ${pressure.total} departures`,
-      body: `It has been running at ${pressure.occ.toFixed(0)}% of capacity. At a conservative 18% turn-away rate that is about ${turnaways} guests you could not seat — roughly ${formatCurrency(value, currency)} of demand. Adding a second daily departure or a larger vessel on peak days is the fastest revenue available to you.`,
+      body: `About ${formatNumber(turnaways)} guests you could not seat. Add a second daily departure or a larger vessel on peak days.`,
       metric: `${formatCurrency(value, currency, { compact: true })} unmet`,
+      impact: {
+        value: formatCurrency(value, currency, { compact: true }),
+        caption: `unmet demand · ${pressure.soldOut} of ${pressure.total} departures sold out`,
+        direction: 'up',
+      },
+      visual: {
+        kind: 'meter',
+        label: 'Capacity sold',
+        value: pressure.occ,
+        target: 85,
+        unit: '%',
+      },
       href: `/dashboard/activities/${activity.slug}`,
       actionLabel: 'Adjust capacity',
     })
@@ -1961,8 +1985,24 @@ function buildInsights(ctx: {
       id: 'ins_top_activity',
       severity: top.deltaPercent >= 0 ? 'positive' : 'neutral',
       title: `${top.name} is ${share.toFixed(0)}% of net revenue`,
-      body: `${formatCurrency(top.revenue, currency)} across ${formatNumber(top.bookings)} bookings at ${top.occupancy.toFixed(0)}% occupancy, ${top.deltaPercent >= 0 ? 'up' : 'down'} ${Math.abs(top.deltaPercent).toFixed(1)}% on the previous period. Concentration this high is a risk as much as a strength — the second-placed product is ${topActivities[1] ? `${topActivities[1].name} at ${formatCurrency(topActivities[1].revenue, currency, { compact: true })}` : 'a long way behind'}.`,
+      body: `${formatNumber(top.bookings)} bookings at ${top.occupancy.toFixed(0)}% occupancy. Concentration this high is a risk as much as a strength.`,
       metric: `${share.toFixed(0)}% of revenue`,
+      impact: {
+        value: formatCurrency(top.revenue, currency, { compact: true }),
+        caption: `net revenue · ${top.deltaPercent >= 0 ? 'up' : 'down'} ${Math.abs(top.deltaPercent).toFixed(1)}% on the previous period`,
+        direction: top.deltaPercent >= 0 ? 'up' : 'down',
+      },
+      visual: {
+        kind: 'share',
+        label: top.name,
+        value: share,
+        runnerUp: topActivities[1]
+          ? {
+              label: topActivities[1].name,
+              value: cur.revenue === 0 ? 0 : (topActivities[1].revenue / cur.revenue) * 100,
+            }
+          : undefined,
+      },
       href: '/dashboard/analytics',
       actionLabel: 'See the breakdown',
     })
@@ -1977,8 +2017,19 @@ function buildInsights(ctx: {
       id: 'ins_channel',
       severity: best.deltaPercent > 0 ? 'positive' : 'warning',
       title: `${best.label} revenue moved ${best.deltaPercent >= 0 ? 'up' : 'down'} ${Math.abs(best.deltaPercent).toFixed(1)}%`,
-      body: `${best.label} now carries ${best.share.toFixed(0)}% of net revenue (${formatCurrency(best.revenue, currency)} from ${best.bookings} bookings), while ${worst.label} moved ${worst.deltaPercent.toFixed(1)}%. Shifting spend toward the channel with the lower effective commission is worth modelling before the next peak.`,
+      body: `Worth shifting spend toward the channel with the lower effective commission before the next peak.`,
       metric: `${best.share.toFixed(0)}% share`,
+      impact: {
+        value: `${best.deltaPercent >= 0 ? '+' : ''}${best.deltaPercent.toFixed(1)}%`,
+        caption: `${best.label} · ${formatCurrency(best.revenue, currency, { compact: true })} from ${formatNumber(best.bookings)} bookings`,
+        direction: best.deltaPercent >= 0 ? 'up' : 'down',
+      },
+      visual: {
+        kind: 'comparison',
+        a: { label: best.label, value: Math.abs(best.deltaPercent) },
+        b: { label: worst.label, value: Math.abs(worst.deltaPercent) },
+        unit: '%',
+      },
       href: '/dashboard/analytics',
       actionLabel: 'Compare channels',
     })
@@ -1990,8 +2041,21 @@ function buildInsights(ctx: {
     id: 'ins_cancellations',
     severity: cur.cancelRate > 9 ? 'critical' : cancelDelta > 1 ? 'warning' : 'positive',
     title: `Cancellation rate is ${cur.cancelRate.toFixed(1)}%, ${cancelDelta >= 0 ? 'up' : 'down'} ${Math.abs(cancelDelta).toFixed(1)} points`,
-    body: `${formatNumber(cur.cancellations)} of ${formatNumber(cur.bookings + cur.cancellations)} bookings were cancelled or refunded, against ${prev.cancelRate.toFixed(1)}% in the previous period. Weather-driven operator cancellations are the largest single cause — tightening the go/no-go call to 18 hours out would let guests rebook instead of refunding.`,
+    body: `Weather-driven operator calls are the largest single cause. Tightening the go/no-go to 18 hours out would let guests rebook instead of refunding.`,
     metric: `${formatNumber(cur.cancellations)} cancelled`,
+    impact: {
+      value: `${cur.cancelRate.toFixed(1)}%`,
+      caption: `${formatNumber(cur.cancellations)} of ${formatNumber(cur.bookings + cur.cancellations)} bookings cancelled or refunded`,
+      direction: cancelDelta > 0 ? 'up' : cancelDelta < 0 ? 'down' : 'flat',
+    },
+    visual: {
+      kind: 'trend',
+      label: 'Cancellation rate',
+      from: prev.cancelRate,
+      to: cur.cancelRate,
+      unit: '%',
+      higherIsBetter: false,
+    },
     href: '/dashboard/bookings?status=cancelled',
     actionLabel: 'Review cancellations',
   })
@@ -2001,8 +2065,22 @@ function buildInsights(ctx: {
     id: 'ins_leadtime',
     severity: 'neutral',
     title: `Guests book ${cur.leadDays.toFixed(1)} days ahead on average`,
-    body: `Average lead time moved from ${prev.leadDays.toFixed(1)} to ${cur.leadDays.toFixed(1)} days. With ${tenant.stats.activeActivities} live products and an average order of ${formatCurrency(cur.aov, currency)}, an early-bird price released ${Math.max(14, Math.round(cur.leadDays * 2))} days out would pull demand forward into the slots that currently fill last.`,
+    body: `An early-bird price released ${Math.max(14, Math.round(cur.leadDays * 2))} days out would pull demand forward into the slots that currently fill last.`,
     metric: `${cur.leadDays.toFixed(1)} days`,
+    impact: {
+      value: cur.leadDays.toFixed(1),
+      unit: ' days',
+      caption: `average booking lead time · ${formatCurrency(cur.aov, currency)} average order`,
+      direction: cur.leadDays >= prev.leadDays ? 'up' : 'down',
+    },
+    visual: {
+      kind: 'trend',
+      label: 'Lead time',
+      from: prev.leadDays,
+      to: cur.leadDays,
+      unit: 'd',
+      higherIsBetter: true,
+    },
     href: '/dashboard/analytics',
     actionLabel: 'Model the offer',
   })

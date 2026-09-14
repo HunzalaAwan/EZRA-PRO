@@ -20,12 +20,20 @@ import {
   toDateKey,
   isSameDay,
   clamp,
+  fillRate,
+  formatTime,
   minutesSinceMidnight,
   formatDateLong,
 } from '@/lib/utils'
 import { NOW } from '@/lib/demo-core'
 import type { CalendarEvent } from '@/lib/demo'
-import { DepartureChip } from '@/components/dashboard/calendar/departure-chip'
+import {
+  DepartureChip,
+  EVENT_BORDER,
+  EVENT_SOLID,
+  EVENT_TINT,
+  eventVar,
+} from '@/components/dashboard/calendar/departure-chip'
 
 /* ==========================================================================
    GEOMETRY
@@ -275,7 +283,151 @@ export function EventLayer({
 
 /* ==========================================================================
    WEEK VIEW
+
+   A proportional time grid is the wrong instrument here. At 90+ departures a
+   week this operator runs 12-16 concurrent blocks per day, and a time grid
+   divides the column between them — every block lands about 8px wide, so
+   every label truncates to "6:0 M C." and the colour coding carries all the
+   meaning on its own.
+
+   So the week drops proportional positioning and stacks instead: each
+   departure gets the FULL column width, in time order, inside a time-of-day
+   band. You lose "this block is twice as tall because it runs twice as long"
+   and gain being able to read the activity name, the time and the seat count
+   — which is what an operator actually scans a week for.
+
+   Day view keeps the real time grid (one day across the full width has room
+   for it), and every export above is still what it uses.
    ========================================================================== */
+
+interface Band {
+  key: string
+  label: string
+  /** Inclusive start hour, exclusive end. */
+  from: number
+  to: number
+}
+
+/** Bands chosen to match how the day actually runs, not even clock divisions. */
+const BANDS: Band[] = [
+  { key: 'early', label: 'Early', from: 0, to: 9 },
+  { key: 'morning', label: 'Morning', from: 9, to: 12 },
+  { key: 'afternoon', label: 'Afternoon', from: 12, to: 17 },
+  { key: 'evening', label: 'Evening', from: 17, to: 24 },
+]
+
+function bandFor(event: CalendarEvent): Band {
+  const hour = new Date(event.departure.startsAt).getHours()
+  return BANDS.find((b) => hour >= b.from && hour < b.to) ?? BANDS[BANDS.length - 1]
+}
+
+/**
+ * One departure, full column width. Everything an operator scans for is on
+ * three lines: when, what, and how full.
+ */
+function DepartureCard({
+  event,
+  onSelect,
+}: {
+  event: CalendarEvent
+  onSelect: (departureId: string) => void
+}) {
+  const { departure, activity, seatsLeft } = event
+  const cancelled = departure.status === 'cancelled'
+  const weather = departure.status === 'weather_hold'
+  const soldOut = !cancelled && seatsLeft === 0
+  const fill = fillRate(departure.booked, departure.capacity)
+
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(departure.id)}
+      aria-label={`${formatTime(departure.startsAt)} ${activity.name}, ${departure.booked} of ${departure.capacity} seats booked${
+        cancelled ? ', cancelled' : soldOut ? ', sold out' : weather ? ', weather hold' : ''
+      }`}
+      className={cn(
+        'group/card relative block w-full overflow-hidden rounded-lg border py-1.5 pr-1.5 pl-2 text-left',
+        eventVar(activity.colorKey),
+        'transition-all duration-150 ease-[var(--ease-out-expo)]',
+        'hover:-translate-y-px hover:shadow-sm',
+        'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary',
+        cancelled
+          ? 'border-line-subtle bg-surface-sunken/60 opacity-65'
+          : weather
+            ? 'border-[color-mix(in_oklab,var(--warning)_35%,transparent)] bg-warning-soft/45'
+            : cn(EVENT_BORDER, EVENT_TINT),
+        soldOut && !cancelled && 'ring-1 ring-[color-mix(in_oklab,var(--evt)_40%,transparent)] ring-inset',
+      )}
+    >
+      {/* Activity identity rail — the one place colour still does work. */}
+      <span
+        aria-hidden="true"
+        className={cn(
+          'absolute inset-y-1 left-0 w-[3px] rounded-full',
+          cancelled ? 'bg-line-strong' : weather ? 'bg-warning' : EVENT_SOLID,
+        )}
+      />
+
+      {/* when · how full */}
+      <div className="flex items-baseline justify-between gap-1.5">
+        <span
+          className={cn(
+            'text-[0.6875rem] leading-none font-bold tabular-nums',
+            cancelled ? 'text-faint line-through' : 'text-foreground',
+          )}
+        >
+          {formatTime(departure.startsAt)}
+        </span>
+        <span
+          className={cn(
+            'shrink-0 text-[0.625rem] leading-none font-semibold tabular-nums',
+            cancelled ? 'text-faint' : soldOut ? 'text-accent' : 'text-muted',
+          )}
+        >
+          {cancelled ? 'Cancelled' : `${departure.booked}/${departure.capacity}`}
+        </span>
+      </div>
+
+      {/* what */}
+      <p
+        className={cn(
+          'mt-1 line-clamp-2 text-[0.6875rem] leading-tight font-medium',
+          cancelled ? 'text-faint line-through' : 'text-foreground',
+        )}
+      >
+        {activity.name}
+      </p>
+
+      {/* how full, at a glance */}
+      {!cancelled ? (
+        <span
+          aria-hidden="true"
+          className="mt-1.5 block h-1 overflow-hidden rounded-full bg-surface-sunken"
+        >
+          <span
+            className={cn('block h-full rounded-full', weather ? 'bg-warning' : EVENT_SOLID)}
+            style={{ width: `${Math.max(3, fill)}%` }}
+          />
+        </span>
+      ) : null}
+
+      {/* Only the states that change what you'd do get a word. */}
+      {soldOut && !cancelled ? (
+        <span className="mt-1 block text-[0.5625rem] leading-none font-bold tracking-wide text-accent uppercase">
+          Sold out
+        </span>
+      ) : weather ? (
+        <span className="mt-1 block text-[0.5625rem] leading-none font-bold tracking-wide text-warning uppercase">
+          Weather hold
+        </span>
+      ) : seatsLeft <= 3 ? (
+        <span className="mt-1 block text-[0.5625rem] leading-none font-semibold text-subtle tabular-nums">
+          {seatsLeft} left
+        </span>
+      ) : null}
+    </button>
+  )
+}
 
 export interface WeekViewProps {
   weekStart: Date
@@ -297,36 +449,51 @@ export function WeekView({
     [weekStart],
   )
 
-  const byDay = React.useMemo(() => {
-    const map = new Map<string, CalendarEvent[]>()
-    for (const event of events) {
-      const key = event.departure.startsAt.slice(0, 10)
-      const bucket = map.get(key)
+  /** day key -> band key -> departures, each list already in time order. */
+  const byDayBand = React.useMemo(() => {
+    const map = new Map<string, Map<string, CalendarEvent[]>>()
+    const sorted = [...events].sort((a, b) =>
+      a.departure.startsAt.localeCompare(b.departure.startsAt),
+    )
+    for (const event of sorted) {
+      const dayKey = event.departure.startsAt.slice(0, 10)
+      const bandKey = bandFor(event).key
+      let bands = map.get(dayKey)
+      if (!bands) {
+        bands = new Map()
+        map.set(dayKey, bands)
+      }
+      const bucket = bands.get(bandKey)
       if (bucket) bucket.push(event)
-      else map.set(key, [event])
+      else bands.set(bandKey, [event])
     }
     return map
   }, [events])
 
-  const { startHour, endHour } = React.useMemo(() => gridBounds(events), [events])
-  const totalHeight = (endHour - startHour) * HOUR_HEIGHT
-  const todayIndex = days.findIndex((day) => isSameDay(day, NOW))
+  /** Only render bands that any day in the week actually uses. */
+  const activeBands = React.useMemo(
+    () =>
+      BANDS.filter((band) =>
+        days.some((day) => (byDayBand.get(toDateKey(day))?.get(band.key)?.length ?? 0) > 0),
+      ),
+    [days, byDayBand],
+  )
 
   return (
     <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-sm">
       <div className="max-h-[calc(100dvh-17rem)] min-h-[30rem] overflow-auto">
-        <div className="min-w-[54rem]">
-          {/* Sticky day header */}
-          <div className="sticky top-0 z-40 grid grid-cols-[3.5rem_repeat(7,minmax(0,1fr))] border-b border-line bg-surface/92 backdrop-blur-md">
-            <div className="border-r border-line-subtle" />
+        <div className="min-w-[56rem]">
+          {/* ---- sticky day header ---------------------------------------- */}
+          <div className="sticky top-0 z-40 grid grid-cols-7 border-b border-line bg-surface/92 backdrop-blur-md">
             {days.map((day) => {
-              const dayEvents = byDay.get(toDateKey(day)) ?? []
+              const bands = byDayBand.get(toDateKey(day))
+              const dayEvents = bands ? [...bands.values()].flat() : []
               const isToday = isSameDay(day, NOW)
               const isWeekend = day.getDay() === 0 || day.getDay() === 6
-              const guests = dayEvents.reduce(
-                (sum, e) => (e.departure.status === 'cancelled' ? sum : sum + e.departure.booked),
-                0,
-              )
+              const live = dayEvents.filter((e) => e.departure.status !== 'cancelled')
+              const guests = live.reduce((sum, e) => sum + e.departure.booked, 0)
+              const seats = live.reduce((sum, e) => sum + e.departure.capacity, 0)
+              const sold = fillRate(guests, seats)
 
               return (
                 <button
@@ -335,7 +502,7 @@ export function WeekView({
                   onClick={() => onOpenDay(day)}
                   aria-label={`Open ${formatDateLong(day)}`}
                   className={cn(
-                    'flex flex-col items-center gap-0.5 border-l border-line-subtle px-2 py-2.5',
+                    'flex flex-col items-center gap-1 border-l border-line-subtle px-2 py-2.5 first:border-l-0',
                     'transition-colors duration-150 hover:bg-surface-sunken',
                     isWeekend && 'bg-surface-sunken/40',
                     isToday && 'bg-primary-soft/40',
@@ -346,56 +513,109 @@ export function WeekView({
                   </span>
                   <span
                     className={cn(
-                      'tabular inline-flex size-7 items-center justify-center rounded-full text-sm font-semibold',
+                      'inline-flex size-7 items-center justify-center rounded-full text-sm font-semibold tabular-nums',
                       isToday ? 'bg-primary text-on-primary' : 'text-foreground',
                     )}
                   >
                     {day.getDate()}
                   </span>
-                  <span className="tabular text-[0.625rem] text-subtle">
-                    {dayEvents.length === 0 ? '—' : `${dayEvents.length} · ${guests}g`}
-                  </span>
+
+                  {dayEvents.length === 0 ? (
+                    <span className="text-[0.625rem] text-faint">—</span>
+                  ) : (
+                    <>
+                      <span className="text-[0.625rem] text-subtle tabular-nums">
+                        {live.length} runs · {guests}g
+                      </span>
+                      {/* One bar per day makes the week's shape readable at a glance. */}
+                      <span
+                        aria-hidden="true"
+                        className="mt-0.5 block h-1 w-full max-w-[4.5rem] overflow-hidden rounded-full bg-surface-sunken"
+                      >
+                        <span
+                          className={cn(
+                            'block h-full rounded-full',
+                            sold >= 90 ? 'bg-accent' : sold >= 60 ? 'bg-primary' : 'bg-line-strong',
+                          )}
+                          style={{ width: `${Math.max(3, sold)}%` }}
+                        />
+                      </span>
+                    </>
+                  )}
                 </button>
               )
             })}
           </div>
 
-          {/* Time grid */}
-          <div className="grid grid-cols-[3.5rem_repeat(7,minmax(0,1fr))] pt-3 pb-6">
-            <TimeAxis startHour={startHour} endHour={endHour} showNow={todayIndex >= 0} />
+          {/* ---- banded, stacked departures -------------------------------- */}
+          {activeBands.map((band) => (
+            <section key={band.key} className="border-b border-line last:border-b-0">
+              <h3 className="sticky top-[5.25rem] z-30 flex items-center gap-2 bg-surface-sunken/85 px-3 py-1 text-[0.625rem] font-bold tracking-[0.12em] text-subtle uppercase backdrop-blur-sm">
+                {band.label}
+                <span className="font-medium tracking-normal text-faint normal-case">
+                  {hourLabel(band.from)} – {hourLabel(band.to === 24 ? 23 : band.to)}
+                </span>
+              </h3>
 
-            {days.map((day) => {
-              const dayEvents = byDay.get(toDateKey(day)) ?? []
-              const isToday = isSameDay(day, NOW)
-              const isWeekend = day.getDay() === 0 || day.getDay() === 6
+              <div className="grid grid-cols-7">
+                {days.map((day) => {
+                  const dayEvents = byDayBand.get(toDateKey(day))?.get(band.key) ?? []
+                  const isToday = isSameDay(day, NOW)
+                  const isWeekend = day.getDay() === 0 || day.getDay() === 6
 
-              return (
-                <div
-                  key={toDateKey(day)}
-                  className={cn(
-                    'relative border-l border-line-subtle',
-                    isWeekend && 'bg-surface-sunken/30',
-                    isToday && 'bg-primary-soft/15',
-                  )}
-                  style={{ height: totalHeight }}
-                >
-                  <HourLines
-                    startHour={startHour}
-                    endHour={endHour}
-                    day={day}
-                    onCreate={onCreate}
-                  />
-                  <EventLayer
-                    events={dayEvents}
-                    startHour={startHour}
-                    endHour={endHour}
-                    onSelectEvent={onSelectEvent}
-                  />
-                  {isToday ? <NowLine startHour={startHour} /> : null}
-                </div>
-              )
-            })}
-          </div>
+                  return (
+                    <div
+                      key={toDateKey(day)}
+                      className={cn(
+                        'flex flex-col gap-1.5 border-l border-line-subtle p-1.5 first:border-l-0',
+                        isWeekend && 'bg-surface-sunken/25',
+                        isToday && 'bg-primary-soft/12',
+                      )}
+                    >
+                      {dayEvents.map((event) => (
+                        <DepartureCard
+                          key={event.departure.id}
+                          event={event}
+                          onSelect={onSelectEvent}
+                        />
+                      ))}
+
+                      {/* Quiet affordance — never competes with the cards. */}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onCreate(
+                            new Date(
+                              day.getFullYear(),
+                              day.getMonth(),
+                              day.getDate(),
+                              band.from === 0 ? 7 : band.from,
+                              0,
+                            ),
+                          )
+                        }
+                        aria-label={`New ${band.label.toLowerCase()} departure on ${formatDateLong(day)}`}
+                        className={cn(
+                          'flex min-h-6 items-center justify-center rounded-md border border-dashed border-line-subtle',
+                          'opacity-0 transition-opacity duration-150',
+                          'hover:border-primary hover:bg-primary-soft/40 hover:opacity-100 focus-visible:opacity-100',
+                          dayEvents.length === 0 && 'opacity-40',
+                        )}
+                      >
+                        <Plus aria-hidden="true" className="size-3 text-primary" />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+          ))}
+
+          {activeBands.length === 0 ? (
+            <p className="px-4 py-16 text-center text-sm text-subtle">
+              No departures scheduled this week.
+            </p>
+          ) : null}
         </div>
       </div>
     </div>

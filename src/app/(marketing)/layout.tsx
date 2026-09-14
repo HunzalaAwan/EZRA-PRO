@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import { PageTransition } from '@/components/motion/page-transition'
+import { SmoothScroll } from '@/components/providers/smooth-scroll'
 import { SiteFooter } from '@/components/marketing/site-footer'
 import { SiteHeader } from '@/components/marketing/site-header'
 
@@ -14,6 +15,7 @@ import { SiteHeader } from '@/components/marketing/site-header'
  */
 export default function MarketingLayout({ children }: { children: ReactNode }) {
   return (
+    <SmoothScroll>
     <div className="relative flex min-h-dvh flex-col bg-background">
       <a
         href="#main-content"
@@ -30,5 +32,6 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
 
       <SiteFooter />
     </div>
+    </SmoothScroll>
   )
 }

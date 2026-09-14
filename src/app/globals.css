@@ -81,6 +81,7 @@
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-display: var(--font-sora), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, monospace;
+  --font-serif: var(--font-instrument-serif), "Iowan Old Style", "Palatino Linotype", Georgia, serif;
 
   /* Fluid display scale */
   --text-display-sm: clamp(1.875rem, 1.55rem + 1.6vw, 2.75rem);
@@ -483,4 +484,23 @@
 
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}
+
+/* ============================================================================
+   LENIS — smooth scroll on the marketing site (see providers/smooth-scroll)
+   Lenis stamps these classes on <html>. `scroll-behavior: smooth` on html
+   would fight its own interpolation, so it is switched off while Lenis runs.
+   ========================================================================== */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+.lenis.lenis-stopped {
+  overflow: hidden;
 }

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, Sora } from 'next/font/google'
+import { Instrument_Serif, Inter, Sora } from 'next/font/google'
 import { ThemeProvider, themeInitScript } from '@/components/providers/theme-provider'
 import { Toaster } from '@/components/ui/toaster'
 import './globals.css'
@@ -16,6 +16,18 @@ const sora = Sora({
   display: 'swap',
   // 800 is never used; every display heading is 600 (base CSS) or 700.
   weight: ['400', '500', '600', '700'],
+})
+
+/**
+ * One editorial voice for the marketing site — pull quotes and a single
+ * italic word in a headline. Loaded in its two real styles only.
+ */
+const instrumentSerif = Instrument_Serif({
+  subsets: ['latin'],
+  variable: '--font-instrument-serif',
+  display: 'swap',
+  weight: '400',
+  style: ['normal', 'italic'],
 })
 
 export const metadata: Metadata = {
@@ -61,7 +73,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${sora.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${sora.variable} ${instrumentSerif.variable}`}>
       <head>
         {/* Applies the stored theme before first paint — prevents a flash of the wrong scheme. */}
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />

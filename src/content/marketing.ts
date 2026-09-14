@@ -19,34 +19,33 @@ import type {
    ========================================================================== */
 
 export const HERO = {
-  eyebrow: 'Built for operators, not spreadsheets',
-  headlineLead: 'Booking software for experiences that',
-  /** Cycled by the typewriter effect in the hero. */
-  headlineRotators: ['sell out.', 'run on time.', 'grow every season.', 'guests rave about.'],
+  eyebrow: 'Built for tour & activity operators',
+  headlineLead: 'Booking & experience software for',
+  headlineRotators: ['guided tours.', 'outdoor adventures.', 'dining & hospitality.', 'attractions & wellness.', 'watersports & charters.'],
   subhead:
-    'EZRA Pro runs your availability, checkout, manifest and payouts in one place — and tells you which departures to add, cut or reprice before the season turns.',
+    'EZRA Pro runs availability, checkout, rosters, manifests and next-day payouts for experience operators worldwide — from city sightseeing and mountain ziplines to dive charters and sunset dining.',
   primaryCta: { label: 'Start free — no card', href: '/signup' },
   secondaryCta: { label: 'See a live demo', href: '/dashboard' },
-  microProof: 'Free migration from FareHarbor or Peek Pro · Live in a weekend · No contract',
+  microProof: '4% flat booking fee · Free migration from FareHarbor or Peek Pro · Live in a weekend',
 } as const
 
 export const STATS: { value: string; label: string; hint?: string }[] = [
   { value: '$2.4B+', label: 'Processed for operators', hint: 'Gross booking value across the platform in the last 12 months' },
-  { value: '11,800+', label: 'Experiences live', hint: 'Activities actively selling on EZRA Pro today' },
+  { value: '11,800+', label: 'Experiences live', hint: 'Tours & activities actively selling on EZRA Pro today' },
   { value: '+31%', label: 'Average lift in direct bookings', hint: 'Median across operators in their first 6 months' },
   { value: '99.98%', label: 'Checkout uptime', hint: 'Rolling 90-day availability of the booking path' },
 ]
 
 export const LOGO_MARKS: { name: string; mark: string }[] = [
-  { name: 'Blue Horizon Watersports', mark: 'BLUE HORIZON' },
-  { name: 'Coral Cay Expeditions', mark: 'CORAL CAY' },
   { name: 'Ridgeline Adventure Co.', mark: 'RIDGELINE' },
-  { name: 'Saltline Kitchen', mark: 'SALTLINE' },
-  { name: 'Kona Deep Charters', mark: 'KONA DEEP' },
-  { name: 'Northshore Surf School', mark: 'NORTHSHORE' },
+  { name: 'Blue Horizon Watersports', mark: 'BLUE HORIZON' },
+  { name: 'Saltline Kitchen & Terrace', mark: 'SALTLINE' },
+  { name: 'Summit Heli Tours', mark: 'SUMMIT HELI' },
+  { name: 'Coral Cay Expeditions', mark: 'CORAL CAY' },
   { name: 'Cabo Azul Excursions', mark: 'CABO AZUL' },
   { name: 'Tidewater Sailing', mark: 'TIDEWATER' },
-  { name: 'Summit Heli Tours', mark: 'SUMMIT HELI' },
+  { name: 'Northshore Surf School', mark: 'NORTHSHORE' },
+  { name: 'Kona Deep Charters', mark: 'KONA DEEP' },
   { name: 'Lagoon Paddle Club', mark: 'LAGOON PADDLE' },
 ]
 
@@ -60,22 +59,22 @@ export const FEATURE_BLOCKS: FeatureBlock[] = [
     eyebrow: 'Conversion',
     title: 'A checkout guests actually finish',
     description:
-      'Most booking flows lose a third of guests between "check availability" and "pay". Ours is three taps on a phone at the beach, with Apple Pay and Google Pay on by default.',
+      'Most booking flows lose a third of guests between "check availability" and "pay". Ours is three taps on a phone with Apple Pay and Google Pay on by default.',
     icon: 'ShoppingCart',
     bullets: [
-      'Live availability — never oversell a boat again',
+      'Live availability — never oversell a tour again',
       'Apple Pay, Google Pay and card, no account required',
       'Abandoned-cart recovery that actually converts',
-      'Works on 3G at the dock',
+      'Works on mobile signal at any location',
     ],
     accent: 'lagoon',
   },
   {
     id: 'feat-calendar',
     eyebrow: 'Operations',
-    title: 'Every departure, crew and boat on one timeline',
+    title: 'Every departure, guide and resource on one timeline',
     description:
-      'Drag a departure to move it. Assign a captain and a vessel and watch double-bookings become impossible. See the whole week at a glance, or drop into a single day manifest.',
+      'Drag a departure to move it. Assign a guide or a vehicle and watch double-bookings become impossible. See the whole week at a glance or drop into a daily manifest.',
     icon: 'CalendarDays',
     bullets: [
       'Month, week, day and agenda views',
@@ -105,13 +104,13 @@ export const FEATURE_BLOCKS: FeatureBlock[] = [
     eyebrow: 'Cash flow',
     title: 'Deposits today, payout tomorrow',
     description:
-      'Take a deposit at booking and the balance on the day. Split tips to the crew automatically. Money lands next business day instead of sitting in someone else&rsquo;s account for a week.',
+      'Take a deposit at booking and the balance on the day. Split tips to the guides automatically. Money lands next business day at a flat 4% rate instead of sitting in someone else&rsquo;s account for a week.',
     icon: 'CreditCard',
     bullets: [
       'Next-day payouts as standard',
+      'Flat 4% booking rate',
       'Deposits, balances and partial refunds',
-      'Automatic crew tip splitting',
-      'Chargeback handling we fight on your behalf',
+      'Automatic guide tip splitting',
     ],
     accent: 'sunset',
   },
@@ -120,11 +119,11 @@ export const FEATURE_BLOCKS: FeatureBlock[] = [
     eyebrow: 'Retention',
     title: 'Know your guests before they arrive',
     description:
-      'Every guest carries their history: trips taken, allergies, certifications, the fact they get seasick and always want the bow. Turn a first-timer into a family that comes back for a decade.',
+      'Every guest carries their history: trips taken, dietary preferences, certifications, and special notes. Turn a first-timer into a family that comes back year after year.',
     icon: 'Users',
     bullets: [
       'Full guest profile with trip history',
-      'Waivers signed before they leave the hotel',
+      'Digital waivers signed before departure',
       'Automated review requests that lift ratings',
       'Segments for win-back and VIP campaigns',
     ],
@@ -138,7 +137,7 @@ export const FEATURE_BLOCKS: FeatureBlock[] = [
       'Viator, GetYourGuide and Expedia read the same live availability as your own site. Sell the last seat anywhere and it disappears everywhere, in under a second.',
     icon: 'Share2',
     bullets: [
-      'Two-way sync with the major OTAs',
+      'Two-way sync with major OTAs',
       'One inventory pool, zero manual reconciliation',
       'Per-channel margin reporting',
       'Google Things to do included free',
@@ -165,11 +164,11 @@ export const FEATURE_BLOCKS: FeatureBlock[] = [
     eyebrow: 'Team',
     title: 'Roles that match how you actually work',
     description:
-      'Your dock lead sees today&rsquo;s manifest. Your bookkeeper sees payouts. Your captain sees the crew list on their phone and nothing else. Nobody sees the bank account who shouldn&rsquo;t.',
+      'Your tour guide sees today&rsquo;s manifest. Your bookkeeper sees payouts. Your guide sees the roster on their phone and nothing else. Nobody sees the bank account who shouldn&rsquo;t.',
     icon: 'UserCog',
     bullets: [
       'Six role levels, permissions down to the field',
-      'Mobile manifest and check-in for crew',
+      'Mobile manifest and check-in for staff',
       'Full audit log of every change',
       'Multi-location and multi-brand support',
     ],
@@ -185,18 +184,6 @@ export const VERTICAL_PITCHES: Record<
   VerticalKey,
   { headline: string; body: string; proofStat: string; proofLabel: string; bullets: string[] }
 > = {
-  watersports: {
-    headline: 'Built for boats, boards and tanks',
-    body: 'Capacity per vessel, certification checks at booking, weather holds that notify every guest at once, and a wet-hands check-in that works with no signal at the dock.',
-    proofStat: '+38%',
-    proofLabel: 'direct bookings, Blue Horizon Watersports',
-    bullets: [
-      'Per-vessel capacity and crew assignment',
-      'Certification and waiver capture at checkout',
-      'One-tap weather cancellation with auto-refunds',
-      'Tide and swell context on every departure',
-    ],
-  },
   tours: {
     headline: 'Built for guided tours at scale',
     body: 'Multi-departure days, guide rostering, multi-language groups and private upgrades — with a manifest your guides can run from a phone.',
@@ -207,18 +194,6 @@ export const VERTICAL_PITCHES: Record<
       'Guide rostering with conflict detection',
       'Private and group pricing side by side',
       'Pickup lists sorted by hotel and time',
-    ],
-  },
-  island: {
-    headline: 'Built for resorts and excursion desks',
-    body: 'One desk selling twenty operators&rsquo; trips, commission tracked per partner, and a concierge view that books a guest into anything on the island in seconds.',
-    proofStat: '3.1x',
-    proofLabel: 'excursion attachment rate',
-    bullets: [
-      'Multi-operator reseller marketplace',
-      'Per-partner commission and settlement',
-      'Concierge quick-book with room charging',
-      'Cruise-ship arrival demand forecasting',
     ],
   },
   adventure: {
@@ -257,6 +232,30 @@ export const VERTICAL_PITCHES: Record<
       'Instructor scheduling and pay rates',
     ],
   },
+  watersports: {
+    headline: 'Built for boats, charters and dives',
+    body: 'Capacity per vessel, certification checks at booking, weather holds that notify every guest at once, and a wet-hands check-in that works with no signal at the slip.',
+    proofStat: '+38%',
+    proofLabel: 'direct bookings, Blue Horizon',
+    bullets: [
+      'Per-vessel capacity and crew assignment',
+      'Certification and waiver capture at checkout',
+      'One-tap weather cancellation with auto-refunds',
+      'Tide and swell context on every departure',
+    ],
+  },
+  island: {
+    headline: 'Built for resorts and excursion desks',
+    body: 'One desk selling twenty operators&rsquo; trips, commission tracked per partner, and a concierge view that books a guest into anything in seconds.',
+    proofStat: '3.1x',
+    proofLabel: 'excursion attachment rate',
+    bullets: [
+      'Multi-operator reseller marketplace',
+      'Per-partner commission and settlement',
+      'Concierge quick-book with room charging',
+      'Cruise-ship arrival demand forecasting',
+    ],
+  },
 }
 
 /* ==========================================================================
@@ -273,7 +272,7 @@ const FEATURE_MATRIX = [
   'Custom-branded storefront',
   'Advanced analytics & insights',
   'OTA channel manager',
-  'Resource & crew scheduling',
+  'Resource & staff scheduling',
   'Dynamic pricing & promotions',
   'Gift cards & memberships',
   'Multi-location & multi-brand',
@@ -310,11 +309,11 @@ export const PRICING_PLANS: PricingPlan[] = [
   {
     id: 'starter',
     name: 'Starter',
-    commissionPercent: 6,
+    commissionPercent: 4,
     monthlyPrice: 0,
     annualPrice: 0,
-    blurb: 'For new operators taking their first bookings online.',
-    highlights: ['No monthly fee', 'Unlimited activities', 'Next-day payouts'],
+    blurb: 'Flat 4% per booking. For new operators taking their first bookings online.',
+    highlights: ['No monthly fee', 'Flat 4% rate', 'Unlimited activities', 'Next-day payouts'],
     features: buildFeatures('starter'),
     cta: 'Start free',
     popular: false,
@@ -322,11 +321,11 @@ export const PRICING_PLANS: PricingPlan[] = [
   {
     id: 'growth',
     name: 'Growth',
-    commissionPercent: 4.5,
-    monthlyPrice: 7900,
-    annualPrice: 79000,
-    blurb: 'For established operators who want the commission down and the data up.',
-    highlights: ['Lower commission', 'Advanced analytics', 'OTA channel manager'],
+    commissionPercent: 4,
+    monthlyPrice: 4900,
+    annualPrice: 49000,
+    blurb: '4% flat rate with full channel manager and advanced analytics.',
+    highlights: ['Flat 4% rate', 'Advanced analytics', 'OTA channel manager'],
     features: buildFeatures('growth'),
     cta: 'Start 14-day trial',
     popular: true,
@@ -335,11 +334,11 @@ export const PRICING_PLANS: PricingPlan[] = [
   {
     id: 'scale',
     name: 'Scale',
-    commissionPercent: 3,
-    monthlyPrice: 24900,
-    annualPrice: 249000,
-    blurb: 'For multi-vessel, multi-location operators running serious volume.',
-    highlights: ['Lowest commission', 'Dynamic pricing', 'Multi-location'],
+    commissionPercent: 2.5,
+    monthlyPrice: 19900,
+    annualPrice: 199000,
+    blurb: 'Reduced 2.5% rate for high-volume operators and multi-location businesses.',
+    highlights: ['2.5% volume rate', 'Dynamic pricing', 'Multi-location'],
     features: buildFeatures('scale'),
     cta: 'Start 14-day trial',
     popular: false,
@@ -350,8 +349,8 @@ export const PRICING_PLANS: PricingPlan[] = [
     commissionPercent: 0,
     monthlyPrice: 0,
     annualPrice: 0,
-    blurb: 'For resorts, groups and marketplaces with bespoke requirements.',
-    highlights: ['Custom commission', 'Dedicated CSM', '99.99% SLA'],
+    blurb: 'For large attractions, resort groups and marketplaces with custom volumes.',
+    highlights: ['Custom rate', 'Dedicated CSM', '99.99% SLA'],
     features: buildFeatures('enterprise'),
     cta: 'Talk to sales',
     popular: false,

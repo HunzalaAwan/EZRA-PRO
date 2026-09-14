@@ -21,19 +21,8 @@ import dynamic from 'next/dynamic'
  * difference never registers as layout shift for the reader.
  */
 
-const ProductShowcase = dynamic(
-  () => import('./product-showcase').then((m) => m.ProductShowcase),
-  { ssr: false, loading: () => <SectionPlaceholder className="min-h-[220vh] border-y border-line bg-surface-sunken" /> },
-)
-
-const AnalyticsShowcase = dynamic(
-  () => import('./analytics-showcase').then((m) => m.AnalyticsShowcase),
-  { ssr: false, loading: () => <SectionPlaceholder className="min-h-[60rem] bg-background-subtle" /> },
-)
-
-function SectionPlaceholder({ className }: { className?: string }) {
-  return <div aria-hidden="true" className={className} />
-}
+import { ProductShowcase } from './product-showcase'
+import { AnalyticsShowcase } from './analytics-showcase'
 
 function useNearViewport<T extends Element>(rootMargin: string) {
   const ref = React.useRef<T>(null)
@@ -63,27 +52,9 @@ function useNearViewport<T extends Element>(rootMargin: string) {
 }
 
 export function LazyProductShowcase({ className }: { className?: string }) {
-  const { ref, near } = useNearViewport<HTMLDivElement>('1200px 0px')
-  return (
-    <div ref={ref}>
-      {near ? (
-        <ProductShowcase className={className} />
-      ) : (
-        <SectionPlaceholder className="min-h-[220vh] border-y border-line bg-surface-sunken" />
-      )}
-    </div>
-  )
+  return <ProductShowcase className={className} />
 }
 
 export function LazyAnalyticsShowcase({ className }: { className?: string }) {
-  const { ref, near } = useNearViewport<HTMLDivElement>('1200px 0px')
-  return (
-    <div ref={ref}>
-      {near ? (
-        <AnalyticsShowcase className={className} />
-      ) : (
-        <SectionPlaceholder className="min-h-[60rem] bg-background-subtle" />
-      )}
-    </div>
-  )
+  return <AnalyticsShowcase className={className} />
 }

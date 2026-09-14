@@ -551,12 +551,73 @@ export interface AnalyticsSnapshot {
   insights: Insight[]
 }
 
+/**
+ * The one number an insight is really about, pulled out of the prose so the
+ * panel can lead with it.
+ */
+export interface InsightImpact {
+  /** Pre-formatted headline figure, e.g. "$5.4K" or "96%". */
+  value: string
+  /** Unit that trails the figure at smaller size, e.g. "/mo" or "of capacity". */
+  unit?: string
+  /** What the figure means, e.g. "recoverable a month". */
+  caption: string
+  /** Tints the figure. Omit where the number is neither good nor bad. */
+  direction?: TrendDirection
+}
+
+/**
+ * A small chart the insight row draws instead of describing in words.
+ * Every variant is normalised to percentages so the panel needs no scale logic.
+ */
+export type InsightVisual =
+  /** Two slots, products or channels side by side — the gap IS the point. */
+  | {
+      kind: 'comparison'
+      a: { label: string; value: number }
+      b: { label: string; value: number }
+      /** Appended to both values, e.g. "%". */
+      unit?: string
+    }
+  /** A single fill against capacity, with an optional target marker. */
+  | {
+      kind: 'meter'
+      label: string
+      /** 0-100. */
+      value: number
+      /** 0-100. Draws a tick where the value ought to sit. */
+      target?: number
+      unit?: string
+    }
+  /** One slice of a whole, with the runner-up for context. */
+  | {
+      kind: 'share'
+      label: string
+      /** 0-100. */
+      value: number
+      runnerUp?: { label: string; value: number }
+    }
+  /** Movement between two readings of the same measure. */
+  | {
+      kind: 'trend'
+      label: string
+      from: number
+      to: number
+      unit?: string
+      /** Whether a rise is good. Drives the colour. */
+      higherIsBetter?: boolean
+    }
+
 export interface Insight {
   id: string
   severity: 'positive' | 'neutral' | 'warning' | 'critical'
   title: string
   body: string
   metric?: string
+  /** Headline figure, surfaced above the prose. */
+  impact?: InsightImpact
+  /** Rendered as a small inline chart in place of describing the numbers. */
+  visual?: InsightVisual
   /** Optional deep link into the dashboard. */
   href?: string
   actionLabel?: string

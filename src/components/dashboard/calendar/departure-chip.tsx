@@ -244,7 +244,7 @@ export function DepartureChip({
       ) : null}
 
       {roomy ? (
-        <span className="tabular mt-auto flex items-center gap-1.5 text-[0.625rem] font-medium opacity-80">
+        <span className="tabular flex items-center gap-1.5 text-[0.625rem] font-medium opacity-80">
           <span>
             {departure.booked}/{departure.capacity} seats
           </span>
