@@ -143,10 +143,10 @@ export function LoginForm({ redirectTo = '/dashboard', className, ...props }: Lo
             exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -10, scale: 0.98 }}
             transition={transition}
           >
-            <div className="relative flex items-start gap-3 rounded-xl border border-dashed border-[color-mix(in_oklab,var(--primary)_38%,transparent)] bg-primary-soft/50 p-3.5 pr-10">
+            <div className="relative flex items-start gap-3 rounded-xl border border-primary/25 bg-primary-soft/50 p-3.5 pr-10">
               <span
                 aria-hidden="true"
-                className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary text-on-primary shadow-[0_4px_12px_-4px_color-mix(in_oklab,var(--primary)_70%,transparent)]"
+                className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-primary text-on-primary"
               >
                 <Sparkles className="size-4" />
               </span>

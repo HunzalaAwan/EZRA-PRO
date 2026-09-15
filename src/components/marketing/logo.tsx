@@ -1,8 +1,5 @@
 'use client'
 
-// Client-only for one reason: `useId()` gives every instance its own gradient
-// ids. Two logos on a page (header + footer) would otherwise both resolve
-// `url(#…)` to whichever mark rendered first.
 import * as React from 'react'
 
 import { cn } from '@/lib/utils'
@@ -25,16 +22,12 @@ export interface LogoProps extends Omit<React.ComponentProps<'span'>, 'children'
 /**
  * EZRA Pro brand mark.
  *
- * A sun cresting a horizon over two swells, set in a lagoon→coral squircle.
+ * A sun cresting a horizon over two swells, set in a solid squircle in the primary colour.
  * The glyph is drawn with light strokes at ~95% opacity rather than flat white
- * so it keeps its weight against the gradient in both themes, and the squircle
+ * so it keeps its weight on the tile in both themes, and the squircle
  * carries a 1px inner light edge so it never dissolves into a dark surface.
  */
 export function Logo({ size = 'md', markOnly = false, className, ...props }: LogoProps) {
-  // React ids contain characters that are awkward inside url(#…) references.
-  const uid = `ezra-logo-${React.useId().replace(/[^a-zA-Z0-9]/g, '')}`
-  const fillId = `${uid}-fill`
-  const glossId = `${uid}-gloss`
   const s = SIZE_MAP[size]
 
   return (
@@ -51,21 +44,8 @@ export function Logo({ size = 'md', markOnly = false, className, ...props }: Log
         aria-hidden={markOnly ? undefined : 'true'}
         className="shrink-0"
       >
-        <defs>
-          <linearGradient id={fillId} x1="3" y1="1" x2="37" y2="39" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="var(--color-lagoon-300)" />
-            <stop offset="42%" stopColor="var(--color-lagoon-500)" />
-            <stop offset="100%" stopColor="var(--color-coral-500)" />
-          </linearGradient>
-          <linearGradient id={glossId} x1="20" y1="0" x2="20" y2="27" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="var(--color-ink-50)" stopOpacity="0.34" />
-            <stop offset="100%" stopColor="var(--color-ink-50)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
 
-        <rect width="40" height="40" rx="12.5" fill={`url(#${fillId})`} />
-        {/* Specular sheen — reads as a physical key rather than a flat tile. */}
-        <rect width="40" height="40" rx="12.5" fill={`url(#${glossId})`} />
+        <rect width="40" height="40" rx="12.5" fill="var(--primary)" />
         <rect
           x="0.6"
           y="0.6"

@@ -171,7 +171,7 @@ export function ForgotPasswordForm({
             <div className="relative overflow-hidden rounded-2xl border border-line bg-surface p-6 text-center shadow-sm">
               <div
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-[radial-gradient(60%_100%_at_50%_0%,var(--success-soft),transparent_75%)]"
+                className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-primary-soft/40"
               />
 
               <motion.span

@@ -311,7 +311,7 @@ function MobileNavSection({ group, onNavigate }: { group: NavGroup; onNavigate: 
             onClick={onNavigate}
             className={cn(
               'mt-3 flex items-start gap-3 rounded-xl border border-line-subtle p-3',
-              'bg-[linear-gradient(135deg,var(--primary-soft),transparent_78%)]',
+              'bg-primary-soft/50',
               'transition-colors duration-200 ease-[var(--ease-out-expo)]',
               'hover:border-[color-mix(in_oklab,var(--primary)_38%,transparent)]',
             )}

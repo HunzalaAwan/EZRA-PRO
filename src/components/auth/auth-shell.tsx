@@ -1,9 +1,10 @@
 'use client'
 
 import * as React from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { AnimatePresence, motion } from 'motion/react'
-import { Quote, Star } from 'lucide-react'
+import { Star } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 import { DURATION, EASE_OUT_EXPO } from '@/lib/motion'
@@ -11,7 +12,7 @@ import { SITE } from '@/lib/site-config'
 import { NOW } from '@/lib/data/constants'
 import { STATS, TESTIMONIALS } from '@/content/marketing'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
-import { AuroraBackground, GlowOrb, NoiseOverlay } from '@/components/motion/backgrounds'
+import { PHOTOS, photoUrl, type Photo } from '@/components/marketing/story/photos'
 import { Avatar } from '@/components/ui/avatar'
 
 /* ==========================================================================
@@ -19,14 +20,14 @@ import { Avatar } from '@/components/ui/avatar'
    ========================================================================== */
 
 export interface AuthWordmarkProps {
-  /** `brand` inverts the lockup for the dark panel. */
+  /** `brand` inverts the lockup for the photo panel. */
   tone?: 'default' | 'brand'
   className?: string
 }
 
 /**
  * The EZRA mark: a rounded tile carrying a swell line. Drawn inline so it
- * tints itself from the surrounding text colour on the dark brand panel.
+ * tints itself from the surrounding text colour on the dark panel.
  */
 export function AuthWordmark({ tone = 'default', className }: AuthWordmarkProps) {
   const brand = tone === 'brand'
@@ -37,9 +38,7 @@ export function AuthWordmark({ tone = 'default', className }: AuthWordmarkProps)
         aria-hidden="true"
         className={cn(
           'relative flex size-9 items-center justify-center rounded-xl',
-          brand
-            ? 'bg-lagoon-400/18 text-lagoon-100 ring-1 ring-lagoon-200/25'
-            : 'bg-[linear-gradient(145deg,var(--color-lagoon-500),var(--color-lagoon-700))] text-on-primary shadow-[0_6px_18px_-8px_color-mix(in_oklab,var(--primary)_80%,transparent)]',
+          brand ? 'bg-white/15 text-white ring-1 ring-white/20' : 'bg-primary text-on-primary',
         )}
       >
         <svg viewBox="0 0 24 24" className="size-5" fill="none" focusable="false">
@@ -61,7 +60,7 @@ export function AuthWordmark({ tone = 'default', className }: AuthWordmarkProps)
       <span
         className={cn(
           'font-display text-[0.9375rem] font-semibold tracking-[-0.02em]',
-          brand ? 'text-lagoon-50' : 'text-foreground',
+          brand ? 'text-white' : 'text-foreground',
         )}
       >
         {SITE.name}
@@ -71,7 +70,7 @@ export function AuthWordmark({ tone = 'default', className }: AuthWordmarkProps)
 }
 
 /* ==========================================================================
-   BRAND PANEL
+   BRAND PANEL — a photograph of the trade, one operator's words over it.
    ========================================================================== */
 
 /** The marketing copy carries typographic entities; the panel renders text. */
@@ -90,25 +89,27 @@ function decodeEntities(input: string) {
   return input.replace(/&(?:rsquo|lsquo|rdquo|ldquo|mdash|ndash|hellip|amp);/g, (match) => ENTITIES[match] ?? match)
 }
 
-/** Four operators, one per vertical family, so the rotation never repeats a story. */
-const PANEL_TESTIMONIAL_IDS = ['tst-1', 'tst-2', 'tst-4', 'tst-6'] as const
+/** Four operators from four trades, each with the picture of their day. */
+const PANEL_STORIES: { id: string; trade: string; photo: Photo }[] = [
+  { id: 'tst-3', trade: 'Restaurants', photo: PHOTOS.restaurantRoom },
+  { id: 'tst-4', trade: 'Adventure', photo: PHOTOS.summitLedge },
+  { id: 'tst-1', trade: 'Watersports', photo: PHOTOS.barrel },
+  { id: 'tst-6', trade: 'Charters', photo: PHOTOS.goldenShore },
+]
 
-const TRUST_STAT_LABELS = [
-  'Processed for operators',
-  'Experiences live',
-  'Checkout uptime',
-] as const
+const TRUST_STAT_LABELS = ['Processed for operators', 'Experiences live', 'Checkout uptime'] as const
 
 const ROTATE_MS = 7600
 
 function BrandPanel() {
   const reducedMotion = useReducedMotionSafe()
 
-  const quotes = React.useMemo(
+  const stories = React.useMemo(
     () =>
-      PANEL_TESTIMONIAL_IDS.map((id) => TESTIMONIALS.find((t) => t.id === id)).filter(
-        (t): t is (typeof TESTIMONIALS)[number] => Boolean(t),
-      ),
+      PANEL_STORIES.map((story) => {
+        const testimonial = TESTIMONIALS.find((t) => t.id === story.id)
+        return testimonial ? { ...story, testimonial } : null
+      }).filter((s): s is NonNullable<typeof s> => s !== null),
     [],
   )
 
@@ -125,141 +126,129 @@ function BrandPanel() {
   React.useEffect(() => {
     // Paused entirely under prefers-reduced-motion — an auto-advancing panel is
     // motion whether or not it is animated.
-    if (reducedMotion || quotes.length < 2) return
+    if (reducedMotion || stories.length < 2) return
     const timer = window.setInterval(() => {
-      setIndex((current) => (current + 1) % quotes.length)
+      setIndex((current) => (current + 1) % stories.length)
     }, ROTATE_MS)
     return () => window.clearInterval(timer)
-  }, [reducedMotion, quotes.length])
+  }, [reducedMotion, stories.length])
 
-  const active = quotes[index] ?? quotes[0]
+  const active = stories[index] ?? stories[0]
   if (!active) return null
+  const quote = active.testimonial
 
-  const transition = reducedMotion
-    ? { duration: 0 }
-    : { duration: DURATION.slow, ease: EASE_OUT_EXPO }
+  const transition = reducedMotion ? { duration: 0 } : { duration: DURATION.slow, ease: EASE_OUT_EXPO }
 
   return (
-    <div className="relative isolate flex h-full flex-col justify-between overflow-hidden bg-[linear-gradient(155deg,var(--color-lagoon-950)_0%,var(--color-lagoon-900)_38%,var(--color-reef-950)_100%)] px-10 py-12 xl:px-14 xl:py-14">
-      <AuroraBackground
-        seed="ezra-auth-panel"
-        blobs={5}
-        intensity="vivid"
-        palette={['lagoon', 'reef', 'coral']}
-      />
-      <GlowOrb color="lagoon" size={520} opacity={0.28} blur={110} className="-top-32 -left-24" />
-      <GlowOrb color="coral" size={360} opacity={0.18} blur={100} float={false} className="right-[-6rem] bottom-24" />
-      <NoiseOverlay opacity={0.05} />
+    <div className="relative isolate flex h-full flex-col justify-between overflow-hidden bg-navy-deep px-10 py-10 text-white xl:px-14 xl:py-12">
+      {/* ---------- photograph, cut slowly between stories ---------- */}
+      <AnimatePresence initial={false}>
+        <motion.div
+          key={active.id}
+          className="absolute inset-0 -z-20"
+          initial={reducedMotion ? false : { opacity: 0, scale: 1.06 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={reducedMotion ? undefined : { opacity: 0 }}
+          transition={{ duration: reducedMotion ? 0 : 1.2, ease: EASE_OUT_EXPO }}
+        >
+          <Image
+            src={photoUrl(active.photo, 1600, 72)}
+            alt=""
+            fill
+            priority={index === 0}
+            sizes="(min-width: 1024px) 55vw, 0px"
+            className="object-cover"
+            style={{ objectPosition: active.photo.focus }}
+          />
+        </motion.div>
+      </AnimatePresence>
+      <div aria-hidden="true" className="absolute inset-0 -z-10 bg-navy-deep/60" />
 
-      {/* Hairline grid, drawn from the brand ramp so it survives both themes. */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 -z-10 mask-fade-b opacity-[0.14]"
-        style={{
-          backgroundImage:
-            'linear-gradient(to right, var(--color-lagoon-200) 1px, transparent 1px), linear-gradient(to bottom, var(--color-lagoon-200) 1px, transparent 1px)',
-          backgroundSize: '72px 72px',
-        }}
-      />
-
+      {/* ---------- top ---------- */}
       <div className="relative flex items-center justify-between gap-4">
         <Link
           href="/"
-          className="rounded-lg focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-lagoon-200 focus-visible:ring-offset-2 focus-visible:ring-offset-lagoon-950"
+          className="rounded-lg focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-navy-deep"
         >
           <AuthWordmark tone="brand" />
           <span className="sr-only">{`${SITE.name} home`}</span>
         </Link>
 
-        <span className="inline-flex items-center gap-2 rounded-full border border-lagoon-200/20 bg-lagoon-950/40 px-3 py-1.5 text-[0.6875rem] font-medium tracking-[0.04em] text-lagoon-100/85 uppercase backdrop-blur-sm">
+        <span className="inline-flex items-center gap-2 rounded-full bg-white/12 px-3 py-1.5 text-[0.6875rem] font-semibold tracking-[0.06em] text-white uppercase ring-1 ring-white/15 backdrop-blur-sm">
           <span aria-hidden="true" className="relative flex size-1.5">
-            <span className="absolute inset-0 rounded-full bg-lagoon-300" />
+            <span className="absolute inset-0 rounded-full bg-primary" />
             {!reducedMotion ? (
-              <span className="absolute inset-0 animate-pulse-ring rounded-full bg-lagoon-300" />
+              <span className="absolute inset-0 animate-pulse-ring rounded-full bg-primary" />
             ) : null}
           </span>
           Live in a weekend
         </span>
       </div>
 
-      {/* ---------- Rotating testimonial ---------- */}
-      <div className="relative flex flex-1 items-center py-12">
+      {/* ---------- the story ---------- */}
+      <div className="relative flex flex-1 items-end py-12">
         <div className="w-full max-w-xl">
-          <Quote
-            aria-hidden="true"
-            className="mb-6 size-9 text-lagoon-300/40"
-            strokeWidth={1.5}
-          />
-
           <AnimatePresence mode="wait" initial={false}>
             <motion.figure
               key={active.id}
-              initial={{ opacity: 0, y: 16, filter: 'blur(8px)' }}
-              animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-              exit={{ opacity: 0, y: -14, filter: 'blur(8px)' }}
+              initial={reducedMotion ? false : { opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reducedMotion ? undefined : { opacity: 0, y: -12 }}
               transition={transition}
               className="gpu"
             >
-              <blockquote className="font-display text-[1.375rem] leading-[1.45] font-medium tracking-[-0.02em] text-balance text-lagoon-50 xl:text-2xl">
-                {decodeEntities(active.quote)}
+              <span className="inline-flex items-center rounded-full bg-white/12 px-2.5 py-1 text-[0.625rem] font-semibold tracking-[0.1em] text-white/90 uppercase ring-1 ring-white/15">
+                {active.trade}
+              </span>
+
+              <blockquote className="mt-5 font-serif text-[1.75rem] leading-[1.15] tracking-[-0.01em] text-balance text-white xl:text-[2.25rem]">
+                “{decodeEntities(quote.quote)}”
               </blockquote>
 
               <figcaption className="mt-7 flex flex-wrap items-center gap-x-4 gap-y-3">
-                <Avatar
-                  name={active.author}
-                  src={active.avatarUrl}
-                  size="md"
-                  className="ring-2 ring-lagoon-200/25"
-                />
+                <Avatar name={quote.author} src={quote.avatarUrl} size="md" className="ring-2 ring-white/30" />
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-lagoon-50">{active.author}</p>
-                  <p className="truncate text-xs text-lagoon-100/70">
-                    {active.role} · {active.company}
+                  <p className="text-sm font-semibold text-white">{quote.author}</p>
+                  <p className="truncate text-xs text-white/70">
+                    {quote.role} · {quote.company}
                   </p>
                 </div>
 
-                {active.metric ? (
-                  <div className="ml-auto shrink-0 rounded-xl border border-lagoon-200/15 bg-lagoon-950/40 px-3.5 py-2 text-right backdrop-blur-sm">
-                    <p className="font-display text-lg leading-none font-semibold tracking-[-0.02em] text-lagoon-100 tabular">
-                      {active.metric.value}
+                {quote.metric ? (
+                  <div className="ml-auto shrink-0 rounded-xl bg-primary px-3.5 py-2 text-right text-on-primary">
+                    <p className="font-display text-lg leading-none font-semibold tracking-[-0.02em] tabular-nums">
+                      {quote.metric.value}
                     </p>
-                    <p className="mt-1 text-[0.625rem] leading-tight text-lagoon-100/60">
-                      {active.metric.label}
-                    </p>
+                    <p className="mt-1 text-[0.625rem] leading-tight opacity-85">{quote.metric.label}</p>
                   </div>
                 ) : null}
               </figcaption>
 
-              <div className="mt-5 flex items-center gap-1" aria-label={`Rated ${active.rating} out of 5`}>
+              <div className="mt-5 flex items-center gap-1" aria-label={`Rated ${quote.rating} out of 5`}>
                 {Array.from({ length: 5 }, (_, i) => (
                   <Star
                     key={i}
                     aria-hidden="true"
-                    className={cn(
-                      'size-3.5',
-                      i < active.rating ? 'fill-sunset-400 text-sunset-400' : 'text-lagoon-200/25',
-                    )}
+                    className={cn('size-3.5', i < quote.rating ? 'fill-sunset-400 text-sunset-400' : 'text-white/30')}
                   />
                 ))}
               </div>
             </motion.figure>
           </AnimatePresence>
 
-          {quotes.length > 1 ? (
+          {stories.length > 1 ? (
             <div className="mt-8 flex items-center gap-2">
-              {quotes.map((quote, i) => (
+              {stories.map((story, i) => (
                 <button
-                  key={quote.id}
+                  key={story.id}
                   type="button"
                   onClick={() => setIndex(i)}
-                  aria-label={`Show the story from ${quote.company}`}
+                  aria-label={`Show the story from ${story.testimonial.company}`}
                   aria-current={i === index || undefined}
                   className={cn(
-                    'h-1 rounded-full transition-all duration-500 ease-[var(--ease-out-expo)]',
-                    'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-lagoon-200 focus-visible:ring-offset-4 focus-visible:ring-offset-lagoon-950',
-                    i === index
-                      ? 'w-10 bg-lagoon-200'
-                      : 'w-4 bg-lagoon-200/25 hover:bg-lagoon-200/50',
+                    'h-1.5 rounded-full transition-all duration-500 ease-[var(--ease-out-expo)]',
+                    'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-4 focus-visible:ring-offset-navy-deep',
+                    i === index ? 'w-10 bg-white' : 'w-4 bg-white/30 hover:bg-white/60',
                   )}
                 />
               ))}
@@ -268,18 +257,16 @@ function BrandPanel() {
         </div>
       </div>
 
-      {/* ---------- Trust points ---------- */}
-      <dl className="relative grid grid-cols-3 gap-6 border-t border-lagoon-200/15 pt-8">
+      {/* ---------- trust points ---------- */}
+      <dl className="relative grid grid-cols-3 gap-6 border-t border-white/15 pt-7">
         {trustPoints.map((stat) => (
           <div key={stat.label} className="min-w-0">
             <dt className="sr-only">{stat.label}</dt>
             <dd>
-              <span className="block font-display text-xl leading-none font-semibold tracking-[-0.025em] text-lagoon-50 tabular xl:text-2xl">
+              <span className="block font-display text-xl leading-none font-semibold tracking-[-0.025em] text-white tabular-nums xl:text-2xl">
                 {stat.value}
               </span>
-              <span className="mt-2 block text-xs leading-snug text-lagoon-100/65">
-                {stat.label}
-              </span>
+              <span className="mt-2 block text-xs leading-snug text-white/65">{stat.label}</span>
             </dd>
           </div>
         ))}
@@ -312,18 +299,10 @@ export interface AuthShellProps {
  *
  * Left: a quiet, single-column form on the app's own background, so the moment
  * the operator lands in the dashboard nothing about the chrome changes.
- * Right (lg and up): the brand, doing the selling — drifting aurora, a rotating
- * customer story, and the three numbers that matter.
+ * Right (lg and up): a photograph of one of the trades with an operator's
+ * story over it, and the three numbers that matter.
  */
-export function AuthShell({
-  title,
-  subtitle,
-  eyebrow,
-  children,
-  footer,
-  side,
-  className,
-}: AuthShellProps) {
+export function AuthShell({ title, subtitle, eyebrow, children, footer, side, className }: AuthShellProps) {
   // Sourced from the demo clock so the footer never disagrees with the data.
   const year = NOW.getFullYear()
 
@@ -336,16 +315,8 @@ export function AuthShell({
     >
       {/* ---------- Form column ---------- */}
       <div className="relative isolate flex min-h-dvh flex-col px-5 py-6 sm:px-8 lg:min-h-0 lg:px-12 xl:px-16">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-72 bg-[radial-gradient(70%_100%_at_50%_0%,var(--primary-soft),transparent_70%)] opacity-60 lg:hidden"
-        />
-
         <header className="flex items-center justify-between gap-4">
-          <Link
-            href="/"
-            className="-m-1 rounded-lg p-1 transition-opacity duration-200 hover:opacity-80"
-          >
+          <Link href="/" className="-m-1 rounded-lg p-1 transition-opacity duration-200 hover:opacity-80">
             <AuthWordmark />
             <span className="sr-only">{`${SITE.name} home`}</span>
           </Link>
@@ -354,18 +325,14 @@ export function AuthShell({
         <main className="flex flex-1 items-center justify-center py-12 sm:py-16">
           <div className="w-full max-w-md">
             {eyebrow ? (
-              <p className="mb-3 text-[0.6875rem] font-semibold tracking-[0.12em] text-primary uppercase">
-                {eyebrow}
-              </p>
+              <p className="mb-3 text-[0.6875rem] font-semibold tracking-[0.12em] text-primary uppercase">{eyebrow}</p>
             ) : null}
 
             <h1 className="font-display text-[1.75rem] leading-[1.15] font-semibold tracking-[-0.03em] text-balance text-foreground sm:text-[2rem]">
               {title}
             </h1>
 
-            {subtitle ? (
-              <p className="mt-3 text-sm leading-relaxed text-pretty text-muted">{subtitle}</p>
-            ) : null}
+            {subtitle ? <p className="mt-3 text-sm leading-relaxed text-pretty text-muted">{subtitle}</p> : null}
 
             <div className="mt-8">{children}</div>
           </div>
@@ -378,22 +345,13 @@ export function AuthShell({
                 © {year} {SITE.name}. All rights reserved.
               </p>
               <nav aria-label="Legal" className="flex items-center gap-4">
-                <Link
-                  href="/legal/privacy"
-                  className="text-xs text-faint transition-colors duration-200 hover:text-foreground"
-                >
+                <Link href="/legal/privacy" className="text-xs text-faint transition-colors duration-200 hover:text-foreground">
                   Privacy
                 </Link>
-                <Link
-                  href="/legal/terms"
-                  className="text-xs text-faint transition-colors duration-200 hover:text-foreground"
-                >
+                <Link href="/legal/terms" className="text-xs text-faint transition-colors duration-200 hover:text-foreground">
                   Terms
                 </Link>
-                <Link
-                  href="/help"
-                  className="text-xs text-faint transition-colors duration-200 hover:text-foreground"
-                >
+                <Link href="/help" className="text-xs text-faint transition-colors duration-200 hover:text-foreground">
                   Help
                 </Link>
               </nav>

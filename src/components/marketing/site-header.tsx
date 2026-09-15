@@ -270,7 +270,7 @@ export function SiteHeader({ className }: SiteHeaderProps) {
           inert={!bannerOpen}
           className={cn(
             'absolute inset-x-0 top-0 z-10 h-9 overflow-hidden',
-            'bg-lagoon-700',
+            'bg-navy-deep',
             chromeReady && 'transition-[transform,opacity] duration-500 ease-[var(--ease-out-expo)]',
             bannerOpen
               ? 'translate-y-0 opacity-100'
