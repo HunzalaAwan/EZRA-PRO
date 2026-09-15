@@ -42,3 +42,19 @@ export const KPI_SERIES: Record<string, SeriesKey> = {
 export function seriesForKpi(key: string): SeriesKey {
   return KPI_SERIES[key] ?? 'revenue'
 }
+
+/* --------------------------------------------------------------------------
+   KPI tiles. The headline cards want louder ink than the chart palette gives
+   revenue and bookings (both blues), so those two borrow the warm slots. The
+   full-size charts keep the series colours above.
+   -------------------------------------------------------------------------- */
+
+const KPI_ACCENT: Partial<Record<SeriesKey, string>> = {
+  revenue: 'var(--chart-2)', // coral
+  bookings: 'var(--chart-8)', // magenta
+}
+
+/** Ink for a KPI card's icon and mini chart. */
+export function kpiAccent(key: SeriesKey): string {
+  return KPI_ACCENT[key] ?? seriesVar(key)
+}

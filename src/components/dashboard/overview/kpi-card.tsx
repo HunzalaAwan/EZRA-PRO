@@ -7,7 +7,7 @@ import { TrendingDown, TrendingUp, type LucideIcon } from 'lucide-react'
 
 import { CountUp } from '@/components/motion/count-up'
 import { Card } from '@/components/ui/card'
-import { seriesForKpi, seriesVar } from '@/lib/metric-colors'
+import { kpiAccent, seriesForKpi } from '@/lib/metric-colors'
 import { cn, formatDelta, sparklinePath } from '@/lib/utils'
 import type { CurrencyCode, KpiMetric } from '@/types'
 
@@ -109,7 +109,7 @@ export interface KpiCardProps {
 
 export function KpiCard({ metric, currency, icon: Icon, trend = 'area', showDelta = true, className }: KpiCardProps) {
   const series = seriesForKpi(metric.key)
-  const color = seriesVar(series)
+  const color = kpiAccent(series)
   const good = metric.direction === 'flat' ? null : (metric.direction === 'up') === metric.higherIsBetter
   const DeltaIcon = metric.deltaPercent >= 0 ? TrendingUp : TrendingDown
 

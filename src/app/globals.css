@@ -280,26 +280,26 @@
 
   /* Categorical slots, in a fixed order that passes the CVD checks in both
      themes (worst adjacent ΔE 17.3 light / 13.8 dark). Consume in order. */
-  --chart-1: oklch(0.615 0.113 196); /* teal */
-  --chart-2: oklch(0.520 0.170 272); /* indigo */
-  --chart-3: oklch(0.627 0.186 32);  /* coral */
-  --chart-4: oklch(0.588 0.199 299); /* violet */
+  --chart-1: oklch(0.545 0.150 245); /* blue */
+  --chart-2: oklch(0.627 0.186 32);  /* coral */
+  --chart-3: oklch(0.588 0.199 299); /* violet */
+  --chart-4: oklch(0.720 0.152 82);  /* amber */
   --chart-5: oklch(0.606 0.132 156); /* green */
-  --chart-6: oklch(0.580 0.132 240); /* blue */
-  --chart-7: oklch(0.720 0.152 82);  /* amber */
+  --chart-6: oklch(0.720 0.130 215); /* sky */
+  --chart-7: oklch(0.520 0.170 272); /* indigo */
   --chart-8: oklch(0.640 0.150 350); /* magenta */
 
   /* Colour follows the metric: one slot per business series, reused on every
      tile, sparkline, trend chart and legend that shows it. */
   --series-revenue:       var(--chart-1);
   --series-bookings:      var(--chart-6);
-  --series-guests:        var(--chart-4);
-  --series-aov:           var(--chart-7);
+  --series-guests:        var(--chart-3);
+  --series-aov:           var(--chart-4);
   --series-occupancy:     var(--chart-5);
-  --series-cancellations: var(--chart-3);
+  --series-cancellations: var(--chart-2);
   --series-repeat:        var(--chart-8);
-  --series-rating:        var(--chart-7);
-  --series-lead:          var(--chart-2);
+  --series-rating:        var(--chart-4);
+  --series-lead:          var(--chart-7);
   --series-compare:       var(--fg-subtle);
 
   /* Dashboard plane: a whisper of blue behind white cards; navy for the one
@@ -349,14 +349,14 @@
   --info:           oklch(0.732 0.128 240);
   --info-soft:      oklch(0.300 0.060 242);
 
-  --chart-1: oklch(0.650 0.118 194); /* teal */
-  --chart-2: oklch(0.630 0.160 272); /* indigo */
-  --chart-3: oklch(0.650 0.170 34);  /* coral */
-  --chart-4: oklch(0.650 0.160 300); /* violet */
-  --chart-5: oklch(0.650 0.140 158); /* green */
-  --chart-6: oklch(0.640 0.130 242); /* blue */
-  --chart-7: oklch(0.650 0.150 80);  /* amber */
-  --chart-8: oklch(0.650 0.140 350); /* magenta */
+  --chart-1: oklch(0.660 0.135 242); /* blue */
+  --chart-2: oklch(0.650 0.170 34);  /* coral */
+  --chart-3: oklch(0.650 0.160 300); /* violet */
+  --chart-4: oklch(0.650 0.150 80);  /* amber */
+  --chart-5: oklch(0.550 0.150 160); /* green */
+  --chart-6: oklch(0.655 0.135 226); /* sky */
+  --chart-7: oklch(0.570 0.180 280); /* indigo */
+  --chart-8: oklch(0.665 0.150 350); /* magenta */
   --bg-dashboard:   oklch(0.128 0.022 238);
   --navy:           oklch(0.300 0.078 252);
   --navy-deep:      oklch(0.190 0.055 254);
@@ -578,10 +578,10 @@ html.lenis body {
   --warning-soft:   oklch(0.330 0.060 70);
   --danger:         oklch(0.740 0.170 22);
   --danger-soft:    oklch(0.320 0.080 22);
-  --chart-1: oklch(0.760 0.110 193);
-  --chart-3: oklch(0.760 0.150 34);
+  --chart-1: oklch(0.760 0.110 242);
+  --chart-3: oklch(0.760 0.150 300);
   --chart-5: oklch(0.760 0.130 158);
-  --chart-7: oklch(0.800 0.140 82);
+  --chart-7: oklch(0.760 0.120 280);
 }
 
 /* Landing-page illustrations: an ink that reads on both surfaces. */

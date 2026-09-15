@@ -4,13 +4,15 @@ import Link from 'next/link'
 import { ArrowUpRight, Landmark } from 'lucide-react'
 
 import { CountUp } from '@/components/motion/count-up'
+import { CardAurora } from '@/components/dashboard/overview/card-aurora'
 import { cn, formatCurrency } from '@/lib/utils'
 import type { CurrencyCode } from '@/types'
 
 /* ==========================================================================
    PayoutCard — the money on its way to the bank.
 
-   The one dark surface on the overview, sized and placed like a bank card:
+   The one dark surface on the overview, sized and placed like a bank card,
+   with slow weather moving behind the numbers:
    what settles next, when it lands, and the account it lands in. Next-day
    payouts are the product's sharpest edge, so they get the sharpest card.
    ========================================================================== */
@@ -46,11 +48,7 @@ export function PayoutCard({
         className,
       )}
     >
-      {/* Flat ring in the brand hue — atmosphere, not a gradient. */}
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute -top-24 -right-20 -z-10 size-64 rounded-full border-[22px] border-info/35"
-      />
+      <CardAurora tone="dark" fields={3} />
 
       <div className="flex items-start justify-between gap-3">
         <div>
