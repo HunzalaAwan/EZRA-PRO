@@ -8,7 +8,7 @@
  */
 
 import { useMemo, useState, type ReactNode } from 'react'
-import { useReducedMotion } from 'motion/react'
+import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { cn, formatCurrency, formatNumber, formatPercent, sum } from '@/lib/utils'
 import type { ChannelBreakdown, CurrencyCode } from '@/types'
@@ -41,7 +41,7 @@ export function ChannelDonutChart({
   loading = false,
   className,
 }: ChannelDonutChartProps) {
-  const reduced = useReducedMotion()
+  const reduced = useReducedMotionSafe()
   const [hidden, setHidden] = useState<string[]>([])
   const [activeChannel, setActiveChannel] = useState<string | null>(null)
 
@@ -78,6 +78,10 @@ export function ChannelDonutChart({
     setHidden((prev) => (prev.includes(channel) ? prev.filter((c) => c !== channel) : [...prev, channel]))
 
   const ranked = useMemo(() => [...channels].sort((a, b) => b[metric] - a[metric]), [channels, metric])
+  // Past five rows the list stops being a glance; the tail folds behind a toggle.
+  const FOLD = 5
+  const [expanded, setExpanded] = useState(false)
+  const shownChannels = expanded ? ranked : ranked.slice(0, FOLD)
 
   return (
     <ChartContainer
@@ -115,8 +119,9 @@ export function ChannelDonutChart({
         </table>
       }
       footer={
+        <>
         <ul className="space-y-0.5">
-          {ranked.map((channel) => {
+          {shownChannels.map((channel) => {
             const isHidden = hidden.includes(channel.channel)
             const isActive = activeChannel === channel.channel
             return (
@@ -157,6 +162,16 @@ export function ChannelDonutChart({
             )
           })}
         </ul>
+        {ranked.length > FOLD ? (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="mt-1.5 inline-flex min-h-8 items-center rounded-md px-2 text-[0.6875rem] font-semibold text-primary transition-colors hover:text-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+          >
+            {expanded ? 'Show fewer' : `Show ${ranked.length - FOLD} more`}
+          </button>
+        ) : null}
+        </>
       }
     >
       <div className="relative h-full w-full">

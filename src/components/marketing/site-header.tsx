@@ -69,7 +69,7 @@ export interface SiteHeaderProps {
  * Marketing navigation.
  *
  * Layering, from the top of the viewport down: the reading-progress hairline, a
- * dismissible gradient announcement strip, then the bar itself. The strip and
+ * dismissible announcement strip, then the bar itself. The strip and
  * the bar share one fixed wrapper and the bar is offset with a *transform*
  * rather than flow — dismissing the strip therefore slides the bar up without
  * moving a pixel of page content, and the layout's static top padding never has
@@ -270,9 +270,7 @@ export function SiteHeader({ className }: SiteHeaderProps) {
           inert={!bannerOpen}
           className={cn(
             'absolute inset-x-0 top-0 z-10 h-9 overflow-hidden',
-            'bg-[linear-gradient(100deg,var(--color-lagoon-700),var(--color-lagoon-500)_28%,var(--color-coral-500)_66%,var(--color-sunset-500))]',
-            'bg-[length:220%_100%]',
-            !reducedMotion && 'animate-gradient-pan',
+            'bg-lagoon-700',
             chromeReady && 'transition-[transform,opacity] duration-500 ease-[var(--ease-out-expo)]',
             bannerOpen
               ? 'translate-y-0 opacity-100'
@@ -340,7 +338,7 @@ export function SiteHeader({ className }: SiteHeaderProps) {
             aria-hidden="true"
             className={cn(
               'absolute inset-x-0 bottom-0 -z-10 h-px',
-              'bg-[linear-gradient(90deg,transparent,color-mix(in_oklab,var(--color-lagoon-400)_60%,transparent)_26%,color-mix(in_oklab,var(--color-coral-400)_52%,transparent)_74%,transparent)]',
+              'bg-line-strong',
               'transition-opacity duration-500 ease-[var(--ease-out-expo)]',
               scrolled ? 'opacity-100' : 'opacity-0',
             )}
@@ -595,7 +593,7 @@ function MegaPanel({ group, onNavigate }: { group: NavGroup; onNavigate: () => v
         <div
           className={cn(
             'relative border-l border-line-subtle p-3',
-            'bg-[linear-gradient(165deg,var(--primary-soft),transparent_72%)]',
+            'bg-primary-soft/50',
           )}
         >
           <Link

@@ -1,7 +1,8 @@
 'use client'
 
 import * as React from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
+import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import {
   CheckCheck,
   CircleX,
@@ -66,7 +67,7 @@ interface BulkActionBarProps {
 }
 
 function BulkActionBar({ count, onClear, onAction }: BulkActionBarProps) {
-  const reduceMotion = useReducedMotion()
+  const reduceMotion = useReducedMotionSafe()
 
   return (
     <AnimatePresence>

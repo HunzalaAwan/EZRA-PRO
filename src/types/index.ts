@@ -306,6 +306,8 @@ export interface Resource {
   status: 'available' | 'maintenance' | 'retired'
   location?: string
   notes?: string
+  /** Photo of the vessel, vehicle or kit — an absolute URL or an object URL. */
+  imageUrl?: string
 }
 
 /* ==========================================================================

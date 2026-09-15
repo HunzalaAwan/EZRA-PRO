@@ -3,8 +3,8 @@
 import * as React from 'react'
 import * as TabsPrimitive from '@radix-ui/react-tabs'
 import { cva, type VariantProps } from 'class-variance-authority'
-import { motion, useReducedMotion } from 'motion/react'
-
+import { motion } from 'motion/react'
+import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { cn } from '@/lib/utils'
 
 const TABS_MOTION_CSS = `
@@ -67,7 +67,7 @@ const Tabs = React.forwardRef<React.ComponentRef<typeof TabsPrimitive.Root>, Tab
     const activeValue = value ?? uncontrolledValue
     const reactId = React.useId()
     // Only feeds motion props, never markup — safe for hydration.
-    const reduceMotion = useReducedMotion() ?? false
+    const reduceMotion = useReducedMotionSafe()
 
     const handleValueChange = React.useCallback(
       (next: string) => {

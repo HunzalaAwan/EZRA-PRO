@@ -342,7 +342,7 @@ export function AnalyticsShowcase({ className }: { className?: string }) {
       id="analytics"
       aria-labelledby="analytics-showcase-heading"
       className={cn(
-        'relative isolate overflow-hidden bg-background-subtle py-20 sm:py-24 lg:py-32',
+        'relative isolate overflow-hidden bg-background-subtle py-14 sm:py-16',
         className,
       )}
     >
@@ -353,7 +353,7 @@ export function AnalyticsShowcase({ className }: { className?: string }) {
       />
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -top-24 right-[-10%] -z-10 size-[34rem] rounded-full bg-[radial-gradient(circle,var(--color-reef-400),transparent_66%)] opacity-[0.12] blur-3xl"
+        className="pointer-events-none absolute -top-24 right-[-10%] -z-10 size-[34rem] rounded-full bg-reef-400 opacity-[0.08] blur-3xl"
       />
 
       <div className="mx-auto w-full max-w-7xl px-5 sm:px-8">

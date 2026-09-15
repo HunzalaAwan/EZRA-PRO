@@ -33,23 +33,21 @@ export const buttonVariants = cva(
       },
       variant: {
         /**
-         * Hero CTA. Vertical gradient + inset specular highlight so it reads as a
+         * Hero CTA. Solid fill + inset specular highlight so it reads as a
          * physical key, a brand-tinted lift on hover and a real press state.
          * White/black here are pure light/shade overlays, not palette colours.
          */
         primary: [
           'bg-primary text-on-primary',
-          'bg-[linear-gradient(180deg,color-mix(in_oklab,var(--primary)_84%,white)_0%,var(--primary)_52%,color-mix(in_oklab,var(--primary)_93%,black)_100%)]',
           'shadow-[inset_0_1px_0_0_color-mix(in_oklab,white_28%,transparent),0_1px_2px_0_color-mix(in_oklab,var(--primary)_40%,transparent)]',
-          'hover:bg-[linear-gradient(180deg,color-mix(in_oklab,var(--primary)_92%,white)_0%,var(--primary-hover)_54%,color-mix(in_oklab,var(--primary-hover)_92%,black)_100%)]',
+          'hover:bg-primary-hover',
           'hover:-translate-y-px hover:shadow-[inset_0_1px_0_0_color-mix(in_oklab,white_34%,transparent),0_10px_26px_-8px_color-mix(in_oklab,var(--primary)_70%,transparent)]',
           'active:translate-y-0 active:scale-[0.98] active:shadow-[inset_0_2px_5px_0_color-mix(in_oklab,black_22%,transparent)]',
         ],
         accent: [
           'bg-accent text-on-accent',
-          'bg-[linear-gradient(180deg,color-mix(in_oklab,var(--accent)_84%,white)_0%,var(--accent)_52%,color-mix(in_oklab,var(--accent)_93%,black)_100%)]',
           'shadow-[inset_0_1px_0_0_color-mix(in_oklab,white_28%,transparent),0_1px_2px_0_color-mix(in_oklab,var(--accent)_40%,transparent)]',
-          'hover:bg-[linear-gradient(180deg,color-mix(in_oklab,var(--accent)_92%,white)_0%,var(--accent-hover)_54%,color-mix(in_oklab,var(--accent-hover)_92%,black)_100%)]',
+          'hover:bg-accent-hover',
           'hover:-translate-y-px hover:shadow-[inset_0_1px_0_0_color-mix(in_oklab,white_34%,transparent),0_10px_26px_-8px_color-mix(in_oklab,var(--accent)_70%,transparent)]',
           'active:translate-y-0 active:scale-[0.98] active:shadow-[inset_0_2px_5px_0_color-mix(in_oklab,black_22%,transparent)]',
         ],
@@ -75,7 +73,7 @@ export const buttonVariants = cva(
         ],
         danger: [
           'bg-danger text-background',
-          'bg-[linear-gradient(180deg,color-mix(in_oklab,var(--danger)_84%,white)_0%,var(--danger)_52%,color-mix(in_oklab,var(--danger)_93%,black)_100%)]',
+          'hover:bg-[color-mix(in_oklab,var(--danger)_88%,black)]',
           'shadow-[inset_0_1px_0_0_color-mix(in_oklab,white_26%,transparent),0_1px_2px_0_color-mix(in_oklab,var(--danger)_40%,transparent)]',
           'hover:-translate-y-px hover:shadow-[inset_0_1px_0_0_color-mix(in_oklab,white_32%,transparent),0_10px_26px_-8px_color-mix(in_oklab,var(--danger)_65%,transparent)]',
           'active:translate-y-0 active:scale-[0.98] active:shadow-[inset_0_2px_5px_0_color-mix(in_oklab,black_22%,transparent)]',

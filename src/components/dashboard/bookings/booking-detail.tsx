@@ -3,7 +3,8 @@
 import * as React from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
+import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import {
   ArrowUpRight,
   BadgeCheck,
@@ -231,7 +232,7 @@ export function BookingDetailContent({
   onRequestClose,
   className,
 }: BookingDetailContentProps) {
-  const reduceMotion = useReducedMotion()
+  const reduceMotion = useReducedMotionSafe()
   const bookingId = detail.booking.id
 
   const staffById = React.useMemo(() => {

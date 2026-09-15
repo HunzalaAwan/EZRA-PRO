@@ -157,7 +157,7 @@ export function MonthView({
                 'transition-colors duration-200',
                 isWeekend && !outside && 'bg-surface-sunken/35',
                 outside && 'bg-background-subtle/50',
-                isToday && 'bg-primary-soft/30',
+                isToday && 'bg-info-soft/35',
               )}
             >
               {/* ---- date + the day's headline number ---------------------- */}

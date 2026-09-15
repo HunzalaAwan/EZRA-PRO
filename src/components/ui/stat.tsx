@@ -2,9 +2,11 @@
 
 import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
-import { animate, motion, useIsomorphicLayoutEffect, useReducedMotion } from 'motion/react'
+import { animate, motion, useIsomorphicLayoutEffect } from 'motion/react'
+import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { Info, Minus, TrendingDown, TrendingUp, type LucideIcon } from 'lucide-react'
 
+import { seriesVar, type SeriesKey } from '@/lib/metric-colors'
 import {
   cn,
   formatCurrency,
@@ -20,8 +22,10 @@ import type { CurrencyCode, KpiMetric, TrendDirection } from '@/types'
    Stat — the KPI tile.
 
    Three ideas hold this together:
-   1. Delta colour is derived from `direction` AND `higherIsBetter`, so a
-      falling cancellation rate reads green while falling revenue reads red.
+   1. Every tile wears ONE colour — the metric's own series colour — on its
+      icon and sparkline, so revenue looks the same here as it does on the
+      trend chart. Good/bad is carried only by the delta chip, so the tile is
+      not shouting red and green at the same time.
    2. The value counts up by mutating textContent from a motion animation
       rather than by setting React state 60x a second — the tile re-renders
       exactly once no matter how long the count runs.
@@ -31,42 +35,25 @@ import type { CurrencyCode, KpiMetric, TrendDirection } from '@/types'
 
 export type StatTone = 'good' | 'bad' | 'neutral'
 
-export type StatAccent = 'lagoon' | 'coral' | 'sunset' | 'reef'
+/** A series key, or one of the legacy brand names older callers still pass. */
+export type StatAccent = SeriesKey | 'lagoon' | 'coral' | 'sunset' | 'reef'
 
-/** Decorative per-accent treatments. Ornament only — never the sole signal. */
-const ACCENT: Record<StatAccent, { wash: string; rule: string; chip: string }> = {
-  lagoon: {
-    wash: 'bg-[radial-gradient(60%_100%_at_50%_0%,var(--color-lagoon-400),transparent_72%)]',
-    rule: 'via-lagoon-400/50',
-    chip: 'bg-lagoon-400/12 text-primary ring-lagoon-400/25',
-  },
-  coral: {
-    wash: 'bg-[radial-gradient(60%_100%_at_50%_0%,var(--color-coral-500),transparent_72%)]',
-    rule: 'via-line-strong',
-    chip: 'bg-coral-400/12 text-accent ring-coral-400/25',
-  },
-  sunset: {
-    wash: 'bg-[radial-gradient(60%_100%_at_50%_0%,var(--color-sunset-400),transparent_72%)]',
-    rule: 'via-line-strong',
-    chip: 'bg-sunset-400/14 text-warning ring-sunset-400/25',
-  },
-  reef: {
-    wash: 'bg-[radial-gradient(60%_100%_at_50%_0%,var(--color-reef-400),transparent_72%)]',
-    rule: 'via-line-strong',
-    chip: 'bg-reef-400/12 text-info ring-reef-400/25',
-  },
+const LEGACY_ACCENT: Record<'lagoon' | 'coral' | 'sunset' | 'reef', SeriesKey> = {
+  lagoon: 'revenue',
+  coral: 'cancellations',
+  sunset: 'aov',
+  reef: 'guests',
+}
+
+export function accentColor(accent: StatAccent): string {
+  const key = (LEGACY_ACCENT as Record<string, SeriesKey>)[accent] ?? (accent as SeriesKey)
+  return seriesVar(key)
 }
 
 const TONE_CHIP: Record<StatTone, string> = {
   good: 'bg-success-soft/70 text-success',
   bad: 'bg-danger-soft/70 text-danger',
   neutral: 'bg-surface-sunken text-subtle',
-}
-
-const TONE_MARK: Record<StatTone, string> = {
-  good: 'text-success',
-  bad: 'text-danger',
-  neutral: 'text-faint',
 }
 
 const TONE_ICON: Record<TrendDirection, LucideIcon> = {
@@ -113,8 +100,8 @@ export interface StatSparklineProps extends Omit<React.ComponentProps<'svg'>, 'v
   values: number[]
   width?: number
   height?: number
-  /** Drives stroke + gradient colour via `currentColor`. */
-  tone?: StatTone
+  /** Any CSS colour. Defaults to the tile's `--stat-color`. */
+  color?: string
   /** Draws the line on mount. Ignored under reduced motion. */
   animateIn?: boolean
 }
@@ -123,17 +110,16 @@ function StatSparkline({
   values,
   width = 112,
   height = 36,
-  tone = 'neutral',
+  color = 'var(--stat-color, var(--series-revenue))',
   animateIn = true,
   className,
   ...props
 }: StatSparklineProps) {
-  const gradientId = React.useId()
-  const reduceMotion = useReducedMotion()
+  const reduceMotion = useReducedMotionSafe()
 
   if (values.length < 2) return null
 
-  const pad = 3
+  const pad = 4
   const line = sparklinePath(values, width, height, pad)
   // Close the line down to the baseline to get a fillable area.
   const area = `${line} L${(width - pad).toFixed(2)},${height} L${pad.toFixed(2)},${height} Z`
@@ -154,17 +140,18 @@ function StatSparkline({
       fill="none"
       role="presentation"
       aria-hidden="true"
-      className={cn('overflow-visible', tone === 'neutral' ? 'text-primary' : TONE_MARK[tone], className)}
+      className={cn('overflow-visible', className)}
+      style={{ color }}
       {...props}
     >
-      <defs>
-        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="currentColor" stopOpacity="0.26" />
-          <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-
-      <path d={area} fill={`url(#${gradientId})`} />
+      {/* Flat wash under the line — one tone, never a gradient. */}
+      <motion.path
+        d={area}
+        fill="currentColor"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 0.12 }}
+        transition={shouldDraw ? { duration: 0.6, delay: 0.5 } : { duration: 0 }}
+      />
       <motion.path
         d={line}
         stroke="currentColor"
@@ -172,14 +159,14 @@ function StatSparkline({
         strokeLinecap="round"
         strokeLinejoin="round"
         // Kept unconditional so SSR and client hydrate the same inline style —
-        // `useReducedMotion()` disagrees across that boundary. Opting out zeroes
+        // `useReducedMotionSafe()` disagrees across that boundary. Opting out zeroes
         // the duration instead, which paints the finished line on frame one.
         initial={{ pathLength: 0, opacity: 0.45 }}
         animate={{ pathLength: 1, opacity: 1 }}
         transition={shouldDraw ? { duration: 0.9, ease: [0.16, 1, 0.3, 1] } : { duration: 0 }}
       />
-      <circle cx={width - pad} cy={lastY} r={2.5} fill="currentColor" />
-      <circle cx={width - pad} cy={lastY} r={5} fill="currentColor" opacity={0.16} />
+      {/* End marker with a surface ring so it reads where the line doubles back. */}
+      <circle cx={width - pad} cy={lastY} r={3} fill="currentColor" stroke="var(--surface)" strokeWidth={2} />
     </svg>
   )
 }
@@ -207,7 +194,7 @@ function StatValue({
   countUp = true,
   className,
 }: StatValueProps) {
-  const reduceMotion = useReducedMotion()
+  const reduceMotion = useReducedMotionSafe()
   const nodeRef = React.useRef<HTMLSpanElement>(null)
   // Where the next animation starts from — 0 on mount, the live figure after.
   const fromRef = React.useRef(0)
@@ -294,6 +281,7 @@ export interface StatProps extends Omit<React.ComponentProps<'div'>, 'children'>
    * reference isn't serializable there, but an element descriptor is.
    */
   icon?: LucideIcon | React.ReactElement
+  /** The metric's series colour; icon chip and sparkline both wear it. */
   accent?: StatAccent
   /** Abbreviates large values ("$128.4K"). */
   compact?: boolean
@@ -304,6 +292,7 @@ export interface StatProps extends Omit<React.ComponentProps<'div'>, 'children'>
 
 function Stat({
   className,
+  style,
   size = 'md',
   label,
   value,
@@ -316,7 +305,7 @@ function Stat({
   sparkline,
   hint,
   icon,
-  accent = 'lagoon',
+  accent = 'revenue',
   compact = false,
   decimals = 0,
   countUp = true,
@@ -332,7 +321,12 @@ function Stat({
   const showDelta = typeof deltaPercent === 'number'
 
   return (
-    <div data-slot="stat" className={cn(statVariants({ size }), className)} {...props}>
+    <div
+      data-slot="stat"
+      className={cn(statVariants({ size }), className)}
+      style={{ ...style, ['--stat-color' as string]: accentColor(accent) }}
+      {...props}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-1.5">
           <span className="truncate text-[0.8125rem] font-medium text-muted">{label}</span>
@@ -352,8 +346,8 @@ function Stat({
         {iconNode ? (
           <span
             className={cn(
-              'grid size-8 shrink-0 place-items-center rounded-lg ring-1 ring-inset',
-              ACCENT[accent].chip,
+              'grid size-8 shrink-0 place-items-center rounded-lg',
+              'bg-[color-mix(in_oklab,var(--stat-color)_13%,transparent)] text-(--stat-color)',
             )}
           >
             {iconNode}
@@ -396,7 +390,6 @@ function Stat({
         {sparkline && sparkline.length > 1 ? (
           <StatSparkline
             values={sparkline}
-            tone={tone}
             width={size === 'sm' ? 84 : 112}
             height={size === 'sm' ? 28 : 36}
             className="shrink-0"
@@ -414,8 +407,8 @@ function Stat({
 const statCardVariants = cva(
   [
     'group relative isolate overflow-hidden rounded-2xl border border-line bg-surface',
-    'shadow-xs transition-all duration-300 ease-[var(--ease-out-expo)]',
-    'hover:-translate-y-0.5 hover:border-line-strong hover:shadow-lg',
+    'shadow-xs transition-[transform,box-shadow,border-color] duration-300 ease-[var(--ease-out-expo)]',
+    'hover:-translate-y-0.5 hover:border-line-strong hover:shadow-md',
     'motion-reduce:transform-none motion-reduce:transition-none',
   ],
   {
@@ -453,7 +446,7 @@ function StatCard({
   metric,
   stat,
   icon,
-  accent = 'lagoon',
+  accent = 'revenue',
   compact = false,
   countUp = true,
   footer,
@@ -484,25 +477,6 @@ function StatCard({
       className={cn(statCardVariants({ size }), className)}
       {...props}
     >
-      {/* Accent wash — invisible at rest, blooms on hover. */}
-      <div
-        aria-hidden="true"
-        className={cn(
-          'pointer-events-none absolute inset-x-0 -top-16 -z-10 h-32 opacity-0 blur-2xl',
-          'transition-opacity duration-500 ease-[var(--ease-out-expo)] group-hover:opacity-[0.18]',
-          ACCENT[accent].wash,
-        )}
-      />
-      {/* Top hairline that lights up with the accent on hover. */}
-      <div
-        aria-hidden="true"
-        className={cn(
-          'pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent to-transparent',
-          'opacity-0 transition-opacity duration-500 group-hover:opacity-100',
-          ACCENT[accent].rule,
-        )}
-      />
-
       <Stat
         {...resolved}
         size={size}

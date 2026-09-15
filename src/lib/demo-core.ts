@@ -659,10 +659,16 @@ export const SESSION: Session = {
    RESOURCES
    ========================================================================== */
 
+/** Fleet photography — each ID was looked at before it was assigned. */
+function resourcePhoto(id: string) {
+  return `https://images.unsplash.com/${id}?auto=format&fit=crop&w=1200&q=80`
+}
+
 export const RESOURCES: Resource[] = [
   /* Blue Horizon — vessels and equipment */
   {
     id: 'res_bh_alii_nui',
+    imageUrl: resourcePhoto('photo-1697050891362-17b55eb48346'),
     tenantId: 'tnt_bluehorizon',
     name: 'Alii Nui (49ft sailing catamaran)',
     kind: 'vessel',
@@ -674,6 +680,7 @@ export const RESOURCES: Resource[] = [
   },
   {
     id: 'res_bh_kaimana_sky',
+    imageUrl: resourcePhoto('photo-1713849608655-caa62c4df4e5'),
     tenantId: 'tnt_bluehorizon',
     name: 'Kaimana Sky (42ft power catamaran)',
     kind: 'vessel',
@@ -684,6 +691,7 @@ export const RESOURCES: Resource[] = [
   },
   {
     id: 'res_bh_manta_voyager',
+    imageUrl: resourcePhoto('photo-1563967949-d97cba787cae'),
     tenantId: 'tnt_bluehorizon',
     name: 'Manta Voyager (36ft dive boat)',
     kind: 'vessel',
@@ -695,6 +703,7 @@ export const RESOURCES: Resource[] = [
   },
   {
     id: 'res_bh_pelagic_pursuit',
+    imageUrl: resourcePhoto('photo-1551942296-97384c850440'),
     tenantId: 'tnt_bluehorizon',
     name: 'Pelagic Pursuit (38ft sportfisher)',
     kind: 'vessel',
@@ -705,6 +714,7 @@ export const RESOURCES: Resource[] = [
   },
   {
     id: 'res_bh_trade_wind_flyer',
+    imageUrl: resourcePhoto('photo-1628690920311-a820459457ba'),
     tenantId: 'tnt_bluehorizon',
     name: 'Trade Wind Flyer (parasail boat)',
     kind: 'vessel',
@@ -715,6 +725,7 @@ export const RESOURCES: Resource[] = [
   },
   {
     id: 'res_bh_reef_runner',
+    imageUrl: resourcePhoto('photo-1631994299194-1d712dfd19b4'),
     tenantId: 'tnt_bluehorizon',
     name: 'Reef Runner (24ft skiff)',
     kind: 'vessel',
@@ -726,6 +737,7 @@ export const RESOURCES: Resource[] = [
   },
   {
     id: 'res_bh_jetski_fleet',
+    imageUrl: resourcePhoto('photo-1554132267-d06483b00adc'),
     tenantId: 'tnt_bluehorizon',
     name: 'Yamaha VX Jet Ski fleet',
     kind: 'equipment',
@@ -736,6 +748,7 @@ export const RESOURCES: Resource[] = [
   },
   {
     id: 'res_bh_kayak_fleet',
+    imageUrl: resourcePhoto('photo-1709771075610-4382004a7e25'),
     tenantId: 'tnt_bluehorizon',
     name: 'Ocean Kayak tandem fleet',
     kind: 'equipment',
@@ -746,6 +759,7 @@ export const RESOURCES: Resource[] = [
   },
   {
     id: 'res_bh_sup_fleet',
+    imageUrl: resourcePhoto('photo-1614614098579-7167dd3f4c07'),
     tenantId: 'tnt_bluehorizon',
     name: 'Inflatable SUP fleet',
     kind: 'equipment',
@@ -756,6 +770,7 @@ export const RESOURCES: Resource[] = [
   },
   {
     id: 'res_bh_surf_fleet',
+    imageUrl: resourcePhoto('photo-1743779035871-9653b8c58c24'),
     tenantId: 'tnt_bluehorizon',
     name: 'Soft-top longboard fleet',
     kind: 'equipment',
@@ -766,6 +781,7 @@ export const RESOURCES: Resource[] = [
   },
   {
     id: 'res_bh_shuttle',
+    imageUrl: resourcePhoto('photo-1688619103602-35c5b27a6619'),
     tenantId: 'tnt_bluehorizon',
     name: 'Guest shuttle van',
     kind: 'vehicle',
@@ -778,6 +794,7 @@ export const RESOURCES: Resource[] = [
   /* Coral Cay */
   {
     id: 'res_cc_reef_sprinter',
+    imageUrl: resourcePhoto('photo-1758135005218-f18e2a3c3ce8'),
     tenantId: 'tnt_coralcay',
     name: 'Reef Sprinter (24m catamaran)',
     kind: 'vessel',
@@ -788,6 +805,7 @@ export const RESOURCES: Resource[] = [
   },
   {
     id: 'res_cc_coral_dawn',
+    imageUrl: resourcePhoto('photo-1741754952748-179ec003ee7f'),
     tenantId: 'tnt_coralcay',
     name: 'Coral Dawn (dive liveaboard)',
     kind: 'vessel',
@@ -798,6 +816,7 @@ export const RESOURCES: Resource[] = [
   },
   {
     id: 'res_cc_sailaway',
+    imageUrl: resourcePhoto('photo-1413834932717-29e7d4714192'),
     tenantId: 'tnt_coralcay',
     name: 'Sailaway II (18m sailing cat)',
     kind: 'vessel',
@@ -808,6 +827,7 @@ export const RESOURCES: Resource[] = [
   },
   {
     id: 'res_cc_dive_kit',
+    imageUrl: resourcePhoto('photo-1682687982502-1529b3b33f85'),
     tenantId: 'tnt_coralcay',
     name: 'Certified dive kit sets',
     kind: 'equipment',
@@ -817,6 +837,7 @@ export const RESOURCES: Resource[] = [
   },
   {
     id: 'res_cc_coach',
+    imageUrl: resourcePhoto('photo-1509749837427-ac94a2553d0e'),
     tenantId: 'tnt_coralcay',
     name: 'Daintree touring coach',
     kind: 'vehicle',
@@ -828,6 +849,7 @@ export const RESOURCES: Resource[] = [
   /* Saltline */
   {
     id: 'res_sl_terrace',
+    imageUrl: resourcePhoto('photo-1772352214475-12f9a75618d8'),
     tenantId: 'tnt_saltline',
     name: 'Caldera terrace tables',
     kind: 'table',
@@ -838,6 +860,7 @@ export const RESOURCES: Resource[] = [
   },
   {
     id: 'res_sl_sunset_deck',
+    imageUrl: resourcePhoto('photo-1760726743907-ed4907b1ea83'),
     tenantId: 'tnt_saltline',
     name: 'Sunset deck two-tops',
     kind: 'table',
@@ -848,6 +871,7 @@ export const RESOURCES: Resource[] = [
   },
   {
     id: 'res_sl_cellar',
+    imageUrl: resourcePhoto('photo-1724882207681-9e7e8c3dd45c'),
     tenantId: 'tnt_saltline',
     name: 'Vaulted wine cellar',
     kind: 'room',
@@ -857,6 +881,7 @@ export const RESOURCES: Resource[] = [
   },
   {
     id: 'res_sl_chefs_table',
+    imageUrl: resourcePhoto('photo-1550927001-03fd6b9e9262'),
     tenantId: 'tnt_saltline',
     name: 'Chef’s table (kitchen pass)',
     kind: 'table',
@@ -868,6 +893,7 @@ export const RESOURCES: Resource[] = [
   /* Ridgeline */
   {
     id: 'res_rl_swing_rig',
+    imageUrl: resourcePhoto('photo-1518837993197-f2f59dd4ba8e'),
     tenantId: 'tnt_ridgeline',
     name: 'Canyon swing rig',
     kind: 'equipment',
@@ -878,6 +904,7 @@ export const RESOURCES: Resource[] = [
   },
   {
     id: 'res_rl_heli',
+    imageUrl: resourcePhoto('photo-1620734631260-5a3915458976'),
     tenantId: 'tnt_ridgeline',
     name: 'Squirrel AS350 helicopter',
     kind: 'vehicle',
@@ -888,6 +915,7 @@ export const RESOURCES: Resource[] = [
   },
   {
     id: 'res_rl_jetboat',
+    imageUrl: resourcePhoto('photo-1749410351629-529f5f79367f'),
     tenantId: 'tnt_ridgeline',
     name: 'Dart River jet boat',
     kind: 'vessel',
@@ -898,6 +926,7 @@ export const RESOURCES: Resource[] = [
   },
   {
     id: 'res_rl_4wd',
+    imageUrl: resourcePhoto('photo-1612934563202-523b120e84d6'),
     tenantId: 'tnt_ridgeline',
     name: 'Land Cruiser 4WD',
     kind: 'vehicle',
@@ -907,6 +936,7 @@ export const RESOURCES: Resource[] = [
   },
   {
     id: 'res_rl_ebikes',
+    imageUrl: resourcePhoto('photo-1566480047210-b10eaa1f8095'),
     tenantId: 'tnt_ridgeline',
     name: 'Trail e-bike fleet',
     kind: 'equipment',
@@ -916,6 +946,7 @@ export const RESOURCES: Resource[] = [
   },
   {
     id: 'res_rl_alpine_kit',
+    imageUrl: resourcePhoto('photo-1709517659952-263e00150b65'),
     tenantId: 'tnt_ridgeline',
     name: 'Alpine guiding kit (rope, axe, crampons)',
     kind: 'equipment',

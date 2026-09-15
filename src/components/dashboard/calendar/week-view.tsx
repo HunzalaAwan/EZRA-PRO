@@ -505,7 +505,7 @@ export function WeekView({
                     'flex flex-col items-center gap-1 border-l border-line-subtle px-2 py-2.5 first:border-l-0',
                     'transition-colors duration-150 hover:bg-surface-sunken',
                     isWeekend && 'bg-surface-sunken/40',
-                    isToday && 'bg-primary-soft/40',
+                    isToday && 'bg-info-soft/45',
                   )}
                 >
                   <span className="text-[0.625rem] font-semibold tracking-wider text-faint uppercase">
@@ -514,7 +514,7 @@ export function WeekView({
                   <span
                     className={cn(
                       'inline-flex size-7 items-center justify-center rounded-full text-sm font-semibold tabular-nums',
-                      isToday ? 'bg-primary text-on-primary' : 'text-foreground',
+                      isToday ? 'bg-info text-white' : 'text-foreground',
                     )}
                   >
                     {day.getDate()}
@@ -569,7 +569,7 @@ export function WeekView({
                       className={cn(
                         'flex flex-col gap-1.5 border-l border-line-subtle p-1.5 first:border-l-0',
                         isWeekend && 'bg-surface-sunken/25',
-                        isToday && 'bg-primary-soft/12',
+                        isToday && 'bg-info-soft/15',
                       )}
                     >
                       {dayEvents.map((event) => (

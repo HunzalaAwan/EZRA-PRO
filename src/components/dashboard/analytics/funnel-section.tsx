@@ -161,11 +161,7 @@ export function FunnelSection({
         </div>
 
         {/* ---------- biggest leak ---------- */}
-        <div className="relative isolate overflow-hidden rounded-2xl border border-[color-mix(in_oklab,var(--accent)_28%,var(--border))] bg-[linear-gradient(160deg,color-mix(in_oklab,var(--accent)_12%,var(--surface))_0%,var(--surface)_58%)] p-5 shadow-md">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute -left-14 -top-16 -z-10 size-48 rounded-full bg-[radial-gradient(circle,var(--color-coral-500),transparent_68%)] opacity-20 blur-2xl"
-          />
+        <div className="relative isolate overflow-hidden rounded-2xl border border-line bg-surface p-5 shadow-md">
 
           {loading || !analysis ? (
             <div className="space-y-3">

@@ -41,12 +41,12 @@ export function chartColorVar(index: number): string {
  * the raw brand ramps) keeps activity colours legible in both themes.
  */
 export const ACTIVITY_COLOR_VAR: Record<Activity['colorKey'], string> = {
-  lagoon: 'var(--chart-1)',
-  coral: 'var(--chart-2)',
-  reef: 'var(--chart-3)',
-  sunset: 'var(--chart-4)',
-  info: 'var(--chart-5)',
-  success: 'var(--chart-6)',
+  lagoon: 'var(--chart-1)', // teal
+  coral: 'var(--chart-3)', // coral
+  reef: 'var(--chart-4)', // violet
+  sunset: 'var(--chart-7)', // amber
+  info: 'var(--chart-6)', // blue
+  success: 'var(--chart-5)', // green
 }
 
 /** Shared axis/grid ink — hairline grid, muted ticks, no axis rules. */

@@ -115,7 +115,7 @@ function PlanCard({ plan, billing }: { plan: PricingPlan; billing: BillingPeriod
         popular
           ? [
               'shadow-xl xl:scale-[1.035]',
-              'bg-[linear-gradient(150deg,var(--color-lagoon-400)_0%,var(--color-reef-400)_46%,var(--color-coral-400)_100%)]',
+              'bg-primary',
             ]
           : 'bg-transparent',
       )}
@@ -126,7 +126,7 @@ function PlanCard({ plan, billing }: { plan: PricingPlan; billing: BillingPeriod
             className={cn(
               'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 shadow-lg',
               'text-[0.6875rem] font-semibold uppercase tracking-[0.09em] text-white',
-              'bg-[linear-gradient(100deg,var(--color-lagoon-800)_0%,var(--color-reef-800)_52%,var(--color-coral-800)_100%)]',
+              'bg-lagoon-800',
             )}
           >
             <Sparkles className="size-3.5" aria-hidden="true" />
@@ -284,7 +284,7 @@ export function PricingSection({ id = 'pricing', className }: PricingSectionProp
                   aria-hidden="true"
                   className={cn(
                     'pointer-events-none absolute -inset-3 -z-10 rounded-[2.25rem] blur-2xl',
-                    'bg-[linear-gradient(140deg,var(--color-lagoon-400)_0%,var(--color-reef-400)_48%,var(--color-coral-400)_100%)]',
+                    'bg-primary',
                     'opacity-20 dark:opacity-30',
                   )}
                 />

@@ -84,16 +84,16 @@ const VERTICAL_TONE: Record<VerticalKey, SpotlightColor> = {
   wellness: 'reef',
 }
 
-/** Gradient wash + border tint for the two featured cards. */
+/** Solid tint + border tint for the two featured cards. */
 const FEATURED_WASH: Record<SpotlightColor, string> = {
   lagoon:
-    'border-[color-mix(in_oklab,var(--color-lagoon-500)_28%,var(--border))] bg-[linear-gradient(152deg,color-mix(in_oklab,var(--color-lagoon-500)_15%,var(--surface))_0%,var(--surface)_54%,color-mix(in_oklab,var(--color-reef-500)_10%,var(--surface))_100%)]',
+    'border-[color-mix(in_oklab,var(--color-lagoon-500)_28%,var(--border))] bg-[color-mix(in_oklab,var(--color-lagoon-500)_15%,var(--surface))]',
   coral:
-    'border-[color-mix(in_oklab,var(--color-coral-500)_28%,var(--border))] bg-[linear-gradient(152deg,color-mix(in_oklab,var(--color-coral-500)_14%,var(--surface))_0%,var(--surface)_54%,color-mix(in_oklab,var(--color-sunset-500)_12%,var(--surface))_100%)]',
+    'border-[color-mix(in_oklab,var(--color-coral-500)_28%,var(--border))] bg-[color-mix(in_oklab,var(--color-coral-500)_14%,var(--surface))]',
   sunset:
-    'border-[color-mix(in_oklab,var(--color-sunset-500)_28%,var(--border))] bg-[linear-gradient(152deg,color-mix(in_oklab,var(--color-sunset-500)_15%,var(--surface))_0%,var(--surface)_54%,color-mix(in_oklab,var(--color-coral-500)_10%,var(--surface))_100%)]',
+    'border-[color-mix(in_oklab,var(--color-sunset-500)_28%,var(--border))] bg-[color-mix(in_oklab,var(--color-sunset-500)_15%,var(--surface))]',
   reef:
-    'border-[color-mix(in_oklab,var(--color-reef-500)_26%,var(--border))] bg-[linear-gradient(152deg,color-mix(in_oklab,var(--color-reef-500)_14%,var(--surface))_0%,var(--surface)_54%,color-mix(in_oklab,var(--color-lagoon-500)_11%,var(--surface))_100%)]',
+    'border-[color-mix(in_oklab,var(--color-reef-500)_26%,var(--border))] bg-[color-mix(in_oklab,var(--color-reef-500)_14%,var(--surface))]',
 }
 
 /** Gradient-text recipe for the oversized featured figure. */

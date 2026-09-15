@@ -19,7 +19,7 @@ export default function ManifestPage() {
         <PageHeader
           className="mb-0"
           title="Daily manifest"
-          description="The dock run sheet. Check guests in, flag no-shows, and see who is on the water — built to be read on a phone in full sun."
+          description="Pick a departure on the left, check guests in on the right."
         />
       </div>
 

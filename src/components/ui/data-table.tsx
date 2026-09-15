@@ -2,7 +2,8 @@
 
 import * as React from 'react'
 import * as CheckboxPrimitive from '@radix-ui/react-checkbox'
-import { motion, useReducedMotion } from 'motion/react'
+import { motion } from 'motion/react'
+import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { ArrowUp, Check, ChevronsUpDown, Minus } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
@@ -107,7 +108,7 @@ function DataTable<T>({
   className,
   containerClassName,
 }: DataTableProps<T>) {
-  const reduceMotion = useReducedMotion()
+  const reduceMotion = useReducedMotionSafe()
 
   const pageIds = React.useMemo(() => rows.map(getRowId), [rows, getRowId])
   const selectedSet = React.useMemo(() => new Set(selectedIds ?? []), [selectedIds])
@@ -281,7 +282,7 @@ function DataTable<T>({
                 key={id}
                 data-slot="table-row"
                 data-state={isSelected ? 'selected' : undefined}
-                // `initial` must NOT depend on useReducedMotion(): it reads false
+                // `initial` must NOT depend on useReducedMotionSafe(): it reads false
                 // during SSR and true on a reduced-motion client, which would
                 // hydrate a different inline style. Reduced motion is honoured by
                 // zeroing the duration instead, so the row simply snaps in.

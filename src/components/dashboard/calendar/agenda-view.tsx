@@ -134,7 +134,7 @@ export function AgendaView({
                   <span
                     className={cn(
                       'tabular font-display text-base font-semibold',
-                      today ? 'text-primary' : 'text-foreground',
+                      today ? 'text-info' : 'text-foreground',
                     )}
                   >
                     {new Intl.DateTimeFormat('en-US', {

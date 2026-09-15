@@ -8,7 +8,7 @@
 
 import * as React from 'react'
 import { MessageSquareWarning, Star } from 'lucide-react'
-import { useReducedMotion } from 'motion/react'
+import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import {
   Area,
   CartesianGrid,
@@ -131,7 +131,7 @@ export function RatingSummary({
   reviewRate,
   className,
 }: RatingSummaryProps) {
-  const reduceMotion = useReducedMotion()
+  const reduceMotion = useReducedMotionSafe()
   const gradientId = `ezra-rating-${React.useId().replace(/:/g, '')}`
 
   const trendAverage = React.useMemo(() => {

@@ -4,18 +4,22 @@
  * Inline trend line. Deliberately Recharts-free: KPI rows render dozens of these
  * at once, and a single memoised <svg> with two paths is an order of magnitude
  * cheaper than a chart instance per tile.
+ *
+ * The area under the line is a flat wash of the series colour (no gradient),
+ * and the end marker carries a surface-coloured ring so it stays legible where
+ * the line doubles back on itself.
  */
 
-import { memo, useId, useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import { cn, sparklinePath } from '@/lib/utils'
 
 export interface SparklineProps {
   values: number[]
   width?: number
   height?: number
-  /** Any CSS colour — pass a `var(--chart-N)` token. */
+  /** Any CSS colour — pass a `var(--series-*)` or `var(--chart-N)` token. */
   color?: string
-  /** Adds a soft gradient area under the line. */
+  /** Adds a flat wash under the line. */
   fill?: boolean
   /** Marks the most recent value with a dot. */
   showLastDot?: boolean
@@ -32,20 +36,18 @@ export const Sparkline = memo(function Sparkline({
   values,
   width = 96,
   height = 28,
-  color = 'var(--chart-1)',
+  color = 'var(--series-revenue)',
   fill = false,
   showLastDot = false,
   strokeWidth = 1.5,
   className,
   ariaLabel,
 }: SparklineProps) {
-  const gradientId = `ezra-spark-${useId().replace(/:/g, '')}`
-
   const geometry = useMemo(() => {
     if (values.length === 0) return null
 
     // Inset by the stroke width so the line never clips at the edges.
-    const pad = strokeWidth
+    const pad = strokeWidth + 2
     const line = sparklinePath(values, width, height, pad)
     const min = Math.min(...values)
     const max = Math.max(...values)
@@ -74,16 +76,7 @@ export const Sparkline = memo(function Sparkline({
       className={cn('overflow-visible', className)}
       {...(ariaLabel ? { role: 'img', 'aria-label': ariaLabel } : { 'aria-hidden': true })}
     >
-      {fill ? (
-        <defs>
-          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={0.3} />
-            <stop offset="100%" stopColor={color} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-      ) : null}
-
-      {fill && !geometry.single ? <path d={geometry.area} fill={`url(#${gradientId})`} /> : null}
+      {fill && !geometry.single ? <path d={geometry.area} fill={color} fillOpacity={0.12} /> : null}
 
       {!geometry.single ? (
         <path
@@ -96,7 +89,14 @@ export const Sparkline = memo(function Sparkline({
       ) : null}
 
       {showLastDot || geometry.single ? (
-        <circle cx={geometry.lastX} cy={geometry.lastY} r={strokeWidth + 0.6} fill={color} />
+        <circle
+          cx={geometry.lastX}
+          cy={geometry.lastY}
+          r={strokeWidth + 1.5}
+          fill={color}
+          stroke="var(--surface)"
+          strokeWidth={2}
+        />
       ) : null}
     </svg>
   )

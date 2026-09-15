@@ -1,57 +1,44 @@
 import type { Metadata } from 'next'
 
-import { FaqSection } from '@/components/marketing/faq-section'
-import { Integrations } from '@/components/marketing/integrations'
+import { ClosingCta } from '@/components/marketing/land/closing-cta'
+import { FeatureBento } from '@/components/marketing/land/feature-bento'
+import { LandHero } from '@/components/marketing/land/land-hero'
+import { ProofStrip } from '@/components/marketing/land/proof-strip'
+import { SceneReel } from '@/components/marketing/land/scene-reel'
 import { PricingSection } from '@/components/marketing/pricing-section'
-import { PhotoCta } from '@/components/marketing/story/photo-cta'
-import { ProofBand } from '@/components/marketing/story/proof-band'
-import { StoryHero } from '@/components/marketing/story/story-hero'
-import { StoryHook } from '@/components/marketing/story/story-hook'
-import { DayStory } from '@/components/marketing/story/day-story'
-import { VerticalsGrid } from '@/components/marketing/story/verticals-grid'
 
 export const metadata: Metadata = {
-  title: 'EZRA Pro — Booking software for experience operators',
+  title: 'EZRA Pro — Booking software for tours, restaurants, events and classes',
   description:
-    'Availability, checkout, crew and next-day payouts for tour, activity, adventure, dining and wellness operators worldwide. One inventory across your site and the marketplaces. Free migration from FareHarbor or Peek Pro.',
+    'Availability, deposits, staff rosters and next-day payouts for tours, restaurants, events, classes and venues. One inventory behind your website, the marketplaces and the phone. Free migration.',
   alternates: { canonical: '/' },
   openGraph: {
     url: '/',
-    title: 'EZRA Pro — Booking software for experience operators',
+    title: 'EZRA Pro — Booking software for tours, restaurants, events and classes',
     description:
-      'One inventory across your site and the marketplaces, a mobile app that works with no signal, and payouts the next business day.',
+      'One inventory behind your website, the marketplaces and the phone, a host app that works with no signal, and payouts the next business day.',
   },
 }
 
 /* ==========================================================================
-   The landing page is told as a story, in the order the skill's pattern
-   recommends: hook → the problem → a day on the product → who it is for →
-   proof → price → questions → the last frame.
-
-   Surfaces alternate so the page reads as chapters, not a scroll of cards:
-     hero          photograph (dark)
-     hook          background
-     day story     surface-sunken, pinned
-     verticals     background
-     proof         photograph (dark)
-     integrations  background
-     pricing       surface-sunken
-     faq           background
-     cta           photograph (dark)
+   Six sections, in the order a first visit needs them:
+     hero        the product working, for six kinds of business
+     reel        three moments it handled, told as a pinned film
+     features    five drawings of what it runs
+     proof       who uses it, and three numbers
+     pricing     the price, plainly
+     closing     the ask
    ========================================================================== */
 
 export default function LandingPage() {
   return (
     <>
-      <StoryHero />
-      <StoryHook />
-      <DayStory />
-      <VerticalsGrid />
-      <ProofBand />
-      <Integrations className="bg-background" />
-      <PricingSection className="scroll-mt-4 border-y border-line bg-surface-sunken" />
-      <FaqSection className="scroll-mt-4 bg-background" />
-      <PhotoCta />
+      <LandHero />
+      <SceneReel />
+      <FeatureBento />
+      <ProofStrip />
+      <PricingSection className="scroll-mt-4 bg-background py-16 sm:py-20" />
+      <ClosingCta />
     </>
   )
 }

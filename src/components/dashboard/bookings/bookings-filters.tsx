@@ -328,13 +328,13 @@ export function BookingsFilters({
                 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
                 'active:scale-[0.97] motion-reduce:active:scale-100',
                 active
-                  ? 'border-[color-mix(in_oklab,var(--primary)_38%,transparent)] bg-primary-soft text-primary shadow-xs'
+                  ? 'border-[color-mix(in_oklab,var(--info)_40%,transparent)] bg-info-soft text-info shadow-xs'
                   : 'border-line bg-surface text-muted hover:border-line-strong hover:bg-surface-sunken hover:text-foreground',
               )}
             >
               <Icon
                 aria-hidden="true"
-                className={cn('size-3.5 shrink-0', active ? 'text-primary' : 'text-faint')}
+                className={cn('size-3.5 shrink-0', active ? 'text-info' : 'text-faint')}
               />
               {view.label}
             </button>
@@ -447,13 +447,13 @@ export function BookingsFilters({
                   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
                   'data-[state=open]:border-primary data-[state=open]:ring-2 data-[state=open]:ring-primary/25',
                   filters.range
-                    ? 'border-[color-mix(in_oklab,var(--primary)_38%,transparent)] bg-primary-soft text-primary'
+                    ? 'border-[color-mix(in_oklab,var(--info)_40%,transparent)] bg-info-soft text-info'
                     : 'border-line bg-surface text-foreground hover:border-line-strong hover:bg-surface-sunken',
                 )}
               >
                 <CalendarClock
                   aria-hidden="true"
-                  className={cn('size-4 shrink-0', filters.range ? 'text-primary' : 'text-subtle')}
+                  className={cn('size-4 shrink-0', filters.range ? 'text-info' : 'text-subtle')}
                 />
                 <span className="truncate tabular-nums">
                   {filters.range ? formatRangeLabel(filters.range) : 'Any date'}

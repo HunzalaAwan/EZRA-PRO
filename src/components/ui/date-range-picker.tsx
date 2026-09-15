@@ -440,7 +440,7 @@ const DAY_PICKER_CLASS_NAMES = {
   range_start: 'rounded-l-lg bg-primary-soft/55 [&>button]:bg-primary [&>button]:text-on-primary',
   range_end: 'rounded-r-lg bg-primary-soft/55 [&>button]:bg-primary [&>button]:text-on-primary',
   range_middle: 'bg-primary-soft/55 [&>button]:text-primary [&>button]:hover:bg-primary-soft',
-  today: '[&>button]:ring-1 [&>button]:ring-inset [&>button]:ring-primary/55',
+  today: '[&>button]:ring-1 [&>button]:ring-inset [&>button]:ring-info/60',
   outside: '[&>button]:text-faint [&>button]:opacity-70',
   disabled: '[&>button]:text-faint [&>button]:opacity-40',
   hidden: 'invisible',

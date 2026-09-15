@@ -25,12 +25,12 @@ export const separatorVariants = cva('shrink-0', {
     {
       orientation: 'horizontal',
       tone: 'gradient',
-      class: 'bg-gradient-to-r from-transparent via-line-strong to-transparent',
+      class: 'bg-line-strong/70',
     },
     {
       orientation: 'vertical',
       tone: 'gradient',
-      class: 'bg-gradient-to-b from-transparent via-line-strong to-transparent',
+      class: 'bg-line-strong/70',
     },
   ],
   defaultVariants: { orientation: 'horizontal', tone: 'default' },

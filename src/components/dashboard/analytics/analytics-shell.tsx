@@ -1,7 +1,8 @@
 'use client'
 
 import * as React from 'react'
-import { useReducedMotion } from 'motion/react'
+import { motion } from 'motion/react'
+import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import {
   ChartPie,
   Filter,
@@ -67,6 +68,20 @@ const RANGE_PRESETS: RangePreset[] = ['7d', '30d', '90d', 'mtd', 'qtd', 'ytd']
 /** Height of the sticky dashboard header the tab rail parks beneath. */
 const HEADER_OFFSET = 56
 
+/** Each tab mounts fresh, so a short rise-in makes the switch read as a new page. */
+function TabPane({ children }: { children: React.ReactNode }) {
+  const reduce = useReducedMotionSafe()
+  return (
+    <motion.div
+      initial={reduce ? false : { opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
 function SectionLabel({ eyebrow, title, hint }: { eyebrow: string; title: string; hint: string }) {
   return (
     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 pt-2">
@@ -88,7 +103,7 @@ export interface AnalyticsShellProps {
 
 export function AnalyticsShell({ initialSnapshot }: AnalyticsShellProps) {
   const tenant = CURRENT_TENANT
-  const reduceMotion = useReducedMotion()
+  const reduceMotion = useReducedMotionSafe()
 
   const [preset, setPreset] = React.useState<RangePreset>('30d')
   const [range, setRange] = React.useState<DateRange>(
@@ -274,7 +289,7 @@ export function AnalyticsShell({ initialSnapshot }: AnalyticsShellProps) {
         }
       />
 
-      <Tabs value={tab} onValueChange={handleTabChange} variant="underline" className="gap-5">
+      <Tabs value={tab} onValueChange={handleTabChange} variant="underline" className="gap-6">
         {/* ---------- sticky rail ---------- */}
         <div
           ref={railRef}
@@ -306,60 +321,27 @@ export function AnalyticsShell({ initialSnapshot }: AnalyticsShellProps) {
         />
 
         {/* ---------- panels ---------- */}
-        <TabsContent value="overview" className="space-y-6">
-          {insights}
-
-          <div className="space-y-4">
-            <SectionLabel
-              eyebrow="01 · Revenue"
-              title="What you sold"
-              hint="Daily net revenue against the period before it"
-            />
-            {revenue}
-          </div>
-
-          <div className="space-y-4">
-            <SectionLabel
-              eyebrow="02 · Channels"
-              title="Where it came from"
-              hint="Gross carried through commission to what actually landed"
-            />
-            {channels}
-          </div>
-
-          <div className="space-y-4">
-            <SectionLabel
-              eyebrow="03 · Occupancy"
-              title="How full you ran"
-              hint="Seats sold against seats offered, by weekday and hour"
-            />
-            {occupancySection}
-          </div>
-
-          <div className="space-y-4">
-            <SectionLabel
-              eyebrow="04 · Funnel"
-              title="Where you lost people"
-              hint="Storefront through to a paid booking, priced at your own order value"
-            />
-            {funnel}
-          </div>
-
-          <div className="space-y-4">
-            <SectionLabel
-              eyebrow="05 · Retention"
-              title="Who came back"
-              hint="Cohort retention and the markets your guests travel from"
-            />
-            {retention}
-          </div>
+        <TabsContent value="overview">
+          <TabPane>
+            <div className="space-y-6">
+              {insights}
+              <div className="space-y-4">
+                <SectionLabel
+                  eyebrow="Revenue"
+                  title="What you sold"
+                  hint="Daily net revenue against the period before it — channels, occupancy, funnel and retention each have their own tab"
+                />
+                {revenue}
+              </div>
+            </div>
+          </TabPane>
         </TabsContent>
 
-        <TabsContent value="revenue">{revenue}</TabsContent>
-        <TabsContent value="channels">{channels}</TabsContent>
-        <TabsContent value="occupancy">{occupancySection}</TabsContent>
-        <TabsContent value="funnel">{funnel}</TabsContent>
-        <TabsContent value="retention">{retention}</TabsContent>
+        <TabsContent value="revenue"><TabPane>{revenue}</TabPane></TabsContent>
+        <TabsContent value="channels"><TabPane>{channels}</TabPane></TabsContent>
+        <TabsContent value="occupancy"><TabPane>{occupancySection}</TabPane></TabsContent>
+        <TabsContent value="funnel"><TabPane>{funnel}</TabPane></TabsContent>
+        <TabsContent value="retention"><TabPane>{retention}</TabPane></TabsContent>
       </Tabs>
     </>
   )

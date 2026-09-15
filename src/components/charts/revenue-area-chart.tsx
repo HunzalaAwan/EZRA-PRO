@@ -1,13 +1,13 @@
 'use client'
 
 /**
- * The headline trend chart. Gradient area for the selected metric, a dashed
+ * The headline trend chart. A flat-washed area for the selected metric, a dashed
  * prior-period line for context, and a period-average reference so an operator
  * can see at a glance which days beat their own baseline.
  */
 
-import { useId, useMemo, useState, type ReactNode } from 'react'
-import { useReducedMotion } from 'motion/react'
+import { useMemo, useState, type ReactNode } from 'react'
+import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import {
   Area,
   CartesianGrid,
@@ -32,6 +32,7 @@ import {
   percentChange,
   sum,
 } from '@/lib/utils'
+import { seriesVar } from '@/lib/metric-colors'
 import type { CurrencyCode, TimeSeriesPoint } from '@/types'
 import { CHART_INK, ChartContainer, ChartLegend, type ChartLegendItem } from './chart-container'
 import { CHART_CURSOR_LINE, ChartTooltip } from './chart-tooltip'
@@ -78,8 +79,7 @@ const METRICS: Record<RevenueMetric, MetricConfig> = {
   },
 }
 
-const SERIES_COLOR = 'var(--chart-1)'
-const COMPARE_COLOR = 'var(--chart-8)'
+const COMPARE_COLOR = 'var(--series-compare)'
 
 export interface RevenueAreaChartProps {
   points: TimeSeriesPoint[]
@@ -96,6 +96,8 @@ export interface RevenueAreaChartProps {
   /** Range/metric switchers rendered in the card header. */
   toolbar?: ReactNode
   loading?: boolean
+  /** Series colour. Defaults to the metric's own `--series-*` token. */
+  color?: string
   className?: string
 }
 
@@ -110,11 +112,11 @@ export function RevenueAreaChart({
   description,
   toolbar,
   loading = false,
+  color,
   className,
 }: RevenueAreaChartProps) {
-  const reduced = useReducedMotion()
-  // useId contains colons, which are legal in ids but awkward in url() refs.
-  const gradientId = `ezra-area-${useId().replace(/:/g, '')}`
+  const reduced = useReducedMotionSafe()
+  const SERIES_COLOR = color ?? seriesVar(metric)
   const [hidden, setHidden] = useState<string[]>([])
 
   const config = METRICS[metric]
@@ -192,14 +194,6 @@ export function RevenueAreaChart({
     >
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={points} margin={{ top: 10, right: 10, bottom: 0, left: 0 }}>
-          <defs>
-            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={SERIES_COLOR} stopOpacity={0.34} />
-              <stop offset="55%" stopColor={SERIES_COLOR} stopOpacity={0.1} />
-              <stop offset="100%" stopColor={SERIES_COLOR} stopOpacity={0} />
-            </linearGradient>
-          </defs>
-
           {/* Horizontal rules only — vertical gridlines fight the crosshair. */}
           <CartesianGrid vertical={false} stroke={CHART_INK.grid} strokeWidth={1} />
 
@@ -267,7 +261,8 @@ export function RevenueAreaChart({
             hide={isHidden(metric)}
             stroke={SERIES_COLOR}
             strokeWidth={2}
-            fill={`url(#${gradientId})`}
+            fill={SERIES_COLOR}
+            fillOpacity={0.1}
             dot={false}
             activeDot={{ r: 4, strokeWidth: 2, stroke: 'var(--surface)', fill: SERIES_COLOR }}
             isAnimationActive={!reduced}

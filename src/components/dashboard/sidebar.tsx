@@ -165,7 +165,7 @@ export function DashboardNavList({
                     'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
                     collapsed ? 'h-10 w-10 justify-center' : 'gap-2.5 px-2.5 py-2',
                     active
-                      ? 'bg-primary-soft text-primary'
+                      ? 'bg-info-soft text-info'
                       : 'text-muted hover:bg-surface-sunken hover:text-foreground',
                   )}
                 >
@@ -173,13 +173,13 @@ export function DashboardNavList({
                     reduceMotion ? (
                       <span
                         aria-hidden="true"
-                        className="absolute inset-y-1.5 -left-3 w-[3px] rounded-r-full bg-primary"
+                        className="absolute inset-y-1.5 -left-3 w-[3px] rounded-r-full bg-info"
                       />
                     ) : (
                       <motion.span
                         aria-hidden="true"
                         layoutId={layoutId}
-                        className="absolute inset-y-1.5 -left-3 w-[3px] rounded-r-full bg-primary"
+                        className="absolute inset-y-1.5 -left-3 w-[3px] rounded-r-full bg-info"
                         transition={{ type: 'spring', stiffness: 420, damping: 36, mass: 0.7 }}
                       />
                     )

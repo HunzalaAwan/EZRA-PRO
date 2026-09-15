@@ -8,7 +8,7 @@
  */
 
 import { useMemo, useState, type ReactNode } from 'react'
-import { useReducedMotion } from 'motion/react'
+import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { XAxisTickContentProps } from 'recharts'
 import {
@@ -25,8 +25,8 @@ import type { CurrencyCode, TimeSeriesPoint } from '@/types'
 import { CHART_INK, ChartContainer, ChartLegend, type ChartLegendItem } from './chart-container'
 import { CHART_CURSOR_BAND, ChartTooltip } from './chart-tooltip'
 
-const BOOKINGS_COLOR = 'var(--chart-1)'
-const CANCELLED_COLOR = 'var(--danger)'
+const BOOKINGS_COLOR = 'var(--series-bookings)'
+const CANCELLED_COLOR = 'var(--series-cancellations)'
 
 /** Saturday or Sunday in local time — `fromDateKey` avoids the UTC shift. */
 function isWeekendKey(dateKey: string): boolean {
@@ -85,7 +85,7 @@ export function BookingsBarChart({
   loading = false,
   className,
 }: BookingsBarChartProps) {
-  const reduced = useReducedMotion()
+  const reduced = useReducedMotionSafe()
   const [hidden, setHidden] = useState<string[]>([])
 
   const data: BarPoint[] = useMemo(
@@ -241,7 +241,7 @@ export function BookingsBarChart({
             stackId="day"
             hide={hidden.includes('bookings')}
             fill={BOOKINGS_COLOR}
-            radius={[6, 6, 0, 0]}
+            radius={[4, 4, 0, 0]}
             isAnimationActive={!reduced}
             animationDuration={620}
             animationEasing="cubic-bezier(0.16,1,0.3,1)"
@@ -259,7 +259,7 @@ export function BookingsBarChart({
             hide={hidden.includes('cancellations')}
             fill={CANCELLED_COLOR}
             fillOpacity={0.5}
-            radius={[6, 6, 0, 0]}
+            radius={[4, 4, 0, 0]}
             isAnimationActive={!reduced}
             animationDuration={620}
             animationBegin={120}

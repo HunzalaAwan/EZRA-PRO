@@ -212,11 +212,7 @@ export function OccupancySection({
 
       {/* ---------- the money shot: underfilled slots ---------- */}
       <div className="grid gap-4 xl:grid-cols-3">
-        <div className="relative isolate overflow-hidden rounded-2xl border border-[color-mix(in_oklab,var(--primary)_26%,var(--border))] bg-[linear-gradient(145deg,color-mix(in_oklab,var(--primary)_11%,var(--surface))_0%,var(--surface)_52%,color-mix(in_oklab,var(--accent)_9%,var(--surface))_100%)] shadow-md xl:col-span-2">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute -right-16 -top-20 -z-10 size-56 rounded-full bg-[radial-gradient(circle,var(--color-lagoon-400),transparent_68%)] opacity-25 blur-2xl"
-          />
+        <div className="relative isolate overflow-hidden rounded-2xl border border-line bg-surface shadow-md xl:col-span-2">
 
           <header className="flex flex-wrap items-start justify-between gap-4 px-5 pb-4 pt-5">
             <div className="min-w-0">
@@ -292,7 +288,7 @@ export function OccupancySection({
                     </div>
                     <div className="relative mt-1.5 h-2 overflow-hidden rounded-full bg-surface-sunken">
                       <div
-                        className="h-full rounded-full bg-[linear-gradient(90deg,var(--color-sunset-500),var(--color-coral-500))]"
+                        className="h-full rounded-full bg-surface"
                         style={{ width: `${clamp(slot.cell.occupancy, 2, 100)}%` }}
                       />
                       <span

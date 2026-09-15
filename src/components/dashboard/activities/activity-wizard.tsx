@@ -2,7 +2,8 @@
 
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
+import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import {
   ArrowLeft,
   ArrowRight,
@@ -649,7 +650,7 @@ export function ActivityWizard({
   nowIso,
 }: ActivityWizardProps) {
   const router = useRouter()
-  const reduceMotion = useReducedMotion()
+  const reduceMotion = useReducedMotionSafe()
 
   const initial = React.useMemo(
     () => createDefaultDraft(defaultCategory, nowIso),

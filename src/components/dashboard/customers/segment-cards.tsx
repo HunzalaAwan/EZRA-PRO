@@ -11,8 +11,8 @@
 
 import * as React from 'react'
 import { Clock8, Crown, Repeat2, Sparkles, type LucideIcon } from 'lucide-react'
-import { motion, useReducedMotion } from 'motion/react'
-
+import { motion } from 'motion/react'
+import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { cn, formatCurrency, formatDelta, formatNumber, formatPercent } from '@/lib/utils'
 import { Sparkline } from '@/components/charts/sparkline'
 import type { CurrencyCode, Customer } from '@/types'
@@ -114,7 +114,7 @@ export function SegmentCards({
   onValueChange,
   className,
 }: SegmentCardsProps) {
-  const reduceMotion = useReducedMotion()
+  const reduceMotion = useReducedMotionSafe()
   const layoutId = React.useId()
 
   const ordered = React.useMemo(

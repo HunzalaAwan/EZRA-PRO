@@ -2,7 +2,7 @@
 
 /**
  * The "what should I reschedule?" view. Weekday rows x hour columns, tinted
- * through the lagoon ramp by occupancy, so dead slots and sell-outs are obvious
+ * through the occupancy series hue, so dead slots and sell-outs are obvious
  * before you read a single number.
  *
  * Hand-built with CSS grid: Recharts has no heatmap primitive, and a grid of
@@ -10,7 +10,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { motion, useReducedMotion } from 'motion/react'
+import { motion } from 'motion/react'
+import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { cn, clamp, formatCurrency, formatNumber, formatPercent } from '@/lib/utils'
 import type { CurrencyCode, HeatmapCell } from '@/types'
 import { ChartContainer } from './chart-container'
@@ -38,13 +39,13 @@ function hourLabelLong(hour: number): string {
 }
 
 /**
- * Occupancy -> tint. Mixing toward `--chart-1` keeps the ramp inside the brand
+ * Occupancy -> tint. Mixing toward the occupancy series hue keeps the ramp on brand
  * and correct in both themes; the floor of 8% keeps empty-but-scheduled slots
  * distinguishable from slots that do not exist at all.
  */
 function cellTint(occupancy: number): string {
   const weight = 8 + (clamp(occupancy, 0, 100) / 100) * 88
-  return `color-mix(in oklab, var(--chart-1) ${weight.toFixed(1)}%, var(--surface-sunken))`
+  return `color-mix(in oklab, var(--series-occupancy) ${weight.toFixed(1)}%, var(--surface-sunken))`
 }
 
 /** Flip label ink once the tint gets dark enough to swallow muted text. */
@@ -83,7 +84,7 @@ export function OccupancyHeatmap({
   loading = false,
   className,
 }: OccupancyHeatmapProps) {
-  const reduced = useReducedMotion()
+  const reduced = useReducedMotionSafe()
   const wrapperRef = useRef<HTMLDivElement>(null)
   const cellRefs = useRef(new Map<string, HTMLButtonElement>())
   const shouldRestoreFocus = useRef(false)
@@ -189,13 +190,11 @@ export function OccupancyHeatmap({
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <div className="flex items-center gap-2">
             <span className="text-[11px] text-subtle">Occupancy</span>
-            <span
-              aria-hidden="true"
-              className="h-2 w-28 rounded-full"
-              style={{
-                background: `linear-gradient(to right, ${cellTint(0)}, ${cellTint(50)}, ${cellTint(100)})`,
-              }}
-            />
+            <span aria-hidden="true" className="flex gap-0.5">
+              {[0, 25, 50, 75, 100].map((step) => (
+                <span key={step} className="h-2 w-5 rounded-[3px]" style={{ background: cellTint(step) }} />
+              ))}
+            </span>
             <span className="tabular text-[11px] text-subtle">0–100%</span>
           </div>
           {peak ? (
@@ -340,7 +339,7 @@ export function OccupancyHeatmap({
               }
             >
               <ChartTooltipRow
-                color="var(--chart-1)"
+                color="var(--series-occupancy)"
                 name="Occupancy"
                 value={formatPercent(hover.cell.occupancy)}
               />

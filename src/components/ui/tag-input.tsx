@@ -2,7 +2,8 @@
 
 import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
+import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { X } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
@@ -96,7 +97,7 @@ function TagInput({
   const inputRef = React.useRef<HTMLInputElement>(null)
   const listId = React.useId()
   const errorId = React.useId()
-  const reduceMotion = useReducedMotion()
+  const reduceMotion = useReducedMotionSafe()
 
   const atCapacity = typeof max === 'number' && value.length >= max
   const message = error ?? localError

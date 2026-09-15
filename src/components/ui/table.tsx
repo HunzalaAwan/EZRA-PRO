@@ -55,6 +55,8 @@ function TableHeader({ className, sticky = false, ...props }: TableHeaderProps) 
       data-slot="table-header"
       className={cn(
         '[&_tr]:border-b [&_tr]:border-line',
+        // A blue-grey head row, a step below the card, so columns read as a band.
+        !sticky && 'bg-well',
         // The blur + translucent fill keeps rows legible as they scroll under it.
         sticky &&
           'sticky top-0 z-20 bg-surface/85 backdrop-blur-md supports-[not(backdrop-filter:blur(0))]:bg-surface',

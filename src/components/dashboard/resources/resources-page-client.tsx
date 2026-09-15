@@ -1,15 +1,16 @@
 'use client'
 
 import * as React from 'react'
-import { Anchor, Plus, Ship, TriangleAlert, Users } from 'lucide-react'
+import { Anchor, ImagePlus, LayoutGrid, List, Plus, Ship, Trash2, TriangleAlert, Users, Wrench } from 'lucide-react'
 import { z } from 'zod'
 
 import { PageHeader } from '@/components/dashboard/page-header'
 import {
   RESOURCE_KIND_META,
   ResourceGrid,
+  type ResourceImage,
+  type ResourceView,
 } from '@/components/dashboard/resources/resource-grid'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -23,18 +24,14 @@ import {
 import { Field, FieldGroup } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { SearchInput } from '@/components/ui/search-input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Segmented } from '@/components/ui/segmented'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
 import { cn, formatNumber, pluralize } from '@/lib/utils'
 import type { Activity, Resource, ResourceKind, Tenant } from '@/types'
+
+export type { ResourceImage }
 
 /* ==========================================================================
    FORM
@@ -48,6 +45,7 @@ const resourceSchema = z.object({
   status: z.string().min(1),
   location: z.string().trim().max(80),
   notes: z.string().trim().max(300, 'Keep notes under 300 characters.'),
+  imageUrl: z.string().trim().max(2000),
 })
 
 interface ResourceForm {
@@ -58,6 +56,7 @@ interface ResourceForm {
   status: Resource['status']
   location: string
   notes: string
+  imageUrl: string
 }
 
 const BLANK: ResourceForm = {
@@ -68,9 +67,99 @@ const BLANK: ResourceForm = {
   status: 'available',
   location: '',
   notes: '',
+  imageUrl: '',
 }
 
 const KIND_OPTIONS: ResourceKind[] = ['vessel', 'vehicle', 'equipment', 'table', 'room', 'guide']
+
+/* --------------------------------------------------------------------------
+   Photo field — pick a file (kept as an object URL for the session) or paste
+   a link. The preview is the same box the card will show.
+   -------------------------------------------------------------------------- */
+
+function PhotoField({
+  value,
+  fallback,
+  onChange,
+}: {
+  value: string
+  fallback?: ResourceImage
+  onChange: (url: string) => void
+}) {
+  const inputRef = React.useRef<HTMLInputElement>(null)
+  const [url, setUrl] = React.useState('')
+  const shown = value || fallback?.url || ''
+
+  function pick(file: File | undefined) {
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      toast.error('That file is not an image', { description: 'Choose a JPG, PNG or WebP.' })
+      return
+    }
+    onChange(URL.createObjectURL(file))
+  }
+
+  return (
+    <div className="grid gap-3 sm:grid-cols-[11rem_minmax(0,1fr)]">
+      <div className="relative aspect-[16/10] overflow-hidden rounded-xl border border-line bg-surface-sunken">
+        {shown ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={shown} alt="" className="size-full object-cover" />
+        ) : (
+          <span className="grid size-full place-items-center text-faint">
+            <ImagePlus aria-hidden="true" className="size-6" />
+          </span>
+        )}
+        {!value && fallback ? (
+          <span className="absolute inset-x-0 bottom-0 bg-ink-950/60 px-2 py-1 text-[0.625rem] font-medium text-white">
+            Using the activity photo
+          </span>
+        ) : null}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          className="sr-only"
+          onChange={(e) => pick(e.target.files?.[0])}
+        />
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" variant="secondary" leftIcon={<ImagePlus />} onClick={() => inputRef.current?.click()}>
+            Upload photo
+          </Button>
+          {value ? (
+            <Button type="button" size="sm" variant="ghost" leftIcon={<Trash2 />} onClick={() => onChange('')}>
+              Remove
+            </Button>
+          ) : null}
+        </div>
+        <div className="flex gap-2">
+          <Input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="…or paste an image URL"
+            aria-label="Image URL"
+          />
+          <Button
+            type="button"
+            size="md"
+            variant="outline"
+            disabled={!/^https?:\/\//.test(url.trim())}
+            onClick={() => {
+              onChange(url.trim())
+              setUrl('')
+            }}
+          >
+            Use
+          </Button>
+        </div>
+        <p className="text-xs text-subtle">Landscape works best. The crew sees it on the run sheet and the storefront.</p>
+      </div>
+    </div>
+  )
+}
 
 /* ==========================================================================
    PAGE
@@ -81,28 +170,32 @@ export interface ResourcesPageClientProps {
   initialResources: Resource[]
   dependents: Record<string, Activity[]>
   upcomingUse: Record<string, number>
+  imageFallbacks: Record<string, ResourceImage>
 }
 
 /**
- * `initialResources`, `dependents` and `upcomingUse` are all fetched and
- * derived server-side — this file never imports `@/lib/demo` itself.
+ * Everything here is fetched and derived server-side — this file never
+ * imports `@/lib/demo` itself.
  */
 export function ResourcesPageClient({
   tenant: CURRENT_TENANT,
   initialResources,
   dependents: DEPENDENTS,
   upcomingUse: UPCOMING_USE,
+  imageFallbacks,
 }: ResourcesPageClientProps) {
   const PEAK_USE = React.useMemo(() => Math.max(1, ...Object.values(UPCOMING_USE)), [UPCOMING_USE])
   const [resources, setResources] = React.useState<Resource[]>(initialResources)
   const [query, setQuery] = React.useState('')
   const [statusFilter, setStatusFilter] = React.useState<'all' | Resource['status']>('all')
+  const [view, setView] = React.useState<ResourceView>('grid')
 
   const [editing, setEditing] = React.useState<Resource | null>(null)
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [form, setForm] = React.useState<ResourceForm>(BLANK)
   const [errors, setErrors] = React.useState<Partial<Record<keyof ResourceForm, string>>>({})
   const [saving, setSaving] = React.useState(false)
+  const photoRef = React.useRef<HTMLDivElement>(null)
 
   const visible = React.useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -117,10 +210,9 @@ export function ResourcesPageClient({
     })
   }, [resources, query, statusFilter])
 
-  const totalSeats = resources
-    .filter((r) => r.status === 'available')
-    .reduce((sum, r) => sum + r.capacity * r.quantity, 0)
+  const totalSeats = resources.filter((r) => r.status === 'available').reduce((sum, r) => sum + r.capacity * r.quantity, 0)
   const maintenanceList = resources.filter((r) => r.status === 'maintenance')
+  const withPhoto = resources.filter((r) => r.imageUrl || imageFallbacks[r.id]).length
 
   function openAdd(kind: ResourceKind = 'vessel') {
     setEditing(null)
@@ -129,7 +221,7 @@ export function ResourcesPageClient({
     setDialogOpen(true)
   }
 
-  function openEdit(resource: Resource) {
+  function openEdit(resource: Resource, focusPhoto = false) {
     setEditing(resource)
     setForm({
       name: resource.name,
@@ -139,9 +231,13 @@ export function ResourcesPageClient({
       status: resource.status,
       location: resource.location ?? '',
       notes: resource.notes ?? '',
+      imageUrl: resource.imageUrl ?? '',
     })
     setErrors({})
     setDialogOpen(true)
+    if (focusPhoto) {
+      window.setTimeout(() => photoRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 80)
+    }
   }
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -152,9 +248,7 @@ export function ResourcesPageClient({
       const next: Partial<Record<keyof ResourceForm, string>> = {}
       for (const issue of parsed.error.issues) {
         const key = issue.path[0]
-        if (typeof key === 'string' && !(key in next)) {
-          next[key as keyof ResourceForm] = issue.message
-        }
+        if (typeof key === 'string' && !(key in next)) next[key as keyof ResourceForm] = issue.message
       }
       setErrors(next)
       return
@@ -172,17 +266,14 @@ export function ResourcesPageClient({
         status: form.status,
         location: parsed.data.location || undefined,
         notes: parsed.data.notes || undefined,
+        imageUrl: parsed.data.imageUrl || undefined,
       }
 
-      setResources((prev) =>
-        editing ? prev.map((r) => (r.id === editing.id ? payload : r)) : [payload, ...prev],
-      )
+      setResources((prev) => (editing ? prev.map((r) => (r.id === editing.id ? payload : r)) : [payload, ...prev]))
       setSaving(false)
       setDialogOpen(false)
       toast.success(editing ? 'Resource updated' : 'Resource added', {
-        description: `${payload.name} is ${
-          payload.status === 'available' ? 'available for scheduling' : 'saved but not schedulable'
-        }.`,
+        description: `${payload.name} is ${payload.status === 'available' ? 'available for scheduling' : 'saved but not schedulable'}.`,
       })
     }, 600)
   }
@@ -198,11 +289,11 @@ export function ResourcesPageClient({
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       <PageHeader
         className="mb-0"
         title="Resources"
-        description="Vessels, vehicles, equipment and rooms. Every departure consumes what its activity requires, so a boat can never be double-booked."
+        description="Vessels, vehicles, equipment and rooms. A departure consumes what its activity requires, so nothing can be double-booked."
         actions={
           <Button size="sm" leftIcon={<Plus />} onClick={() => openAdd()}>
             Add resource
@@ -211,46 +302,35 @@ export function ResourcesPageClient({
       />
 
       {/* ---------------- Summary ---------------- */}
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-3">
         <SummaryTile
           icon={<Ship className="size-4" />}
           value={formatNumber(resources.length)}
-          label="Resources on the books"
-          hint={`${KIND_OPTIONS.filter((k) => resources.some((r) => r.kind === k)).length} categories`}
+          label="Resources"
+          hint={`${KIND_OPTIONS.filter((k) => resources.some((r) => r.kind === k)).length} categories · ${withPhoto} with a photo`}
         />
         <SummaryTile
           icon={<Users className="size-4" />}
           value={formatNumber(totalSeats)}
-          label="Seats available at once"
+          label="Seats at once"
           hint="Across everything in service"
         />
         <SummaryTile
-          icon={<TriangleAlert className="size-4" />}
+          icon={maintenanceList.length > 0 ? <Wrench className="size-4" /> : <TriangleAlert className="size-4" />}
           value={formatNumber(maintenanceList.length)}
           label="In maintenance"
           hint={
             maintenanceList.length === 0
               ? 'Whole fleet is in service'
-              : maintenanceList.map((r) => r.name.split(' (')[0]).join(', ')
+              : `${maintenanceList.map((r) => r.name.split(' (')[0]).join(', ')} — departures that need ${
+                  maintenanceList.length === 1 ? 'it' : 'them'
+                } stay closed for sale`
           }
           tone={maintenanceList.length > 0 ? 'warning' : 'default'}
         />
       </div>
 
-      {maintenanceList.length > 0 ? (
-        <Alert variant="warning">
-          <AlertTitle>
-            {maintenanceList.length} {pluralize(maintenanceList.length, 'resource')} out of service
-          </AlertTitle>
-          <AlertDescription>
-            {maintenanceList.map((r) => r.name).join(' · ')} — departures that require{' '}
-            {maintenanceList.length === 1 ? 'it' : 'them'} will not open for sale until the status
-            goes back to in service.
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
-      {/* ---------------- Filters ---------------- */}
+      {/* ---------------- Toolbar ---------------- */}
       <div className="flex flex-wrap items-center gap-3">
         <SearchInput
           label="Search resources"
@@ -266,32 +346,34 @@ export function ResourcesPageClient({
           onValueChange={setStatusFilter}
           options={[
             { value: 'all', label: 'All', count: resources.length },
-            {
-              value: 'available',
-              label: 'In service',
-              count: resources.filter((r) => r.status === 'available').length,
-            },
-            {
-              value: 'maintenance',
-              label: 'Maintenance',
-              count: maintenanceList.length,
-            },
-            {
-              value: 'retired',
-              label: 'Retired',
-              count: resources.filter((r) => r.status === 'retired').length,
-            },
+            { value: 'available', label: 'In service', count: resources.filter((r) => r.status === 'available').length },
+            { value: 'maintenance', label: 'Maintenance', count: maintenanceList.length },
+            { value: 'retired', label: 'Retired', count: resources.filter((r) => r.status === 'retired').length },
+          ]}
+        />
+        <Segmented
+          size="sm"
+          label="View"
+          value={view}
+          onValueChange={setView}
+          className="ml-auto"
+          options={[
+            { value: 'grid', label: 'Cards', icon: LayoutGrid },
+            { value: 'list', label: 'List', icon: List },
           ]}
         />
       </div>
 
-      {/* ---------------- Grid ---------------- */}
+      {/* ---------------- Grid / list ---------------- */}
       <ResourceGrid
         resources={visible}
         dependents={DEPENDENTS}
         upcomingUse={UPCOMING_USE}
         peakUse={PEAK_USE}
-        onEdit={openEdit}
+        imageFallbacks={imageFallbacks}
+        view={view}
+        onEdit={(r) => openEdit(r)}
+        onAddPhoto={(r) => openEdit(r, true)}
         onAdd={openAdd}
       />
 
@@ -311,6 +393,16 @@ export function ResourcesPageClient({
 
             <DialogBody className="py-5">
               <FieldGroup columns={2}>
+                <Field label="Photo" optional className="sm:col-span-2">
+                  <div ref={photoRef}>
+                    <PhotoField
+                      value={form.imageUrl}
+                      fallback={editing ? imageFallbacks[editing.id] : undefined}
+                      onChange={(url) => set('imageUrl', url)}
+                    />
+                  </div>
+                </Field>
+
                 <Field
                   label="Name"
                   required
@@ -318,19 +410,12 @@ export function ResourcesPageClient({
                   className="sm:col-span-2"
                   description="Include the model or size — the crew reads this on the run sheet."
                 >
-                  <Input
-                    value={form.name}
-                    onChange={(e) => set('name', e.target.value)}
-                    placeholder="Alii Nui (49ft sailing catamaran)"
-                  />
+                  <Input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Alii Nui (49ft sailing catamaran)" />
                 </Field>
 
                 <Field label="Type" required error={errors.kind}>
                   {({ id }) => (
-                    <Select
-                      value={form.kind}
-                      onValueChange={(v) => set('kind', v as ResourceKind)}
-                    >
+                    <Select value={form.kind} onValueChange={(v) => set('kind', v as ResourceKind)}>
                       <SelectTrigger id={id}>
                         <SelectValue />
                       </SelectTrigger>
@@ -347,10 +432,7 @@ export function ResourcesPageClient({
 
                 <Field label="Status" required>
                   {({ id }) => (
-                    <Select
-                      value={form.status}
-                      onValueChange={(v) => set('status', v as Resource['status'])}
-                    >
+                    <Select value={form.status} onValueChange={(v) => set('status', v as Resource['status'])}>
                       <SelectTrigger id={id}>
                         <SelectValue />
                       </SelectTrigger>
@@ -370,48 +452,18 @@ export function ResourcesPageClient({
                 </Field>
 
                 <Field label="Capacity per unit" required error={errors.capacity}>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={500}
-                    value={form.capacity}
-                    onChange={(e) => set('capacity', e.target.value)}
-                    suffix="seats"
-                  />
+                  <Input type="number" min={1} max={500} value={form.capacity} onChange={(e) => set('capacity', e.target.value)} suffix="seats" />
                 </Field>
 
                 <Field label="Units in the fleet" required error={errors.quantity}>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={200}
-                    value={form.quantity}
-                    onChange={(e) => set('quantity', e.target.value)}
-                    suffix="units"
-                  />
+                  <Input type="number" min={1} max={200} value={form.quantity} onChange={(e) => set('quantity', e.target.value)} suffix="units" />
                 </Field>
 
-                <Field
-                  label="Location"
-                  optional
-                  error={errors.location}
-                  className="sm:col-span-2"
-                  description="Slip, ramp, trailer or storage point."
-                >
-                  <Input
-                    value={form.location}
-                    onChange={(e) => set('location', e.target.value)}
-                    placeholder="Maalaea Harbor, Slip 61"
-                  />
+                <Field label="Location" optional error={errors.location} className="sm:col-span-2" description="Slip, ramp, trailer or storage point.">
+                  <Input value={form.location} onChange={(e) => set('location', e.target.value)} placeholder="Maalaea Harbor, Slip 61" />
                 </Field>
 
-                <Field
-                  label="Notes"
-                  optional
-                  error={errors.notes}
-                  className="sm:col-span-2"
-                  hint={`${form.notes.length}/300`}
-                >
+                <Field label="Notes" optional error={errors.notes} className="sm:col-span-2" hint={`${form.notes.length}/300`}>
                   <Textarea
                     rows={3}
                     maxLength={300}
@@ -454,22 +506,22 @@ function SummaryTile({
   tone?: 'default' | 'warning'
 }) {
   return (
-    <div className="flex items-start gap-3 rounded-xl border border-line bg-surface p-4">
-      <span
-        aria-hidden="true"
-        className={cn(
-          'grid size-9 shrink-0 place-items-center rounded-lg',
-          tone === 'warning' ? 'bg-warning-soft text-warning' : 'bg-primary-soft text-primary',
-        )}
-      >
-        {icon}
-      </span>
-      <div className="min-w-0">
-        <p className="font-display text-xl font-semibold tracking-tight text-foreground tabular">
-          {value}
-        </p>
-        <p className="text-sm font-medium text-foreground">{label}</p>
-        <p className="mt-0.5 truncate text-xs text-subtle">{hint}</p>
+    <div className="rounded-2xl border border-line bg-surface p-4">
+      <div className="flex items-center gap-2.5">
+        <span
+          aria-hidden="true"
+          className={cn(
+            'grid size-7 shrink-0 place-items-center rounded-lg',
+            tone === 'warning' ? 'bg-warning-soft text-warning' : 'bg-primary-soft text-primary',
+          )}
+        >
+          {icon}
+        </span>
+        <span className="text-[0.8125rem] font-medium text-muted">{label}</span>
+      </div>
+      <div className="mt-3 rounded-xl bg-well px-4 py-3">
+        <p className="font-display text-2xl leading-none font-semibold tracking-[-0.03em] text-foreground">{value}</p>
+        <p className="mt-1.5 truncate text-[0.6875rem] text-subtle">{hint}</p>
       </div>
     </div>
   )

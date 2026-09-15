@@ -2,7 +2,8 @@
 
 import * as React from 'react'
 import Image from 'next/image'
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
+import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import {
   ArrowLeft,
   ArrowRight,
@@ -240,7 +241,7 @@ export interface NewBookingDialogProps {
 }
 
 export function NewBookingDialog({ open, onOpenChange }: NewBookingDialogProps) {
-  const reduceMotion = useReducedMotion()
+  const reduceMotion = useReducedMotionSafe()
   const currency = CURRENT_TENANT.currency
 
   const activities = React.useMemo(

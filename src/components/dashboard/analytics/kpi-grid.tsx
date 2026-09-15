@@ -15,44 +15,46 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-import { StatCard, StatGrid, type StatAccent, type StatProps } from '@/components/ui/stat'
+import { ChartDeltaChip } from '@/components/charts/chart-container'
+import { KpiCard, type MiniTrendKind } from '@/components/dashboard/overview/kpi-card'
+import { formatStatValue } from '@/components/ui/stat'
 import { Skeleton } from '@/components/ui/skeleton'
+import { seriesForKpi, seriesVar } from '@/lib/metric-colors'
 import { cn } from '@/lib/utils'
 import type { CurrencyCode, KpiMetric } from '@/types'
 
 /* ==========================================================================
-   KpiGrid — the nine numbers an operator steers on.
+   KpiGrid — the nine numbers an operator steers on, without nine cards.
 
-   Two rows on purpose. The first four are the money line and get the large
-   type; the remaining five are rate metrics that read better small and dense.
-   Delta colour comes from `direction` + `higherIsBetter`, so a falling
-   cancellation rate is green while falling revenue is red.
+   The four money-line metrics get the same instrument card as the overview
+   (figure and mini chart in a well, each in its own series colour). The five
+   rate metrics are a single strip: label, figure, change.
    ========================================================================== */
 
 type ComparisonMode = 'previous' | 'year'
 
 interface KpiPresentation {
   icon: LucideIcon
-  accent: StatAccent
+  trend: MiniTrendKind
   /** Overrides the label when the unit needs to live in it. */
   label?: string
 }
 
 const PRESENTATION: Record<string, KpiPresentation> = {
-  net_revenue: { icon: Wallet, accent: 'lagoon' },
-  bookings: { icon: Ticket, accent: 'lagoon' },
-  guests: { icon: Users, accent: 'reef' },
-  aov: { icon: Receipt, accent: 'sunset' },
-  occupancy: { icon: Gauge, accent: 'lagoon' },
-  cancellation_rate: { icon: CircleSlash2, accent: 'coral' },
-  repeat_rate: { icon: Repeat2, accent: 'reef' },
-  avg_rating: { icon: Star, accent: 'sunset' },
+  net_revenue: { icon: Wallet, trend: 'area' },
+  bookings: { icon: Ticket, trend: 'bars' },
+  guests: { icon: Users, trend: 'area' },
+  aov: { icon: Receipt, trend: 'bars' },
+  occupancy: { icon: Gauge, trend: 'bars' },
+  cancellation_rate: { icon: CircleSlash2, trend: 'bars' },
+  repeat_rate: { icon: Repeat2, trend: 'area' },
+  avg_rating: { icon: Star, trend: 'area' },
   // The value is in DAYS and the format is `number` — the unit lives in the
-  // label so the big figure never reads as a bare, unitless count.
-  lead_time: { icon: CalendarClock, accent: 'coral', label: 'Avg. Lead Time (days)' },
+  // label so the figure never reads as a bare, unitless count.
+  lead_time: { icon: CalendarClock, trend: 'area', label: 'Avg. lead time (days)' },
 }
 
-const FALLBACK: KpiPresentation = { icon: TrendingUp, accent: 'lagoon' }
+const FALLBACK: KpiPresentation = { icon: TrendingUp, trend: 'area' }
 
 const PRIMARY_KEYS = ['net_revenue', 'bookings', 'guests', 'aov']
 
@@ -65,7 +67,8 @@ function decimalsFor(metric: KpiMetric): number {
   return 0
 }
 
-function toStat(metric: KpiMetric, currency: CurrencyCode, comparison: ComparisonMode): Omit<StatProps, 'size'> {
+/** The metric as it should be shown under the current comparison basis. */
+function present(metric: KpiMetric, currency: CurrencyCode, comparison: ComparisonMode) {
   const presentation = PRESENTATION[metric.key] ?? FALLBACK
   const missingPrior = metric.comparisonLabel === NO_PRIOR_PERIOD
   const yearOverYear = comparison === 'year'
@@ -73,49 +76,90 @@ function toStat(metric: KpiMetric, currency: CurrencyCode, comparison: Compariso
   // workspace has five. Report that honestly rather than inventing a delta.
   const suppressed = yearOverYear || missingPrior
 
-  return {
+  const shown: KpiMetric = {
+    ...metric,
     label: presentation.label ?? metric.label,
-    value: metric.value,
-    format: metric.format,
     currency: metric.currency ?? currency,
-    deltaPercent: suppressed ? undefined : metric.deltaPercent,
     direction: suppressed ? 'flat' : metric.direction,
-    higherIsBetter: metric.higherIsBetter,
     comparisonLabel: suppressed
       ? yearOverYear
-        ? '— no comparable prior year'
-        : `— ${NO_PRIOR_PERIOD}`
+        ? 'no comparable prior year'
+        : NO_PRIOR_PERIOD
       : metric.comparisonLabel,
-    sparkline: metric.sparkline,
-    hint: metric.hint,
-    decimals: decimalsFor(metric),
   }
+  return { shown, suppressed, presentation }
 }
 
 /* --------------------------------------------------------------------------
    Loading
    -------------------------------------------------------------------------- */
 
-function KpiSkeleton({ size }: { size: 'sm' | 'md' }) {
+function KpiSkeleton() {
   return (
-    <div
+    <div className="rounded-2xl border border-line bg-surface p-4 shadow-xs">
+      <div className="flex items-center gap-2.5">
+        <Skeleton shape="block" className="size-7 rounded-lg" />
+        <Skeleton shape="line" className="h-3 w-24" />
+      </div>
+      <Skeleton shape="block" className="mt-3 h-[5.25rem] w-full rounded-xl" />
+    </div>
+  )
+}
+
+/* --------------------------------------------------------------------------
+   Rates strip
+   -------------------------------------------------------------------------- */
+
+function RatesStrip({
+  metrics,
+  currency,
+  comparison,
+}: {
+  metrics: KpiMetric[]
+  currency: CurrencyCode
+  comparison: ComparisonMode
+}) {
+  return (
+    <dl
       className={cn(
-        'rounded-2xl border border-line bg-surface shadow-xs',
-        size === 'md' ? 'p-5' : 'p-4',
+        'grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-line bg-line-subtle shadow-xs',
+        'sm:grid-cols-3 xl:grid-cols-5',
       )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <Skeleton shape="line" className="h-3 w-24" />
-        <Skeleton shape="block" className="size-8 rounded-lg" />
-      </div>
-      <div className="mt-3 flex items-end justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <Skeleton shape="block" className={cn('rounded-lg', size === 'md' ? 'h-8 w-32' : 'h-6 w-20')} />
-          <Skeleton shape="line" className="mt-3 h-2.5 w-28" />
-        </div>
-        <Skeleton shape="block" className={cn('rounded-lg', size === 'md' ? 'h-9 w-24' : 'h-7 w-16')} />
-      </div>
-    </div>
+      {metrics.map((metric) => {
+        const { shown, suppressed } = present(metric, currency, comparison)
+        return (
+          <div key={metric.key} className="min-w-0 bg-surface px-4 py-3.5">
+            <dt className="flex items-center gap-1.5 text-[0.6875rem] font-medium text-subtle">
+              <span
+                aria-hidden="true"
+                className="size-1.5 shrink-0 rounded-full"
+                style={{ background: seriesVar(seriesForKpi(metric.key)) }}
+              />
+              <span className="truncate">{shown.label}</span>
+            </dt>
+            <dd className="mt-1.5 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <span className="font-display text-lg leading-none font-semibold tracking-[-0.02em] text-foreground">
+                {formatStatValue(metric.value, metric.format, {
+                  currency: shown.currency,
+                  decimals: decimalsFor(metric),
+                })}
+              </span>
+              {suppressed ? (
+                <span className="text-[0.6875rem] text-faint">no prior period</span>
+              ) : (
+                <ChartDeltaChip
+                  value={metric.deltaPercent}
+                  higherIsBetter={metric.higherIsBetter}
+                  size="xs"
+                  bare
+                />
+              )}
+            </dd>
+          </div>
+        )
+      })}
+    </dl>
   )
 }
 
@@ -141,53 +185,39 @@ export function KpiGrid({ kpis, currency, comparison, loading = false, className
 
   if (loading) {
     return (
-      <div className={cn('space-y-3', className)} role="status" aria-busy="true" aria-live="polite">
+      <div className={cn('space-y-4', className)} role="status" aria-busy="true" aria-live="polite">
         <span className="sr-only">Loading key metrics</span>
-        <StatGrid columns={4}>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
-            <KpiSkeleton key={i} size="md" />
-          ))}
-        </StatGrid>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-          {[0, 1, 2, 3, 4].map((i) => (
-            <KpiSkeleton key={i} size="sm" />
+            <KpiSkeleton key={i} />
           ))}
         </div>
+        <Skeleton shape="block" className="h-16 w-full rounded-2xl" />
       </div>
     )
   }
 
   return (
-    <div className={cn('space-y-3', className)}>
-      <StatGrid columns={4}>
+    <div className={cn('space-y-4', className)}>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {primary.map((metric) => {
-          const presentation = PRESENTATION[metric.key] ?? FALLBACK
+          const { shown, suppressed, presentation } = present(metric, currency, comparison)
           return (
-            <StatCard
+            <KpiCard
               key={metric.key}
-              size="md"
+              metric={shown}
+              currency={currency}
               icon={presentation.icon}
-              accent={presentation.accent}
-              stat={toStat(metric, currency, comparison)}
-            />
-          )
-        })}
-      </StatGrid>
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-        {secondary.map((metric) => {
-          const presentation = PRESENTATION[metric.key] ?? FALLBACK
-          return (
-            <StatCard
-              key={metric.key}
-              size="sm"
-              icon={presentation.icon}
-              accent={presentation.accent}
-              stat={toStat(metric, currency, comparison)}
+              trend={presentation.trend}
+              showDelta={!suppressed}
             />
           )
         })}
       </div>
+
+      {secondary.length > 0 ? (
+        <RatesStrip metrics={secondary} currency={currency} comparison={comparison} />
+      ) : null}
     </div>
   )
 }

@@ -164,7 +164,7 @@ export function ComparisonTable({
                 className={cn(
                   'pointer-events-none absolute inset-y-0 overflow-hidden rounded-3xl',
                   'border border-primary/25 shadow-glow-lagoon',
-                  'bg-gradient-to-b from-primary-soft via-primary-soft/35 to-transparent',
+                  'bg-primary-soft/45',
                 )}
               >
                 <span className="absolute inset-x-0 top-0 h-[3px] bg-primary" />

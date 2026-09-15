@@ -10,7 +10,7 @@
  */
 
 import { useMemo, type ReactNode } from 'react'
-import { useReducedMotion } from 'motion/react'
+import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import {
   Bar,
   BarChart,
@@ -27,8 +27,8 @@ import type { TimeSeriesPoint } from '@/types'
 import { CHART_INK, ChartContainer, ChartLegend, type ChartLegendItem } from './chart-container'
 import { CHART_CURSOR_BAND, ChartTooltip } from './chart-tooltip'
 
-const IN_COLOR = 'var(--chart-1)'
-const OUT_COLOR = 'var(--chart-2)'
+const IN_COLOR = 'var(--series-bookings)'
+const OUT_COLOR = 'var(--series-cancellations)'
 
 interface FlowPoint {
   date: string
@@ -56,7 +56,7 @@ export function BookingsFlowChart({
   loading = false,
   className,
 }: BookingsFlowChartProps) {
-  const reduced = useReducedMotion() ?? false
+  const reduced = useReducedMotionSafe()
 
   const data = useMemo<FlowPoint[]>(
     () =>
@@ -162,7 +162,7 @@ export function BookingsFlowChart({
             name="Bookings"
             stackId="flow"
             fill={IN_COLOR}
-            radius={[5, 5, 0, 0]}
+            radius={[4, 4, 0, 0]}
             isAnimationActive={!reduced}
             animationDuration={720}
             animationEasing="ease-out"
@@ -172,7 +172,7 @@ export function BookingsFlowChart({
             name="Cancelled"
             stackId="flow"
             fill={OUT_COLOR}
-            radius={[0, 0, 5, 5]}
+            radius={[0, 0, 4, 4]}
             isAnimationActive={!reduced}
             animationDuration={720}
             animationEasing="ease-out"

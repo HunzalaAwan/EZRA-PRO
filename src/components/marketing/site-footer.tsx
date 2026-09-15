@@ -161,7 +161,7 @@ export function SiteFooter({ className }: SiteFooterProps) {
             <div className="relative overflow-hidden rounded-3xl border border-line bg-surface p-6 shadow-xl sm:p-8 lg:p-10">
               <div
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_150%_at_0%_0%,var(--primary-soft),transparent_58%)] opacity-80"
+                className="pointer-events-none absolute inset-0 bg-primary-soft/40"
               />
               <div className="relative grid gap-8 lg:grid-cols-[1.1fr_minmax(0,1fr)] lg:items-center lg:gap-14">
                 <div>

@@ -3,11 +3,12 @@
 /**
  * Capacity gauge. A 270-degree arc swept with stroke-dashoffset, coloured by
  * threshold — with the threshold also spelled out in words underneath, because
- * colour on its own is not an accessible signal.
+ * colour on its own is not an accessible signal. The unfilled track is a
+ * lighter step of the same hue, so state reads across the whole arc.
  */
 
-import { useId } from 'react'
-import { motion, useReducedMotion } from 'motion/react'
+import { motion } from 'motion/react'
+import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { cn, clamp, formatPercent } from '@/lib/utils'
 
 /** `--ease-out-expo`, in the tuple shape motion expects. */
@@ -83,8 +84,7 @@ export function RadialGauge({
   className,
   ariaLabel,
 }: RadialGaugeProps) {
-  const reduced = useReducedMotion()
-  const gradientId = `ezra-gauge-${useId().replace(/:/g, '')}`
+  const reduced = useReducedMotionSafe()
 
   const pct = clamp(value, 0, 100)
   const status: GaugeStatus = pct >= thresholds.good ? 'strong' : pct >= thresholds.warning ? 'steady' : 'soft'
@@ -109,14 +109,14 @@ export function RadialGauge({
       aria-label={ariaLabel ?? `${statusLabel}: ${formatPercent(pct)} of capacity`}
     >
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} fill="none" aria-hidden="true">
-        <defs>
-          <linearGradient id={gradientId} x1="0" y1="1" x2="1" y2="0">
-            <stop offset="0%" stopColor={color} stopOpacity={0.55} />
-            <stop offset="100%" stopColor={color} stopOpacity={1} />
-          </linearGradient>
-        </defs>
-
-        <path d={track} stroke="var(--surface-sunken)" strokeWidth={thickness} strokeLinecap="round" />
+        {/* Track: a light step of the fill hue, so the whole arc reads as one meter. */}
+        <path
+          d={track}
+          stroke={color}
+          strokeOpacity={0.16}
+          strokeWidth={thickness}
+          strokeLinecap="round"
+        />
 
         {showTicks
           ? [0, 25, 50, 75, 100].map((tick) => {
@@ -140,7 +140,7 @@ export function RadialGauge({
 
         <motion.path
           d={track}
-          stroke={`url(#${gradientId})`}
+          stroke={color}
           strokeWidth={thickness}
           strokeLinecap="round"
           strokeDasharray={arcLength}
@@ -151,7 +151,7 @@ export function RadialGauge({
       </svg>
 
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-        <span className="tabular text-2xl font-semibold leading-none text-foreground">
+        <span className="text-2xl font-semibold leading-none text-foreground">
           {Math.round(pct)}
           <span className="text-base font-medium text-subtle">{unit}</span>
         </span>

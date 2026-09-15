@@ -8,7 +8,8 @@
  */
 
 import { useMemo, useRef, type ReactNode } from 'react'
-import { motion, useInView, useReducedMotion } from 'motion/react'
+import { motion, useInView } from 'motion/react'
+import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { clamp, formatCurrency, formatNumber, formatPercent } from '@/lib/utils'
 import type { ActivityPerformance, CurrencyCode } from '@/types'
 import { ACTIVITY_COLOR_VAR, ChartContainer, ChartDeltaChip } from './chart-container'
@@ -46,7 +47,7 @@ export function ActivityPerformanceChart({
   className,
   onSelect,
 }: ActivityPerformanceChartProps) {
-  const reduced = useReducedMotion()
+  const reduced = useReducedMotionSafe()
   const listRef = useRef<HTMLOListElement>(null)
   const inView = useInView(listRef, { once: true, margin: '-40px' })
 

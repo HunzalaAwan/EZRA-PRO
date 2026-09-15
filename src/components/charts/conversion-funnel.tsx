@@ -7,7 +7,8 @@
  */
 
 import { useMemo, useRef, type ReactNode } from 'react'
-import { motion, useInView, useReducedMotion } from 'motion/react'
+import { motion, useInView } from 'motion/react'
+import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { ChevronDown } from 'lucide-react'
 import { clamp, formatNumber, formatPercent } from '@/lib/utils'
 import type { FunnelStage } from '@/types'
@@ -41,7 +42,7 @@ export function ConversionFunnel({
   loading = false,
   className,
 }: ConversionFunnelProps) {
-  const reduced = useReducedMotion()
+  const reduced = useReducedMotionSafe()
   const viewRef = useRef<HTMLOListElement>(null)
   const inView = useInView(viewRef, { once: true, margin: '-48px' })
 

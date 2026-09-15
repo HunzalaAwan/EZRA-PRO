@@ -18,12 +18,12 @@ export const cardVariants = cva(
         glass: 'glass shadow-lg',
         outline: 'border border-line bg-transparent',
         /**
-         * Brand-washed panel for hero stats and upsell blocks. The wash is built
+         * Brand-tinted panel for hero stats and upsell blocks. The tint is built
          * from the semantic tokens so it re-tints itself in dark mode.
          */
         gradient: [
           'border border-[color-mix(in_oklab,var(--primary)_22%,var(--border))]',
-          'bg-[linear-gradient(145deg,color-mix(in_oklab,var(--primary)_12%,var(--surface))_0%,var(--surface)_46%,color-mix(in_oklab,var(--accent)_10%,var(--surface))_100%)]',
+          'bg-[color-mix(in_oklab,var(--primary)_9%,var(--surface))]',
           'shadow-md',
         ],
       },

@@ -125,7 +125,7 @@ export function StatsBand({ className }: StatsBandProps) {
 
                 <span
                   aria-hidden="true"
-                  className="mt-4 block h-px w-9 rounded-full bg-gradient-to-r from-primary to-transparent sm:mt-5"
+                  className="mt-4 block h-px w-9 rounded-full bg-primary sm:mt-5"
                 />
 
                 <div className="mt-3 flex items-start gap-1.5 sm:mt-4">

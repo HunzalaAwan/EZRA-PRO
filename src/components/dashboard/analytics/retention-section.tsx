@@ -223,7 +223,7 @@ export function RetentionSection({
                     values={repeatRate.sparkline}
                     width={320}
                     height={76}
-                    color="var(--chart-3)"
+                    color="var(--series-repeat)"
                     fill
                     showLastDot
                     strokeWidth={2}

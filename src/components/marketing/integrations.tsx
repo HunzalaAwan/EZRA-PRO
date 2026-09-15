@@ -210,7 +210,7 @@ function Constellation({ items }: { items: Integration[] }) {
     >
       <div className="absolute inset-[3%] rounded-full border border-dashed border-line-subtle" />
       <div className="absolute inset-[17%] rounded-full border border-dashed border-line" />
-      <div className="absolute inset-[30%] rounded-full bg-[radial-gradient(circle_at_center,color-mix(in_oklab,var(--primary)_16%,transparent),transparent_70%)] blur-xl" />
+      <div className="absolute inset-[30%] rounded-full bg-primary/12 blur-xl" />
 
       <OrbitRing marks={outer} points={OUTER_POINTS} seconds={68} reverse />
       <OrbitRing marks={inner} points={INNER_POINTS} seconds={46} reverse={false} />

@@ -52,7 +52,9 @@ const METRIC_OPTIONS: { value: ChannelMetric; label: string }[] = [
   { value: 'bookings', label: 'Bookings' },
 ]
 
-const ROW_GRID = 'lg:grid-cols-[minmax(0,1fr)_4.75rem_7rem_5.75rem_5.25rem_7rem_6.5rem]'
+/* Five columns fit beside the donut; take and net-per-booking join at 2xl. */
+const ROW_GRID =
+  'lg:grid-cols-[minmax(8rem,1.4fr)_4.5rem_5.5rem_5.75rem_5.5rem] 2xl:grid-cols-[minmax(9rem,1.4fr)_4.75rem_6rem_5.75rem_5rem_6rem_6.5rem]'
 
 interface ChannelRow extends ChannelBreakdown {
   take: number
@@ -218,9 +220,9 @@ export function ChannelSection({
                   <span className="text-right">Bookings</span>
                   <span className="text-right">Gross</span>
                   <span className="text-right">Δ vs prev</span>
-                  <span className="text-right">Take</span>
+                  <span className="hidden text-right 2xl:block">Take</span>
                   <span className="text-right">Net</span>
-                  <span className="text-right">Net / booking</span>
+                  <span className="hidden text-right 2xl:block">Net / booking</span>
                 </div>
 
                 <ul className="divide-y divide-line-subtle">
@@ -267,13 +269,13 @@ export function ChannelSection({
                         </span>
                         <ChartDeltaChip value={row.deltaPercent} className="mt-0.5 lg:mt-0" />
                       </div>
-                      <Cell label="Take" className="text-muted">
+                      <Cell label="Take" className="hidden text-muted max-lg:block 2xl:block">
                         {formatPercent(row.take, 1)}
                       </Cell>
                       <Cell label="Net" className="font-semibold text-foreground">
                         {formatCurrency(row.net, currency, { compact: true })}
                       </Cell>
-                      <Cell label="Net / booking" className="text-muted">
+                      <Cell label="Net / booking" className="hidden text-muted max-lg:block 2xl:block">
                         {formatCurrency(row.netPerBooking, currency)}
                       </Cell>
                     </li>
@@ -317,7 +319,7 @@ export function ChannelSection({
         <div className="relative overflow-hidden rounded-2xl border border-line bg-surface p-5 shadow-sm">
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-primary via-accent to-transparent"
+            className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-primary"
           />
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-md bg-primary-soft px-2 py-0.5 text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-primary">

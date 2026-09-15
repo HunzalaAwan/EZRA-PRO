@@ -17,7 +17,7 @@ import {
   Timer,
   Wallet,
 } from 'lucide-react'
-import { useReducedMotion } from 'motion/react'
+import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import {
   Bar,
   CartesianGrid,
@@ -270,7 +270,7 @@ function toWeekly(points: RevenueFeePoint[]): RevenueFeePoint[] {
 }
 
 export function RevenueFeesChart({ points, currency, className }: RevenueFeesChartProps) {
-  const reduceMotion = useReducedMotion()
+  const reduceMotion = useReducedMotionSafe()
   const [grain, setGrain] = React.useState<Grain>('daily')
   const [hidden, setHidden] = React.useState<string[]>([])
 

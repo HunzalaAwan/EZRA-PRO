@@ -2,7 +2,8 @@
 
 import * as React from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
-import { motion, useReducedMotion } from 'motion/react'
+import { motion } from 'motion/react'
+import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import type { LucideIcon } from 'lucide-react'
 
 import { cn, formatNumber } from '@/lib/utils'
@@ -100,7 +101,7 @@ function Segmented<V extends string = string>({
   hideLabelsOnMobile = false,
   ...props
 }: SegmentedProps<V>) {
-  const reduceMotion = useReducedMotion()
+  const reduceMotion = useReducedMotionSafe()
   // Scoped so two Segmented controls on one screen never share an indicator.
   const layoutId = `segmented-indicator-${React.useId()}`
   const itemRefs = React.useRef<Array<HTMLButtonElement | null>>([])

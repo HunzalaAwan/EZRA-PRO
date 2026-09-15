@@ -31,14 +31,14 @@ import type { Insight } from '@/types'
    Every card here is arithmetic, not a language model. The titles and bodies
    arrive already carrying real figures from the snapshot; this component's job
    is to give them a surface serious enough that an operator acts on them, and
-   to be candid about where the numbers came from.
+   to be candid about where the numbers came from. Three cards lead; the rest
+   unfold on request so the board never becomes a wall.
    ========================================================================== */
 
 interface SeverityStyle {
   icon: LucideIcon
   chip: string
   stripe: string
-  ring: string
   label: string
 }
 
@@ -47,28 +47,24 @@ const SEVERITY: Record<Insight['severity'], SeverityStyle> = {
     icon: TrendingUp,
     chip: 'bg-success-soft text-success',
     stripe: 'bg-success',
-    ring: 'hover:border-[color-mix(in_oklab,var(--success)_45%,var(--border))]',
     label: 'Opportunity',
   },
   neutral: {
     icon: Compass,
     chip: 'bg-info-soft text-info',
     stripe: 'bg-info',
-    ring: 'hover:border-[color-mix(in_oklab,var(--info)_45%,var(--border))]',
     label: 'Context',
   },
   warning: {
     icon: TriangleAlert,
     chip: 'bg-warning-soft text-warning',
     stripe: 'bg-warning',
-    ring: 'hover:border-[color-mix(in_oklab,var(--warning)_50%,var(--border))]',
     label: 'Worth a look',
   },
   critical: {
     icon: CircleAlert,
     chip: 'bg-danger-soft text-danger',
     stripe: 'bg-danger',
-    ring: 'hover:border-[color-mix(in_oklab,var(--danger)_50%,var(--border))]',
     label: 'Needs attention',
   },
 }
@@ -92,6 +88,8 @@ const METHOD_NOTES: { title: string; body: string }[] = [
   },
 ]
 
+const LEAD_COUNT = 3
+
 /* --------------------------------------------------------------------------
    Card
    -------------------------------------------------------------------------- */
@@ -103,16 +101,12 @@ function InsightCard({ insight }: { insight: Insight }) {
   return (
     <article
       className={cn(
-        'group relative isolate flex h-full flex-col overflow-hidden rounded-xl border border-line bg-surface/85 p-4 shadow-xs backdrop-blur-sm',
+        'group relative isolate flex h-full flex-col overflow-hidden rounded-xl border border-line bg-surface p-4 shadow-xs',
         'transition-[transform,box-shadow,border-color] duration-300 ease-[var(--ease-out-expo)]',
-        'hover:-translate-y-0.5 hover:shadow-lg motion-reduce:transform-none motion-reduce:transition-none',
-        style.ring,
+        'hover:-translate-y-0.5 hover:border-line-strong hover:shadow-md motion-reduce:transform-none motion-reduce:transition-none',
       )}
     >
-      <span
-        aria-hidden="true"
-        className={cn('absolute inset-y-0 left-0 w-[3px]', style.stripe)}
-      />
+      <span aria-hidden="true" className={cn('absolute inset-y-0 left-0 w-[3px]', style.stripe)} />
 
       <header className="flex items-start justify-between gap-3 pl-2">
         <span className={cn('grid size-7 shrink-0 place-items-center rounded-lg', style.chip)}>
@@ -179,6 +173,7 @@ export function InsightsBoard({
   className,
 }: InsightsBoardProps) {
   const [open, setOpen] = React.useState(false)
+  const [expanded, setExpanded] = React.useState(false)
 
   const counts = React.useMemo(() => {
     const actionable = insights.filter(
@@ -187,50 +182,31 @@ export function InsightsBoard({
     return { actionable, total: insights.length }
   }, [insights])
 
+  const visible = expanded ? insights : insights.slice(0, LEAD_COUNT)
+  const hiddenCount = insights.length - visible.length
+
   return (
     <section
       aria-label="EZRA Intelligence recommendations"
-      className={cn(
-        'relative isolate overflow-hidden rounded-2xl border border-[color-mix(in_oklab,var(--primary)_26%,var(--border))]',
-        'bg-[linear-gradient(150deg,color-mix(in_oklab,var(--primary)_13%,var(--surface))_0%,var(--surface)_46%,color-mix(in_oklab,var(--accent)_11%,var(--surface))_100%)]',
-        'shadow-lg',
-        className,
-      )}
+      className={cn('overflow-hidden rounded-2xl border border-line bg-surface-sunken/60', className)}
     >
-      {/* decorative wash */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -left-24 -top-28 -z-10 size-72 rounded-full bg-[radial-gradient(circle,var(--color-lagoon-400),transparent_66%)] opacity-30 blur-3xl"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -bottom-32 -right-24 -z-10 size-72 rounded-full bg-[radial-gradient(circle,var(--color-coral-500),transparent_66%)] opacity-20 blur-3xl"
-      />
-
-      <header className="flex flex-wrap items-start justify-between gap-4 px-5 pb-5 pt-5 sm:px-6 sm:pt-6">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2.5">
-            <span className="grid size-9 place-items-center rounded-xl bg-primary text-on-primary shadow-[0_8px_22px_-10px_color-mix(in_oklab,var(--primary)_85%,transparent)]">
-              <Sparkles aria-hidden="true" className="size-[1.125rem]" strokeWidth={2} />
-            </span>
-            <div className="min-w-0">
-              <h2 className="font-display text-lg font-semibold tracking-[-0.025em] text-foreground">
-                EZRA Intelligence
-              </h2>
-              <p className="text-xs text-muted">
-                {counts.total} recommendations computed from your own data · {rangeLabel}
-              </p>
-            </div>
+      <header className="flex flex-wrap items-center justify-between gap-4 px-5 pt-5 pb-4 sm:px-6">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="grid size-9 place-items-center rounded-xl bg-info text-white">
+            <Sparkles aria-hidden="true" className="size-[1.125rem]" strokeWidth={2} />
+          </span>
+          <div className="min-w-0">
+            <h2 className="font-display text-lg font-semibold tracking-[-0.025em] text-foreground">
+              EZRA Intelligence
+            </h2>
+            <p className="text-xs text-muted">
+              {counts.total} recommendations from your own data · {rangeLabel}
+            </p>
           </div>
-
-          <p className="mt-3 max-w-2xl text-[0.8125rem] leading-relaxed text-muted">
-            Not a summary of what happened — a shortlist of what to change next, each one priced
-            against your booking history and linked to the screen where you can act on it.
-          </p>
         </div>
 
         {counts.actionable > 0 ? (
-          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-[color-mix(in_oklab,var(--warning)_40%,transparent)] bg-warning-soft px-2.5 py-1.5 text-[0.6875rem] font-semibold text-warning">
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-warning-soft px-2.5 py-1.5 text-[0.6875rem] font-semibold text-warning">
             <TriangleAlert aria-hidden="true" className="size-3.5" />
             {counts.actionable} {counts.actionable === 1 ? 'needs' : 'need'} attention
           </span>
@@ -238,9 +214,9 @@ export function InsightsBoard({
       </header>
 
       {loading ? (
-        <div className="grid gap-3 px-5 pb-5 sm:px-6 lg:grid-cols-2 xl:grid-cols-3">
-          {[0, 1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="rounded-xl border border-line bg-surface/80 p-4">
+        <div className="grid gap-3 px-5 pb-5 sm:px-6 lg:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="rounded-xl border border-line bg-surface p-4">
               <div className="flex items-start justify-between gap-3">
                 <Skeleton shape="block" className="size-7 rounded-lg" />
                 <Skeleton shape="pill" className="h-5 w-20" />
@@ -248,25 +224,41 @@ export function InsightsBoard({
               <Skeleton shape="line" className="mt-4 h-3 w-full" />
               <Skeleton shape="line" className="mt-2 h-3 w-4/5" />
               <Skeleton shape="line" className="mt-4 h-2.5 w-full" />
-              <Skeleton shape="line" className="mt-2 h-2.5 w-full" />
               <Skeleton shape="line" className="mt-2 h-2.5 w-2/3" />
               <Skeleton shape="pill" className="mt-4 h-7 w-28" />
             </div>
           ))}
         </div>
       ) : insights.length > 0 ? (
-        <StaggerGroup
-          as="div"
-          stagger={0.07}
-          margin="-40px"
-          className="grid gap-3 px-5 pb-5 sm:px-6 lg:grid-cols-2 xl:grid-cols-3"
-        >
-          {insights.map((insight) => (
-            <StaggerItem key={insight.id} className="h-full">
-              <InsightCard insight={insight} />
-            </StaggerItem>
-          ))}
-        </StaggerGroup>
+        <>
+          <StaggerGroup
+            as="div"
+            stagger={0.07}
+            margin="-40px"
+            className="grid gap-3 px-5 pb-4 sm:px-6 lg:grid-cols-3"
+          >
+            {visible.map((insight) => (
+              <StaggerItem key={insight.id} className="h-full">
+                <InsightCard insight={insight} />
+              </StaggerItem>
+            ))}
+          </StaggerGroup>
+
+          {insights.length > LEAD_COUNT ? (
+            <div className="px-5 pb-4 sm:px-6">
+              <Button size="xs" variant="ghost" onClick={() => setExpanded((v) => !v)}>
+                {expanded ? 'Show the top three' : `Show ${hiddenCount} more`}
+                <ChevronDown
+                  aria-hidden="true"
+                  className={cn(
+                    'transition-transform duration-300 ease-[var(--ease-out-expo)]',
+                    expanded && 'rotate-180',
+                  )}
+                />
+              </Button>
+            </div>
+          ) : null}
+        </>
       ) : (
         <p className="px-5 pb-6 text-sm text-subtle sm:px-6">
           Nothing stands out in this range. Widen the window and we will look again.
@@ -274,12 +266,8 @@ export function InsightsBoard({
       )}
 
       {/* ---------- why am I seeing this? ---------- */}
-      <Collapsible
-        open={open}
-        onOpenChange={setOpen}
-        className="border-t border-[color-mix(in_oklab,var(--primary)_16%,var(--border))] bg-surface/45 backdrop-blur-sm"
-      >
-        <div className="px-5 py-3.5 sm:px-6">
+      <Collapsible open={open} onOpenChange={setOpen} className="border-t border-line bg-surface">
+        <div className="px-5 py-3 sm:px-6">
           <CollapsibleTrigger className="text-[0.8125rem]">
             <HelpCircle aria-hidden="true" className="size-4" />
             Why am I seeing this?
@@ -295,7 +283,7 @@ export function InsightsBoard({
 
         <CollapsibleContent className="grid gap-4 px-5 pb-5 sm:grid-cols-2 sm:px-6">
           {METHOD_NOTES.map((note) => (
-            <div key={note.title} className="rounded-xl border border-line-subtle bg-surface/80 p-4">
+            <div key={note.title} className="rounded-xl border border-line-subtle bg-surface-sunken/60 p-4">
               <h4 className="text-[0.8125rem] font-semibold text-foreground">{note.title}</h4>
               <p className="mt-1.5 text-xs leading-relaxed text-muted">{note.body}</p>
             </div>

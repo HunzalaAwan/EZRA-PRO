@@ -20,14 +20,14 @@ import { cn } from '@/lib/utils'
 export type AppFrameVariant = 'light' | 'dark'
 export type AppFrameGlow = 'none' | 'lagoon' | 'coral' | 'reef'
 
-/** Decorative bloom behind the frame. Brand ramps, never a hardcoded colour. */
+/** Decorative bloom behind the frame: a solid brand disc, softened by blur. */
 const GLOW: Record<AppFrameGlow, string> = {
   none: '',
   lagoon:
-    'bg-[radial-gradient(58%_56%_at_50%_46%,var(--color-lagoon-400),transparent_70%)] opacity-[0.22]',
+    'rounded-full bg-lagoon-400 opacity-[0.12] blur-3xl',
   coral:
-    'bg-[radial-gradient(58%_56%_at_50%_46%,var(--color-coral-400),transparent_70%)] opacity-[0.20]',
-  reef: 'bg-[radial-gradient(58%_56%_at_50%_46%,var(--color-reef-400),transparent_70%)] opacity-[0.20]',
+    'rounded-full bg-coral-400 opacity-[0.11] blur-3xl',
+  reef: 'rounded-full bg-reef-400 opacity-[0.11] blur-3xl',
 }
 
 export interface AppFrameProps extends Omit<React.ComponentProps<'div'>, 'children' | 'title'> {
@@ -81,7 +81,7 @@ export function AppFrame({
         {/* Specular hairline along the top edge — reads as glass, not a box. */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 top-0 z-20 h-px bg-gradient-to-r from-transparent via-line-strong to-transparent"
+          className="pointer-events-none absolute inset-x-0 top-0 z-20 h-px bg-line-strong/70"
         />
 
         {/* ---------- Chrome ---------- */}

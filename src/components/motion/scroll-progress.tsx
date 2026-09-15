@@ -5,8 +5,7 @@ import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { SPRING_GLIDE } from '@/lib/motion'
 import { cn } from '@/lib/utils'
 
-const BRAND_BAR =
-  'linear-gradient(90deg, var(--color-lagoon-400) 0%, var(--color-coral-400) 58%, var(--color-sunset-400) 100%)'
+const BRAND_BAR = 'var(--primary)'
 
 export interface ScrollProgressProps {
   /** Bar thickness in px. */

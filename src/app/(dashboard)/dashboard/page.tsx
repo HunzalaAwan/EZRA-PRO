@@ -1,16 +1,13 @@
 import type { Metadata } from 'next'
 
-import { ActivityPerformanceChart } from '@/components/charts/activity-performance-chart'
-import { BookingsFlowChart } from '@/components/charts/bookings-flow-chart'
 import { ChannelDonutChart } from '@/components/charts/channel-donut-chart'
 import { PageHeader } from '@/components/dashboard/page-header'
-import { CapacityHealth } from '@/components/dashboard/overview/capacity-health'
-import { HeroCard } from '@/components/dashboard/overview/hero-card'
 import { InsightsPanel } from '@/components/dashboard/overview/insights-panel'
+import { KpiRow } from '@/components/dashboard/overview/kpi-row'
+import { PayoutCard } from '@/components/dashboard/overview/payout-card'
 import { OverviewHeaderActions } from '@/components/dashboard/overview/quick-actions'
 import { RecentBookings } from '@/components/dashboard/overview/recent-bookings'
-import { RevenuePanel } from '@/components/dashboard/overview/revenue-panel'
-import { StatTiles } from '@/components/dashboard/overview/stat-tiles'
+import { RevenueBars } from '@/components/dashboard/overview/revenue-bars'
 import { Reveal } from '@/components/motion/reveal'
 import {
   CHANNEL_LABELS,
@@ -20,8 +17,7 @@ import {
   TODAY_KEY,
   getDashboardOverview,
 } from '@/lib/demo'
-import { formatDateLong, formatNumber, pluralize } from '@/lib/utils'
-import type { KpiMetric } from '@/types'
+import { addDays, formatDateLong, formatNumber, pluralize, sum } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,23 +41,26 @@ function greeting(hour: number): string {
   return 'Good evening'
 }
 
+/** Takings settle on the next business day; weekends roll to Monday. */
+function nextBusinessDay(from: Date): Date {
+  let next = addDays(from, 1)
+  while (next.getDay() === 0 || next.getDay() === 6) next = addDays(next, 1)
+  return next
+}
+
 /* ==========================================================================
    LAYOUT
 
-   Row 1 — the wallet row: revenue hero (with its actions inside), the three
-           numbers that produced it, and a capacity score.
-   Row 2 — the trend, beside the panel that says what to do about it.
-   Row 3 — flow (bookings in / cancellations out) beside the channel mix.
-   Row 4 — the money, and where it comes from.
-
-   Every row's cards share a top edge; heavy elements (hero, chart) sit left,
-   where the eye lands first, and the read gets lighter to the right.
+   Row 1 — four instruments: the figure and its mini chart in a well.
+   Row 2 — the revenue comparison, wide, beside the money on its way to the
+           bank — the one dark card on the page.
+   Row 3 — the bookings that just came in, full width, filterable by status.
+   Row 4 — what to do next beside where the bookings come from.
    ========================================================================== */
 
 export default function DashboardOverviewPage() {
   const tenant = CURRENT_TENANT
   const overview = getDashboardOverview(tenant.id)
-  const kpi = new Map<string, KpiMetric>(overview.kpis.map((k) => [k.key, k]))
 
   const firstName = CURRENT_USER.name.split(' ')[0]
   const todayGuests = overview.todayDepartures.reduce((acc, e) => acc + e.departure.booked, 0)
@@ -74,15 +73,17 @@ export default function DashboardOverviewPage() {
           'departure',
         )} and ${formatNumber(todayGuests)} ${pluralize(todayGuests, 'guest')} on the books`
 
-  const revenue = kpi.get('net_revenue') ?? overview.kpis[0]
-  const occupancy = kpi.get('occupancy')
-  const supportingRates = ['repeat_rate', 'cancellation_rate']
-    .map((key) => kpi.get(key))
-    .filter((m): m is KpiMetric => Boolean(m))
-
-  // The flow chart reads best over a fortnight — long enough for a pattern,
-  // short enough that every bar still has room.
-  const flowPoints = overview.timeseries.slice(-14)
+  // Payouts: today's takings settle next business day; the trailing month is
+  // what has already landed.
+  const series = overview.timeseries
+  const today = series[series.length - 1]
+  const nextPayout = today?.revenue ?? 0
+  const paidOut = sum(series.slice(-31, -1).map((p) => p.revenue))
+  const arrivesOn = nextBusinessDay(NOW).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  })
 
   return (
     <div className="flex flex-col gap-5">
@@ -93,67 +94,44 @@ export default function DashboardOverviewPage() {
         className="mb-0"
       />
 
-      {/* ---- row 1: the wallet row ------------------------------------------ */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-12">
-        <Reveal className="min-w-0 lg:col-span-4" distance={18}>
-          {revenue ? (
-            <HeroCard metric={revenue} currency={tenant.currency} periodLabel="Last 30 days" />
-          ) : null}
+      {/* ---- row 1: four instruments ------------------------------------- */}
+      <KpiRow kpis={overview.kpis} currency={tenant.currency} />
+
+      {/* ---- row 2: the comparison, and the money on its way -------------- */}
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
+        <Reveal className="min-w-0 xl:col-span-8" delay={0.1} distance={16}>
+          <RevenueBars points={series} currency={tenant.currency} className="h-full" />
         </Reveal>
-        <Reveal className="min-w-0 lg:col-span-5" delay={0.06} distance={18}>
-          <StatTiles kpis={overview.kpis} currency={tenant.currency} className="h-full" />
-        </Reveal>
-        <Reveal className="min-w-0 lg:col-span-3" delay={0.12} distance={18}>
-          {occupancy ? (
-            <CapacityHealth metric={occupancy} supporting={supportingRates} className="h-full" />
-          ) : null}
+        <Reveal className="min-w-0 xl:col-span-4" delay={0.16} distance={16}>
+          <PayoutCard
+            nextPayout={nextPayout}
+            arrivesOn={arrivesOn}
+            paidOut={paidOut}
+            paidOutLabel="Paid out · last 30 days"
+            account="Bank of Hawaii ···· 4421"
+            currency={tenant.currency}
+            className="h-full"
+          />
         </Reveal>
       </div>
 
-      {/* ---- row 2: the trend and what to do about it ----------------------- */}
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
-        <Reveal className="min-w-0 xl:col-span-8" delay={0.04} distance={18}>
-          <RevenuePanel points={overview.timeseries} currency={tenant.currency} />
-        </Reveal>
-        <Reveal className="min-w-0 xl:col-span-4" delay={0.12} distance={18}>
-          <InsightsPanel insights={overview.insights} className="xl:max-h-[46rem]" />
-        </Reveal>
-      </div>
+      {/* ---- row 3: what just came in ------------------------------------- */}
+      <Reveal distance={16}>
+        <RecentBookings rows={overview.recentBookings} nowIso={NOW_ISO} channelLabels={CHANNEL_LABELS} />
+      </Reveal>
 
-      {/* ---- row 3: flow and mix -------------------------------------------- */}
+      {/* ---- row 4: what to do, and where it comes from --------------------- */}
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
-        <Reveal className="min-w-0 xl:col-span-7" distance={18}>
-          <BookingsFlowChart points={flowPoints} height={250} className="h-full" />
+        <Reveal className="min-w-0 xl:col-span-5" distance={16}>
+          <InsightsPanel insights={overview.insights} limit={3} className="h-full" />
         </Reveal>
-        <Reveal className="min-w-0 xl:col-span-5" delay={0.08} distance={18}>
+        <Reveal className="min-w-0 xl:col-span-7" delay={0.06} distance={16}>
           <ChannelDonutChart
             channels={overview.channels}
             currency={tenant.currency}
-            height={250}
+            height={220}
             title="Where bookings come from"
-            description="Net revenue by channel over the last 30 days."
-            className="h-full"
-          />
-        </Reveal>
-      </div>
-
-      {/* ---- row 4: the money, and what earns it ---------------------------- */}
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
-        <Reveal className="min-w-0 xl:col-span-7" distance={18}>
-          <RecentBookings
-            rows={overview.recentBookings}
-            nowIso={NOW_ISO}
-            channelLabels={CHANNEL_LABELS}
-            className="h-full"
-          />
-        </Reveal>
-        <Reveal className="min-w-0 xl:col-span-5" delay={0.08} distance={18}>
-          <ActivityPerformanceChart
-            items={overview.topActivities}
-            currency={tenant.currency}
-            limit={6}
-            title="Top activities by revenue"
-            description="Ranked over the last 30 days, with occupancy and guest rating."
+            description="Net revenue by channel, last 30 days"
             className="h-full"
           />
         </Reveal>

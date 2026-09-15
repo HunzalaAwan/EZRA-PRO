@@ -59,7 +59,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         Skip to content
       </a>
 
-      <div className="flex min-h-dvh bg-background-subtle">
+      <div className="flex min-h-dvh bg-background-dashboard">
         <Sidebar navCounts={navCounts} />
 
         <div className="flex min-w-0 flex-1 flex-col">
