@@ -20,9 +20,9 @@ import type { CurrencyCode } from '@/types'
    themed, so the card stays bright in dark mode, like a card in a wallet.
    ========================================================================== */
 
-/** Lilac into pink, warming to gold at the far corner, all on white. */
+/** Lilac into pink, warming to gold at the far corner, a shade deeper than pastel. */
 const GROUND =
-  'linear-gradient(135deg, color-mix(in oklab, white 78%, var(--color-reef-500)) 0%, color-mix(in oklab, white 74%, var(--aurora-pink)) 52%, color-mix(in oklab, white 66%, var(--accent)) 100%)'
+  'linear-gradient(135deg, color-mix(in oklab, white 66%, var(--color-reef-500)) 0%, color-mix(in oklab, white 62%, var(--aurora-pink)) 52%, color-mix(in oklab, white 54%, var(--accent)) 100%)'
 /** Field order follows CardAurora's light layout: top-right, bottom-left, lower-middle. */
 const FIELDS = ['var(--aurora-pink)', 'var(--color-reef-500)', 'var(--accent)']
 const RING: [string, string] = ['var(--aurora-pink)', 'var(--accent)']
@@ -76,7 +76,7 @@ export function PayoutCard({ balance, currency, className }: PayoutCardProps) {
         className,
       )}
     >
-      <CardAurora tone="light" fields={3} colors={FIELDS} ground={GROUND} ring ringColors={RING} intensity={2.4} />
+      <CardAurora tone="light" fields={3} colors={FIELDS} ground={GROUND} ring ringColors={RING} intensity={2.9} />
 
       {/* ---------- what lands next ---------- */}
       <div className="flex items-start justify-between gap-4">
