@@ -25,10 +25,12 @@ export interface CardAuroraProps {
   colors?: string[]
   /** Replace the base gradient behind the fields. */
   ground?: string
-  /** The turning conic ring, the dark payout card's signature. */
+  /** The turning conic ring. On by default for the dark tone, off for light. */
   ring?: boolean
   /** The two colours the ring turns through. */
   ringColors?: [string, string]
+  /** Multiplies the field opacities; above 1 makes a light card read bright, not pale. */
+  intensity?: number
   /** Turn the movement off while keeping the gradient. */
   animated?: boolean
   className?: string
@@ -70,11 +72,14 @@ export function CardAurora({
   fields = 2,
   colors,
   ground,
-  ring = true,
+  ring,
   ringColors = ['var(--info)', 'var(--accent)'],
+  intensity = 1,
   animated = true,
   className,
 }: CardAuroraProps) {
+  const showRing = ring ?? tone === 'dark'
+  const ringMix = tone === 'dark' ? [75, 70] : [55, 50]
   const reduce = useReducedMotionSafe()
   const moving = animated && !reduce
   const list = (tone === 'dark' ? DARK_FIELDS : LIGHT_FIELDS)
@@ -97,7 +102,7 @@ export function CardAurora({
             left: field.left,
             top: field.top,
             background: field.color,
-            opacity: field.opacity,
+            opacity: Math.min(1, field.opacity * intensity),
             filter: `blur(${tone === 'dark' ? 56 : 44}px)`,
           }}
           animate={
@@ -113,23 +118,23 @@ export function CardAurora({
         />
       ))}
 
-      {tone === 'dark' ? (
-        <>
-          {/* Turning ring, the card's signature. */}
-          {ring ? (
+      {/* Turning ring, the card's signature. */}
+      {showRing ? (
           <motion.span
             className="absolute -top-28 -right-24 block size-72 rounded-full will-change-transform"
             style={{
               background:
-                `conic-gradient(from 0deg, transparent 0deg, color-mix(in oklab, ${ringColors[0]} 75%, transparent) 110deg, transparent 220deg, color-mix(in oklab, ${ringColors[1]} 70%, transparent) 300deg, transparent 360deg)`,
+                `conic-gradient(from 0deg, transparent 0deg, color-mix(in oklab, ${ringColors[0]} ${ringMix[0]}%, transparent) 110deg, transparent 220deg, color-mix(in oklab, ${ringColors[1]} ${ringMix[1]}%, transparent) 300deg, transparent 360deg)`,
               WebkitMask: 'radial-gradient(circle, transparent 58%, #000 59.5%)',
               mask: 'radial-gradient(circle, transparent 58%, #000 59.5%)',
             }}
             animate={moving ? { rotate: 360 } : undefined}
             transition={{ duration: 38, repeat: Infinity, ease: 'linear' }}
           />
-          ) : null}
+      ) : null}
 
+      {tone === 'dark' ? (
+        <>
           {/* A light sweep across the card now and then. */}
           {moving ? (
             <motion.span
