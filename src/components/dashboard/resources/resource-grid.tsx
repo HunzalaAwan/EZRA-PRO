@@ -22,7 +22,6 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Progress } from '@/components/ui/progress'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { SimpleTooltip } from '@/components/ui/tooltip'
 import { cn, formatNumber, pluralize } from '@/lib/utils'
 import type { Activity, Resource, ResourceKind } from '@/types'
@@ -56,10 +55,10 @@ export interface ResourceImage {
   alt: string
 }
 
-export type ResourceView = 'grid' | 'list'
+export type ResourceView = 'list' | 'cards'
 
 /* ==========================================================================
-   GRID / LIST
+   CARDS — the visual browse. The manageable ledger is ResourceTable.
    ========================================================================== */
 
 export interface ResourceGridProps {
@@ -72,7 +71,6 @@ export interface ResourceGridProps {
   peakUse: number
   /** Stand-in photo (the experience that runs on it) until the operator adds one. */
   imageFallbacks: Record<string, ResourceImage>
-  view: ResourceView
   onEdit: (resource: Resource) => void
   onAddPhoto: (resource: Resource) => void
   onAdd: (kind: ResourceKind) => void
@@ -85,7 +83,6 @@ export function ResourceGrid({
   upcomingUse,
   peakUse,
   imageFallbacks,
-  view,
   onEdit,
   onAddPhoto,
   onAdd,
@@ -139,31 +136,20 @@ export function ResourceGrid({
               </Button>
             </div>
 
-            {view === 'grid' ? (
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {items.map((resource) => (
-                  <ResourceCard
-                    key={resource.id}
-                    resource={resource}
-                    image={imageFor(resource)}
-                    dependents={dependents[resource.id] ?? []}
-                    upcoming={upcomingUse[resource.id] ?? 0}
-                    peakUse={peakUse}
-                    onEdit={() => onEdit(resource)}
-                    onAddPhoto={() => onAddPhoto(resource)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <ResourceTable
-                items={items}
-                imageFor={imageFor}
-                dependents={dependents}
-                upcomingUse={upcomingUse}
-                peakUse={peakUse}
-                onEdit={onEdit}
-              />
-            )}
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {items.map((resource) => (
+                <ResourceCard
+                  key={resource.id}
+                  resource={resource}
+                  image={imageFor(resource)}
+                  dependents={dependents[resource.id] ?? []}
+                  upcoming={upcomingUse[resource.id] ?? 0}
+                  peakUse={peakUse}
+                  onEdit={() => onEdit(resource)}
+                  onAddPhoto={() => onAddPhoto(resource)}
+                />
+              ))}
+            </div>
           </section>
         )
       })}
@@ -175,7 +161,7 @@ export function ResourceGrid({
    CARD
    ========================================================================== */
 
-function Thumb({ image, kind, className }: { image: ResourceImage | null; kind: ResourceKind; className?: string }) {
+export function Thumb({ image, kind, className }: { image: ResourceImage | null; kind: ResourceKind; className?: string }) {
   const meta = RESOURCE_KIND_META[kind]
   const Icon = meta.icon
   return (
@@ -351,93 +337,6 @@ function Figure({ label, value, hint }: { label: string; value: string; hint: st
       <dt className="text-[0.625rem] font-semibold tracking-[0.08em] text-faint uppercase">{label}</dt>
       <dd className="text-sm font-semibold text-foreground tabular-nums">{value}</dd>
       <p className="truncate text-[0.625rem] text-subtle">{hint}</p>
-    </div>
-  )
-}
-
-/* ==========================================================================
-   TABLE — the manageable view: one row per unit, scan and edit.
-   ========================================================================== */
-
-function ResourceTable({
-  items,
-  imageFor,
-  dependents,
-  upcomingUse,
-  peakUse,
-  onEdit,
-}: {
-  items: Resource[]
-  imageFor: (r: Resource) => ResourceImage | null
-  dependents: Record<string, Activity[]>
-  upcomingUse: Record<string, number>
-  peakUse: number
-  onEdit: (resource: Resource) => void
-}) {
-  return (
-    <div className="overflow-hidden rounded-2xl border border-line bg-surface">
-      <Table density="compact">
-        <TableHeader>
-          <TableRow>
-            <TableHead className="pl-4">Resource</TableHead>
-            <TableHead>Location</TableHead>
-            <TableHead align="right" numeric>
-              Capacity
-            </TableHead>
-            <TableHead>Next 14 days</TableHead>
-            <TableHead>Required by</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead align="right" className="pr-4">
-              <span className="sr-only">Actions</span>
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {items.map((resource) => {
-            const status = STATUS_META[resource.status]
-            const upcoming = upcomingUse[resource.id] ?? 0
-            const utilisation = peakUse === 0 ? 0 : Math.round((upcoming / peakUse) * 100)
-            const deps = dependents[resource.id] ?? []
-            return (
-              <TableRow key={resource.id} interactive>
-                <TableCell className="pl-4">
-                  <div className="flex items-center gap-3">
-                    <Thumb image={imageFor(resource)} kind={resource.kind} className="size-11 shrink-0 rounded-lg" />
-                    <div className="min-w-0">
-                      <p className="truncate text-[0.8125rem] font-semibold text-foreground">{resource.name}</p>
-                      <p className="text-[0.6875rem] text-faint">{RESOURCE_KIND_META[resource.kind].label}</p>
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell className="text-[0.8125rem] text-muted">{resource.location ?? '—'}</TableCell>
-                <TableCell align="right" numeric className="text-[0.8125rem]">
-                  {formatNumber(resource.capacity)} × {formatNumber(resource.quantity)}
-                  <span className="text-faint"> = {formatNumber(resource.capacity * resource.quantity)}</span>
-                </TableCell>
-                <TableCell>
-                  <div className="flex w-36 items-center gap-2">
-                    <Progress value={utilisation} size="sm" tone={utilisation >= 80 ? 'accent' : 'primary'} className="flex-1" />
-                    <span className="w-6 shrink-0 text-right text-[0.75rem] text-muted tabular-nums">{upcoming}</span>
-                  </div>
-                </TableCell>
-                <TableCell className="text-[0.8125rem] text-muted">
-                  {deps.length === 0 ? '—' : deps.length === 1 ? deps[0].name : `${deps[0].name} +${deps.length - 1}`}
-                </TableCell>
-                <TableCell>
-                  <Badge variant={status.variant} size="sm" dot>
-                    {status.label}
-                  </Badge>
-                </TableCell>
-                <TableCell align="right" className="pr-4">
-                  <Button variant="ghost" size="xs" leftIcon={<Pencil />} onClick={() => onEdit(resource)}>
-                    Edit
-                  </Button>
-                </TableCell>
-              </TableRow>
-            )
-          })}
-        </TableBody>
-      </Table>
     </div>
   )
 }
