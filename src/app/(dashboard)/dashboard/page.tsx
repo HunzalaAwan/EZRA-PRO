@@ -17,7 +17,8 @@ import {
   TODAY_KEY,
   getDashboardOverview,
 } from '@/lib/demo'
-import { addDays, formatDateLong, formatNumber, pluralize, sum } from '@/lib/utils'
+import { getPayoutBalance } from '@/lib/data/payouts'
+import { formatDateLong, formatNumber, pluralize } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,13 +40,6 @@ function greeting(hour: number): string {
   if (hour < 12) return 'Good morning'
   if (hour < 18) return 'Good afternoon'
   return 'Good evening'
-}
-
-/** Takings settle on the next business day; weekends roll to Monday. */
-function nextBusinessDay(from: Date): Date {
-  let next = addDays(from, 1)
-  while (next.getDay() === 0 || next.getDay() === 6) next = addDays(next, 1)
-  return next
 }
 
 /* ==========================================================================
@@ -73,17 +67,10 @@ export default function DashboardOverviewPage() {
           'departure',
         )} and ${formatNumber(todayGuests)} ${pluralize(todayGuests, 'guest')} on the books`
 
-  // Payouts: today's takings settle next business day; the trailing month is
-  // what has already landed.
+  // Payouts come from the same settlement seam as the Payments page, so the
+  // card and the page never disagree.
   const series = overview.timeseries
-  const today = series[series.length - 1]
-  const nextPayout = today?.revenue ?? 0
-  const paidOut = sum(series.slice(-31, -1).map((p) => p.revenue))
-  const arrivesOn = nextBusinessDay(NOW).toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  })
+  const balance = getPayoutBalance(tenant.id, tenant.currency)
 
   return (
     <div className="flex flex-col gap-5">
@@ -103,15 +90,7 @@ export default function DashboardOverviewPage() {
           <RevenueBars points={series} currency={tenant.currency} className="h-full" />
         </Reveal>
         <Reveal className="min-w-0 xl:col-span-4" delay={0.16} distance={16}>
-          <PayoutCard
-            nextPayout={nextPayout}
-            arrivesOn={arrivesOn}
-            paidOut={paidOut}
-            paidOutLabel="Paid out · last 30 days"
-            account="Bank of Hawaii ···· 4421"
-            currency={tenant.currency}
-            className="h-full"
-          />
+          <PayoutCard balance={balance} currency={tenant.currency} className="h-full" />
         </Reveal>
       </div>
 

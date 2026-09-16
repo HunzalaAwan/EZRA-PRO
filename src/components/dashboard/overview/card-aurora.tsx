@@ -27,6 +27,8 @@ export interface CardAuroraProps {
   ground?: string
   /** The turning conic ring, the dark payout card's signature. */
   ring?: boolean
+  /** The two colours the ring turns through. */
+  ringColors?: [string, string]
   /** Turn the movement off while keeping the gradient. */
   animated?: boolean
   className?: string
@@ -69,6 +71,7 @@ export function CardAurora({
   colors,
   ground,
   ring = true,
+  ringColors = ['var(--info)', 'var(--accent)'],
   animated = true,
   className,
 }: CardAuroraProps) {
@@ -118,7 +121,7 @@ export function CardAurora({
             className="absolute -top-28 -right-24 block size-72 rounded-full will-change-transform"
             style={{
               background:
-                'conic-gradient(from 0deg, transparent 0deg, color-mix(in oklab, var(--info) 75%, transparent) 110deg, transparent 220deg, color-mix(in oklab, var(--accent) 70%, transparent) 300deg, transparent 360deg)',
+                `conic-gradient(from 0deg, transparent 0deg, color-mix(in oklab, ${ringColors[0]} 75%, transparent) 110deg, transparent 220deg, color-mix(in oklab, ${ringColors[1]} 70%, transparent) 300deg, transparent 360deg)`,
               WebkitMask: 'radial-gradient(circle, transparent 58%, #000 59.5%)',
               mask: 'radial-gradient(circle, transparent 58%, #000 59.5%)',
             }}

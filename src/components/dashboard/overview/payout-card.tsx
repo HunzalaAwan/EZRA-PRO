@@ -1,45 +1,72 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowUpRight, Landmark } from 'lucide-react'
+import { ArrowUpRight, Landmark, TrendingDown, TrendingUp } from 'lucide-react'
 
 import { CountUp } from '@/components/motion/count-up'
 import { CardAurora } from '@/components/dashboard/overview/card-aurora'
-import { cn, formatCurrency } from '@/lib/utils'
+import type { PayoutBalance } from '@/components/dashboard/payments/payout-summary'
+import { cn, formatCurrency, formatDelta, formatNumber, formatPercent, pluralize } from '@/lib/utils'
 import type { CurrencyCode } from '@/types'
 
 /* ==========================================================================
    PayoutCard — the money on its way to the bank.
 
    The one dark surface on the overview, sized and placed like a bank card,
-   with slow weather moving behind the numbers:
-   what settles next, when it lands, and the account it lands in. Next-day
-   payouts are the product's sharpest edge, so they get the sharpest card.
+   with slow weather in purple, pink and gold moving behind the numbers. It
+   reads from the same settlement seam as the Payments page, so the figure
+   here is the figure there: what lands next, what is in transit, what has
+   already landed this month, and what the processor took.
    ========================================================================== */
 
+/** Deep violet into pink, warming to gold at the far corner. */
+const GROUND =
+  'linear-gradient(135deg, var(--navy-deep) 0%, color-mix(in oklab, var(--navy-deep) 42%, var(--primary)) 36%, color-mix(in oklab, var(--navy-deep) 40%, var(--aurora-pink)) 70%, color-mix(in oklab, var(--navy-deep) 38%, var(--accent)) 100%)'
+/** Field order follows CardAurora's dark layout: top-right glow, bottom-left, bottom-right. */
+const FIELDS = ['var(--aurora-pink)', 'var(--primary)', 'var(--accent)']
+const RING: [string, string] = ['var(--aurora-pink)', 'var(--accent)']
+
 export interface PayoutCardProps {
-  /** Takings that settle on the next business day. */
-  nextPayout: number
-  /** Human date the payout lands, e.g. "Mon, Sep 14". */
-  arrivesOn: string
-  /** Takings already settled in the trailing window. */
-  paidOut: number
-  paidOutLabel: string
-  /** Masked destination account, e.g. "Bank of Hawaii ···· 4421". */
-  account: string
+  balance: PayoutBalance
   currency: CurrencyCode
   className?: string
 }
 
-export function PayoutCard({
-  nextPayout,
-  arrivesOn,
-  paidOut,
-  paidOutLabel,
-  account,
-  currency,
-  className,
-}: PayoutCardProps) {
+function arrives(iso: string) {
+  return new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(iso))
+}
+
+export function PayoutCard({ balance, currency, className }: PayoutCardProps) {
+  const GrossIcon = balance.grossDelta >= 0 ? TrendingUp : TrendingDown
+
+  const figures: { label: string; value: string; note: React.ReactNode }[] = [
+    {
+      label: 'In transit',
+      value: formatCurrency(balance.inTransit, currency),
+      note: `${formatNumber(balance.inTransitTransactions)} ${pluralize(balance.inTransitTransactions, 'transaction')}`,
+    },
+    {
+      label: 'Paid out this month',
+      value: formatCurrency(balance.paidOutThisMonth, currency),
+      note: `${formatNumber(balance.paidOutBatches)} settled ${pluralize(balance.paidOutBatches, 'batch', 'batches')}`,
+    },
+    {
+      label: 'Gross · last 30 days',
+      value: formatCurrency(balance.grossLast30, currency, { compact: true }),
+      note: (
+        <span className="inline-flex items-center gap-0.5 tabular-nums">
+          <GrossIcon aria-hidden="true" className="size-3" strokeWidth={2.5} />
+          {formatDelta(balance.grossDelta)} vs prior
+        </span>
+      ),
+    },
+    {
+      label: 'Processing fees',
+      value: formatCurrency(balance.processingFees, currency, { compact: true }),
+      note: `${formatPercent(balance.feeRate, 2)} of gross`,
+    },
+  ]
+
   return (
     <section
       aria-label="Payouts"
@@ -48,38 +75,35 @@ export function PayoutCard({
         className,
       )}
     >
-      <CardAurora tone="dark" fields={3} />
+      <CardAurora tone="dark" fields={3} colors={FIELDS} ground={GROUND} ringColors={RING} />
 
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <p className="text-[0.6875rem] font-semibold tracking-[0.12em] text-white/60 uppercase">Next payout</p>
-          <p className="mt-1 text-[0.8125rem] text-white/80">Arrives {arrivesOn}</p>
+          <p className="mt-1 text-[0.8125rem] text-white/80">Arrives {arrives(balance.nextPayoutAt)}</p>
         </div>
-        <span className="grid size-9 place-items-center rounded-xl bg-white/12 text-white">
+        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white/12 text-white">
           <Landmark aria-hidden="true" className="size-4" strokeWidth={1.9} />
         </span>
       </div>
 
       <CountUp
-        value={nextPayout}
+        value={balance.nextPayoutAmount}
         format="currency"
         currency={currency}
         duration={1.3}
-        className="mt-6 block font-display text-[2.25rem] leading-none font-semibold tracking-[-0.035em] text-white"
+        className="mt-4 block font-display text-[2.25rem] leading-none font-semibold tracking-[-0.035em] text-white"
       />
-      <p className="mt-3 font-mono text-[0.8125rem] tracking-[0.08em] text-white/70">{account}</p>
+      <p className="mt-2.5 font-mono text-[0.8125rem] tracking-[0.08em] text-white/70">{balance.destination}</p>
 
-      <dl className="mt-auto grid grid-cols-2 gap-4 border-t border-white/12 pt-4">
-        <div>
-          <dt className="text-[0.6875rem] text-white/55">{paidOutLabel}</dt>
-          <dd className="mt-1 font-display text-lg leading-none font-semibold tabular-nums">
-            {formatCurrency(paidOut, currency)}
-          </dd>
-        </div>
-        <div>
-          <dt className="text-[0.6875rem] text-white/55">Settlement</dt>
-          <dd className="mt-1 font-display text-base leading-none font-semibold whitespace-nowrap">Next business day</dd>
-        </div>
+      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-white/12 pt-4">
+        {figures.map((figure) => (
+          <div key={figure.label} className="min-w-0">
+            <dt className="truncate text-[0.6875rem] text-white/55">{figure.label}</dt>
+            <dd className="mt-0.5 font-display text-base leading-none font-semibold tabular-nums">{figure.value}</dd>
+            <dd className="mt-1 text-[0.6875rem] text-white/60">{figure.note}</dd>
+          </div>
+        ))}
       </dl>
 
       <Link

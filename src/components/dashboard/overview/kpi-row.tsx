@@ -41,14 +41,7 @@ export function KpiRow({ kpis, currency, className }: KpiRowProps) {
     <div className={cn('grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4', className)}>
       {lead.map((item, i) => (
         <Reveal key={item.key} delay={i * 0.06} distance={14} className="min-w-0">
-          <KpiCard
-            metric={item.metric}
-            currency={currency}
-            icon={item.icon}
-            trend={item.trend}
-            hero={item.key === 'net_revenue'}
-            className="h-full"
-          />
+          <KpiCard metric={item.metric} currency={currency} icon={item.icon} trend={item.trend} className="h-full" />
         </Reveal>
       ))}
     </div>
