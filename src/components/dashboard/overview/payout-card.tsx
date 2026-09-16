@@ -12,9 +12,9 @@ import type { CurrencyCode } from '@/types'
 /* ==========================================================================
    PayoutCard — the money on its way to the bank.
 
-   A vivid card on the overview: the brand violet as the body, melting into
-   hot pink and an orange glow at the top-left corner, with white ink and
-   slow weather behind the numbers. It reads from the same settlement seam as
+   The one dark surface on the overview: deep navy into indigo, violet at
+   the far corner, rich gold light from the top right, white ink and slow
+   weather behind the numbers. It reads from the same settlement seam as
    the Payments page, so the figure here is the figure there: what lands
    next, what is in transit, what has already landed this month, and what
    the processor took. The palette is fixed rather than themed, so the card
@@ -22,22 +22,24 @@ import type { CurrencyCode } from '@/types'
    ========================================================================== */
 
 /**
- * Orange corner, pink through the middle, violet everywhere else.
- *
- * Every layer interpolates in OKLab and fades along an eased run of stops, so
- * the washes melt into the violet body instead of ending at a visible edge.
+ * Deep navy into indigo, violet at the far corner, and rich gold light from
+ * the top right. Every layer interpolates in OKLab along eased stops so the
+ * tones melt into one another instead of meeting at an edge.
  */
-const ORANGE = 'color-mix(in oklab, var(--aurora-orange) 88%, var(--color-reef-800))'
-const PINK = 'var(--aurora-pink)'
+/* Pinned tones so the card reads the same in both themes: light-mode gold, indigo, #601CEF and the deep navy ground. */
+const GOLD = 'oklch(0.720 0.165 82)'
+const INDIGO = 'oklch(0.520 0.160 275)'
+const VIOLET = 'var(--color-reef-700)'
+const NAVY = 'oklch(0.205 0.075 286)'
 const wash = (color: string, alpha: number) => `color-mix(in oklab, ${color} ${Math.round(alpha * 100)}%, transparent)`
 const GROUND = [
-  `radial-gradient(in oklab 115% 95% at 6% 4%, ${ORANGE} 0%, ${wash(ORANGE, 0.92)} 10%, color-mix(in oklab, ${ORANGE} 50%, ${PINK}) 22%, ${wash(PINK, 0.7)} 34%, ${wash(PINK, 0.45)} 46%, ${wash(PINK, 0.24)} 58%, ${wash(PINK, 0.1)} 70%, ${wash(PINK, 0.03)} 82%, transparent 94%)`,
-  `radial-gradient(in oklab 75% 65% at 42% 58%, ${wash(PINK, 0.45)} 0%, ${wash(PINK, 0.3)} 25%, ${wash(PINK, 0.15)} 50%, ${wash(PINK, 0.05)} 75%, transparent 100%)`,
-  'linear-gradient(in oklab 160deg, var(--color-reef-500) 0%, color-mix(in oklab, var(--color-reef-500) 50%, var(--color-reef-600)) 25%, var(--color-reef-600) 50%, color-mix(in oklab, var(--color-reef-600) 50%, var(--color-reef-700)) 75%, var(--color-reef-700) 100%)',
+  `radial-gradient(in oklab 80% 70% at 92% 12%, ${wash(GOLD, 0.5)} 0%, ${wash(GOLD, 0.34)} 18%, ${wash(GOLD, 0.18)} 38%, ${wash(GOLD, 0.07)} 58%, ${wash(GOLD, 0.02)} 74%, transparent 88%)`,
+  `radial-gradient(in oklab 70% 60% at 90% 95%, ${wash(VIOLET, 0.55)} 0%, ${wash(VIOLET, 0.3)} 30%, ${wash(VIOLET, 0.1)} 60%, transparent 85%)`,
+  `linear-gradient(in oklab 140deg, ${NAVY} 0%, color-mix(in oklab, ${NAVY} 80%, ${INDIGO}) 30%, color-mix(in oklab, ${NAVY} 64%, ${INDIGO}) 55%, color-mix(in oklab, ${NAVY} 58%, ${VIOLET}) 80%, color-mix(in oklab, ${NAVY} 46%, ${VIOLET}) 100%)`,
 ].join(', ')
 /** Field order follows CardAurora's dark layout: top-right glow, bottom-left, bottom-right. */
-const FIELDS = ['var(--aurora-pink)', 'var(--aurora-orange)', 'var(--color-reef-400)']
-const RING: [string, string] = ['var(--aurora-pink)', 'var(--aurora-orange)']
+const FIELDS = [GOLD, INDIGO, VIOLET]
+const RING: [string, string] = [INDIGO, GOLD]
 
 export interface PayoutCardProps {
   balance: PayoutBalance
@@ -69,11 +71,11 @@ export function PayoutCard({ balance, currency, className }: PayoutCardProps) {
     <section
       aria-label="Payouts"
       className={cn(
-        'relative isolate flex flex-col overflow-hidden rounded-2xl bg-reef-700 p-5 text-white shadow-md sm:p-6',
+        'relative isolate flex flex-col overflow-hidden rounded-2xl bg-[oklch(0.205_0.075_286)] p-5 text-white shadow-md sm:p-6',
         className,
       )}
     >
-      <CardAurora tone="dark" fields={3} colors={FIELDS} ground={GROUND} ringColors={RING} />
+      <CardAurora tone="dark" fields={3} colors={FIELDS} ground={GROUND} ringColors={RING} intensity={0.85} />
 
       {/* ---------- what lands next ---------- */}
       <div className="flex items-start justify-between gap-4">
