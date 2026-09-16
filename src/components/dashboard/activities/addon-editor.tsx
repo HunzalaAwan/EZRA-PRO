@@ -43,7 +43,14 @@ export function blankAddOn(label = '', price = 0): DraftAddOn {
   }
 }
 
-const ADDON_PRESETS: { label: string; price: number; description: string; icon: typeof Camera }[] = [
+export interface AddOnPreset {
+  label: string
+  price: number
+  description: string
+  icon: typeof Camera
+}
+
+const ADDON_PRESETS: AddOnPreset[] = [
   {
     label: 'Photo package',
     price: 4500,
@@ -85,10 +92,12 @@ export interface AddonEditorProps {
   onChange: (addOns: DraftAddOn[]) => void
   currency: CurrencyCode
   errors?: Record<string, string>
+  /** One-click starting points; defaults to the tour-operator set. */
+  presets?: AddOnPreset[]
   className?: string
 }
 
-export function AddonEditor({ addOns, onChange, currency, errors, className }: AddonEditorProps) {
+export function AddonEditor({ addOns, onChange, currency, errors, presets = ADDON_PRESETS, className }: AddonEditorProps) {
   const update = (index: number, patch: Partial<DraftAddOn>) => {
     onChange(addOns.map((addOn, i) => (i === index ? { ...addOn, ...patch } : addOn)))
   }
@@ -229,7 +238,7 @@ export function AddonEditor({ addOns, onChange, currency, errors, className }: A
         >
           Add an add-on
         </Button>
-        {ADDON_PRESETS.filter((preset) => !used.has(preset.label.toLowerCase())).map((preset) => {
+        {presets.filter((preset) => !used.has(preset.label.toLowerCase())).map((preset) => {
           const Icon = preset.icon
           return (
             <button

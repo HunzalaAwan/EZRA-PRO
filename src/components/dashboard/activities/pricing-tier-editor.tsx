@@ -46,7 +46,14 @@ export function blankTier(label = '', price = 0): DraftTier {
   }
 }
 
-const TIER_PRESETS: { label: string; price: number; description: string; counts?: boolean }[] = [
+export interface TierPreset {
+  label: string
+  price: number
+  description: string
+  counts?: boolean
+}
+
+const TIER_PRESETS: TierPreset[] = [
   { label: 'Adult', price: 14900, description: 'Ages 18 and over' },
   { label: 'Child (4–12)', price: 8900, description: 'Must be accompanied by an adult' },
   { label: 'Senior (65+)', price: 12900, description: '' },
@@ -156,6 +163,8 @@ export interface PricingTierEditorProps {
   currency: CurrencyCode
   /** Keyed by `tiers.<index>.<field>`. */
   errors?: Record<string, string>
+  /** One-click starting points; defaults to the tour-operator set. */
+  presets?: TierPreset[]
   className?: string
 }
 
@@ -164,6 +173,7 @@ export function PricingTierEditor({
   onChange,
   currency,
   errors,
+  presets = TIER_PRESETS,
   className,
 }: PricingTierEditorProps) {
   const update = (index: number, patch: Partial<DraftTier>) => {
@@ -333,7 +343,7 @@ export function PricingTierEditor({
           Add tier
         </Button>
         <span className="text-xs text-faint">or start from</span>
-        {TIER_PRESETS.filter((preset) => !usedPresets.has(preset.label.toLowerCase())).map((preset) => (
+        {presets.filter((preset) => !usedPresets.has(preset.label.toLowerCase())).map((preset) => (
           <button
             key={preset.label}
             type="button"

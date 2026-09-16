@@ -26,8 +26,8 @@ export interface DraftSchedule {
 }
 
 /** Mon-first display order — the calendar grid starts on Monday. */
-const WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0]
-const WEEKDAY_LABEL: Record<number, string> = {
+export const WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0]
+export const WEEKDAY_LABEL: Record<number, string> = {
   0: 'Sun',
   1: 'Mon',
   2: 'Tue',

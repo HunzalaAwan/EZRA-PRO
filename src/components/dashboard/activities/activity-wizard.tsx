@@ -28,6 +28,7 @@ import {
   TriangleAlert,
   Trash2,
   Users,
+  UtensilsCrossed,
   Waves,
 } from 'lucide-react'
 import { z } from 'zod'
@@ -73,6 +74,23 @@ import {
   previewDepartures,
   type DraftSchedule,
 } from './schedule-editor'
+import {
+  BOOKING_MODE_OPTIONS,
+  CHILDREN_OPTIONS,
+  DINING_ADDON_PRESETS,
+  DINING_BASICS,
+  DINING_TIER_PRESETS,
+  DRESS_OPTIONS,
+  DiningBasicsFields,
+  DiningBookingFields,
+  DiningDietaryFields,
+  DiningServiceEditor,
+  FORMAT_OPTIONS,
+  defaultDining,
+  formatLabel,
+  serviceStartTimes,
+  type DiningDraft,
+} from './dining-fields'
 
 /* ==========================================================================
    DRAFT MODEL
@@ -101,19 +119,30 @@ export interface ActivityDraft {
   schedule: DraftSchedule
   featured: boolean
   freeCancellationHours: number
+  /** Restaurant settings; only read while the category is Dining. */
+  dining: DiningDraft
 }
 
-const STORAGE_KEY = 'ezra:activity-wizard:v1'
+const STORAGE_KEY = 'ezra:activity-wizard:v2'
+
+/** Dining is the one category whose product is a table, not a departure. */
+export const isDining = (draft: Pick<ActivityDraft, 'category'>) => draft.category === 'restaurants'
+
+/** Generic defaults the operator has not touched can be swapped when the category changes. */
+const TOUR_BASICS = { durationMinutes: 120, maxCapacity: 16, minAge: 8 } as const
 
 export function createDefaultDraft(category: VerticalKey, nowIso: string): ActivityDraft {
+  const dining = defaultDining()
+  const restaurant = category === 'restaurants'
+  const schedule = defaultSchedule(nowIso)
   return {
     name: '',
     tagline: '',
     category,
     difficulty: 'easy',
-    durationMinutes: 120,
-    minAge: 8,
-    maxCapacity: 16,
+    durationMinutes: restaurant ? DINING_BASICS.durationMinutes : TOUR_BASICS.durationMinutes,
+    minAge: restaurant ? DINING_BASICS.minAge : TOUR_BASICS.minAge,
+    maxCapacity: restaurant ? DINING_BASICS.maxCapacity : TOUR_BASICS.maxCapacity,
     minParticipants: 1,
     description: '',
     highlights: [''],
@@ -122,12 +151,46 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
     requirements: [],
     meetingPoint: '',
     media: [],
-    tiers: [blankTier('Adult', 14900)],
+    tiers: [restaurant ? blankTier('Tasting menu', 8500) : blankTier('Adult', 14900)],
     addOns: [],
-    schedule: defaultSchedule(nowIso),
+    schedule: restaurant
+      ? { ...schedule, startTimes: serviceStartTimes(dining.services), capacity: DINING_BASICS.maxCapacity }
+      : schedule,
     featured: false,
     freeCancellationHours: 24,
+    dining,
   }
+}
+
+/**
+ * Switching category re-seeds the numbers a tour and a restaurant disagree
+ * on, but only where the operator has left the defaults alone.
+ */
+export function withCategory(draft: ActivityDraft, category: VerticalKey): ActivityDraft {
+  const wasDining = isDining(draft)
+  const willBeDining = category === 'restaurants'
+  if (wasDining === willBeDining) return { ...draft, category }
+
+  const from = wasDining ? DINING_BASICS : TOUR_BASICS
+  const to = willBeDining ? DINING_BASICS : TOUR_BASICS
+  const untouched =
+    draft.durationMinutes === from.durationMinutes && draft.maxCapacity === from.maxCapacity && draft.minAge === from.minAge
+
+  const next: ActivityDraft = { ...draft, category }
+  if (untouched) Object.assign(next, to)
+  if (willBeDining) {
+    next.schedule = {
+      ...draft.schedule,
+      startTimes: serviceStartTimes(draft.dining.services),
+      capacity: untouched ? DINING_BASICS.maxCapacity : draft.schedule.capacity,
+    }
+    if (draft.tiers.length === 1 && draft.tiers[0].label === 'Adult' && draft.tiers[0].price === 14900) {
+      next.tiers = [blankTier('Tasting menu', 8500)]
+    }
+  } else if (draft.tiers.length === 1 && draft.tiers[0].label === 'Tasting menu' && draft.tiers[0].price === 8500) {
+    next.tiers = [blankTier('Adult', 14900)]
+  }
+  return next
 }
 
 const CATEGORY_OPTIONS: { value: VerticalKey; label: string; hint: string }[] = [
@@ -175,7 +238,7 @@ const DIFFICULTY_OPTIONS: {
    STEPS + VALIDATION
    ========================================================================== */
 
-const STEPS = [
+const TOUR_STEPS = [
   { id: 'basics', label: 'Basics', hint: 'Name, category, capacity', icon: Compass },
   { id: 'description', label: 'Description', hint: 'The copy guests read', icon: FileText },
   { id: 'media', label: 'Media', hint: 'Photography', icon: Images },
@@ -183,6 +246,24 @@ const STEPS = [
   { id: 'schedule', label: 'Schedule', hint: 'When it runs', icon: CalendarClock },
   { id: 'review', label: 'Review', hint: 'Publish', icon: Rocket },
 ] as const
+
+const DINING_STEPS = [
+  { id: 'basics', label: 'Basics', hint: 'Name, format, covers', icon: UtensilsCrossed },
+  { id: 'description', label: 'Description', hint: 'Menu and venue', icon: FileText },
+  { id: 'media', label: 'Media', hint: 'The room and the plate', icon: Images },
+  { id: 'pricing', label: 'Pricing', hint: 'Menus and deposits', icon: Tag },
+  { id: 'schedule', label: 'Services', hint: 'Sittings and hours', icon: CalendarClock },
+  { id: 'review', label: 'Review', hint: 'Publish', icon: Rocket },
+] as const
+
+interface WizardStep {
+  id: string
+  label: string
+  hint: string
+  icon: typeof Compass
+}
+const STEPS: readonly WizardStep[] = TOUR_STEPS
+const stepsFor = (dining: boolean): readonly WizardStep[] => (dining ? DINING_STEPS : TOUR_STEPS)
 
 const nonEmptyList = (min: number, message: string) =>
   z
@@ -265,10 +346,117 @@ const STEP_SCHEMAS = [
   }),
 ]
 
+const CLOCK = /^\d{2}:\d{2}$/
+
+/** What a restaurant must get right before a table goes on sale. */
+const DINING_STEP_SCHEMAS = [
+  z
+    .object({
+      name: z.string().trim().min(3, 'Give this experience a name guests will recognise'),
+      tagline: z
+        .string()
+        .trim()
+        .min(12, 'Write a one-line hook of at least 12 characters')
+        .max(120, 'Keep the tagline under 120 characters'),
+      durationMinutes: z
+        .number()
+        .int()
+        .min(30, 'Give each table at least 30 minutes')
+        .max(600, 'A table time over ten hours looks like a mistake'),
+      maxCapacity: z.number().int().min(1, 'A sitting needs at least one cover').max(1000, 'Keep covers per sitting under 1,000'),
+      dining: z.object({
+        cuisine: z.string().trim().min(2, 'Name the cuisine, for example Modern Greek'),
+        seating: z.array(z.string()).min(1, 'Pick at least one seating area'),
+        minPartySize: z.number().int().min(1, 'Parties start at one guest'),
+        maxPartySize: z.number().int().min(1, 'Allow at least one guest'),
+      }),
+    })
+    .superRefine((draft, ctx) => {
+      if (draft.dining.maxPartySize < draft.dining.minPartySize) {
+        ctx.addIssue({ code: 'custom', path: ['dining', 'maxPartySize'], message: 'The largest party cannot be smaller than the smallest' })
+      } else if (draft.dining.maxPartySize > draft.maxCapacity) {
+        ctx.addIssue({ code: 'custom', path: ['dining', 'maxPartySize'], message: 'The largest party cannot exceed the covers in a sitting' })
+      }
+    }),
+
+  z.object({
+    description: z
+      .string()
+      .trim()
+      .min(80, 'Describe the food, the room and the evening in at least 80 characters'),
+    highlights: nonEmptyList(3, 'Add at least three highlights'),
+    included: nonEmptyList(1, 'List at least one thing on the menu or included'),
+    meetingPoint: z.string().trim().min(10, 'Tell guests where the venue is and how to arrive'),
+  }),
+
+  z.object({
+    media: z
+      .array(z.object({ alt: z.string().trim().min(3, 'Alt text is required — it drives accessibility and SEO') }))
+      .min(1, 'Add at least one image before publishing'),
+  }),
+
+  z
+    .object({
+      tiers: z.array(
+        z
+          .object({
+            label: z.string().trim().min(2, 'Name this menu price'),
+            price: z.number().int().min(0),
+            minQuantity: z.number().int().min(0),
+            maxQuantity: z.number().int().min(1),
+          })
+          .refine((tier) => tier.maxQuantity >= tier.minQuantity, { message: 'Maximum must be at least the minimum', path: ['maxQuantity'] }),
+      ),
+      addOns: z.array(z.object({ label: z.string().trim().min(2, 'Name this extra, or remove it') })),
+      dining: z.object({
+        bookingMode: z.enum(['card_hold', 'deposit', 'prepaid']),
+        depositPerGuest: z.number().int().min(0),
+        noShowFeePerGuest: z.number().int().min(0),
+      }),
+    })
+    .superRefine((draft, ctx) => {
+      if (draft.dining.bookingMode !== 'card_hold' && draft.tiers.length === 0) {
+        ctx.addIssue({ code: 'custom', path: ['tiers'], message: 'Add at least one menu price per guest, or switch to a card hold' })
+      }
+      if (draft.dining.bookingMode === 'deposit' && draft.dining.depositPerGuest <= 0) {
+        ctx.addIssue({ code: 'custom', path: ['dining', 'depositPerGuest'], message: 'Set a deposit, or switch to a card hold' })
+      }
+    }),
+
+  z
+    .object({
+      schedule: z.object({
+        weekdays: z.array(z.number()).min(1, 'Pick at least one open day'),
+        startTimes: z.array(z.string()).min(1, 'No sitting times yet — check the first and last seating on each service'),
+        capacity: z.number().int().min(1).max(1000),
+        seasonStart: z.string().min(1, 'Choose a season start'),
+        seasonEnd: z.string().min(1, 'Choose a season end'),
+      }),
+      dining: z.object({
+        services: z
+          .array(
+            z.object({
+              label: z.string().trim().min(1, 'Name this service'),
+              from: z.string().regex(CLOCK, 'Pick a first seating'),
+              to: z.string().regex(CLOCK, 'Pick a last seating'),
+            }),
+          )
+          .min(1, 'Add at least one service'),
+      }),
+    })
+    .superRefine((draft, ctx) => {
+      draft.dining.services.forEach((service, index) => {
+        if (service.to < service.from) {
+          ctx.addIssue({ code: 'custom', path: ['dining', 'services', index, 'to'], message: 'Last seating must come after the first' })
+        }
+      })
+    }),
+]
+
 type FieldErrors = Record<string, string>
 
 function validateStep(step: number, draft: ActivityDraft): FieldErrors {
-  const schema = STEP_SCHEMAS[step]
+  const schema = (isDining(draft) ? DINING_STEP_SCHEMAS : STEP_SCHEMAS)[step]
   if (!schema) return {}
   const result = schema.safeParse(draft)
   if (result.success) return {}
@@ -398,14 +586,17 @@ function ListEditor({
    ========================================================================== */
 
 function StepProgress({
+  steps,
   current,
   furthest,
   onJump,
 }: {
+  steps: readonly WizardStep[]
   current: number
   furthest: number
   onJump: (index: number) => void
 }) {
+  const STEPS = steps
   const progress = (current / (STEPS.length - 1)) * 100
 
   return (
@@ -522,6 +713,7 @@ function StorefrontPreview({
   const fromPrice = priced.length === 0 ? 0 : Math.min(...priced.map((tier) => tier.price))
   const upcoming = previewDepartures(draft.schedule, nowIso, 10).slice(0, 3)
   const highlights = draft.highlights.filter((item) => item.trim().length > 0).slice(0, 3)
+  const dining = isDining(draft)
 
   return (
     <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-lg">
@@ -570,15 +762,23 @@ function StorefrontPreview({
           <span className="inline-flex items-center gap-1.5">
             <Timer className="size-3.5 text-faint" aria-hidden="true" />
             {formatDuration(draft.durationMinutes)}
+            {dining ? ' table' : ''}
           </span>
           <span className="inline-flex items-center gap-1.5">
             <Users className="size-3.5 text-faint" aria-hidden="true" />
-            Up to {draft.maxCapacity}
+            {dining ? `Parties of ${draft.dining.minPartySize}–${draft.dining.maxPartySize}` : `Up to ${draft.maxCapacity}`}
           </span>
-          <span className="inline-flex items-center gap-1.5">
-            <Gauge className="size-3.5 text-faint" aria-hidden="true" />
-            {draft.difficulty}
-          </span>
+          {dining ? (
+            <span className="inline-flex items-center gap-1.5">
+              <UtensilsCrossed className="size-3.5 text-faint" aria-hidden="true" />
+              {draft.dining.cuisine || formatLabel(FORMAT_OPTIONS, draft.dining.format)}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5">
+              <Gauge className="size-3.5 text-faint" aria-hidden="true" />
+              {draft.difficulty}
+            </span>
+          )}
         </div>
 
         {highlights.length > 0 && !compact ? (
@@ -595,7 +795,7 @@ function StorefrontPreview({
         {upcoming.length > 0 ? (
           <div className="rounded-lg bg-surface-sunken p-2.5">
             <p className="text-[0.625rem] font-semibold tracking-wide text-faint uppercase">
-              Next available
+              {dining ? 'Next sittings' : 'Next available'}
             </p>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {upcoming.map((day) => (
@@ -621,7 +821,7 @@ function StorefrontPreview({
             </p>
           </div>
           <span className="pointer-events-none inline-flex h-9 items-center rounded-lg bg-primary px-4 text-[0.8125rem] font-semibold text-on-primary shadow-sm">
-            Check availability
+            {dining ? 'Reserve a table' : 'Check availability'}
           </span>
         </div>
       </div>
@@ -792,12 +992,14 @@ export function ActivityWizard({
     exit: (dir: number) => ({ x: dir > 0 ? -36 : 36, opacity: 0 }),
   }
 
-  const currentStep = STEPS[step]
-  const isLast = step === STEPS.length - 1
+  const dining = isDining(draft)
+  const steps = stepsFor(dining)
+  const currentStep = steps[step]
+  const isLast = step === steps.length - 1
 
   return (
     <div className="flex flex-col gap-5">
-      <StepProgress current={step} furthest={furthest} onJump={(index) => goTo(index, index > step ? 1 : -1)} />
+      <StepProgress steps={steps} current={step} furthest={furthest} onJump={(index) => goTo(index, index > step ? 1 : -1)} />
 
       {restored && step === 0 ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-info/30 bg-info-soft/60 px-4 py-2.5">
@@ -820,7 +1022,7 @@ export function ActivityWizard({
                 <CardTitle className="text-base">
                   {step + 1}. {currentStep.label}
                 </CardTitle>
-                <CardDescription>{STEP_COPY[step]}</CardDescription>
+                <CardDescription>{(dining ? DINING_STEP_COPY : STEP_COPY)[step]}</CardDescription>
               </div>
             </CardHeader>
 
@@ -863,16 +1065,33 @@ export function ActivityWizard({
                   ) : null}
                   {step === 3 ? (
                     <div className="flex flex-col gap-6">
+                      {dining ? (
+                        <>
+                          <DiningBookingFields
+                            dining={draft.dining}
+                            onChange={(next) => patch({ dining: next })}
+                            errors={errors}
+                            currency={currency}
+                          />
+                          <Separator />
+                        </>
+                      ) : null}
+
                       <section>
-                        <h3 className="text-sm font-semibold">Price tiers</h3>
+                        <h3 className="text-sm font-semibold">{dining ? 'Menu prices per guest' : 'Price tiers'}</h3>
                         <p className="mt-0.5 mb-3 text-xs text-muted">
-                          The first tier sets the “from” price on every storefront tile.
+                          {dining
+                            ? draft.dining.bookingMode === 'card_hold'
+                              ? 'Optional for à la carte. Add menus here if guests choose one when they reserve.'
+                              : 'Each guest picks a menu when the table is reserved. The first sets the “from” price.'
+                            : 'The first tier sets the “from” price on every storefront tile.'}
                         </p>
                         <PricingTierEditor
                           tiers={draft.tiers}
                           onChange={(tiers) => patch({ tiers })}
                           currency={currency}
                           errors={errors}
+                          presets={dining ? DINING_TIER_PRESETS : undefined}
                         />
                         {errors.tiers ? (
                           <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-danger">
@@ -885,15 +1104,18 @@ export function ActivityWizard({
                       <Separator />
 
                       <section>
-                        <h3 className="text-sm font-semibold">Add-ons</h3>
+                        <h3 className="text-sm font-semibold">{dining ? 'Pairings and extras' : 'Add-ons'}</h3>
                         <p className="mt-0.5 mb-3 text-xs text-muted">
-                          Optional extras offered once the guest has picked a time.
+                          {dining
+                            ? 'Offered once the table is picked: pairings, a bottle on arrival, a cake for the birthday.'
+                            : 'Optional extras offered once the guest has picked a time.'}
                         </p>
                         <AddonEditor
                           addOns={draft.addOns}
                           onChange={(addOns) => patch({ addOns })}
                           currency={currency}
                           errors={errors}
+                          presets={dining ? DINING_ADDON_PRESETS : undefined}
                         />
                       </section>
 
@@ -905,12 +1127,23 @@ export function ActivityWizard({
                     </div>
                   ) : null}
                   {step === 4 ? (
-                    <ScheduleEditor
-                      schedule={draft.schedule}
-                      onChange={(schedule) => patch({ schedule })}
-                      nowIso={nowIso}
-                      errors={errors}
-                    />
+                    dining ? (
+                      <DiningServiceEditor
+                        dining={draft.dining}
+                        onChange={(next) => patch({ dining: next })}
+                        schedule={draft.schedule}
+                        onSchedule={(schedule) => patch({ schedule })}
+                        nowIso={nowIso}
+                        errors={errors}
+                      />
+                    ) : (
+                      <ScheduleEditor
+                        schedule={draft.schedule}
+                        onChange={(schedule) => patch({ schedule })}
+                        nowIso={nowIso}
+                        errors={errors}
+                      />
+                    )
                   ) : null}
                   {step === 5 ? (
                     <ReviewStep
@@ -929,7 +1162,7 @@ export function ActivityWizard({
 
             <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-line bg-surface-sunken/50 px-5 py-4 sm:px-6">
               <Button type="button" variant="ghost" leftIcon={<ArrowLeft />} onClick={back}>
-                {step === 0 ? 'Cancel' : `Back to ${STEPS[step - 1].label.toLowerCase()}`}
+                {step === 0 ? 'Cancel' : `Back to ${steps[step - 1].label.toLowerCase()}`}
               </Button>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -952,7 +1185,7 @@ export function ActivityWizard({
                     disabled={submitting !== null}
                     onClick={() => submit('live')}
                   >
-                    Publish activity
+                    {dining ? 'Open the book' : 'Publish activity'}
                   </Button>
                 ) : (
                   <Button type="button" variant="primary" rightIcon={<ArrowRight />} onClick={advance}>
@@ -997,6 +1230,15 @@ const STEP_COPY = [
   'One last read-through, then publish.',
 ] as const
 
+const DINING_STEP_COPY = [
+  'What you serve, the room, and how many covers a sitting carries.',
+  'The copy guests read before they reserve. Lead with the food.',
+  'Photography sells the room and the plate. Landscape frames, no logos, no text overlays.',
+  'How the table is secured, menu prices per guest, and the extras you upsell.',
+  'Your services and sitting times, and the covers each one sells.',
+  'One last read-through, then open the book.',
+] as const
+
 /* ==========================================================================
    STEPS
    ========================================================================== */
@@ -1008,10 +1250,11 @@ interface StepProps {
 }
 
 function BasicsStep({ draft, patch, errors }: StepProps) {
+  const dining = isDining(draft)
   return (
     <div className="flex flex-col gap-5">
       <Field
-        label="Activity name"
+        label={dining ? 'Experience name' : 'Activity name'}
         required
         error={errors.name}
         description={
@@ -1020,7 +1263,11 @@ function BasicsStep({ draft, patch, errors }: StepProps) {
             : 'Guests see this everywhere — search, checkout, confirmation emails.'
         }
       >
-        <Input placeholder="Molokini Crater Dawn Patrol" value={draft.name} onChange={(event) => patch({ name: event.target.value })} />
+        <Input
+          placeholder={dining ? 'Sunset Tasting Menu on the Terrace' : 'Molokini Crater Dawn Patrol'}
+          value={draft.name}
+          onChange={(event) => patch({ name: event.target.value })}
+        />
       </Field>
 
       <Field
@@ -1031,17 +1278,24 @@ function BasicsStep({ draft, patch, errors }: StepProps) {
         description="One line that earns the click."
       >
         <Input
-          placeholder="First boat on the water, before the crowds and the wind"
+          placeholder={dining ? 'Seven courses as the caldera goes gold' : 'First boat on the water, before the crowds and the wind'}
           value={draft.tagline}
           maxLength={120}
           onChange={(event) => patch({ tagline: event.target.value })}
         />
       </Field>
 
-      <Field label="Category" description="Drives storefront filters and the reporting rollup.">
+      <Field
+        label="Category"
+        description={
+          dining
+            ? 'Dining switches the wizard to tables, covers, menus and services.'
+            : 'Drives storefront filters and the reporting rollup. Pick Dining for restaurant fields.'
+        }
+      >
         <Select
           value={draft.category}
-          onValueChange={(value) => patch({ category: value as VerticalKey })}
+          onValueChange={(value) => patch(withCategory(draft, value as VerticalKey))}
         >
           <SelectTrigger aria-label="Category">
             <SelectValue />
@@ -1056,6 +1310,26 @@ function BasicsStep({ draft, patch, errors }: StepProps) {
         </Select>
       </Field>
 
+      {dining ? (
+        <DiningBasicsFields
+          dining={draft.dining}
+          onChange={(next) => patch({ dining: next })}
+          errors={errors}
+          durationMinutes={draft.durationMinutes}
+          maxCapacity={draft.maxCapacity}
+          onDuration={(durationMinutes) => patch({ durationMinutes })}
+          onCapacity={(maxCapacity) => patch({ maxCapacity, schedule: { ...draft.schedule, capacity: maxCapacity } })}
+        />
+      ) : (
+        <TourBasicsFields draft={draft} patch={patch} errors={errors} />
+      )}
+    </div>
+  )
+}
+
+function TourBasicsFields({ draft, patch, errors }: StepProps) {
+  return (
+    <>
       <fieldset>
         <legend className="text-[0.8125rem] font-medium">Difficulty</legend>
         <p className="mt-0.5 mb-2.5 text-xs text-muted">
@@ -1146,11 +1420,45 @@ function BasicsStep({ draft, patch, errors }: StepProps) {
           </button>
         ))}
       </div>
-    </div>
+    </>
   )
 }
 
+/** Field copy per mode: a restaurant reads "menu" where a tour reads "included". */
+const DESCRIPTION_COPY = {
+  tour: {
+    descriptionHelp: 'Two or three short paragraphs. Lead with what the guest will actually see and feel.',
+    descriptionPlaceholder: 'We leave the harbour before sunrise, when the water inside the crater is still glass…',
+    highlightPlaceholder: 'Glass-flat water and the best visibility of the day',
+    included: 'Included',
+    includedPlaceholder: 'Snorkel gear and wetsuit',
+    excludedPlaceholder: 'Gratuity',
+    requirements: 'Requirements',
+    requirementsHelp: 'Shown at checkout and repeated in the confirmation email.',
+    requirementsPlaceholder: 'Comfortable swimming in open water',
+    venue: 'Meeting point',
+    venueHelp: 'Exact enough that a guest with no local knowledge finds it in the dark.',
+    venuePlaceholder: 'Māʻalaea Harbor, Slip 42 — park in the public lot and walk to the far end of the pier.',
+  },
+  dining: {
+    descriptionHelp: 'Two or three short paragraphs. The food first, then the room, then the evening.',
+    descriptionPlaceholder: 'Seven courses built around the morning catch, served on the lower terrace as the light turns…',
+    highlightPlaceholder: 'Caldera-edge terrace with every table facing west',
+    included: 'On the menu and included',
+    includedPlaceholder: 'Seven-course tasting menu with bread and amuse-bouche',
+    excludedPlaceholder: 'Drinks and wine pairing',
+    requirements: 'Good to know',
+    requirementsHelp: 'House rules shown at checkout and repeated in the confirmation email.',
+    requirementsPlaceholder: 'Tables are held for 15 minutes past the reservation time',
+    venue: 'Venue and arrival',
+    venueHelp: 'The address, the entrance to use, and where to park or be dropped off.',
+    venuePlaceholder: 'Nikolaou Nomikou 24, Oia — take the outside steps down to the lower terrace; taxis drop at the top of the lane.',
+  },
+} as const
+
 function DescriptionStep({ draft, patch, errors }: StepProps) {
+  const dining = isDining(draft)
+  const copy = dining ? DESCRIPTION_COPY.dining : DESCRIPTION_COPY.tour
   return (
     <div className="flex flex-col gap-5">
       <Field
@@ -1158,12 +1466,12 @@ function DescriptionStep({ draft, patch, errors }: StepProps) {
         required
         error={errors.description}
         hint={`${draft.description.trim().length} characters`}
-        description="Two or three short paragraphs. Lead with what the guest will actually see and feel."
+        description={copy.descriptionHelp}
       >
         <Textarea
           rows={7}
           value={draft.description}
-          placeholder="We leave the harbour before sunrise, when the water inside the crater is still glass…"
+          placeholder={copy.descriptionPlaceholder}
           onChange={(event) => patch({ description: event.target.value })}
         />
       </Field>
@@ -1173,16 +1481,16 @@ function DescriptionStep({ draft, patch, errors }: StepProps) {
         description="Three to five bullets, shown directly under the price."
         items={draft.highlights}
         onChange={(highlights) => patch({ highlights })}
-        placeholder="Glass-flat water and the best visibility of the day"
+        placeholder={copy.highlightPlaceholder}
         error={errors.highlights}
       />
 
       <div className="grid gap-5 sm:grid-cols-2">
         <ListEditor
-          legend="Included"
+          legend={copy.included}
           items={draft.included}
           onChange={(included) => patch({ included })}
-          placeholder="Snorkel gear and wetsuit"
+          placeholder={copy.includedPlaceholder}
           error={errors.included}
         />
         <ListEditor
@@ -1190,29 +1498,26 @@ function DescriptionStep({ draft, patch, errors }: StepProps) {
           tone="negative"
           items={draft.excluded}
           onChange={(excluded) => patch({ excluded })}
-          placeholder="Gratuity"
+          placeholder={copy.excludedPlaceholder}
         />
       </div>
 
+      {dining ? <DiningDietaryFields dining={draft.dining} onChange={(next) => patch({ dining: next })} /> : null}
+
       <ListEditor
-        legend="Requirements"
+        legend={copy.requirements}
         tone="warning"
-        description="Shown at checkout and repeated in the confirmation email."
+        description={copy.requirementsHelp}
         items={draft.requirements}
         onChange={(requirements) => patch({ requirements })}
-        placeholder="Comfortable swimming in open water"
+        placeholder={copy.requirementsPlaceholder}
       />
 
-      <Field
-        label="Meeting point"
-        required
-        error={errors.meetingPoint}
-        description="Exact enough that a guest with no local knowledge finds it in the dark."
-      >
+      <Field label={copy.venue} required error={errors.meetingPoint} description={copy.venueHelp}>
         <Textarea
           rows={3}
           value={draft.meetingPoint}
-          placeholder="Māʻalaea Harbor, Slip 42 — park in the public lot and walk to the far end of the pier."
+          placeholder={copy.venuePlaceholder}
           onChange={(event) => patch({ meetingPoint: event.target.value })}
         />
       </Field>
@@ -1242,40 +1547,80 @@ function ReviewStep({
   const generated = previewDepartures(draft.schedule, nowIso, 14)
   const departures = generated.reduce((acc, day) => acc + day.times.length, 0)
   const seats = generated.reduce((acc, day) => acc + day.seats, 0)
+  const dining = isDining(draft)
+  const d = draft.dining
 
-  const rows: { label: string; value: React.ReactNode; step: number }[] = [
-    { label: 'Name', value: draft.name, step: 0 },
-    { label: 'Category', value: CATEGORY_OPTIONS.find((c) => c.value === draft.category)?.label, step: 0 },
-    { label: 'Difficulty', value: draft.difficulty, step: 0 },
-    { label: 'Duration', value: formatDuration(draft.durationMinutes), step: 0 },
-    {
-      label: 'Capacity',
-      value: `${draft.minParticipants}–${draft.maxCapacity} guests · ages ${draft.minAge}+`,
-      step: 0,
-    },
-    { label: 'Highlights', value: `${draft.highlights.filter(Boolean).length} bullets`, step: 1 },
-    { label: 'Meeting point', value: draft.meetingPoint, step: 1 },
-    { label: 'Media', value: `${draft.media.length} ${pluralize(draft.media.length, 'image')}`, step: 2 },
-    {
-      label: 'Pricing',
-      value: `${priced.length} ${pluralize(priced.length, 'tier')} from ${formatCurrency(fromPrice, currency)} · ${draft.addOns.length} ${pluralize(draft.addOns.length, 'add-on')}`,
-      step: 3,
-    },
-    {
-      label: 'Schedule',
-      value: `${draft.schedule.startTimes.length} ${pluralize(draft.schedule.startTimes.length, 'time')} on ${draft.schedule.weekdays.length} ${pluralize(draft.schedule.weekdays.length, 'day')} · ${draft.schedule.capacity} seats each`,
-      step: 4,
-    },
-  ]
+  const securing =
+    d.bookingMode === 'deposit'
+      ? `Deposit ${formatCurrency(d.depositPerGuest, currency)} per guest · no-show fee ${formatCurrency(d.noShowFeePerGuest, currency)}`
+      : d.bookingMode === 'card_hold'
+        ? `Card hold · no-show fee ${formatCurrency(d.noShowFeePerGuest, currency)} per guest`
+        : 'Prepaid menu at booking'
+
+  const rows: { label: string; value: React.ReactNode; step: number }[] = dining
+    ? [
+        { label: 'Name', value: draft.name, step: 0 },
+        { label: 'Format', value: `${formatLabel(FORMAT_OPTIONS, d.format)}${d.cuisine ? ` · ${d.cuisine}` : ''}`, step: 0 },
+        { label: 'Table time', value: formatDuration(draft.durationMinutes), step: 0 },
+        { label: 'Covers', value: `${draft.maxCapacity} per sitting · parties of ${d.minPartySize}–${d.maxPartySize}`, step: 0 },
+        { label: 'Seating', value: d.seating.length > 0 ? `${d.seating.length} ${pluralize(d.seating.length, 'area')}` : '', step: 0 },
+        { label: 'House rules', value: `${formatLabel(DRESS_OPTIONS, d.dressCode)} · ${formatLabel(CHILDREN_OPTIONS, d.children)}`, step: 0 },
+        { label: 'Dietary', value: `${d.dietary.length} ${pluralize(d.dietary.length, 'option')}${d.askAllergies ? ' · allergies asked at booking' : ''}`, step: 1 },
+        { label: 'Venue', value: draft.meetingPoint, step: 1 },
+        { label: 'Media', value: `${draft.media.length} ${pluralize(draft.media.length, 'image')}`, step: 2 },
+        { label: 'Securing', value: securing, step: 3 },
+        {
+          label: 'Menus',
+          value: priced.length === 0 ? 'À la carte on the night' : `${priced.length} ${pluralize(priced.length, 'menu')} from ${formatCurrency(fromPrice, currency)} per guest · ${draft.addOns.length} ${pluralize(draft.addOns.length, 'extra')}`,
+          step: 3,
+        },
+        {
+          label: 'Services',
+          value: `${d.services.length} ${pluralize(d.services.length, 'service')} · ${draft.schedule.startTimes.length} ${pluralize(draft.schedule.startTimes.length, 'sitting')} a day on ${draft.schedule.weekdays.length} ${pluralize(draft.schedule.weekdays.length, 'day')} · ${draft.schedule.capacity} covers each`,
+          step: 4,
+        },
+      ]
+    : [
+        { label: 'Name', value: draft.name, step: 0 },
+        { label: 'Category', value: CATEGORY_OPTIONS.find((c) => c.value === draft.category)?.label, step: 0 },
+        { label: 'Difficulty', value: draft.difficulty.charAt(0).toUpperCase() + draft.difficulty.slice(1), step: 0 },
+        { label: 'Duration', value: formatDuration(draft.durationMinutes), step: 0 },
+        {
+          label: 'Capacity',
+          value: `${draft.minParticipants}–${draft.maxCapacity} guests · ages ${draft.minAge}+`,
+          step: 0,
+        },
+        { label: 'Highlights', value: `${draft.highlights.filter(Boolean).length} bullets`, step: 1 },
+        { label: 'Meeting point', value: draft.meetingPoint, step: 1 },
+        { label: 'Media', value: `${draft.media.length} ${pluralize(draft.media.length, 'image')}`, step: 2 },
+        {
+          label: 'Pricing',
+          value: `${priced.length} ${pluralize(priced.length, 'tier')} from ${formatCurrency(fromPrice, currency)} · ${draft.addOns.length} ${pluralize(draft.addOns.length, 'add-on')}`,
+          step: 3,
+        },
+        {
+          label: 'Schedule',
+          value: `${draft.schedule.startTimes.length} ${pluralize(draft.schedule.startTimes.length, 'time')} on ${draft.schedule.weekdays.length} ${pluralize(draft.schedule.weekdays.length, 'day')} · ${draft.schedule.capacity} seats each`,
+          step: 4,
+        },
+      ]
+
+  const stats = dining
+    ? [
+        { label: 'Sittings · next 14 days', value: departures.toString(), icon: CalendarClock },
+        { label: 'Covers on sale', value: seats.toString(), icon: Users },
+        { label: priced.length === 0 ? 'Securing' : 'Menu from', value: priced.length === 0 ? formatLabel(BOOKING_MODE_OPTIONS, d.bookingMode) : formatCurrency(fromPrice, currency), icon: Tag },
+      ]
+    : [
+        { label: 'Departures · next 14 days', value: departures.toString(), icon: CalendarClock },
+        { label: 'Seats on sale', value: seats.toString(), icon: Users },
+        { label: 'Lead price', value: formatCurrency(fromPrice, currency), icon: Tag },
+      ]
 
   return (
     <div className="flex flex-col gap-5">
       <div className="grid gap-4 sm:grid-cols-3">
-        {[
-          { label: 'Departures · next 14 days', value: departures.toString(), icon: CalendarClock },
-          { label: 'Seats on sale', value: seats.toString(), icon: Users },
-          { label: 'Lead price', value: formatCurrency(fromPrice, currency), icon: Tag },
-        ].map((item) => {
+        {stats.map((item) => {
           const Icon = item.icon
           return (
             <div key={item.label} className="rounded-xl border border-line bg-surface p-4">
@@ -1298,7 +1643,7 @@ function ReviewStep({
                 className="grid grid-cols-[5.5rem_minmax(0,1fr)_auto] items-start gap-3 bg-surface px-4 py-3 sm:grid-cols-[8rem_minmax(0,1fr)_auto]"
               >
                 <dt className="text-xs text-subtle">{row.label}</dt>
-                <dd className="min-w-0 text-[0.8125rem] break-words text-foreground capitalize">
+                <dd className="min-w-0 text-[0.8125rem] break-words text-foreground">
                   {row.value || <span className="text-faint">Not set</span>}
                 </dd>
                 <button
@@ -1349,7 +1694,9 @@ function ReviewStep({
             <span className="min-w-0">
               <span className="block text-[0.8125rem] font-medium">Free cancellation window</span>
               <span className="block text-xs text-muted">
-                Guests get a full refund up to this many hours before departure.
+                {dining
+                  ? 'Guests get their deposit back up to this many hours before the sitting.'
+                  : 'Guests get a full refund up to this many hours before departure.'}
               </span>
             </span>
             <div className="flex gap-1.5">
@@ -1382,7 +1729,7 @@ function ReviewStep({
           <span className="font-medium text-foreground">
             {tenantSlug}.ezrapro.com/{slugify(draft.name) || 'new-activity'}
           </span>
-          . Departures are generated from your schedule rule for the next 180 days and appear on the
+          . {dining ? 'Sittings are generated from your services' : 'Departures are generated from your schedule rule'} for the next 180 days and appear on the
           calendar straight away.
         </p>
       </div>
