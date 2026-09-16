@@ -21,11 +21,19 @@ import type { CurrencyCode } from '@/types'
    looks the same in dark mode.
    ========================================================================== */
 
-/** Orange corner, pink through the middle, violet everywhere else. */
+/**
+ * Orange corner, pink through the middle, violet everywhere else.
+ *
+ * Every layer interpolates in OKLab and fades along an eased run of stops, so
+ * the washes melt into the violet body instead of ending at a visible edge.
+ */
+const ORANGE = 'color-mix(in oklab, var(--aurora-orange) 88%, var(--color-reef-800))'
+const PINK = 'var(--aurora-pink)'
+const wash = (color: string, alpha: number) => `color-mix(in oklab, ${color} ${Math.round(alpha * 100)}%, transparent)`
 const GROUND = [
-  'radial-gradient(110% 90% at 6% 4%, color-mix(in oklab, var(--aurora-orange) 88%, var(--color-reef-800)) 0%, color-mix(in oklab, var(--aurora-orange) 55%, var(--aurora-pink)) 18%, color-mix(in oklab, var(--aurora-pink) 50%, transparent) 40%, transparent 60%)',
-  'radial-gradient(70% 60% at 42% 58%, color-mix(in oklab, var(--aurora-pink) 34%, transparent) 0%, transparent 70%)',
-  'linear-gradient(160deg, var(--color-reef-600) 0%, var(--color-reef-700) 50%, var(--color-reef-800) 100%)',
+  `radial-gradient(in oklab 115% 95% at 6% 4%, ${ORANGE} 0%, ${wash(ORANGE, 0.92)} 10%, color-mix(in oklab, ${ORANGE} 50%, ${PINK}) 22%, ${wash(PINK, 0.7)} 34%, ${wash(PINK, 0.45)} 46%, ${wash(PINK, 0.24)} 58%, ${wash(PINK, 0.1)} 70%, ${wash(PINK, 0.03)} 82%, transparent 94%)`,
+  `radial-gradient(in oklab 75% 65% at 42% 58%, ${wash(PINK, 0.3)} 0%, ${wash(PINK, 0.2)} 25%, ${wash(PINK, 0.1)} 50%, ${wash(PINK, 0.03)} 75%, transparent 100%)`,
+  'linear-gradient(in oklab 160deg, var(--color-reef-600) 0%, color-mix(in oklab, var(--color-reef-600) 50%, var(--color-reef-700)) 25%, var(--color-reef-700) 50%, color-mix(in oklab, var(--color-reef-700) 50%, var(--color-reef-800)) 75%, var(--color-reef-800) 100%)',
 ].join(', ')
 /** Field order follows CardAurora's dark layout: top-right glow, bottom-left, bottom-right. */
 const FIELDS = ['var(--aurora-pink)', 'var(--aurora-orange)', 'var(--color-reef-400)']

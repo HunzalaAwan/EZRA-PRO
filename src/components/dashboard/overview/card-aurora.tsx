@@ -103,7 +103,7 @@ export function CardAurora({
             top: field.top,
             background: field.color,
             opacity: Math.min(1, field.opacity * intensity),
-            filter: `blur(${tone === 'dark' ? 56 : 44}px)`,
+            filter: `blur(${tone === 'dark' ? 72 : 52}px)`,
           }}
           animate={
             moving
@@ -125,8 +125,10 @@ export function CardAurora({
             style={{
               background:
                 `conic-gradient(from 0deg, transparent 0deg, color-mix(in oklab, ${ringColors[0]} ${ringMix[0]}%, transparent) 110deg, transparent 220deg, color-mix(in oklab, ${ringColors[1]} ${ringMix[1]}%, transparent) 300deg, transparent 360deg)`,
-              WebkitMask: 'radial-gradient(circle, transparent 58%, #000 59.5%)',
-              mask: 'radial-gradient(circle, transparent 58%, #000 59.5%)',
+              /* A feathered annulus: the ring fades in and out instead of cutting. */
+              WebkitMask: 'radial-gradient(circle, transparent 50%, rgb(0 0 0 / 0.55) 57%, #000 63%, #000 70%, rgb(0 0 0 / 0.5) 76%, transparent 84%)',
+              mask: 'radial-gradient(circle, transparent 50%, rgb(0 0 0 / 0.55) 57%, #000 63%, #000 70%, rgb(0 0 0 / 0.5) 76%, transparent 84%)',
+              filter: 'blur(6px)',
             }}
             animate={moving ? { rotate: 360 } : undefined}
             transition={{ duration: 38, repeat: Infinity, ease: 'linear' }}
