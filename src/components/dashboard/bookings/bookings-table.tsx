@@ -433,8 +433,8 @@ type Density = 'comfortable' | 'compact'
 function dense(columns: DataTableColumn<BookingRow>[]): DataTableColumn<BookingRow>[] {
   return columns.map((column) => ({
     ...column,
-    headerClassName: cn('px-3', column.headerClassName),
-    cellClassName: cn('px-3', column.cellClassName),
+    headerClassName: cn('px-2.5', column.headerClassName),
+    cellClassName: cn('px-2.5', column.cellClassName),
   }))
 }
 
@@ -518,29 +518,43 @@ export function BookingsTable({
         id: 'guest',
         header: 'Guest',
         sortable: true,
-        cell: ({ customer, booking }) => {
+        cell: ({ customer }) => {
           const name = `${customer.firstName} ${customer.lastName}`
           return (
-            <span className="flex min-w-[11rem] max-w-[13.5rem] items-center gap-2.5">
+            <span className="flex min-w-[8.5rem] max-w-[13rem] items-center gap-2.5">
               <Avatar name={name} src={customer.avatarUrl} size={density === 'compact' ? 'xs' : 'sm'} />
-              <span className="min-w-0 leading-tight">
-                <span className="flex items-center gap-1.5">
-                  <span className="truncate text-[0.8125rem] font-semibold text-foreground">{name}</span>
-                  {customer.segment === 'vip' ? (
-                    <Badge variant="accent" size="sm">
-                      VIP
-                    </Badge>
-                  ) : null}
-                </span>
-                <span className="block truncate text-[0.6875rem] text-subtle">
-                  <span className="font-mono font-medium tracking-tight text-muted">{booking.reference}</span>
-                  <span className="text-faint"> · </span>
-                  {customer.email}
-                </span>
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="truncate text-[0.8125rem] font-semibold text-foreground">{name}</span>
+                {customer.segment === 'vip' ? (
+                  <Badge variant="accent" size="sm">
+                    VIP
+                  </Badge>
+                ) : null}
               </span>
             </span>
           )
         },
+      },
+      {
+        id: 'reference',
+        header: 'Reference',
+        sortable: true,
+        hideBelow: 'xl',
+        width: '6.5rem',
+        cellClassName: 'whitespace-nowrap',
+        cell: ({ booking }) => (
+          <span className="font-mono text-[0.75rem] font-medium tracking-tight text-muted">{booking.reference}</span>
+        ),
+      },
+      {
+        id: 'email',
+        header: 'Email',
+        hideBelow: '2xl',
+        cell: ({ customer }) => (
+          <span className="block min-w-[8rem] max-w-[12rem] truncate text-xs text-muted" title={customer.email}>
+            {customer.email}
+          </span>
+        ),
       },
       {
         id: 'activity',
@@ -548,20 +562,16 @@ export function BookingsTable({
         sortable: true,
         hideBelow: 'lg',
         cell: ({ activity, departure }) => (
-          <span className="flex min-w-[11rem] max-w-[16rem] items-center gap-2.5">
+          <span className="flex min-w-[9rem] max-w-[16rem] items-center gap-2.5">
             <span
               aria-hidden="true"
-              className="h-5 w-1 shrink-0 rounded-full"
+              className="h-4 w-1 shrink-0 rounded-full"
               style={{ background: ACTIVITY_COLOR_VAR[activity.colorKey] }}
             />
-            <span className="min-w-0 leading-tight">
-              <span className="block truncate text-[0.8125rem] font-medium text-foreground">{activity.name}</span>
-              {departure.status === 'cancelled' || departure.status === 'weather_hold' ? (
-                <StatusBadge kind="departure" status={departure.status} size="sm" showIcon={false} className="mt-0.5" />
-              ) : (
-                <span className="block truncate text-[0.6875rem] text-subtle">{activity.meetingPoint}</span>
-              )}
-            </span>
+            <span className="truncate text-[0.8125rem] font-medium text-foreground">{activity.name}</span>
+            {departure.status === 'cancelled' || departure.status === 'weather_hold' ? (
+              <StatusBadge kind="departure" status={departure.status} size="sm" showIcon={false} className="shrink-0" />
+            ) : null}
           </span>
         ),
       },
@@ -570,16 +580,14 @@ export function BookingsTable({
         header: grouped ? 'Time' : 'Departure',
         sortable: true,
         numeric: true,
-        width: grouped ? '5.5rem' : '8rem',
+        width: grouped ? '7rem' : '9rem',
         defaultSortDir: 'desc',
         cell: ({ departure, activity }) => (
-          <span className="flex flex-col leading-tight whitespace-nowrap">
-            <span className="text-[0.8125rem] font-semibold text-foreground tabular-nums">
+          <span className="whitespace-nowrap text-[0.8125rem] tabular-nums">
+            <span className="font-semibold text-foreground">
               {grouped ? formatTime(departure.startsAt) : formatDateShort(departure.startsAt)}
             </span>
-            <span className="text-[0.6875rem] text-subtle tabular-nums">
-              {grouped ? formatDuration(activity.durationMinutes) : formatTime(departure.startsAt)}
-            </span>
+            <span className="text-subtle"> · {grouped ? formatDuration(activity.durationMinutes) : formatTime(departure.startsAt)}</span>
           </span>
         ),
       },
@@ -600,13 +608,6 @@ export function BookingsTable({
         ),
       },
       {
-        id: 'channel',
-        header: 'Channel',
-        hideBelow: '2xl',
-        width: '6rem',
-        cell: ({ booking }) => <ChannelBadge channel={booking.channel} short />,
-      },
-      {
         id: 'total',
         header: 'Payment',
         sortable: true,
@@ -621,7 +622,7 @@ export function BookingsTable({
         id: 'status',
         header: 'Status',
         sortable: true,
-        width: '6.5rem',
+        width: '6rem',
         cell: ({ booking }) => <StatusBadge kind="booking" status={booking.status} size="sm" />,
       },
       {
