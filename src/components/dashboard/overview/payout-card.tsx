@@ -27,16 +27,16 @@ import type { CurrencyCode } from '@/types'
  * Every layer interpolates in OKLab and fades along an eased run of stops, so
  * the washes melt into the violet body instead of ending at a visible edge.
  */
-const ORANGE = 'color-mix(in oklab, var(--aurora-orange) 76%, var(--color-reef-900))'
-const PINK = 'color-mix(in oklab, var(--aurora-pink) 80%, var(--color-reef-900))'
+const ORANGE = 'color-mix(in oklab, var(--aurora-orange) 88%, var(--color-reef-800))'
+const PINK = 'var(--aurora-pink)'
 const wash = (color: string, alpha: number) => `color-mix(in oklab, ${color} ${Math.round(alpha * 100)}%, transparent)`
 const GROUND = [
   `radial-gradient(in oklab 115% 95% at 6% 4%, ${ORANGE} 0%, ${wash(ORANGE, 0.92)} 10%, color-mix(in oklab, ${ORANGE} 50%, ${PINK}) 22%, ${wash(PINK, 0.7)} 34%, ${wash(PINK, 0.45)} 46%, ${wash(PINK, 0.24)} 58%, ${wash(PINK, 0.1)} 70%, ${wash(PINK, 0.03)} 82%, transparent 94%)`,
-  `radial-gradient(in oklab 75% 65% at 42% 58%, ${wash(PINK, 0.3)} 0%, ${wash(PINK, 0.2)} 25%, ${wash(PINK, 0.1)} 50%, ${wash(PINK, 0.03)} 75%, transparent 100%)`,
-  'linear-gradient(in oklab 160deg, var(--color-reef-700) 0%, color-mix(in oklab, var(--color-reef-700) 50%, var(--color-reef-800)) 25%, var(--color-reef-800) 50%, color-mix(in oklab, var(--color-reef-800) 50%, var(--color-reef-900)) 75%, var(--color-reef-900) 100%)',
+  `radial-gradient(in oklab 75% 65% at 42% 58%, ${wash(PINK, 0.45)} 0%, ${wash(PINK, 0.3)} 25%, ${wash(PINK, 0.15)} 50%, ${wash(PINK, 0.05)} 75%, transparent 100%)`,
+  'linear-gradient(in oklab 160deg, var(--color-reef-500) 0%, color-mix(in oklab, var(--color-reef-500) 50%, var(--color-reef-600)) 25%, var(--color-reef-600) 50%, color-mix(in oklab, var(--color-reef-600) 50%, var(--color-reef-700)) 75%, var(--color-reef-700) 100%)',
 ].join(', ')
 /** Field order follows CardAurora's dark layout: top-right glow, bottom-left, bottom-right. */
-const FIELDS = ['var(--aurora-pink)', 'var(--aurora-orange)', 'var(--color-reef-500)']
+const FIELDS = ['var(--aurora-pink)', 'var(--aurora-orange)', 'var(--color-reef-400)']
 const RING: [string, string] = ['var(--aurora-pink)', 'var(--aurora-orange)']
 
 export interface PayoutCardProps {
@@ -69,11 +69,11 @@ export function PayoutCard({ balance, currency, className }: PayoutCardProps) {
     <section
       aria-label="Payouts"
       className={cn(
-        'relative isolate flex flex-col overflow-hidden rounded-2xl bg-reef-900 p-5 text-white shadow-md sm:p-6',
+        'relative isolate flex flex-col overflow-hidden rounded-2xl bg-reef-700 p-5 text-white shadow-md sm:p-6',
         className,
       )}
     >
-      <CardAurora tone="dark" fields={3} colors={FIELDS} ground={GROUND} ringColors={RING} intensity={0.7} />
+      <CardAurora tone="dark" fields={3} colors={FIELDS} ground={GROUND} ringColors={RING} />
 
       {/* ---------- what lands next ---------- */}
       <div className="flex items-start justify-between gap-4">
