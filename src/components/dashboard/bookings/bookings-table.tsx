@@ -549,7 +549,7 @@ export function BookingsTable({
       {
         id: 'email',
         header: 'Email',
-        hideBelow: '2xl',
+        hideBelow: 'wide',
         cell: ({ customer }) => (
           <span className="block min-w-[8rem] max-w-[12rem] truncate text-xs text-muted" title={customer.email}>
             {customer.email}
