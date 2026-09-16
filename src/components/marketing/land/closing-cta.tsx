@@ -16,11 +16,11 @@ import { cn } from '@/lib/utils'
    ========================================================================== */
 
 const COLLAGE: { photo: Photo; rotate: string; speed: number; offset: string }[] = [
-  { photo: PHOTOS.foodMarket, rotate: '-rotate-3', speed: 0.5, offset: 'mt-10' },
-  { photo: PHOTOS.cookingClass, rotate: 'rotate-2', speed: 0.9, offset: 'mt-0' },
-  { photo: PHOTOS.wineCellar, rotate: '-rotate-1', speed: 0.7, offset: 'mt-14' },
-  { photo: PHOTOS.yogaStudio, rotate: 'rotate-3', speed: 1.1, offset: 'mt-4' },
-  { photo: PHOTOS.escapeRoom, rotate: '-rotate-2', speed: 0.6, offset: 'mt-12' },
+  { photo: PHOTOS.produceMarket, rotate: '-rotate-3', speed: 0.5, offset: 'mt-10' },
+  { photo: PHOTOS.kitchenClass, rotate: 'rotate-2', speed: 0.9, offset: 'mt-0' },
+  { photo: PHOTOS.wineToast, rotate: '-rotate-1', speed: 0.7, offset: 'mt-14' },
+  { photo: PHOTOS.sunsetYoga, rotate: 'rotate-3', speed: 1.1, offset: 'mt-4' },
+  { photo: PHOTOS.confettiCrowd, rotate: '-rotate-2', speed: 0.6, offset: 'mt-12' },
 ]
 
 const PROMISES = ['Free migration, done by us', 'No card to start', 'Cancel any month']
@@ -44,7 +44,7 @@ export function ClosingCta({ className }: { className?: string }) {
             key={item.photo.id}
             direction="up"
             distance={28}
-            className={cn('w-[30vw] max-w-[13rem] shrink-0 sm:w-[18vw]', i > 2 && 'hidden sm:block', item.offset)}
+            className={cn('w-[30vw] max-w-[15rem] shrink-0 sm:w-[19vw]', i > 2 && 'hidden sm:block', item.offset)}
           >
             <Parallax speed={item.speed} distance={40}>
               <figure
@@ -54,10 +54,10 @@ export function ClosingCta({ className }: { className?: string }) {
                 )}
               >
                 <Image
-                  src={photoUrl(item.photo, 640)}
+                  src={photoUrl(item.photo, 960, 82)}
                   alt=""
                   fill
-                  sizes="(min-width: 640px) 18vw, 30vw"
+                  sizes="(min-width: 640px) 19vw, 30vw"
                   className="object-cover"
                   style={{ objectPosition: item.photo.focus }}
                 />

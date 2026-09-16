@@ -200,35 +200,36 @@ export const PHOTOS = {
     alt: 'A concert crowd with raised hands facing a stage lit in orange',
     focus: '50% 50%',
   },
-  /** A yoga class sitting on red mats, laughing. */
-  yogaStudio: {
-    id: 'photo-1671581084718-c4c04fc00250',
-    alt: 'A yoga class sitting on red mats in a bright studio, everyone laughing',
+  /* ---- the closing collage: five trades, five sharp frames ---- */
+  /** Two glasses of red wine raised in a toast at a tasting. */
+  wineToast: {
+    id: 'photo-1510812431401-41d2bd2722f3',
+    alt: 'Two glasses of red wine raised in a toast at a tasting',
     focus: '50% 45%',
   },
-  /** Six bottles lined up on a wooden table for a tasting. */
-  wineCellar: {
-    id: 'photo-1776763019245-1245618be4ee',
-    alt: 'Six bottles of wine lined up on a wooden table for a tasting',
-    focus: '50% 55%',
+  /** Two people cooking together at a bright kitchen counter. */
+  kitchenClass: {
+    id: 'photo-1556910103-1c02745aae4d',
+    alt: 'Two people laughing as they cook together at a bright kitchen counter',
+    focus: '55% 45%',
   },
-  /** Hands chopping vegetables side by side at a cooking class. */
-  cookingClass: {
-    id: 'photo-1683105555403-4c4cae4e2298',
-    alt: 'Hands chopping vegetables side by side at a cooking-class counter',
+  /** A yoga pose in silhouette against a sunset sky. */
+  sunsetYoga: {
+    id: 'photo-1544367567-0f2fcb009e0b',
+    alt: 'A yoga pose in silhouette against a sunset sky',
     focus: '50% 50%',
   },
-  /** A rainy old-town street, people gathered under café awnings. */
-  foodMarket: {
-    id: 'photo-1769316964872-9727a69b4ce0',
-    alt: 'A rainy old-town street with people gathered under café awnings',
-    focus: '50% 55%',
-  },
-  /** Four friends at an escape-room counter under a neon puzzle sign. */
-  escapeRoom: {
-    id: 'photo-1551911729-e6d432b63f73',
-    alt: 'Four friends at an escape-room counter under a neon puzzle sign',
+  /** A produce market stall piled with vegetables and fruit. */
+  produceMarket: {
+    id: 'photo-1488459716781-31db52582fe9',
+    alt: 'A produce market stall piled high with vegetables and fruit',
     focus: '50% 50%',
+  },
+  /** Confetti falling over a crowd at a night event. */
+  confettiCrowd: {
+    id: 'photo-1492684223066-81342ee5ff30',
+    alt: 'Confetti falling over a crowd at a night event',
+    focus: '50% 45%',
   },
 } as const satisfies Record<string, Photo>
 
