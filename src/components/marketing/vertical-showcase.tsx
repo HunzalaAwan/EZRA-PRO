@@ -59,10 +59,10 @@ const VERTICAL_ICONS: Record<string, LucideIcon> = {
 
 /** Decorative tint per vertical — brand ramp, not a semantic token. */
 const ACCENT_VAR: Record<Vertical['accent'], string> = {
-  lagoon: 'var(--color-lagoon-500)',
-  coral: 'var(--color-coral-500)',
-  sunset: 'var(--color-sunset-500)',
-  reef: 'var(--color-reef-500)',
+  lagoon: 'var(--info)',
+  coral: 'var(--accent)',
+  sunset: 'var(--accent)',
+  reef: 'var(--primary)',
 }
 
 const ENTITIES: Record<string, string> = {

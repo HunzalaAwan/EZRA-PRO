@@ -26,6 +26,8 @@ export interface HeroBackdropProps {
   /** Pointer offset from the hero, −0.5…0.5 on each axis, already spring-smoothed. */
   tiltX: MotionValue<number>
   tiltY: MotionValue<number>
+  /** The floating pieces of product. Defaults to the landing page's set. */
+  tokens?: BackdropToken[]
   className?: string
 }
 
@@ -67,7 +69,7 @@ function Orbit({
    Floating tokens — small, honest pieces of the product drawn as vectors.
    -------------------------------------------------------------------------- */
 
-interface Token {
+export interface BackdropToken {
   key: string
   className: string
   depth: number
@@ -91,7 +93,7 @@ function SeatMap() {
   )
 }
 
-const TOKENS: Token[] = [
+const TOKENS: BackdropToken[] = [
   {
     key: 'slot',
     className: 'left-[47%] top-[9%]',
@@ -168,7 +170,7 @@ const TOKENS: Token[] = [
   },
 ]
 
-function FloatingToken({ token, tiltX, tiltY, moving }: { token: Token; tiltX: MotionValue<number>; tiltY: MotionValue<number>; moving: boolean }) {
+function FloatingToken({ token, tiltX, tiltY, moving }: { token: BackdropToken; tiltX: MotionValue<number>; tiltY: MotionValue<number>; moving: boolean }) {
   const x = useTransform(tiltX, (v) => v * -34 * token.depth)
   const y = useTransform(tiltY, (v) => v * -24 * token.depth)
   const rotateY = useTransform(tiltX, (v) => v * 10)
@@ -191,7 +193,7 @@ function FloatingToken({ token, tiltX, tiltY, moving }: { token: Token; tiltX: M
    The backdrop
    -------------------------------------------------------------------------- */
 
-export function HeroBackdrop({ tiltX, tiltY, className }: HeroBackdropProps) {
+export function HeroBackdrop({ tiltX, tiltY, tokens = TOKENS, className }: HeroBackdropProps) {
   const reduce = useReducedMotionSafe()
   const moving = !reduce
 
@@ -223,7 +225,7 @@ export function HeroBackdrop({ tiltX, tiltY, className }: HeroBackdropProps) {
       </motion.div>
 
       {/* ---------- tokens ---------- */}
-      {TOKENS.map((token) => (
+      {tokens.map((token) => (
         <FloatingToken key={token.key} token={token} tiltX={tiltX} tiltY={tiltY} moving={moving} />
       ))}
     </div>
