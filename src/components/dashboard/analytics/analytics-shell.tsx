@@ -29,6 +29,11 @@ import { FunnelSection } from './funnel-section'
 import { RetentionSection } from './retention-section'
 import { InsightsBoard } from './insights-board'
 import { ExportMenu } from './export-menu'
+import { RevenueSummaryCard, OccupancyGaugeCard, TopChannelsCard } from './overview-cards'
+import { AnalyticsFilterBar } from './analytics-filters'
+import { ChannelMixCard } from './channel-mix-card'
+import { TopExperiencesTable } from './top-experiences-table'
+import { RevenueAreaChart, type RevenueMetric } from '@/components/charts/revenue-area-chart'
 
 import { CURRENT_TENANT, CURRENT_USER, NOW, TODAY_KEY } from '@/lib/demo-core'
 import { fetchAnalytics } from '@/lib/actions/dashboard'
@@ -55,11 +60,6 @@ const TABS: { value: TabKey; label: string; icon: typeof LayoutDashboard }[] = [
   { value: 'occupancy', label: 'Occupancy', icon: Gauge },
   { value: 'funnel', label: 'Funnel', icon: Filter },
   { value: 'retention', label: 'Retention', icon: Users },
-]
-
-const COMPARISON_OPTIONS: { value: ComparisonMode; label: string }[] = [
-  { value: 'previous', label: 'vs previous' },
-  { value: 'year', label: 'vs last year' },
 ]
 
 /* `today` is deliberately absent — a one-day analytics range is a manifest, not a trend. */
@@ -110,6 +110,8 @@ export function AnalyticsShell({ initialSnapshot }: AnalyticsShellProps) {
     () => rangeForPreset('30d', NOW) ?? { from: TODAY_KEY, to: TODAY_KEY },
   )
   const [comparison, setComparison] = React.useState<ComparisonMode>('previous')
+  const [metric, setMetric] = React.useState<RevenueMetric>('revenue')
+  const [shadow, setShadow] = React.useState(true)
   const [tab, setTab] = React.useState<TabKey>('overview')
   const [pending, setPending] = React.useState(false)
   const [nonce, setNonce] = React.useState(0)
@@ -256,13 +258,6 @@ export function AnalyticsShell({ initialSnapshot }: AnalyticsShellProps) {
         description={`Where ${tenant.name}'s money comes from, where it leaks, and what to change next.`}
         actions={
           <>
-            <Segmented
-              size="sm"
-              label="Comparison basis"
-              value={comparison}
-              onValueChange={(next) => setComparison(next)}
-              options={COMPARISON_OPTIONS}
-            />
             <DateRangePicker
               value={range}
               preset={preset}
@@ -313,26 +308,62 @@ export function AnalyticsShell({ initialSnapshot }: AnalyticsShellProps) {
         </div>
 
         {/* ---------- KPI band — always on, whichever tab is open ---------- */}
-        <KpiGrid
-          kpis={snapshot.kpis}
-          currency={tenant.currency}
-          comparison={comparison}
-          loading={pending}
-        />
+        {tab !== 'overview' ? (
+          <KpiGrid kpis={snapshot.kpis} currency={tenant.currency} comparison={comparison} loading={pending} />
+        ) : null}
 
         {/* ---------- panels ---------- */}
         <TabsContent value="overview">
           <TabPane>
-            <div className="space-y-6">
-              {insights}
-              <div className="space-y-4">
-                <SectionLabel
-                  eyebrow="Revenue"
-                  title="What you sold"
-                  hint="Daily net revenue against the period before it — channels, occupancy, funnel and retention each have their own tab"
-                />
-                {revenue}
+            <div className="space-y-4">
+              {/* ---------- headline cards ---------- */}
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <RevenueSummaryCard points={snapshot.timeseries} currency={tenant.currency} comparison={comparison} loading={pending} />
+                <OccupancyGaugeCard occupancy={occupancy} points={snapshot.timeseries} loading={pending} />
+                <TopChannelsCard channels={snapshot.channels} loading={pending} onSeeAll={() => handleTabChange('channels')} className="md:col-span-2 xl:col-span-1" />
               </div>
+
+              {/* ---------- knobs ---------- */}
+              <AnalyticsFilterBar
+                metric={metric}
+                onMetricChange={setMetric}
+                comparison={comparison}
+                onComparisonChange={setComparison}
+                shadow={shadow}
+                onShadowChange={setShadow}
+                onReset={() => {
+                  setMetric('revenue')
+                  setComparison('previous')
+                  setShadow(true)
+                }}
+              />
+
+              {/* ---------- the chart and the mix ---------- */}
+              <div className="grid gap-4 xl:grid-cols-3">
+                <RevenueAreaChart
+                  points={snapshot.timeseries}
+                  metric={metric}
+                  currency={tenant.currency}
+                  showComparison={comparison === 'previous' && shadow}
+                  showAverage
+                  height={320}
+                  loading={pending}
+                  title={metric === 'revenue' ? 'Net revenue' : metric === 'bookings' ? 'Bookings' : metric === 'guests' ? 'Guests' : 'Occupancy'}
+                  description={
+                    comparison === 'previous' && shadow
+                      ? `${rangeLabel}, with the previous period shadowed behind it`
+                      : rangeLabel
+                  }
+                  className="xl:col-span-2"
+                />
+                <ChannelMixCard channels={snapshot.channels} currency={tenant.currency} loading={pending} onSeeAll={() => handleTabChange('channels')} />
+              </div>
+
+              {/* ---------- the products ---------- */}
+              <SectionLabel eyebrow="Products" title="What sells" hint="Every experience in the range, sortable, with the cuts that matter" />
+              <TopExperiencesTable items={snapshot.topActivities} currency={tenant.currency} rangeLabel={rangeLabel} loading={pending} />
+
+              {insights}
             </div>
           </TabPane>
         </TabsContent>
