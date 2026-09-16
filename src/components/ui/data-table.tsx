@@ -74,6 +74,11 @@ export interface DataTableProps<T> {
   ariaLabel?: string
   /** Per-row styling hook — dim cancelled rows, flag overbooked ones, etc. */
   getRowClassName?: (row: T) => string | undefined
+  /** Splits the page into sections: a header row is rendered whenever the key changes. */
+  groupBy?: (row: T) => string
+  /** Renders a section header; receives every row on the page that shares the key. */
+  renderGroupHeader?: (key: string, rows: T[]) => React.ReactNode
+  groupHeaderClassName?: string
   className?: string
   containerClassName?: string
 }
@@ -105,6 +110,9 @@ function DataTable<T>({
   caption,
   ariaLabel,
   getRowClassName,
+  groupBy,
+  renderGroupHeader,
+  groupHeaderClassName,
   className,
   containerClassName,
 }: DataTableProps<T>) {
@@ -155,6 +163,19 @@ function DataTable<T>({
   }
 
   const density = rowHeight === 'compact' ? 'compact' : 'comfortable'
+
+  const groups = React.useMemo(() => {
+    if (!groupBy) return null
+    const map = new Map<string, T[]>()
+    for (const row of rows) {
+      const key = groupBy(row)
+      const list = map.get(key)
+      if (list) list.push(row)
+      else map.set(key, [row])
+    }
+    return map
+  }, [groupBy, rows])
+  let lastGroupKey: string | null = null
 
   return (
     <Table
@@ -273,11 +294,32 @@ function DataTable<T>({
             </TableCell>
           </TableRow>
         ) : (
-          rows.map((row, index) => {
+          rows.flatMap((row, index) => {
             const id = getRowId(row)
             const isSelected = selectedSet.has(id)
+            const nodes: React.ReactNode[] = []
 
-            return (
+            if (groupBy && groups) {
+              const key = groupBy(row)
+              if (key !== lastGroupKey) {
+                lastGroupKey = key
+                nodes.push(
+                  <tr key={`group-${key}`} data-slot="table-group">
+                    <td
+                      colSpan={columnCount}
+                      className={cn(
+                        'border-y border-line bg-well px-4 py-1.5 text-xs first:border-t-0',
+                        groupHeaderClassName,
+                      )}
+                    >
+                      {renderGroupHeader ? renderGroupHeader(key, groups.get(key) ?? []) : key}
+                    </td>
+                  </tr>,
+                )
+              }
+            }
+
+            nodes.push(
               <motion.tr
                 key={id}
                 data-slot="table-row"
@@ -344,8 +386,9 @@ function DataTable<T>({
                     {column.cell(row)}
                   </TableCell>
                 ))}
-              </motion.tr>
+              </motion.tr>,
             )
+            return nodes
           })
         )}
       </TableBody>

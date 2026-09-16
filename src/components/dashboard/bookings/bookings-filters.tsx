@@ -141,8 +141,18 @@ export interface SavedView {
 
 const TODAY_RANGE: DateRange = { from: TODAY_KEY, to: TODAY_KEY }
 const NEXT_7: DateRange = { from: TODAY_KEY, to: toDateKey(addDays(NOW, 7)) }
+/** Everything still to sail — the desk's default, since the past can wait. */
+const UPCOMING: DateRange = { from: TODAY_KEY, to: toDateKey(addDays(NOW, 400)) }
 
 export const SAVED_VIEWS: SavedView[] = [
+  {
+    id: 'upcoming',
+    label: 'Upcoming',
+    hint: 'From today, soonest first',
+    icon: CalendarClock,
+    status: 'all',
+    filters: { ...DEFAULT_BOOKING_FILTERS, range: UPCOMING },
+  },
   {
     id: 'all',
     label: 'All reservations',

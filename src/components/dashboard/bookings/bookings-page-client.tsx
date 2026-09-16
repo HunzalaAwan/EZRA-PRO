@@ -24,6 +24,7 @@ import { PageHeader } from '@/components/dashboard/page-header'
 import {
   BookingsFilters,
   DEFAULT_BOOKING_FILTERS,
+  SAVED_VIEWS,
   STATUS_TAB_LABEL,
   STATUS_TAB_MATCH,
   STATUS_TAB_ORDER,
@@ -41,7 +42,9 @@ import { NewBookingDialog } from '@/components/dashboard/bookings/new-booking-di
    rail, saved views, and 13k reservations paginated underneath.
    ========================================================================== */
 
-const DEFAULT_SORT: DataTableSort = { id: 'created', dir: 'desc' }
+/* Soonest departure first: the list opens on what happens next. */
+const DEFAULT_SORT: DataTableSort = { id: 'departure', dir: 'asc' }
+const DEFAULT_VIEW = SAVED_VIEWS.find((view) => view.id === 'upcoming') ?? SAVED_VIEWS[0]
 
 function matchesSearch(row: BookingRow, needle: string) {
   const { booking, customer } = row
@@ -71,9 +74,9 @@ export interface BookingsPageClientProps {
  */
 export function BookingsPageClient({ tenant, allRows, activities, now: NOW, todayKey: TODAY_KEY }: BookingsPageClientProps) {
 
-  const [filters, setFilters] = React.useState<BookingFilters>(DEFAULT_BOOKING_FILTERS)
+  const [filters, setFilters] = React.useState<BookingFilters>(DEFAULT_VIEW.filters)
   const [statusTab, setStatusTab] = React.useState<BookingStatusTab>('all')
-  const [activeViewId, setActiveViewId] = React.useState<string | null>('all')
+  const [activeViewId, setActiveViewId] = React.useState<string | null>(DEFAULT_VIEW.id)
   const [sort, setSort] = React.useState<DataTableSort>(DEFAULT_SORT)
   const [page, setPage] = React.useState(1)
   const [pageSize, setPageSize] = React.useState(25)
@@ -468,6 +471,7 @@ export function BookingsPageClient({ tenant, allRows, activities, now: NOW, toda
       <BookingsTable
         rows={pageRows}
         currency={tenant.currency}
+        todayKey={TODAY_KEY}
         sort={sort}
         onSortChange={(next) => {
           setSort(next)

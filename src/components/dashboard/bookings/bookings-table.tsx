@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import {
   CheckCheck,
+  ChevronRight,
   CircleX,
   Download,
   Send,
@@ -14,9 +15,18 @@ import {
 
 import type { BookingRow } from '@/lib/demo'
 import { CHANNEL_LABELS } from '@/lib/demo-core'
-import type { BadgeVariant } from '@/components/ui/badge'
-import type { BookingChannel, CurrencyCode } from '@/types'
-import { cn, formatCurrency, formatDateShort, formatTime } from '@/lib/utils'
+import { ACTIVITY_COLOR_VAR } from '@/components/charts/chart-container'
+import type { BookingChannel, CurrencyCode, PaymentStatus } from '@/types'
+import {
+  cn,
+  formatCurrency,
+  formatDateShort,
+  formatDuration,
+  formatNumber,
+  formatTime,
+  fromDateKey,
+  toDateKey,
+} from '@/lib/utils'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge, StatusBadge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -28,29 +38,159 @@ import {
 } from '@/components/ui/data-table'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Pagination } from '@/components/ui/pagination'
+import { Segmented } from '@/components/ui/segmented'
+import { Switch } from '@/components/ui/switch'
 
 /* ==========================================================================
-   CHANNEL CHIP
-   One tint per acquisition channel so the mix is readable at a glance down
-   the column.
+   The reservations list.
+
+   Built for volume: one line per booking, numbers right-aligned in tabular
+   figures, colour reserved for state. When the list is ordered by departure
+   it is cut into days, each with its own count, headcount and takings, so an
+   operator reads a week the way they think about it: one day at a time.
    ========================================================================== */
 
-const CHANNEL_VARIANT: Record<BookingChannel, BadgeVariant> = {
-  website_widget: 'primary',
-  direct: 'info',
-  ota: 'accent',
-  phone: 'neutral',
-  walk_in: 'success',
-  reseller: 'warning',
-  concierge: 'info',
-  google: 'outline',
+/* --------------------------------------------------------------------------
+   Channel — a quiet label with a tone dot, so the column reads as a texture
+   rather than eight competing badges.
+   -------------------------------------------------------------------------- */
+
+const CHANNEL_TONE: Record<BookingChannel, string> = {
+  website_widget: 'var(--primary)',
+  direct: 'var(--info)',
+  ota: 'var(--accent)',
+  phone: 'var(--fg-subtle)',
+  walk_in: 'var(--success)',
+  reseller: 'var(--warning)',
+  concierge: 'var(--chart-3)',
+  google: 'var(--chart-6)',
 }
 
-export function ChannelBadge({ channel }: { channel: BookingChannel }) {
+const CHANNEL_SHORT: Record<BookingChannel, string> = {
+  website_widget: 'Website',
+  direct: 'Direct',
+  ota: 'OTA',
+  phone: 'Phone',
+  walk_in: 'Walk-in',
+  reseller: 'Reseller',
+  concierge: 'Concierge',
+  google: 'Google',
+}
+
+export function ChannelBadge({ channel, short = false }: { channel: BookingChannel; short?: boolean }) {
   return (
-    <Badge variant={CHANNEL_VARIANT[channel]} size="sm" dot>
-      {CHANNEL_LABELS[channel]}
-    </Badge>
+    <span
+      className="inline-flex items-center gap-1.5 text-xs font-medium whitespace-nowrap text-muted"
+      title={CHANNEL_LABELS[channel]}
+    >
+      <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full" style={{ background: CHANNEL_TONE[channel] }} />
+      {short ? CHANNEL_SHORT[channel] : CHANNEL_LABELS[channel]}
+    </span>
+  )
+}
+
+/* --------------------------------------------------------------------------
+   Payment — the total, and under it the one thing that matters about it.
+   -------------------------------------------------------------------------- */
+
+const PAYMENT_NOTE: Record<PaymentStatus, { label: string; tone: string }> = {
+  paid: { label: 'Paid', tone: 'text-success' },
+  deposit_paid: { label: 'Deposit', tone: 'text-warning' },
+  unpaid: { label: 'Unpaid', tone: 'text-warning' },
+  partially_refunded: { label: 'Part refund', tone: 'text-subtle' },
+  refunded: { label: 'Refunded', tone: 'text-subtle' },
+  failed: { label: 'Failed', tone: 'text-danger' },
+}
+
+function PaymentCell({ row, currency }: { row: BookingRow; currency: CurrencyCode }) {
+  const { booking } = row
+  const closed = booking.status === 'cancelled' || booking.status === 'refunded'
+  const due = booking.total - booking.amountPaid
+  const note = PAYMENT_NOTE[booking.paymentStatus]
+
+  return (
+    <span className="flex flex-col items-end leading-tight">
+      <span className={cn('text-[0.8125rem] font-semibold tabular-nums text-foreground', closed && 'line-through decoration-line-strong')}>
+        {formatCurrency(booking.total, currency)}
+      </span>
+      {!closed && due > 0 ? (
+        <span className="text-[0.6875rem] font-semibold tabular-nums text-warning">
+          {formatCurrency(due, currency)} due
+        </span>
+      ) : (
+        <span className={cn('text-[0.6875rem] font-medium', note.tone)}>{note.label}</span>
+      )}
+    </span>
+  )
+}
+
+/* --------------------------------------------------------------------------
+   Day header — one line per day with what the day is worth.
+   -------------------------------------------------------------------------- */
+
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+function shiftKey(key: string, days: number) {
+  const d = fromDateKey(key)
+  d.setDate(d.getDate() + days)
+  return toDateKey(d)
+}
+
+function DayHeader({
+  dayKey,
+  rows,
+  todayKey,
+  currency,
+}: {
+  dayKey: string
+  rows: BookingRow[]
+  todayKey: string
+  currency: CurrencyCode
+}) {
+  const date = fromDateKey(dayKey)
+  const relative =
+    dayKey === todayKey
+      ? 'Today'
+      : dayKey === shiftKey(todayKey, 1)
+        ? 'Tomorrow'
+        : dayKey === shiftKey(todayKey, -1)
+          ? 'Yesterday'
+          : null
+  const past = dayKey < todayKey
+
+  let guests = 0
+  let takings = 0
+  let live = 0
+  for (const { booking } of rows) {
+    if (booking.status === 'cancelled' || booking.status === 'refunded' || booking.status === 'no_show') continue
+    live += 1
+    guests += booking.partySize
+    takings += booking.total
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex min-w-0 items-center gap-2">
+        {relative ? (
+          <span
+            className={cn(
+              'rounded-full px-2 py-0.5 text-[0.625rem] font-bold tracking-[0.08em] uppercase',
+              relative === 'Today' ? 'bg-primary text-on-primary' : 'bg-surface text-muted ring-1 ring-line',
+            )}
+          >
+            {relative}
+          </span>
+        ) : null}
+        <span className={cn('truncate text-[0.8125rem] font-semibold', past ? 'text-muted' : 'text-foreground')}>
+          {WEEKDAYS[date.getDay()]}, {formatDateShort(date)}
+        </span>
+      </div>
+      <span className="hidden shrink-0 text-xs text-subtle tabular-nums sm:inline">
+        {formatNumber(live)} {live === 1 ? 'booking' : 'bookings'} · {formatNumber(guests)}{' '}
+        {guests === 1 ? 'guest' : 'guests'} · {formatCurrency(takings, currency)}
+        {rows.length > live ? <span className="text-faint"> · {rows.length - live} cancelled</span> : null}
+      </span>
+    </div>
   )
 }
 
@@ -76,9 +216,7 @@ function BulkActionBar({ count, onClear, onAction }: BulkActionBarProps) {
           initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 24, scale: 0.97 }}
           animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
           exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 16, scale: 0.98 }}
-          transition={
-            reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 34 }
-          }
+          transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 34 }}
           className="pointer-events-none fixed inset-x-0 bottom-4 z-40 flex justify-center px-4 print:hidden"
         >
           <div
@@ -166,7 +304,6 @@ function BookingCard({
         selected ? 'border-primary/55 bg-primary-soft/25 shadow-sm' : 'border-line',
       )}
     >
-      {/* Whole-card target, painted under the controls so the checkbox still wins. */}
       <button
         type="button"
         onClick={onOpen}
@@ -175,18 +312,12 @@ function BookingCard({
       />
 
       <div className="relative z-10 flex shrink-0 items-start pt-0.5">
-        <Checkbox
-          checked={selected}
-          onCheckedChange={onToggle}
-          aria-label={`Select booking ${booking.reference}`}
-        />
+        <Checkbox checked={selected} onCheckedChange={onToggle} aria-label={`Select booking ${booking.reference}`} />
       </div>
 
       <div className="pointer-events-none relative min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <span className="font-mono text-[0.8125rem] font-semibold tracking-tight text-foreground">
-            {booking.reference}
-          </span>
+          <span className="font-mono text-[0.75rem] font-semibold tracking-tight text-muted">{booking.reference}</span>
           <StatusBadge kind="booking" status={booking.status} size="sm" showIcon={false} />
         </div>
 
@@ -198,7 +329,8 @@ function BookingCard({
           </span>
         </div>
 
-        <p className="mt-2.5 truncate text-[0.8125rem] font-medium text-foreground">
+        <p className="mt-2.5 flex items-center gap-2 truncate text-[0.8125rem] font-medium text-foreground">
+          <span aria-hidden="true" className="h-4 w-1 shrink-0 rounded-full" style={{ background: ACTIVITY_COLOR_VAR[activity.colorKey] }} />
           {activity.name}
         </p>
 
@@ -210,17 +342,14 @@ function BookingCard({
             <Users aria-hidden="true" className="size-3.5 text-faint" />
             {booking.partySize}
           </span>
-          <ChannelBadge channel={booking.channel} />
+          <ChannelBadge channel={booking.channel} short />
         </div>
 
         <div className="mt-3 flex items-center justify-between gap-2 border-t border-line-subtle pt-2.5">
           <StatusBadge kind="payment" status={booking.paymentStatus} size="sm" />
-          <span className="text-sm font-semibold text-foreground tabular-nums">
-            {formatCurrency(booking.total, currency)}
-          </span>
+          <span className="text-sm font-semibold text-foreground tabular-nums">{formatCurrency(booking.total, currency)}</span>
         </div>
       </div>
-
     </li>
   )
 }
@@ -229,10 +358,19 @@ function BookingCard({
    TABLE
    ========================================================================== */
 
+type Density = 'comfortable' | 'compact'
+
+const DENSITY_OPTIONS: { value: Density; label: string }[] = [
+  { value: 'compact', label: 'Compact' },
+  { value: 'comfortable', label: 'Comfortable' },
+]
+
 export interface BookingsTableProps {
   /** Rows for the current page only. */
   rows: BookingRow[]
   currency: CurrencyCode
+  /** Today's date key, so day sections can say "Today" and "Tomorrow". */
+  todayKey: string
   sort: DataTableSort
   onSortChange: (sort: DataTableSort) => void
   selectedIds: string[]
@@ -253,6 +391,7 @@ export interface BookingsTableProps {
 export function BookingsTable({
   rows,
   currency,
+  todayKey,
   sort,
   onSortChange,
   selectedIds,
@@ -269,8 +408,10 @@ export function BookingsTable({
   loading = false,
   className,
 }: BookingsTableProps) {
-  const selectedSet = React.useMemo(() => new Set(selectedIds), [selectedIds])
+  const [density, setDensity] = React.useState<Density>('compact')
+  const [groupByDay, setGroupByDay] = React.useState(true)
 
+  const selectedSet = React.useMemo(() => new Set(selectedIds), [selectedIds])
   const toggleOne = (id: string) => {
     const next = new Set(selectedIds)
     if (next.has(id)) next.delete(id)
@@ -278,46 +419,44 @@ export function BookingsTable({
     onSelectionChange(Array.from(next))
   }
 
+  /* Days only make sense when the list runs in departure order. */
+  const canGroup = sort.id === 'departure'
+  const grouped = groupByDay && canGroup
+
+  const groupBy = React.useCallback((row: BookingRow) => toDateKey(row.departure.startsAt), [])
+  const renderGroupHeader = React.useCallback(
+    (key: string, groupRows: BookingRow[]) => (
+      <DayHeader dayKey={key} rows={groupRows} todayKey={todayKey} currency={currency} />
+    ),
+    [todayKey, currency],
+  )
+
   const columns = React.useMemo<DataTableColumn<BookingRow>[]>(
     () => [
-      {
-        id: 'reference',
-        header: 'Reference',
-        sortable: true,
-        width: '9.5rem',
-        cell: ({ booking }) => (
-          <span className="flex flex-col">
-            <span className="font-mono text-[0.8125rem] font-semibold tracking-tight text-foreground">
-              {booking.reference}
-            </span>
-            {booking.promoCode ? (
-              <span className="font-mono text-[0.6875rem] text-accent">{booking.promoCode}</span>
-            ) : null}
-          </span>
-        ),
-      },
       {
         id: 'guest',
         header: 'Guest',
         sortable: true,
         width: '17rem',
-        cell: ({ customer }) => {
+        cell: ({ customer, booking }) => {
           const name = `${customer.firstName} ${customer.lastName}`
           return (
             <span className="flex min-w-0 items-center gap-2.5">
-              <Avatar name={name} src={customer.avatarUrl} size="sm" />
-              <span className="min-w-0">
+              <Avatar name={name} src={customer.avatarUrl} size={density === 'compact' ? 'xs' : 'sm'} />
+              <span className="min-w-0 leading-tight">
                 <span className="flex items-center gap-1.5">
-                  <span className="truncate text-[0.8125rem] font-medium text-foreground">
-                    {name}
-                  </span>
+                  <span className="truncate text-[0.8125rem] font-semibold text-foreground">{name}</span>
                   {customer.segment === 'vip' ? (
                     <Badge variant="accent" size="sm">
                       VIP
                     </Badge>
                   ) : null}
                 </span>
-                <span className="block truncate text-xs text-subtle">{customer.email}</span>
+                <span className="block truncate text-[0.6875rem] text-subtle">
+                  <span className="font-mono font-medium tracking-tight text-muted">{booking.reference}</span>
+                  <span className="text-faint"> · </span>
+                  {customer.email}
+                </span>
               </span>
             </span>
           )
@@ -329,33 +468,18 @@ export function BookingsTable({
         sortable: true,
         hideBelow: 'lg',
         cell: ({ activity, departure }) => (
-          <span className="flex min-w-0 items-center gap-2">
+          <span className="flex min-w-0 items-center gap-2.5">
             <span
               aria-hidden="true"
-              className={cn(
-                'h-6 w-1 shrink-0 rounded-full',
-                activity.colorKey === 'lagoon' && 'bg-chart-1',
-                activity.colorKey === 'coral' && 'bg-chart-2',
-                activity.colorKey === 'sunset' && 'bg-chart-4',
-                activity.colorKey === 'reef' && 'bg-chart-3',
-                activity.colorKey === 'info' && 'bg-chart-5',
-                activity.colorKey === 'success' && 'bg-chart-6',
-              )}
+              className="h-5 w-1 shrink-0 rounded-full"
+              style={{ background: ACTIVITY_COLOR_VAR[activity.colorKey] }}
             />
-            <span className="min-w-0">
-              <span className="block truncate text-[0.8125rem] font-medium text-foreground">
-                {activity.name}
-              </span>
+            <span className="min-w-0 leading-tight">
+              <span className="block truncate text-[0.8125rem] font-medium text-foreground">{activity.name}</span>
               {departure.status === 'cancelled' || departure.status === 'weather_hold' ? (
-                <StatusBadge
-                  kind="departure"
-                  status={departure.status}
-                  size="sm"
-                  showIcon={false}
-                  className="mt-0.5"
-                />
+                <StatusBadge kind="departure" status={departure.status} size="sm" showIcon={false} className="mt-0.5" />
               ) : (
-                <span className="block truncate text-xs text-subtle">{activity.meetingPoint}</span>
+                <span className="block truncate text-[0.6875rem] text-subtle">{activity.meetingPoint}</span>
               )}
             </span>
           </span>
@@ -363,17 +487,19 @@ export function BookingsTable({
       },
       {
         id: 'departure',
-        header: 'Departure',
+        header: grouped ? 'Time' : 'Departure',
         sortable: true,
         numeric: true,
-        width: '9rem',
+        width: grouped ? '6.5rem' : '9rem',
         defaultSortDir: 'desc',
-        cell: ({ departure }) => (
-          <span className="flex flex-col">
-            <span className="text-[0.8125rem] font-medium text-foreground">
-              {formatDateShort(departure.startsAt)}
+        cell: ({ departure, activity }) => (
+          <span className="flex flex-col leading-tight">
+            <span className="text-[0.8125rem] font-semibold text-foreground tabular-nums">
+              {grouped ? formatTime(departure.startsAt) : formatDateShort(departure.startsAt)}
             </span>
-            <span className="text-xs text-subtle">{formatTime(departure.startsAt)}</span>
+            <span className="text-[0.6875rem] text-subtle tabular-nums">
+              {grouped ? formatDuration(activity.durationMinutes) : formatTime(departure.startsAt)}
+            </span>
           </span>
         ),
       },
@@ -383,11 +509,11 @@ export function BookingsTable({
         sortable: true,
         align: 'right',
         numeric: true,
-        width: '5rem',
+        width: '4.5rem',
         defaultSortDir: 'desc',
         hideBelow: 'sm',
         cell: ({ booking }) => (
-          <span className="inline-flex items-center justify-end gap-1 text-[0.8125rem] font-medium text-foreground">
+          <span className="inline-flex items-center justify-end gap-1 text-[0.8125rem] font-medium text-foreground tabular-nums">
             <Users aria-hidden="true" className="size-3.5 text-faint" />
             {booking.partySize}
           </span>
@@ -397,48 +523,36 @@ export function BookingsTable({
         id: 'channel',
         header: 'Channel',
         hideBelow: 'lg',
-        width: '9.5rem',
-        cell: ({ booking }) => <ChannelBadge channel={booking.channel} />,
+        width: '7.5rem',
+        cell: ({ booking }) => <ChannelBadge channel={booking.channel} short />,
       },
       {
         id: 'total',
-        header: 'Total',
+        header: 'Payment',
         sortable: true,
         align: 'right',
         numeric: true,
-        width: '7rem',
+        width: '7.5rem',
         defaultSortDir: 'desc',
-        cell: ({ booking }) => (
-          <span className="flex flex-col items-end">
-            <span className="text-[0.8125rem] font-semibold text-foreground">
-              {formatCurrency(booking.total, currency)}
-            </span>
-            {booking.amountPaid < booking.total && booking.status !== 'cancelled' ? (
-              <span className="text-[0.6875rem] font-medium text-warning">
-                {formatCurrency(booking.total - booking.amountPaid, currency)} due
-              </span>
-            ) : null}
-          </span>
-        ),
-      },
-      {
-        id: 'payment',
-        header: 'Payment',
-        hideBelow: 'md',
-        width: '8.5rem',
-        cell: ({ booking }) => (
-          <StatusBadge kind="payment" status={booking.paymentStatus} size="sm" />
-        ),
+        cell: (row) => <PaymentCell row={row} currency={currency} />,
       },
       {
         id: 'status',
         header: 'Status',
         sortable: true,
-        width: '8.5rem',
+        width: '8rem',
         cell: ({ booking }) => <StatusBadge kind="booking" status={booking.status} size="sm" />,
       },
+      {
+        id: 'open',
+        header: <span className="sr-only">Open</span>,
+        width: '2.25rem',
+        align: 'right',
+        cellClassName: 'pl-0',
+        cell: () => <ChevronRight aria-hidden="true" className="size-4 text-faint" />,
+      },
     ],
-    [currency],
+    [currency, density, grouped],
   )
 
   const empty = (
@@ -454,9 +568,36 @@ export function BookingsTable({
     />
   )
 
+  const from = totalItems === 0 ? 0 : (page - 1) * pageSize + 1
+  const to = Math.min(page * pageSize, totalItems)
+
   return (
-    <div className={cn('flex flex-col gap-4', className)}>
-      {/* Desktop table */}
+    <div className={cn('flex flex-col gap-3', className)}>
+      {/* ---------- toolbar ---------- */}
+      <div className="hidden items-center justify-between gap-3 md:flex">
+        <p className="text-xs text-subtle tabular-nums">
+          {totalItems === 0 ? 'No reservations' : `Showing ${formatNumber(from)}–${formatNumber(to)} of ${formatNumber(totalItems)}`}
+          {sort.id === 'departure' ? (
+            <span className="text-faint"> · {sort.dir === 'desc' ? 'latest departure first' : 'earliest departure first'}</span>
+          ) : null}
+        </p>
+
+        <div className="flex items-center gap-4">
+          <label
+            className={cn(
+              'inline-flex items-center gap-2 text-xs font-medium text-muted',
+              !canGroup && 'opacity-50',
+            )}
+            title={canGroup ? undefined : 'Sort by departure to group by day'}
+          >
+            <Switch size="sm" checked={groupByDay} onCheckedChange={setGroupByDay} disabled={!canGroup} />
+            Group by day
+          </label>
+          <Segmented size="sm" label="Row density" options={DENSITY_OPTIONS} value={density} onValueChange={setDensity} />
+        </div>
+      </div>
+
+      {/* ---------- desktop table ---------- */}
       <div className="hidden md:block">
         <DataTable
           columns={columns}
@@ -469,20 +610,22 @@ export function BookingsTable({
           selectedIds={selectedIds}
           onSelectionChange={onSelectionChange}
           loading={loading}
-          loadingRowCount={8}
+          loadingRowCount={10}
           empty={empty}
           stickyHeader
+          rowHeight={density}
           ariaLabel="Reservations"
+          className="table-fixed"
           containerClassName="rounded-2xl border border-line bg-surface"
+          groupBy={grouped ? groupBy : undefined}
+          renderGroupHeader={renderGroupHeader}
           getRowClassName={(row) =>
-            row.booking.status === 'cancelled' || row.booking.status === 'refunded'
-              ? 'opacity-65'
-              : undefined
+            row.booking.status === 'cancelled' || row.booking.status === 'refunded' ? 'opacity-60' : undefined
           }
         />
       </div>
 
-      {/* Mobile cards */}
+      {/* ---------- mobile cards ---------- */}
       <div className="md:hidden">
         {rows.length === 0 && !loading ? (
           <div className="rounded-2xl border border-line bg-surface">{empty}</div>
