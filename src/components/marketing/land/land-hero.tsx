@@ -104,7 +104,7 @@ export function LandHero() {
         {/* ---------- copy ---------- */}
         <div className="lg:col-span-6">
           <p className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-[0.75rem] font-semibold text-muted">
-            <span className="size-1.5 rounded-full bg-primary" aria-hidden="true" />
+            <span className="size-1.5 rounded-full bg-accent" aria-hidden="true" />
             Booking software for businesses that run on a calendar
           </p>
 
@@ -234,7 +234,7 @@ export function LandHero() {
                     </span>
                   </div>
                   <div className="mt-3 flex items-center justify-between gap-3 border-t border-line-subtle pt-3">
-                    <span className="shrink-0 rounded-md bg-info-soft px-2 py-1 text-[0.75rem] font-semibold whitespace-nowrap text-info">
+                    <span className="shrink-0 rounded-md bg-accent px-2 py-1 text-[0.75rem] font-semibold whitespace-nowrap text-on-accent">
                       {current.booking.money}
                     </span>
                     <span className="inline-flex min-w-0 items-center gap-1.5 text-[0.75rem] text-subtle">
@@ -263,8 +263,8 @@ export function LandHero() {
                   )}
                 >
                   <span className="relative flex size-2" aria-hidden="true">
-                    <span className="absolute inline-flex size-full rounded-full bg-primary opacity-75 motion-safe:animate-pulse-ring" />
-                    <span className="relative inline-flex size-2 rounded-full bg-primary" />
+                    <span className="absolute inline-flex size-full rounded-full bg-accent opacity-75 motion-safe:animate-pulse-ring" />
+                    <span className="relative inline-flex size-2 rounded-full bg-accent" />
                   </span>
                   Live on your site and Viator
                 </motion.p>

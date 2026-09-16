@@ -89,7 +89,7 @@ export function ClosingCta({ className }: { className?: string }) {
         <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[0.8125rem] text-subtle">
           {PROMISES.map((p) => (
             <li key={p} className="inline-flex items-center gap-1.5">
-              <Check aria-hidden="true" className="size-3.5 text-primary" strokeWidth={2.5} />
+              <Check aria-hidden="true" className="size-3.5 text-accent" strokeWidth={2.5} />
               {p}
             </li>
           ))}

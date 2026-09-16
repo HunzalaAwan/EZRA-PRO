@@ -140,7 +140,7 @@ function FrameCopy({ frame, reduce }: { frame: Frame; reduce: boolean }) {
             transition={{ duration: 0.45, delay: 0.25 + i * 0.12, ease: EASE_OUT_EXPO }}
             className="inline-flex items-center gap-2 text-[0.9375rem] text-white/85"
           >
-            <span className="grid size-5 shrink-0 place-items-center rounded-full bg-primary text-white">
+            <span className="grid size-5 shrink-0 place-items-center rounded-full bg-accent text-on-accent">
               <Check aria-hidden="true" className="size-3" strokeWidth={3} />
             </span>
             {item}
@@ -228,7 +228,7 @@ export function SceneReel({ className }: { className?: string }) {
                   >
                     <span
                       aria-hidden="true"
-                      className={cn('h-1 rounded-full transition-all duration-500', isActive ? 'w-8 bg-primary' : 'w-3 bg-white/40')}
+                      className={cn('h-1 rounded-full transition-all duration-500', isActive ? 'w-8 bg-accent' : 'w-3 bg-white/40')}
                     />
                     <span className="font-mono text-[0.75rem] tracking-[0.08em] uppercase">{frame.time}</span>
                     <span className="hidden sm:inline">{frame.label}</span>

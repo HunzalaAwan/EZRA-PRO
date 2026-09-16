@@ -46,7 +46,7 @@ export function ProofStrip({ className }: { className?: string }) {
               <span className="font-display text-[1.375rem] font-semibold tracking-[-0.02em] whitespace-nowrap sm:text-2xl">
                 {trade}
               </span>
-              <span aria-hidden="true" className="mx-5 size-1.5 rounded-full bg-primary sm:mx-7" />
+              <span aria-hidden="true" className="mx-5 size-1.5 rounded-full bg-accent sm:mx-7" />
             </li>
           ))}
         </ul>
@@ -54,7 +54,7 @@ export function ProofStrip({ className }: { className?: string }) {
 
       <div className="mx-auto mt-10 grid max-w-7xl gap-6 px-4 sm:mt-12 sm:grid-cols-3 sm:gap-8 sm:px-6 lg:px-8">
         {NUMBERS.map((n, i) => (
-          <Reveal key={n.label} delay={i * 0.08} className="border-l-2 border-primary pl-4">
+          <Reveal key={n.label} delay={i * 0.08} className="border-l-2 border-accent pl-4">
             <p className="font-display text-3xl font-semibold tracking-[-0.03em] text-foreground tabular-nums sm:text-4xl">
               <CountUp value={n.value} prefix={n.prefix} suffix={n.suffix} decimals={n.decimals} duration={1.4} />
             </p>

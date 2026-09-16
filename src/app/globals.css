@@ -624,10 +624,10 @@ html.lenis body {
   --primary-soft:   oklch(0.955 0.030 300);
   --on-primary:     oklch(1 0 0);
 
-  --accent:         oklch(0.660 0.170 40);  /* coral */
-  --accent-hover:   oklch(0.600 0.165 38);
-  --accent-soft:    oklch(0.958 0.035 45);
-  --on-accent:      oklch(1 0 0);
+  --accent:         oklch(0.720 0.165 82);  /* gold */
+  --accent-hover:   oklch(0.650 0.160 78);
+  --accent-soft:    oklch(0.965 0.050 90);
+  --on-accent:      oklch(0.240 0.055 75);
 
   --info:           oklch(0.520 0.160 275); /* indigo */
   --info-soft:      oklch(0.950 0.030 280);
@@ -687,10 +687,10 @@ html.lenis body {
   --primary-soft:   oklch(0.320 0.080 298);
   --on-primary:     oklch(0.170 0.050 298);
 
-  --accent:         oklch(0.760 0.150 45);
-  --accent-hover:   oklch(0.820 0.130 48);
-  --accent-soft:    oklch(0.320 0.070 40);
-  --on-accent:      oklch(0.180 0.045 40);
+  --accent:         oklch(0.840 0.150 88);
+  --accent-hover:   oklch(0.890 0.130 90);
+  --accent-soft:    oklch(0.330 0.070 80);
+  --on-accent:      oklch(0.200 0.050 80);
 
   --info:           oklch(0.740 0.130 275);
   --info-soft:      oklch(0.310 0.070 278);

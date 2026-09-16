@@ -176,9 +176,9 @@ function BrandPanel() {
 
         <span className="inline-flex items-center gap-2 rounded-full bg-white/12 px-3 py-1.5 text-[0.6875rem] font-semibold tracking-[0.06em] text-white uppercase ring-1 ring-white/15 backdrop-blur-sm">
           <span aria-hidden="true" className="relative flex size-1.5">
-            <span className="absolute inset-0 rounded-full bg-primary" />
+            <span className="absolute inset-0 rounded-full bg-accent" />
             {!reducedMotion ? (
-              <span className="absolute inset-0 animate-pulse-ring rounded-full bg-primary" />
+              <span className="absolute inset-0 animate-pulse-ring rounded-full bg-accent" />
             ) : null}
           </span>
           Live in a weekend
@@ -215,7 +215,7 @@ function BrandPanel() {
                 </div>
 
                 {quote.metric ? (
-                  <div className="ml-auto shrink-0 rounded-xl bg-primary px-3.5 py-2 text-right text-on-primary">
+                  <div className="ml-auto shrink-0 rounded-xl bg-accent px-3.5 py-2 text-right text-on-accent">
                     <p className="font-display text-lg leading-none font-semibold tracking-[-0.02em] tabular-nums">
                       {quote.metric.value}
                     </p>

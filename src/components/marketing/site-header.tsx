@@ -278,7 +278,7 @@ export function SiteHeader({ className }: SiteHeaderProps) {
           )}
         >
           <div className="mx-auto flex h-full max-w-7xl items-center gap-3 px-4 sm:px-6 lg:px-8">
-            <Sparkles aria-hidden="true" className="hidden size-3.5 shrink-0 text-ink-50 sm:block" />
+            <Sparkles aria-hidden="true" className="hidden size-3.5 shrink-0 text-accent sm:block" />
             <p className="min-w-0 flex-1 truncate text-[0.78125rem] font-medium text-ink-50">
               <span className="hidden sm:inline">{ANNOUNCEMENT.full}</span>
               <span className="sm:hidden">{ANNOUNCEMENT.short}</span>
@@ -287,8 +287,8 @@ export function SiteHeader({ className }: SiteHeaderProps) {
               href={ANNOUNCEMENT.href}
               className={cn(
                 'group/ann hidden shrink-0 items-center gap-1 sm:inline-flex',
-                'text-[0.78125rem] font-semibold text-ink-50 underline decoration-ink-50/45 underline-offset-4',
-                'transition-colors duration-200 ease-[var(--ease-out-expo)] hover:decoration-ink-50',
+                'text-[0.78125rem] font-semibold text-accent underline decoration-accent/50 underline-offset-4',
+                'transition-colors duration-200 ease-[var(--ease-out-expo)] hover:decoration-accent',
                 'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink-50',
               )}
             >

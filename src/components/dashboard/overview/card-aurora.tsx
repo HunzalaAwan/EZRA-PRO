@@ -44,7 +44,7 @@ const LIGHT_FIELDS: Field[] = [
 
 const DARK_FIELDS: Field[] = [
   { color: 'var(--info)', size: 340, left: '50%', top: '-55%', opacity: 0.6, drift: [-30, 26], duration: 21 },
-  { color: 'var(--chart-3)', size: 280, left: '-30%', top: '45%', opacity: 0.42, drift: [28, -22], duration: 27 },
+  { color: 'var(--accent)', size: 280, left: '-30%', top: '45%', opacity: 0.34, drift: [28, -22], duration: 27 },
   { color: 'var(--primary)', size: 220, left: '58%', top: '65%', opacity: 0.45, drift: [-22, -18], duration: 24 },
 ]
 
@@ -101,7 +101,7 @@ export function CardAurora({ tone = 'light', fields = 2, animated = true, classN
             className="absolute -top-28 -right-24 block size-72 rounded-full will-change-transform"
             style={{
               background:
-                'conic-gradient(from 0deg, transparent 0deg, color-mix(in oklab, var(--info) 75%, transparent) 110deg, transparent 220deg, color-mix(in oklab, var(--chart-3) 60%, transparent) 300deg, transparent 360deg)',
+                'conic-gradient(from 0deg, transparent 0deg, color-mix(in oklab, var(--info) 75%, transparent) 110deg, transparent 220deg, color-mix(in oklab, var(--accent) 70%, transparent) 300deg, transparent 360deg)',
               WebkitMask: 'radial-gradient(circle, transparent 58%, #000 59.5%)',
               mask: 'radial-gradient(circle, transparent 58%, #000 59.5%)',
             }}
