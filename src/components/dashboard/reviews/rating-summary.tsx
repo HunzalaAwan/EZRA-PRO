@@ -49,19 +49,19 @@ export function StarRating({ value, size = 'sm', hideValue = true, className }: 
   const clamped = Math.max(0, Math.min(5, value))
 
   return (
-    <span className={cn('inline-flex items-center gap-1', className)}>
-      <span className="relative inline-flex" aria-hidden="true">
-        <span className="inline-flex w-max gap-0.5 text-line-strong">
+    <span className={cn('inline-flex items-center gap-1 leading-none', className)}>
+      <span className="relative flex shrink-0" aria-hidden="true">
+        <span className="flex gap-0.5 text-line-strong">
           {[0, 1, 2, 3, 4].map((i) => (
             <Star key={i} className={cn(STAR_SIZE[size], 'shrink-0 fill-current')} />
           ))}
         </span>
         {/* Partial fill: the gold row is clipped to the score, so 4.5 reads as 4.5. */}
         <span
-          className="absolute inset-y-0 left-0 overflow-hidden"
+          className="absolute inset-y-0 left-0 flex overflow-hidden"
           style={{ width: `${(clamped / 5) * 100}%` }}
         >
-          <span className="inline-flex w-max gap-0.5 text-warning">
+          <span className="flex shrink-0 gap-0.5 text-warning">
             {[0, 1, 2, 3, 4].map((i) => (
               <Star key={i} className={cn(STAR_SIZE[size], 'shrink-0 fill-current')} />
             ))}

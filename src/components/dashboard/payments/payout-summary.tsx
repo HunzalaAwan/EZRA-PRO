@@ -297,14 +297,14 @@ export function RevenueFeesChart({ points, currency, className }: RevenueFeesCha
     {
       key: 'net',
       label: 'Net to you',
-      color: 'var(--chart-1)',
+      color: 'var(--chart-4)',
       shape: 'square',
       value: formatCurrency(totals.net, currency, { compact: true }),
     },
     {
       key: 'fee',
       label: 'Processing fees',
-      color: 'var(--chart-2)',
+      color: 'var(--chart-6)',
       shape: 'square',
       value: formatCurrency(totals.fee, currency, { compact: true }),
     },
@@ -445,7 +445,7 @@ export function RevenueFeesChart({ points, currency, className }: RevenueFeesCha
             dataKey="net"
             name="Net to you"
             stackId="gross"
-            fill="var(--chart-1)"
+            fill="var(--chart-4)"
             radius={[0, 0, 3, 3]}
             hide={isHidden('net')}
             isAnimationActive={!reduceMotion}
@@ -455,7 +455,7 @@ export function RevenueFeesChart({ points, currency, className }: RevenueFeesCha
             dataKey="fee"
             name="Processing fees"
             stackId="gross"
-            fill="var(--chart-2)"
+            fill="var(--chart-6)"
             radius={[3, 3, 0, 0]}
             hide={isHidden('fee')}
             isAnimationActive={!reduceMotion}

@@ -238,8 +238,8 @@ export function ChannelDonutChart({
             </>
           ) : (
             <>
-              <span className="tabular text-2xl font-semibold leading-none text-foreground">
-                {formatMetric(total)}
+              <span className="tabular text-[1.375rem] font-semibold leading-none text-foreground">
+                {metric === 'revenue' ? formatCurrency(total, currency, { compact: true }) : formatNumber(total)}
               </span>
               <span className="mt-1.5 text-[11px] uppercase tracking-wide text-subtle">
                 {metric === 'revenue' ? 'Total revenue' : 'Total bookings'}
