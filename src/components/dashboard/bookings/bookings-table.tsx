@@ -360,6 +360,15 @@ function BookingCard({
 
 type Density = 'comfortable' | 'compact'
 
+/** Nine columns need the narrower gutter; the shared table keeps its roomier default. */
+function dense(columns: DataTableColumn<BookingRow>[]): DataTableColumn<BookingRow>[] {
+  return columns.map((column) => ({
+    ...column,
+    headerClassName: cn('px-3', column.headerClassName),
+    cellClassName: cn('px-3', column.cellClassName),
+  }))
+}
+
 const DENSITY_OPTIONS: { value: Density; label: string }[] = [
   { value: 'compact', label: 'Compact' },
   { value: 'comfortable', label: 'Comfortable' },
@@ -432,16 +441,15 @@ export function BookingsTable({
   )
 
   const columns = React.useMemo<DataTableColumn<BookingRow>[]>(
-    () => [
+    () => dense([
       {
         id: 'guest',
         header: 'Guest',
         sortable: true,
-        width: '17rem',
         cell: ({ customer, booking }) => {
           const name = `${customer.firstName} ${customer.lastName}`
           return (
-            <span className="flex min-w-0 items-center gap-2.5">
+            <span className="flex min-w-[11rem] max-w-[13.5rem] items-center gap-2.5">
               <Avatar name={name} src={customer.avatarUrl} size={density === 'compact' ? 'xs' : 'sm'} />
               <span className="min-w-0 leading-tight">
                 <span className="flex items-center gap-1.5">
@@ -468,7 +476,7 @@ export function BookingsTable({
         sortable: true,
         hideBelow: 'lg',
         cell: ({ activity, departure }) => (
-          <span className="flex min-w-0 items-center gap-2.5">
+          <span className="flex min-w-[11rem] max-w-[16rem] items-center gap-2.5">
             <span
               aria-hidden="true"
               className="h-5 w-1 shrink-0 rounded-full"
@@ -490,10 +498,10 @@ export function BookingsTable({
         header: grouped ? 'Time' : 'Departure',
         sortable: true,
         numeric: true,
-        width: grouped ? '6.5rem' : '9rem',
+        width: grouped ? '5.5rem' : '8rem',
         defaultSortDir: 'desc',
         cell: ({ departure, activity }) => (
-          <span className="flex flex-col leading-tight">
+          <span className="flex flex-col leading-tight whitespace-nowrap">
             <span className="text-[0.8125rem] font-semibold text-foreground tabular-nums">
               {grouped ? formatTime(departure.startsAt) : formatDateShort(departure.startsAt)}
             </span>
@@ -509,9 +517,9 @@ export function BookingsTable({
         sortable: true,
         align: 'right',
         numeric: true,
-        width: '4.5rem',
+        width: '3.5rem',
         defaultSortDir: 'desc',
-        hideBelow: 'sm',
+        hideBelow: 'md',
         cell: ({ booking }) => (
           <span className="inline-flex items-center justify-end gap-1 text-[0.8125rem] font-medium text-foreground tabular-nums">
             <Users aria-hidden="true" className="size-3.5 text-faint" />
@@ -522,8 +530,8 @@ export function BookingsTable({
       {
         id: 'channel',
         header: 'Channel',
-        hideBelow: 'lg',
-        width: '7.5rem',
+        hideBelow: '2xl',
+        width: '6rem',
         cell: ({ booking }) => <ChannelBadge channel={booking.channel} short />,
       },
       {
@@ -532,7 +540,8 @@ export function BookingsTable({
         sortable: true,
         align: 'right',
         numeric: true,
-        width: '7.5rem',
+        width: '6rem',
+        cellClassName: 'whitespace-nowrap',
         defaultSortDir: 'desc',
         cell: (row) => <PaymentCell row={row} currency={currency} />,
       },
@@ -540,18 +549,18 @@ export function BookingsTable({
         id: 'status',
         header: 'Status',
         sortable: true,
-        width: '8rem',
+        width: '6.5rem',
         cell: ({ booking }) => <StatusBadge kind="booking" status={booking.status} size="sm" />,
       },
       {
         id: 'open',
         header: <span className="sr-only">Open</span>,
-        width: '2.25rem',
+        width: '2rem',
         align: 'right',
         cellClassName: 'pl-0',
         cell: () => <ChevronRight aria-hidden="true" className="size-4 text-faint" />,
       },
-    ],
+    ]),
     [currency, density, grouped],
   )
 
@@ -615,7 +624,6 @@ export function BookingsTable({
           stickyHeader
           rowHeight={density}
           ariaLabel="Reservations"
-          className="table-fixed"
           containerClassName="rounded-2xl border border-line bg-surface"
           groupBy={grouped ? groupBy : undefined}
           renderGroupHeader={renderGroupHeader}

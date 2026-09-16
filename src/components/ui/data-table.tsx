@@ -37,7 +37,7 @@ export interface DataTableColumn<T> {
   /** Any CSS width — `'12rem'`, `'25%'`, `'1px'` for shrink-to-fit. */
   width?: string
   /** Hides the column below this breakpoint. */
-  hideBelow?: 'sm' | 'md' | 'lg'
+  hideBelow?: 'sm' | 'md' | 'lg' | 'xl' | '2xl'
   /** Renders the cell with `tabular-nums` — use for money, counts, dates. */
   numeric?: boolean
   /** First click on this header sorts in this direction. Defaults to `'asc'`. */
@@ -87,6 +87,8 @@ const HIDE_BELOW = {
   sm: 'hidden sm:table-cell',
   md: 'hidden md:table-cell',
   lg: 'hidden lg:table-cell',
+  xl: 'hidden xl:table-cell',
+  '2xl': 'hidden 2xl:table-cell',
 } as const
 
 /** Deterministic skeleton widths — never Math.random(), which would desync SSR. */
