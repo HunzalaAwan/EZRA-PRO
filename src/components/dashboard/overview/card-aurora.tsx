@@ -21,6 +21,12 @@ export interface CardAuroraProps {
   tone?: 'light' | 'dark'
   /** How many colour fields to drift. */
   fields?: 1 | 2 | 3
+  /** Swap the field colours, in order, for a card with its own palette. */
+  colors?: string[]
+  /** Replace the base gradient behind the fields. */
+  ground?: string
+  /** The turning conic ring, the dark payout card's signature. */
+  ring?: boolean
   /** Turn the movement off while keeping the gradient. */
   animated?: boolean
   className?: string
@@ -57,16 +63,26 @@ const GROUND = {
 const GRAIN =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")"
 
-export function CardAurora({ tone = 'light', fields = 2, animated = true, className }: CardAuroraProps) {
+export function CardAurora({
+  tone = 'light',
+  fields = 2,
+  colors,
+  ground,
+  ring = true,
+  animated = true,
+  className,
+}: CardAuroraProps) {
   const reduce = useReducedMotionSafe()
   const moving = animated && !reduce
-  const list = (tone === 'dark' ? DARK_FIELDS : LIGHT_FIELDS).slice(0, fields)
+  const list = (tone === 'dark' ? DARK_FIELDS : LIGHT_FIELDS)
+    .slice(0, fields)
+    .map((field, i) => (colors?.[i] ? { ...field, color: colors[i] } : field))
 
   return (
     <div
       aria-hidden="true"
       className={cn('pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-[inherit]', className)}
-      style={{ background: GROUND[tone] }}
+      style={{ background: ground ?? GROUND[tone] }}
     >
       {list.map((field, i) => (
         <motion.span
@@ -97,6 +113,7 @@ export function CardAurora({ tone = 'light', fields = 2, animated = true, classN
       {tone === 'dark' ? (
         <>
           {/* Turning ring, the card's signature. */}
+          {ring ? (
           <motion.span
             className="absolute -top-28 -right-24 block size-72 rounded-full will-change-transform"
             style={{
@@ -108,6 +125,7 @@ export function CardAurora({ tone = 'light', fields = 2, animated = true, classN
             animate={moving ? { rotate: 360 } : undefined}
             transition={{ duration: 38, repeat: Infinity, ease: 'linear' }}
           />
+          ) : null}
 
           {/* A light sweep across the card now and then. */}
           {moving ? (

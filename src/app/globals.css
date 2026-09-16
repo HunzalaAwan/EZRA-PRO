@@ -664,6 +664,10 @@ html.lenis body {
   --ink-retention:  oklch(0.500 0.120 228);
   --ink-guests:     oklch(0.560 0.150 5);
 
+  /* The revenue hero card: violet and magenta that stay deep in both themes. */
+  --hero-violet:    var(--chart-1);
+  --hero-magenta:   var(--chart-5);
+
   --bg-dashboard:   oklch(0.962 0.006 292);
   --navy:           oklch(0.290 0.080 300); /* aubergine */
   --navy-deep:      oklch(0.205 0.065 300);
@@ -719,6 +723,9 @@ html.lenis body {
   --ramp-retention: oklch(0.640 0.120 225);
   --ink-retention:  oklch(0.780 0.100 225);
   --ink-guests:     oklch(0.780 0.120 5);
+
+  --hero-violet:    oklch(0.540 0.165 295);
+  --hero-magenta:   oklch(0.520 0.180 350);
 
   --bg-dashboard:   oklch(0.140 0.020 300);
   --navy:           oklch(0.300 0.075 300);
