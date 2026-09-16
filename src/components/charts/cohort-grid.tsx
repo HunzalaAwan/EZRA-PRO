@@ -12,14 +12,19 @@ import { cn, clamp, formatNumber, formatPercent } from '@/lib/utils'
 import type { CohortRow } from '@/types'
 import { ChartContainer } from './chart-container'
 
-/** Retention -> tint, on the same lagoon ramp as the occupancy heatmap. */
+/**
+ * Retention -> tint. A single sequential hue (the retention series, sky)
+ * running light to deep, so the matrix reads as magnitude and stays clear
+ * of the brand violet that carries the chrome around it.
+ */
 function retentionTint(retention: number): string {
-  const weight = 6 + (clamp(retention, 0, 100) / 100) * 88
-  return `color-mix(in oklab, var(--chart-1) ${weight.toFixed(1)}%, var(--surface-sunken))`
+  const weight = 6 + (clamp(retention, 0, 100) / 100) * 94
+  return `color-mix(in oklab, var(--ramp-retention) ${weight.toFixed(1)}%, var(--surface-sunken))`
 }
 
+/** Flip label ink once the tint is deep enough to swallow muted text. */
 function retentionInk(retention: number): string {
-  return retention >= 62 ? 'var(--on-primary)' : 'var(--fg-muted)'
+  return retention >= 65 ? 'var(--on-primary)' : 'var(--fg-muted)'
 }
 
 export interface CohortGridProps {
@@ -145,7 +150,7 @@ export function CohortGrid({
                       className={cn(
                         'tabular h-7 rounded-[5px] text-center text-[11px] font-medium tracking-tight',
                         'outline outline-1 outline-offset-0 transition-[outline-color,opacity] duration-150',
-                        exact ? 'outline-primary' : crossHair ? 'outline-line-strong' : 'outline-transparent',
+                        exact ? 'outline-foreground' : crossHair ? 'outline-line-strong' : 'outline-transparent',
                         hover && !crossHair && 'opacity-55',
                       )}
                       style={{ background: retentionTint(retention), color: retentionInk(retention) }}

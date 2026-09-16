@@ -44,14 +44,15 @@ interface LoyaltyRow {
   label: string
   value: string
   detail: string
-  tone: 'primary' | 'success' | 'info' | 'accent'
+  tone: 'guests' | 'retention' | 'accent'
 }
 
-const TONE_CHIP: Record<LoyaltyRow['tone'], string> = {
-  primary: 'bg-primary-soft text-primary',
-  success: 'bg-success-soft text-success',
-  info: 'bg-info-soft text-info',
-  accent: 'bg-accent-soft text-accent',
+/* Guest counts wear the guests series (rose), retention rates the retention
+   series (sky), and the one award-style row the gold accent. */
+const TONE_CHIP: Record<LoyaltyRow['tone'], React.CSSProperties> = {
+  guests: { background: 'color-mix(in oklab, var(--series-guests) 14%, transparent)', color: 'var(--ink-guests)' },
+  retention: { background: 'color-mix(in oklab, var(--series-repeat) 14%, transparent)', color: 'var(--ink-retention)' },
+  accent: { background: 'var(--accent-soft)', color: 'var(--accent)' },
 }
 
 export interface RetentionSectionProps {
@@ -115,7 +116,7 @@ export function RetentionSection({
         label: 'Guests acquired',
         value: formatNumber(loyalty.guests),
         detail: `First-time bookers across the last ${loyalty.cohortCount} monthly cohorts`,
-        tone: 'primary',
+        tone: 'guests',
       },
       {
         key: 'm1',
@@ -123,7 +124,7 @@ export function RetentionSection({
         label: 'Month-1 retention',
         value: formatPercent(loyalty.monthOne, 1),
         detail: 'Share of a cohort that books again in the month after they joined',
-        tone: 'success',
+        tone: 'retention',
       },
       {
         key: 'm3',
@@ -134,7 +135,7 @@ export function RetentionSection({
           loyalty.monthThree === null
             ? 'Needs a cohort with four months behind it'
             : 'Where a seasonal guest base settles into its true repeat rate',
-        tone: 'info',
+        tone: 'retention',
       },
       {
         key: 'best',
@@ -153,7 +154,7 @@ export function RetentionSection({
         label: 'Newest cohort',
         value: formatNumber(loyalty.newest.size),
         detail: `${cohortLabel(loyalty.newest.cohort)} — still filling out, so its later columns are thin`,
-        tone: 'primary',
+        tone: 'guests',
       },
     ]
   }, [loyalty])
@@ -181,7 +182,10 @@ export function RetentionSection({
               <h3 className="text-sm font-semibold text-foreground">Repeat guest rate</h3>
               <p className="mt-0.5 text-xs text-muted">{rangeLabel}</p>
             </div>
-            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-reef-400/12 text-info ring-1 ring-inset ring-reef-400/25">
+            <span
+              className="grid size-8 shrink-0 place-items-center rounded-lg"
+              style={{ background: 'color-mix(in oklab, var(--series-repeat) 14%, transparent)', color: 'var(--ink-retention)' }}
+            >
               <Repeat2 aria-hidden="true" className="size-4" strokeWidth={1.9} />
             </span>
           </div>
@@ -306,10 +310,8 @@ export function RetentionSection({
                   className="flex items-start gap-3 rounded-xl border border-line-subtle bg-surface-sunken/45 p-3 transition-colors hover:border-line hover:bg-surface-sunken"
                 >
                   <span
-                    className={cn(
-                      'mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg',
-                      TONE_CHIP[row.tone],
-                    )}
+                    className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg"
+                    style={TONE_CHIP[row.tone]}
                   >
                     <row.icon aria-hidden="true" className="size-3.5" strokeWidth={2} />
                   </span>

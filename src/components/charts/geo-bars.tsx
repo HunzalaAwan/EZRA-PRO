@@ -106,7 +106,7 @@ export function GeoBars({
               <motion.span
                 aria-hidden="true"
                 className="absolute inset-y-0 left-0 rounded-lg"
-                style={{ background: 'color-mix(in oklab, var(--chart-1) 28%, transparent)' }}
+                style={{ background: 'color-mix(in oklab, var(--chart-4) 30%, transparent)' }}
                 initial={reduced ? false : { width: '0%' }}
                 animate={{ width: reduced || inView ? `${width}%` : '0%' }}
                 transition={reduced ? { duration: 0 } : { duration: 0.66, delay: index * 0.05, ease: EASE_OUT_EXPO }}
