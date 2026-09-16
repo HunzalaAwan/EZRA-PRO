@@ -105,6 +105,70 @@ function CardTop({ title, hint, icon: Icon }: { title: string; hint: string; ico
   )
 }
 
+const WEEKDAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+const WEEKDAY_NAMES = ['Mondays', 'Tuesdays', 'Wednesdays', 'Thursdays', 'Fridays', 'Saturdays', 'Sundays']
+
+/** Average of `pick` per weekday, Monday first. Days with no data read as null. */
+function weekdayProfile(points: TimeSeriesPoint[], pick: (p: TimeSeriesPoint) => number) {
+  const totals = Array.from({ length: 7 }, () => ({ sum: 0, n: 0 }))
+  for (const point of points) {
+    const day = (fromDateKey(point.date).getDay() + 6) % 7
+    totals[day].sum += pick(point)
+    totals[day].n += 1
+  }
+  return totals.map((t) => (t.n > 0 ? t.sum / t.n : null))
+}
+
+function WeekdayBars({
+  title,
+  values,
+  color,
+  format,
+}: {
+  title: string
+  values: (number | null)[]
+  color: string
+  format: (value: number) => string
+}) {
+  const known = values.filter((v): v is number => v !== null)
+  if (known.length === 0) return null
+  const max = Math.max(...known)
+  const peak = values.indexOf(max)
+  const low = values.indexOf(Math.min(...known))
+
+  return (
+    <div className="border-t border-line-subtle pt-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-[0.6875rem] font-medium text-subtle">{title}</span>
+        <span className="truncate text-[0.6875rem] text-subtle">
+          <span className="font-semibold text-foreground">{WEEKDAY_NAMES[peak]}</span> peak at{' '}
+          <span className="font-semibold text-foreground tabular-nums">{format(max)}</span>
+        </span>
+      </div>
+      <div className="mt-2 grid grid-cols-7 gap-1.5" role="img" aria-label={`${title} by weekday`}>
+        {values.map((value, i) => (
+          <div key={WEEKDAY_NAMES[i]} className="flex flex-col items-center gap-1">
+            <div className="flex h-12 w-full items-end rounded-md bg-well">
+              <div
+                title={value === null ? 'No departures' : `${WEEKDAY_NAMES[i]} · ${format(value)}`}
+                className="w-full rounded-md transition-[height] duration-700 ease-[var(--ease-out-expo)]"
+                style={{
+                  height: value === null ? '0%' : `${Math.max(8, (value / (max || 1)) * 100)}%`,
+                  background: color,
+                  opacity: i === peak ? 1 : i === low ? 0.4 : 0.6,
+                }}
+              />
+            </div>
+            <span className={cn('text-[0.625rem] tabular-nums', i === peak ? 'font-semibold text-foreground' : 'text-faint')}>
+              {WEEKDAY_LETTERS[i]}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function CardSkeleton() {
   return (
     <Card className="p-5">
@@ -186,6 +250,15 @@ export function RevenueSummaryCard({
           </div>
         ) : null}
       </dl>
+
+      <div className="mt-4">
+        <WeekdayBars
+          title="Revenue by weekday"
+          values={weekdayProfile(points, (p) => p.revenue)}
+          color="var(--series-revenue)"
+          format={(v) => formatCurrency(Math.round(v), currency, { compact: true })}
+        />
+      </div>
 
       {best && soft ? (
         <p className="mt-auto border-t border-line-subtle pt-3 text-[0.6875rem] leading-relaxed text-subtle">
@@ -292,6 +365,15 @@ export function OccupancyGaugeCard({
           </dd>
         </div>
       </dl>
+
+      <div className="mt-3">
+        <WeekdayBars
+          title="Occupancy by weekday"
+          values={weekdayProfile(points, (p) => p.occupancy)}
+          color="var(--series-occupancy)"
+          format={(v) => formatPercent(v, 0)}
+        />
+      </div>
     </Card>
   )
 }
