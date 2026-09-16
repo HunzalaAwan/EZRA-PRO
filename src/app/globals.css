@@ -591,3 +591,126 @@ html.lenis body {
 .dark {
   --illo-ink: oklch(0.92 0.012 240);
 }
+
+/* ==========================================================================
+   BRAND: EMBER
+   Warm paper, ink, terracotta, plum and saffron. This block re-points every
+   brand token declared above, so nothing else in the app changes. To return
+   to the blue brand, delete this block or run:
+     git checkout brand-blue -- src/app/globals.css src/lib/metric-colors.ts
+   ========================================================================== */
+
+:root {
+  --bg:             oklch(0.985 0.008 85);
+  --bg-subtle:      oklch(0.968 0.010 82);
+  --surface:        oklch(0.998 0.003 90);
+  --surface-raised: oklch(1 0 0);
+  --surface-sunken: oklch(0.960 0.011 80);
+  --overlay:        oklch(0.220 0.020 55 / 0.45);
+
+  --fg:             oklch(0.215 0.020 55);
+  --fg-muted:       oklch(0.455 0.022 55);
+  --fg-subtle:      oklch(0.565 0.020 58);
+  --fg-faint:       oklch(0.712 0.016 65);
+
+  --border:         oklch(0.905 0.012 75);
+  --border-strong:  oklch(0.845 0.016 72);
+  --border-subtle:  oklch(0.945 0.008 78);
+
+  --primary:        oklch(0.560 0.165 38);  /* terracotta */
+  --primary-hover:  oklch(0.495 0.155 36);
+  --primary-soft:   oklch(0.955 0.030 45);
+  --on-primary:     oklch(1 0 0);
+
+  --accent:         oklch(0.700 0.150 78);  /* saffron */
+  --accent-hover:   oklch(0.640 0.145 74);
+  --accent-soft:    oklch(0.962 0.040 85);
+  --on-accent:      oklch(0.220 0.040 60);
+
+  --info:           oklch(0.500 0.150 330); /* plum */
+  --info-soft:      oklch(0.952 0.030 335);
+  --success:        oklch(0.540 0.120 145); /* sage */
+  --success-soft:   oklch(0.950 0.035 145);
+  --warning:        oklch(0.680 0.150 60);
+  --warning-soft:   oklch(0.960 0.045 75);
+  --danger:         oklch(0.560 0.200 25);
+  --danger-soft:    oklch(0.955 0.030 22);
+
+  /* Categorical slots, validated in this order for both themes. */
+  --chart-1: oklch(0.600 0.165 38);  /* ember */
+  --chart-2: oklch(0.500 0.160 330); /* plum */
+  --chart-3: oklch(0.580 0.120 140); /* moss */
+  --chart-4: oklch(0.550 0.125 245); /* steel */
+  --chart-5: oklch(0.750 0.150 80);  /* saffron */
+  --chart-6: oklch(0.650 0.150 10);  /* rose */
+  --chart-7: oklch(0.520 0.150 280); /* indigo */
+  --chart-8: oklch(0.550 0.105 60);  /* bronze */
+
+  --series-revenue:       var(--chart-1);
+  --series-bookings:      var(--chart-2);
+  --series-guests:        var(--chart-7);
+  --series-aov:           var(--chart-5);
+  --series-occupancy:     var(--chart-3);
+  --series-cancellations: var(--chart-6);
+  --series-repeat:        var(--chart-8);
+  --series-rating:        var(--chart-5);
+  --series-lead:          var(--chart-4);
+
+  --bg-dashboard:   oklch(0.975 0.010 82);
+  --navy:           oklch(0.280 0.030 50);  /* warm ink */
+  --navy-deep:      oklch(0.210 0.025 50);
+  --well:           oklch(0.958 0.014 78);
+  --illo-ink:       var(--navy);
+}
+
+.dark {
+  --bg:             oklch(0.150 0.012 55);
+  --bg-subtle:      oklch(0.170 0.013 55);
+  --surface:        oklch(0.195 0.014 55);
+  --surface-raised: oklch(0.228 0.015 55);
+  --surface-sunken: oklch(0.130 0.011 55);
+  --overlay:        oklch(0.090 0.010 55 / 0.72);
+
+  --fg:             oklch(0.962 0.008 80);
+  --fg-muted:       oklch(0.745 0.016 70);
+  --fg-subtle:      oklch(0.635 0.018 65);
+  --fg-faint:       oklch(0.505 0.018 62);
+
+  --border:         oklch(0.290 0.018 55);
+  --border-strong:  oklch(0.360 0.020 55);
+  --border-subtle:  oklch(0.240 0.016 55);
+
+  --primary:        oklch(0.760 0.140 48);
+  --primary-hover:  oklch(0.820 0.120 50);
+  --primary-soft:   oklch(0.300 0.060 40);
+  --on-primary:     oklch(0.170 0.035 40);
+
+  --accent:         oklch(0.820 0.130 85);
+  --accent-hover:   oklch(0.870 0.110 88);
+  --accent-soft:    oklch(0.320 0.060 75);
+  --on-accent:      oklch(0.180 0.040 70);
+
+  --info:           oklch(0.760 0.120 330);
+  --info-soft:      oklch(0.310 0.065 330);
+  --success:        oklch(0.740 0.130 148);
+  --success-soft:   oklch(0.290 0.055 148);
+  --warning:        oklch(0.810 0.140 70);
+  --warning-soft:   oklch(0.320 0.060 65);
+  --danger:         oklch(0.700 0.175 22);
+  --danger-soft:    oklch(0.310 0.075 22);
+
+  --chart-1: oklch(0.660 0.150 45);  /* ember */
+  --chart-2: oklch(0.640 0.140 330); /* plum */
+  --chart-3: oklch(0.610 0.125 140); /* moss */
+  --chart-4: oklch(0.640 0.120 245); /* steel */
+  --chart-5: oklch(0.665 0.145 85);  /* saffron */
+  --chart-6: oklch(0.660 0.140 10);  /* rose */
+  --chart-7: oklch(0.620 0.140 280); /* indigo */
+  --chart-8: oklch(0.630 0.115 60);  /* bronze */
+
+  --bg-dashboard:   oklch(0.140 0.012 55);
+  --navy:           oklch(0.290 0.025 50);
+  --navy-deep:      oklch(0.180 0.020 50);
+  --well:           oklch(0.225 0.016 55);
+  --illo-ink:       oklch(0.930 0.012 80);
+}

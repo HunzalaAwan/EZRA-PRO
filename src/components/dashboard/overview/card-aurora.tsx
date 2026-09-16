@@ -50,7 +50,7 @@ const DARK_FIELDS: Field[] = [
 
 const GROUND = {
   light: 'linear-gradient(150deg, var(--surface) 0%, var(--surface) 42%, var(--primary-soft) 100%)',
-  dark: 'linear-gradient(140deg, var(--navy-deep) 0%, oklch(0.28 0.095 256) 52%, oklch(0.34 0.125 266) 100%)',
+  dark: 'linear-gradient(140deg, var(--navy-deep) 0%, color-mix(in oklab, var(--navy-deep) 68%, var(--info)) 52%, color-mix(in oklab, var(--navy-deep) 52%, var(--primary)) 100%)',
 } as const
 
 /** Film grain over the dark ground so the gradient never bands. */

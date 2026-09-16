@@ -50,8 +50,8 @@ export function seriesForKpi(key: string): SeriesKey {
    -------------------------------------------------------------------------- */
 
 const KPI_ACCENT: Partial<Record<SeriesKey, string>> = {
-  revenue: 'var(--chart-2)', // coral
-  bookings: 'var(--chart-8)', // magenta
+  revenue: 'var(--chart-1)', // ember
+  bookings: 'var(--chart-2)', // plum
 }
 
 /** Ink for a KPI card's icon and mini chart. */
