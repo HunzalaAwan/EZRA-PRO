@@ -2,10 +2,9 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ArrowRight, Check, Sparkles } from 'lucide-react'
+import { ArrowRight, Check, Star } from 'lucide-react'
 
 import { SectionHeading } from '@/components/marketing/section-heading'
-import { GlowOrb } from '@/components/motion/backgrounds'
 import { CountUp } from '@/components/motion/count-up'
 import { Reveal } from '@/components/motion/reveal'
 import { StaggerGroup, StaggerItem } from '@/components/motion/stagger'
@@ -129,7 +128,7 @@ function PlanCard({ plan, billing }: { plan: PricingPlan; billing: BillingPeriod
               'bg-lagoon-800',
             )}
           >
-            <Sparkles className="size-3.5" aria-hidden="true" />
+            <Star className="size-3.5 fill-current" aria-hidden="true" />
             {plan.badge}
           </span>
         </div>
@@ -224,15 +223,6 @@ export function PricingSection({ id = 'pricing', className }: PricingSectionProp
 
   return (
     <section id={id} className={cn('relative isolate overflow-hidden py-20 sm:py-28', className)}>
-      <GlowOrb color="lagoon" size={520} opacity={0.14} blur={110} className="-top-40 left-[-8%]" />
-      <GlowOrb
-        color="coral"
-        size={460}
-        opacity={0.12}
-        blur={110}
-        float={false}
-        className="-bottom-32 right-[-6%]"
-      />
 
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeading

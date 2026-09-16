@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { toast } from '@/components/ui/toaster'
-import { GlowOrb, WaveDivider } from '@/components/motion/backgrounds'
+import { WaveDivider } from '@/components/motion/backgrounds'
 import { Reveal } from '@/components/motion/reveal'
 import { Logo } from '@/components/marketing/logo'
 
@@ -104,7 +104,7 @@ export interface SiteFooterProps {
 /**
  * The marketing footer: a newsletter band, the full sitemap, and a legal bar.
  *
- * The wave seam and the two glow orbs are the one place on the page where the
+ * The wave seam is the one place on the page where the
  * ocean side of the brand is allowed to be literal.
  */
 export function SiteFooter({ className }: SiteFooterProps) {
@@ -139,21 +139,6 @@ export function SiteFooter({ className }: SiteFooterProps) {
           stacking context here they would paint behind this element's own
           background instead of in front of it. */}
       <div className="relative isolate overflow-hidden bg-surface-sunken">
-        <GlowOrb
-          color="lagoon"
-          size={620}
-          opacity={0.16}
-          blur={130}
-          className="-top-56 left-[-14%]"
-        />
-        <GlowOrb
-          color="coral"
-          size={440}
-          opacity={0.12}
-          blur={120}
-          float={false}
-          className="bottom-[-9rem] right-[-8%]"
-        />
 
         {/* ---------- newsletter band ---------- */}
         <div className="mx-auto max-w-7xl px-5 pb-14 pt-10 sm:px-6 lg:px-8 lg:pb-16 lg:pt-14">

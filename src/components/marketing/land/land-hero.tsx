@@ -20,6 +20,7 @@ import { useIsFinePointer } from '@/hooks/use-media-query'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { EASE_OUT_EXPO, SPRING_SOFT } from '@/lib/motion'
 import { cn } from '@/lib/utils'
+import { HeroBackdrop } from './hero-backdrop'
 import { LAND_VERTICALS, type LandVerticalKey } from './verticals'
 
 /* ==========================================================================
@@ -79,6 +80,8 @@ export function LandHero() {
   const sy = useSpring(my, SPRING_SOFT)
   const stackX = useTransform(sx, (v) => v * 14)
   const stackY = useTransform(sy, (v) => v * 10)
+  const stackRotateY = useTransform(sx, (v) => v * 11)
+  const stackRotateX = useTransform(sy, (v) => v * -8)
   const chipX = useTransform(sx, (v) => v * -22)
   const chipY = useTransform(sy, (v) => v * -16)
 
@@ -98,8 +101,12 @@ export function LandHero() {
   return (
     <section
       aria-labelledby="hero-title"
-      className="relative overflow-hidden bg-background pt-8 pb-14 sm:pt-12 sm:pb-16 lg:pt-14 lg:pb-20"
+      onPointerMove={onPointerMove}
+      onPointerLeave={onPointerLeave}
+      className="relative isolate overflow-hidden bg-background pt-8 pb-14 sm:pt-12 sm:pb-16 lg:pt-14 lg:pb-20"
     >
+      <HeroBackdrop tiltX={sx} tiltY={sy} />
+
       <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-12 lg:gap-8 lg:px-8">
         {/* ---------- copy ---------- */}
         <div className="lg:col-span-6">
@@ -166,12 +173,13 @@ export function LandHero() {
         <div className="lg:col-span-6">
           <div
             ref={sceneRef}
-            onPointerMove={onPointerMove}
-            onPointerLeave={onPointerLeave}
             className="relative mx-auto aspect-[5/4] w-full max-w-xl sm:aspect-[4/3] lg:aspect-[5/4]"
           >
-            {/* card stack */}
-            <motion.div style={{ x: stackX, y: stackY }} className="absolute inset-x-[8%] inset-y-[6%] lg:inset-x-[10%]">
+            {/* card stack, leaning with the pointer */}
+            <motion.div
+              style={{ x: stackX, y: stackY, rotateX: stackRotateX, rotateY: stackRotateY, transformPerspective: 1400, transformStyle: 'preserve-3d' }}
+              className="absolute inset-x-[8%] inset-y-[6%] lg:inset-x-[10%]"
+            >
               {LAND_VERTICALS.map((v, i) => {
                 const order = (i - index + LAND_VERTICALS.length) % LAND_VERTICALS.length
                 const slot = order < SLOT.length ? SLOT[order] : HIDDEN
@@ -195,7 +203,7 @@ export function LandHero() {
                       src={photoUrl(v.photo, 1200)}
                       alt={order === 0 ? v.photo.alt : ''}
                       fill
-                      priority={i < 2}
+                      priority={i < 3}
                       sizes="(min-width: 1024px) 40vw, 90vw"
                       className="object-cover"
                       style={{ objectPosition: v.photo.focus }}
@@ -209,7 +217,7 @@ export function LandHero() {
             </motion.div>
 
             {/* the booking that just landed */}
-            <motion.div style={{ x: chipX, y: chipY }} className="absolute -bottom-3 -left-2 z-40 w-[min(19rem,88%)] sm:-left-4 sm:bottom-2">
+            <motion.div style={{ x: chipX, y: chipY, z: 60 }} className="absolute -bottom-3 -left-2 z-40 w-[min(19rem,88%)] sm:-left-4 sm:bottom-2">
               <AnimatePresence mode="wait" initial={false}>
                 <motion.div
                   key={current.key}

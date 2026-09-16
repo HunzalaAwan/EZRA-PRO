@@ -4,7 +4,7 @@ import * as React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { AnimatePresence, motion, useMotionValueEvent, useScroll } from 'motion/react'
-import { ArrowRight, ChevronDown, Menu, Sparkles, X } from 'lucide-react'
+import { ArrowRight, ChevronDown, Menu, Truck, X } from 'lucide-react'
 
 import { MARKETING_NAV, type NavGroup } from '@/lib/site-config'
 import { cn } from '@/lib/utils'
@@ -278,7 +278,7 @@ export function SiteHeader({ className }: SiteHeaderProps) {
           )}
         >
           <div className="mx-auto flex h-full max-w-7xl items-center gap-3 px-4 sm:px-6 lg:px-8">
-            <Sparkles aria-hidden="true" className="hidden size-3.5 shrink-0 text-accent sm:block" />
+            <Truck aria-hidden="true" className="hidden size-3.5 shrink-0 text-accent sm:block" />
             <p className="min-w-0 flex-1 truncate text-[0.78125rem] font-medium text-ink-50">
               <span className="hidden sm:inline">{ANNOUNCEMENT.full}</span>
               <span className="sm:hidden">{ANNOUNCEMENT.short}</span>

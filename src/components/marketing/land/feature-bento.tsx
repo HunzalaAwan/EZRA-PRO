@@ -4,6 +4,7 @@ import * as React from 'react'
 
 import { SectionHeading } from '@/components/marketing/section-heading'
 import { StaggerGroup, StaggerItem } from '@/components/motion/stagger'
+import { LeanCard } from '@/components/motion/lean-card'
 import { cn } from '@/lib/utils'
 import { CalendarIllo, DepositIllo, HostAppIllo, PayoutIllo, SeatMapIllo } from './illustrations'
 
@@ -70,17 +71,16 @@ function BentoTile({ tile }: { tile: Tile }) {
   const Illo = tile.illo
 
   return (
-    <StaggerItem
-      as="li"
-      className={cn(
-        'group relative flex flex-col overflow-hidden rounded-2xl border border-line bg-surface',
-        'transition-[transform,box-shadow,border-color] duration-300 ease-[var(--ease-out-expo)]',
-        'hover:-translate-y-0.5 hover:border-line-strong hover:shadow-md motion-reduce:transform-none motion-reduce:transition-none',
-        tile.span,
-      )}
-    >
-      <article className="flex h-full flex-col" onMouseEnter={() => setReplay((n) => n + 1)}>
-        <div className={cn('relative w-full bg-well p-3 sm:p-4', tile.stage ?? 'aspect-[16/10]')}>
+    <StaggerItem as="li" className={cn('group relative flex flex-col', tile.span)}>
+      <LeanCard
+        className={cn(
+          'flex h-full flex-col overflow-hidden rounded-2xl border border-line bg-surface',
+          'transition-[box-shadow,border-color] duration-300 ease-[var(--ease-out-expo)]',
+          'hover:border-line-strong hover:shadow-xl hover:shadow-black/[0.06]',
+        )}
+      >
+      <article className="flex h-full flex-col [transform-style:preserve-3d]" onMouseEnter={() => setReplay((n) => n + 1)}>
+        <div className={cn('relative w-full bg-well p-3 sm:p-4 [transform:translateZ(22px)]', tile.stage ?? 'aspect-[16/10]')}>
           <Illo replayKey={replay} />
         </div>
         <div className="flex flex-1 flex-col gap-1.5 p-5">
@@ -90,6 +90,7 @@ function BentoTile({ tile }: { tile: Tile }) {
           <p className="text-[0.875rem] leading-relaxed text-muted">{tile.body}</p>
         </div>
       </article>
+      </LeanCard>
     </StaggerItem>
   )
 }
