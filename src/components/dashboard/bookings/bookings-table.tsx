@@ -4,10 +4,15 @@ import * as React from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import {
+  ArrowUpRight,
+  Ban,
   CheckCheck,
   ChevronRight,
   CircleX,
   Download,
+  MessageSquare,
+  MoreHorizontal,
+  RotateCcw,
   Send,
   Users,
   X,
@@ -31,6 +36,15 @@ import { Avatar } from '@/components/ui/avatar'
 import { Badge, StatusBadge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { IconButton } from '@/components/ui/icon-button'
 import {
   DataTable,
   type DataTableColumn,
@@ -200,10 +214,13 @@ function DayHeader({
    never loses the table while acting on a selection.
    ========================================================================== */
 
+export type BulkBookingAction = 'confirm' | 'message' | 'refund' | 'export' | 'cancel'
+export type BookingRowAction = 'open' | 'message' | 'refund' | 'cancel'
+
 interface BulkActionBarProps {
   count: number
   onClear: () => void
-  onAction: (action: 'confirm' | 'message' | 'export' | 'cancel') => void
+  onAction: (action: BulkBookingAction) => void
 }
 
 function BulkActionBar({ count, onClear, onAction }: BulkActionBarProps) {
@@ -242,6 +259,9 @@ function BulkActionBar({ count, onClear, onAction }: BulkActionBarProps) {
             <Button size="sm" variant="secondary" leftIcon={<Send />} onClick={() => onAction('message')}>
               Message
             </Button>
+            <Button size="sm" variant="secondary" leftIcon={<RotateCcw />} onClick={() => onAction('refund')}>
+              Refund
+            </Button>
             <Button size="sm" variant="secondary" leftIcon={<Download />} onClick={() => onAction('export')}>
               Export
             </Button>
@@ -271,6 +291,55 @@ function BulkActionBar({ count, onClear, onAction }: BulkActionBarProps) {
         </motion.div>
       ) : null}
     </AnimatePresence>
+  )
+}
+
+/* ==========================================================================
+   ROW MENU — the actions a desk takes without opening the record.
+   ========================================================================== */
+
+const CLOSED_STATUSES = new Set(['cancelled', 'refunded', 'completed', 'no_show'])
+
+function RowMenu({ row, onAction }: { row: BookingRow; onAction: (action: BookingRowAction, row: BookingRow) => void }) {
+  const { booking, customer } = row
+  const refundable = booking.amountPaid - (booking.refundAmount ?? 0) > 0
+  const closed = CLOSED_STATUSES.has(booking.status)
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <IconButton
+          variant="ghost"
+          size="xs"
+          aria-label={`Actions for ${booking.reference}`}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <MoreHorizontal />
+        </IconButton>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52" onClick={(event) => event.stopPropagation()}>
+        <DropdownMenuLabel>
+          {booking.reference} · {customer.firstName} {customer.lastName}
+        </DropdownMenuLabel>
+        <DropdownMenuItem onSelect={() => onAction('open', row)}>
+          <ArrowUpRight />
+          Open reservation
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onAction('message', row)}>
+          <MessageSquare />
+          Message guest
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => onAction('refund', row)} disabled={!refundable}>
+          <RotateCcw />
+          {refundable ? 'Refund…' : 'Nothing to refund'}
+        </DropdownMenuItem>
+        <DropdownMenuItem tone="danger" onSelect={() => onAction('cancel', row)} disabled={closed}>
+          <Ban />
+          Cancel reservation
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -385,7 +454,9 @@ export interface BookingsTableProps {
   selectedIds: string[]
   onSelectionChange: (ids: string[]) => void
   onRowClick: (row: BookingRow) => void
-  onBulkAction: (action: 'confirm' | 'message' | 'export' | 'cancel', ids: string[]) => void
+  /** Row-menu actions; refunds and cancellations are handled by the page. */
+  onRowAction?: (action: BookingRowAction, row: BookingRow) => void
+  onBulkAction: (action: BulkBookingAction, ids: string[]) => void
   page: number
   pageCount: number
   pageSize: number
@@ -406,6 +477,7 @@ export function BookingsTable({
   selectedIds,
   onSelectionChange,
   onRowClick,
+  onRowAction,
   onBulkAction,
   page,
   pageCount,
@@ -554,14 +626,19 @@ export function BookingsTable({
       },
       {
         id: 'open',
-        header: <span className="sr-only">Open</span>,
-        width: '2rem',
+        header: <span className="sr-only">Actions</span>,
+        width: '3.5rem',
         align: 'right',
         cellClassName: 'pl-0',
-        cell: () => <ChevronRight aria-hidden="true" className="size-4 text-faint" />,
+        cell: (row) => (
+          <span className="inline-flex items-center justify-end gap-0.5">
+            {onRowAction ? <RowMenu row={row} onAction={onRowAction} /> : null}
+            <ChevronRight aria-hidden="true" className="size-4 text-faint" />
+          </span>
+        ),
       },
     ]),
-    [currency, density, grouped],
+    [currency, density, grouped, onRowAction],
   )
 
   const empty = (

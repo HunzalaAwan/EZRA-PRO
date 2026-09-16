@@ -14,11 +14,19 @@ import {
 
 import type { BookingRow } from '@/lib/demo'
 import type { Activity, Tenant } from '@/types'
-import { addDays, formatNumber, percentChange, toDateKey } from '@/lib/utils'
+import { addDays, formatNumber, percentChange, toDateKey, formatCurrency } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { StatCard, StatGrid } from '@/components/ui/stat'
 import { Segmented, type SegmentedOption } from '@/components/ui/segmented'
 import { toast } from '@/components/ui/toaster'
+import {
+  REFUND_REASONS,
+  RefundDialog,
+  refundableAmount,
+  type RefundResult,
+  type RefundTarget,
+} from '@/components/dashboard/bookings/refund-dialog'
+import type { BookingRowAction } from '@/components/dashboard/bookings/bookings-table'
 import type { DataTableSort } from '@/components/ui/data-table'
 import { PageHeader } from '@/components/dashboard/page-header'
 import {
@@ -72,7 +80,34 @@ export interface BookingsPageClientProps {
  * handed down as a prop; it must never be re-fetched or re-generated here,
  * or the entire synthetic dataset ships into the client bundle again.
  */
-export function BookingsPageClient({ tenant, allRows, activities, now: NOW, todayKey: TODAY_KEY }: BookingsPageClientProps) {
+export function BookingsPageClient({ tenant, allRows: sourceRows, activities, now: NOW, todayKey: TODAY_KEY }: BookingsPageClientProps) {
+  /* Refunds and cancellations made at this desk, layered over the server rows. */
+  const [adjustments, setAdjustments] = React.useState<Record<string, { refunded: number; cancelled: boolean }>>({})
+  const allRows = React.useMemo(
+    () =>
+      sourceRows.map((row) => {
+        const adj = adjustments[row.booking.id]
+        if (!adj) return row
+        const refunded = (row.booking.refundAmount ?? 0) + adj.refunded
+        return {
+          ...row,
+          booking: {
+            ...row.booking,
+            refundAmount: refunded,
+            paymentStatus:
+              refunded > 0 && refunded >= row.booking.amountPaid
+                ? ('refunded' as const)
+                : refunded > 0
+                  ? ('partially_refunded' as const)
+                  : row.booking.paymentStatus,
+            status: adj.cancelled ? ('cancelled' as const) : row.booking.status,
+          },
+        }
+      }),
+    [sourceRows, adjustments],
+  )
+  const [refundTargets, setRefundTargets] = React.useState<BookingRow[]>([])
+  const [refundOpen, setRefundOpen] = React.useState(false)
 
   const [filters, setFilters] = React.useState<BookingFilters>(DEFAULT_VIEW.filters)
   const [statusTab, setStatusTab] = React.useState<BookingStatusTab>('all')
@@ -282,9 +317,85 @@ export function BookingsPageClient({ tenant, allRows, activities, now: NOW, toda
     if (next) setOpenBookingId(next.booking.id)
   }
 
-  const bulkAction = (action: 'confirm' | 'message' | 'export' | 'cancel', ids: string[]) => {
+  const toRefundTarget = (row: BookingRow): RefundTarget => ({
+    id: row.booking.id,
+    reference: row.booking.reference,
+    guestName: `${row.customer.firstName} ${row.customer.lastName}`,
+    activityName: row.activity.name,
+    departureAt: row.departure.startsAt,
+    partySize: row.booking.partySize,
+    status: row.booking.status,
+    total: row.booking.total,
+    amountPaid: row.booking.amountPaid,
+    refunded: row.booking.refundAmount ?? 0,
+    fee: row.booking.amountPaid > 0 ? Math.round(row.booking.amountPaid * 0.029 + 30) : 0,
+  })
+
+  const openRefund = (rows: BookingRow[]) => {
+    const refundable = rows.filter((row) => refundableAmount(toRefundTarget(row)) > 0)
+    if (refundable.length === 0) {
+      toast.info('Nothing to refund', {
+        description: 'Every dollar collected on the selection has already been returned.',
+      })
+      return
+    }
+    setRefundTargets(refundable)
+    setRefundOpen(true)
+  }
+
+  const handleRefund = (result: RefundResult) => {
+    setAdjustments((prev) => {
+      const next = { ...prev }
+      for (const refund of result.refunds) {
+        const current = next[refund.id] ?? { refunded: 0, cancelled: false }
+        next[refund.id] = {
+          refunded: current.refunded + refund.amount,
+          cancelled: current.cancelled || result.cancelBooking,
+        }
+      }
+      return next
+    })
+    const total = result.refunds.reduce((sum, r) => sum + r.amount, 0)
+    const n = result.refunds.length
+    const reason = REFUND_REASONS.find((r) => r.value === result.reason)?.label ?? result.reason
+    toast.success(`Refunded ${formatCurrency(total, tenant.currency)}`, {
+      description: `${n} ${n === 1 ? 'reservation' : 'reservations'} · ${reason}${
+        result.cancelBooking ? ' · seats released' : ''
+      }${result.notifyGuest ? ' · receipt emailed' : ''}`,
+    })
+    setSelectedIds([])
+  }
+
+  const rowAction = (action: BookingRowAction, row: BookingRow) => {
+    switch (action) {
+      case 'open':
+        openRow(row)
+        break
+      case 'refund':
+        openRefund([row])
+        break
+      case 'message':
+        toast.success(`Composer opened for ${row.customer.firstName} ${row.customer.lastName}`)
+        break
+      case 'cancel':
+        setAdjustments((prev) => ({
+          ...prev,
+          [row.booking.id]: { refunded: prev[row.booking.id]?.refunded ?? 0, cancelled: true },
+        }))
+        toast.error(`${row.booking.reference} cancelled`, {
+          description: `${row.booking.partySize} ${row.booking.partySize === 1 ? 'seat' : 'seats'} released. Refund separately if money was taken.`,
+        })
+        break
+    }
+  }
+
+  const bulkAction = (action: 'confirm' | 'message' | 'export' | 'cancel' | 'refund', ids: string[]) => {
     const n = ids.length
     const noun = n === 1 ? 'reservation' : 'reservations'
+    if (action === 'refund') {
+      openRefund(allRows.filter((row) => ids.includes(row.booking.id)))
+      return
+    }
     switch (action) {
       case 'confirm':
         toast.success(`${n} ${noun} confirmed`, {
@@ -480,6 +591,7 @@ export function BookingsPageClient({ tenant, allRows, activities, now: NOW, toda
         selectedIds={selectedIds}
         onSelectionChange={setSelectedIds}
         onRowClick={openRow}
+        onRowAction={rowAction}
         onBulkAction={bulkAction}
         page={safePage}
         pageCount={pageCount}
@@ -507,6 +619,14 @@ export function BookingsPageClient({ tenant, allRows, activities, now: NOW, toda
       />
 
       <NewBookingDialog open={newBookingOpen} onOpenChange={setNewBookingOpen} />
+
+      <RefundDialog
+        open={refundOpen}
+        onOpenChange={setRefundOpen}
+        targets={refundTargets.map(toRefundTarget)}
+        currency={tenant.currency}
+        onConfirm={handleRefund}
+      />
     </div>
   )
 }

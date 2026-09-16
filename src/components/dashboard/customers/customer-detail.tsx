@@ -10,6 +10,7 @@ import * as React from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import {
+  ArrowUpRight,
   Banknote,
   CalendarPlus,
   CheckCheck,
@@ -23,6 +24,7 @@ import {
   MoreHorizontal,
   NotebookPen,
   Phone,
+  RotateCcw,
   Send,
   ShieldCheck,
   SquarePen,
@@ -55,6 +57,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -75,6 +78,12 @@ import { Switch } from '@/components/ui/switch'
 import { TagInput } from '@/components/ui/tag-input'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
+import {
+  RefundDialog,
+  refundableAmount,
+  type RefundResult,
+  type RefundTarget,
+} from '@/components/dashboard/bookings/refund-dialog'
 import { StarRating } from '@/components/dashboard/reviews/rating-summary'
 import { SEGMENT_META } from '@/components/dashboard/customers/segment-cards'
 import type {
@@ -104,6 +113,9 @@ export interface CustomerBookingEntry {
   partySize: number
   /** Minor units. */
   total: number
+  /** Minor units collected and already returned. */
+  amountPaid: number
+  refunded: number
   status: BookingStatus
   paymentStatus: PaymentStatus
   channel: BookingChannel
@@ -254,6 +266,61 @@ export function CustomerDetail({
   operator,
   className,
 }: CustomerDetailProps) {
+  /* Refunds issued from this profile, layered over the server entries. */
+  const [refundAdjust, setRefundAdjust] = React.useState<Record<string, { refunded: number; cancelled: boolean }>>({})
+  const [refundTarget, setRefundTarget] = React.useState<CustomerBookingEntry | null>(null)
+  const entries = React.useMemo(
+    () =>
+      bookings.map((entry) => {
+        const adj = refundAdjust[entry.id]
+        if (!adj) return entry
+        const refunded = entry.refunded + adj.refunded
+        return {
+          ...entry,
+          refunded,
+          paymentStatus:
+            refunded > 0 && refunded >= entry.amountPaid
+              ? ('refunded' as const)
+              : refunded > 0
+                ? ('partially_refunded' as const)
+                : entry.paymentStatus,
+          status: adj.cancelled ? ('cancelled' as const) : entry.status,
+        }
+      }),
+    [bookings, refundAdjust],
+  )
+  const toRefundTarget = (entry: CustomerBookingEntry): RefundTarget => ({
+    id: entry.id,
+    reference: entry.reference,
+    guestName: `${customer.firstName} ${customer.lastName}`,
+    activityName: entry.activityName,
+    departureAt: entry.departureAt,
+    partySize: entry.partySize,
+    status: entry.status,
+    total: entry.total,
+    amountPaid: entry.amountPaid,
+    refunded: entry.refunded,
+    fee: entry.amountPaid > 0 ? Math.round(entry.amountPaid * 0.029 + 30) : 0,
+  })
+  const handleRefund = (result: RefundResult) => {
+    setRefundAdjust((prev) => {
+      const next = { ...prev }
+      for (const refund of result.refunds) {
+        const current = next[refund.id] ?? { refunded: 0, cancelled: false }
+        next[refund.id] = {
+          refunded: current.refunded + refund.amount,
+          cancelled: current.cancelled || result.cancelBooking,
+        }
+      }
+      return next
+    })
+    const total = result.refunds.reduce((sum, r) => sum + r.amount, 0)
+    toast.success(`Refunded ${formatCurrency(total, currency)} to ${customer.firstName}`, {
+      description: result.notifyGuest
+        ? 'Receipt emailed. Money lands in 5–10 business days.'
+        : 'Money lands in 5–10 business days.',
+    })
+  }
   const fullName = `${customer.firstName} ${customer.lastName}`
   const segmentMeta = SEGMENT_META[customer.segment]
   const SegmentIcon = segmentMeta.icon
@@ -523,6 +590,16 @@ export function CustomerDetail({
       {/* ================= BODY ================= */}
       <div className="grid gap-5 lg:grid-cols-3">
         {/* ---- trip history ---- */}
+        <RefundDialog
+          open={refundTarget !== null}
+          onOpenChange={(open) => {
+            if (!open) setRefundTarget(null)
+          }}
+          targets={refundTarget ? [toRefundTarget(refundTarget)] : []}
+          currency={currency}
+          onConfirm={handleRefund}
+        />
+
         <Card className="lg:col-span-2">
           <CardHeader>
             <div className="min-w-0">
@@ -556,7 +633,7 @@ export function CustomerDetail({
                   className="absolute top-3 bottom-6 left-[0.4375rem] w-px bg-gradient-to-b from-line via-line to-transparent"
                 />
                 <StaggerGroup as="ol" stagger={0.04} className="space-y-2.5">
-                  {bookings.map((booking) => (
+                  {entries.map((booking) => (
                     <StaggerItem as="li" key={booking.id} className="relative pl-7">
                       <span
                         aria-hidden="true"
@@ -623,8 +700,44 @@ export function CustomerDetail({
                           <span className="tabular text-sm font-semibold text-foreground">
                             {formatCurrency(booking.total, currency)}
                           </span>
-                          <StatusBadge kind="booking" status={booking.status} size="sm" />
+                          <span className="flex items-center gap-1.5">
+                            {booking.refunded > 0 ? (
+                              <span className="text-[0.6875rem] font-medium text-subtle tabular-nums">
+                                {formatCurrency(booking.refunded, currency)} refunded
+                              </span>
+                            ) : null}
+                            <StatusBadge kind="booking" status={booking.status} size="sm" />
+                          </span>
                         </div>
+
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <IconButton variant="ghost" size="xs" aria-label={`Actions for ${booking.reference}`}>
+                              <MoreHorizontal />
+                            </IconButton>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-52">
+                            <DropdownMenuLabel>{booking.reference}</DropdownMenuLabel>
+                            <DropdownMenuItem asChild>
+                              <Link href={`/dashboard/bookings/${booking.id}`}>
+                                <ArrowUpRight />
+                                Open reservation
+                              </Link>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => toast.success(`Confirmation resent for ${booking.reference}`)}>
+                              <Send />
+                              Resend confirmation
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onSelect={() => setRefundTarget(booking)}
+                              disabled={refundableAmount(booking) <= 0}
+                            >
+                              <RotateCcw />
+                              {refundableAmount(booking) > 0 ? 'Refund…' : 'Nothing to refund'}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </StaggerItem>
                   ))}

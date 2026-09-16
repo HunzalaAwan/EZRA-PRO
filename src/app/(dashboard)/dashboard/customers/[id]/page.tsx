@@ -92,6 +92,8 @@ function toEntry(booking: Booking): CustomerBookingEntry {
     createdAt: booking.createdAt,
     partySize: booking.partySize,
     total: booking.total,
+    amountPaid: booking.amountPaid,
+    refunded: booking.refundAmount ?? 0,
     status: booking.status,
     paymentStatus: booking.paymentStatus,
     channel: booking.channel,

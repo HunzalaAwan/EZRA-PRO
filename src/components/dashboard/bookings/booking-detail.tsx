@@ -79,6 +79,7 @@ import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
+import { RefundDialog, type RefundResult } from '@/components/dashboard/bookings/refund-dialog'
 import { ChannelBadge } from '@/components/dashboard/bookings/bookings-table'
 
 /* ==========================================================================
@@ -431,10 +432,15 @@ export function BookingDetailContent({
       toast('Modify reservation', {
         description: 'Change the departure, party size or add-ons, then re-price.',
       }),
-    refund: () =>
-      toast.success(`Refund of ${formatCurrency(booking.amountPaid, currency)} queued`, {
-        description: 'Funds return to the original payment method in 5-10 business days.',
-      }),
+    refund: (result: RefundResult) =>
+      toast.success(
+        `Refund of ${formatCurrency(result.refunds.reduce((sum, r) => sum + r.amount, 0), currency)} queued`,
+        {
+          description: result.cancelBooking
+            ? 'Seats released. Funds return to the original payment method in 5-10 business days.'
+            : 'Funds return to the original payment method in 5-10 business days.',
+        },
+      ),
     cancel: () =>
       toast.error(`${booking.reference} cancelled`, {
         description: `${booking.partySize} ${
@@ -1150,23 +1156,27 @@ export function BookingDetailContent({
       {/* ==================================================================
           DESTRUCTIVE CONFIRMATIONS
           ================================================================== */}
-      <ConfirmDialog
+      <RefundDialog
         open={refundOpen}
         onOpenChange={setRefundOpen}
-        title={`Refund ${formatCurrency(booking.amountPaid, currency)}?`}
-        description={`${guestName} will be refunded to the original payment method. The seats stay reserved unless you also cancel.`}
-        confirmLabel="Issue refund"
+        targets={[
+          {
+            id: booking.id,
+            reference: booking.reference,
+            guestName,
+            activityName: activity.name,
+            departureAt: departure.startsAt,
+            partySize: booking.partySize,
+            status: booking.status,
+            total: booking.total,
+            amountPaid: booking.amountPaid,
+            refunded: booking.refundAmount ?? 0,
+            fee: booking.amountPaid > 0 ? Math.round(booking.amountPaid * 0.029 + 30) : 0,
+          },
+        ]}
+        currency={currency}
         onConfirm={actions.refund}
-      >
-        <div className="flex flex-col divide-y divide-line-subtle rounded-xl bg-surface-sunken px-3">
-          <DataRow label="Collected">
-            <span className="tabular-nums">{formatCurrency(booking.amountPaid, currency)}</span>
-          </DataRow>
-          <DataRow label="Policy">
-            {activity.cancellationPolicy.freeCancellationHours}h free cancellation
-          </DataRow>
-        </div>
-      </ConfirmDialog>
+      />
 
       <ConfirmDialog
         open={cancelOpen}
