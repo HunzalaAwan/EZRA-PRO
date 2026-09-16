@@ -43,8 +43,8 @@ import type { SolutionContent, SolutionToken, TokenTone } from './solution-conte
 
    Left: the headline and the four promises for this business. Right: a
    photograph of the trade on a card that leans with the pointer in three
-   dimensions, a second frame behind it for depth, the "live" pill, and three
-   pieces of the product floating around it at their own depths. The floor
+   dimensions, a second frame behind it for depth, and three pieces of the
+   product floating around it at their own depths. The floor
    and orbits come from the landing hero's backdrop so the two pages share a
    room.
    ========================================================================== */
@@ -128,7 +128,6 @@ export function SolutionHero({ vertical, content, headline, body, bullets, proof
   const cardX = useTransform(sx, (v) => v * 10)
   const behindX = useTransform(sx, (v) => v * -18)
   const behindY = useTransform(sy, (v) => v * -12)
-  const pillX = useTransform(sx, (v) => v * -24)
 
   const onPointerMove = (event: React.PointerEvent<HTMLElement>) => {
     if (!finePointer || reduce) return
@@ -171,17 +170,13 @@ export function SolutionHero({ vertical, content, headline, body, bullets, proof
         <div className="mt-8 grid items-center gap-12 lg:grid-cols-12 lg:gap-8">
           {/* ---------- copy ---------- */}
           <div className="lg:col-span-6">
-            <p className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-[0.75rem] font-semibold text-muted">
-              <span className="size-1.5 rounded-full bg-accent" aria-hidden="true" />
-              EZRA Pro for {vertical.label.toLowerCase()}
-            </p>
 
             <motion.h1
               id="vertical-title"
               initial={reduce ? false : { opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-              className="mt-5 font-display text-[2.5rem] leading-[1.02] font-semibold tracking-[-0.035em] text-balance text-foreground sm:text-5xl lg:text-[3.5rem] xl:text-[3.85rem]"
+              className="font-display text-[2.5rem] leading-[1.02] font-semibold tracking-[-0.035em] text-balance text-foreground sm:text-5xl lg:text-[3.5rem] xl:text-[3.85rem]"
             >
               {headline}
             </motion.h1>
@@ -252,17 +247,6 @@ export function SolutionHero({ vertical, content, headline, body, bullets, proof
                 </figcaption>
               </motion.figure>
 
-              {/* live pill */}
-              <motion.p
-                style={{ x: pillX }}
-                className="absolute top-2 right-0 z-40 inline-flex max-w-[85%] items-center gap-2 rounded-full bg-navy-deep px-3 py-1.5 text-[0.75rem] font-semibold text-white shadow-lg sm:-right-3 sm:top-4"
-              >
-                <span className="relative flex size-2 shrink-0" aria-hidden="true">
-                  <span className="absolute inline-flex size-full rounded-full bg-accent opacity-75 motion-safe:animate-pulse-ring" />
-                  <span className="relative inline-flex size-2 rounded-full bg-accent" />
-                </span>
-                <span className="truncate">{content.live}</span>
-              </motion.p>
             </div>
           </div>
         </div>

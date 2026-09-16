@@ -64,8 +64,6 @@ export interface SolutionContent {
   hero: PhotoKey
   /** A second frame that sits behind it, for depth. */
   behind: PhotoKey
-  /** The pill on the stage, e.g. "Live on your site and Viator". */
-  live: string
   tokens: SolutionToken[]
   moments: SolutionMoment[]
   outcomes: SolutionOutcome[]
@@ -73,7 +71,7 @@ export interface SolutionContent {
   consoleLine: string
 }
 
-const TOKEN_SLOTS = ['left-[46%] top-[7%]', 'right-[2%] top-[52%]', 'left-[50%] bottom-[5%]'] as const
+const TOKEN_SLOTS = ['left-[46%] top-[7%]', 'right-[3%] bottom-[9%]', 'left-[48%] bottom-[5%]'] as const
 
 function tokens(list: Omit<SolutionToken, 'className' | 'depth'>[]): SolutionToken[] {
   return list.map((token, i) => ({ ...token, className: TOKEN_SLOTS[i] ?? TOKEN_SLOTS[0], depth: [1.4, 0.8, 1.1][i] ?? 1 }))
@@ -83,7 +81,6 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
   watersports: {
     hero: 'barrel',
     behind: 'kayakSunset',
-    live: 'Live on your site, Viator and the dock',
     consoleLine: 'Two hulls, nine departures, and the tide on every one of them.',
     tokens: tokens([
       { key: 'hold', icon: 'CloudRain', tone: 'info', title: 'Weather hold · 06:40', detail: '18 guests texted, refunds queued' },
@@ -126,7 +123,6 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
   tours: {
     hero: 'balloonSunrise',
     behind: 'fujiPagoda',
-    live: 'Live on your site, Viator and GetYourGuide',
     consoleLine: 'Six hotels, twenty-three guests, two languages, one departure board.',
     tokens: tokens([
       { key: 'pickup', icon: 'Bus', tone: 'primary', title: 'Pickup list', detail: 'Hotel Aurora · 07:15 · 6 guests' },
@@ -169,7 +165,6 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
   island: {
     hero: 'atoll',
     behind: 'diversReef',
-    live: 'Live at the desk, on the app and in every partner boat',
     consoleLine: 'Twenty operators, one desk, every commission where it should be.',
     tokens: tokens([
       { key: 'concierge', icon: 'ConciergeBell', tone: 'primary', title: 'Quick-book · Room 412', detail: 'Reef day, charged to the room' },
@@ -212,7 +207,6 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
   adventure: {
     hero: 'cliffClimb',
     behind: 'summitLedge',
-    live: 'Live on your site, at the trailhead and in the van',
     consoleLine: 'Guides, gear and weather, checked before anyone reaches the trailhead.',
     tokens: tokens([
       { key: 'waiver', icon: 'FileCheck2', tone: 'success', title: 'Waiver signed · 09:12', detail: 'On the phone, three days out' },
@@ -255,7 +249,6 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
   restaurants: {
     hero: 'chefPlating',
     behind: 'restaurantRoom',
-    live: 'Live on your site, Google and the host stand',
     consoleLine: 'Forty covers a sitting, two sittings a night, every allergy on the pass.',
     tokens: tokens([
       { key: 'deposit', icon: 'Landmark', tone: 'success', title: 'Deposit held · $60', detail: 'Party of four, 19:30' },
@@ -298,7 +291,6 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
   wellness: {
     hero: 'sunsetYoga',
     behind: 'spaTreatment',
-    live: 'Live on your site, the app and the studio door',
     consoleLine: 'Classes, packs and memberships on one calendar, with retention you can read.',
     tokens: tokens([
       { key: 'pack', icon: 'Ticket', tone: 'primary', title: 'Class pack · 8 of 10', detail: 'Renews when the last one is used' },

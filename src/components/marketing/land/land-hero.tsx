@@ -19,7 +19,6 @@ import { Segmented } from '@/components/ui/segmented'
 import { useIsFinePointer } from '@/hooks/use-media-query'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { EASE_OUT_EXPO, SPRING_SOFT } from '@/lib/motion'
-import { cn } from '@/lib/utils'
 import { HeroBackdrop } from './hero-backdrop'
 import { LAND_VERTICALS, type LandVerticalKey } from './verticals'
 
@@ -110,14 +109,10 @@ export function LandHero() {
       <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-12 lg:gap-8 lg:px-8">
         {/* ---------- copy ---------- */}
         <div className="lg:col-span-6">
-          <p className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-[0.75rem] font-semibold text-muted">
-            <span className="size-1.5 rounded-full bg-accent" aria-hidden="true" />
-            Booking software for businesses that run on a calendar
-          </p>
 
           <h1
             id="hero-title"
-            className="mt-5 font-display text-[2.5rem] leading-[1.02] font-semibold tracking-[-0.035em] text-balance text-foreground sm:text-5xl lg:text-[3.5rem] xl:text-[3.85rem]"
+            className="font-display text-[2.5rem] leading-[1.02] font-semibold tracking-[-0.035em] text-balance text-foreground sm:text-5xl lg:text-[3.5rem] xl:text-[3.85rem]"
           >
             Take bookings for your
             <br />
@@ -254,30 +249,6 @@ export function LandHero() {
               </AnimatePresence>
             </motion.div>
 
-            {/* seats left */}
-            <motion.div
-              style={{ x: chipX, y: chipY }}
-              className="absolute -top-2 right-0 z-40 sm:-right-3 sm:top-4"
-            >
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.p
-                  key={current.key}
-                  initial={reduce ? false : { opacity: 0, x: 12 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={reduce ? undefined : { opacity: 0, x: 8 }}
-                  transition={{ duration: 0.4, ease: EASE_OUT_EXPO, delay: 0.1 }}
-                  className={cn(
-                    'inline-flex items-center gap-2 rounded-full bg-navy-deep px-3 py-1.5 text-[0.75rem] font-semibold text-white shadow-lg',
-                  )}
-                >
-                  <span className="relative flex size-2" aria-hidden="true">
-                    <span className="absolute inline-flex size-full rounded-full bg-accent opacity-75 motion-safe:animate-pulse-ring" />
-                    <span className="relative inline-flex size-2 rounded-full bg-accent" />
-                  </span>
-                  Live on your site and Viator
-                </motion.p>
-              </AnimatePresence>
-            </motion.div>
           </div>
         </div>
       </div>
