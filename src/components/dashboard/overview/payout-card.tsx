@@ -23,9 +23,9 @@ import type { CurrencyCode } from '@/types'
 
 /** Orange corner, pink through the middle, violet everywhere else. */
 const GROUND = [
-  'radial-gradient(115% 95% at 6% 4%, var(--aurora-orange) 0%, color-mix(in oklab, var(--aurora-orange) 60%, var(--aurora-pink)) 20%, color-mix(in oklab, var(--aurora-pink) 55%, transparent) 42%, transparent 64%)',
-  'radial-gradient(70% 60% at 42% 58%, color-mix(in oklab, var(--aurora-pink) 45%, transparent) 0%, transparent 70%)',
-  'linear-gradient(160deg, var(--color-reef-500) 0%, var(--color-reef-600) 48%, var(--color-reef-700) 100%)',
+  'radial-gradient(110% 90% at 6% 4%, color-mix(in oklab, var(--aurora-orange) 88%, var(--color-reef-800)) 0%, color-mix(in oklab, var(--aurora-orange) 55%, var(--aurora-pink)) 18%, color-mix(in oklab, var(--aurora-pink) 50%, transparent) 40%, transparent 60%)',
+  'radial-gradient(70% 60% at 42% 58%, color-mix(in oklab, var(--aurora-pink) 34%, transparent) 0%, transparent 70%)',
+  'linear-gradient(160deg, var(--color-reef-600) 0%, var(--color-reef-700) 50%, var(--color-reef-800) 100%)',
 ].join(', ')
 /** Field order follows CardAurora's dark layout: top-right glow, bottom-left, bottom-right. */
 const FIELDS = ['var(--aurora-pink)', 'var(--aurora-orange)', 'var(--color-reef-400)']
@@ -76,11 +76,11 @@ export function PayoutCard({ balance, currency, className }: PayoutCardProps) {
     <section
       aria-label="Payouts"
       className={cn(
-        'relative isolate flex flex-col overflow-hidden rounded-2xl bg-reef-700 p-5 text-white shadow-md sm:p-6',
+        'relative isolate flex flex-col overflow-hidden rounded-2xl bg-reef-800 p-5 text-white shadow-md sm:p-6',
         className,
       )}
     >
-      <CardAurora tone="dark" fields={3} colors={FIELDS} ground={GROUND} ringColors={RING} />
+      <CardAurora tone="dark" fields={3} colors={FIELDS} ground={GROUND} ringColors={RING} intensity={0.8} />
 
       {/* ---------- what lands next ---------- */}
       <div className="flex items-start justify-between gap-4">
