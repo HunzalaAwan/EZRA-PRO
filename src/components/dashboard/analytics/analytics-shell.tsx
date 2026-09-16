@@ -31,7 +31,7 @@ import { InsightsBoard } from './insights-board'
 import { ExportMenu } from './export-menu'
 import { RevenueSummaryCard, OccupancyGaugeCard, TopChannelsCard } from './overview-cards'
 import { AnalyticsFilterBar } from './analytics-filters'
-import { ChannelMixCard } from './channel-mix-card'
+import { LossesCard } from './losses-card'
 import { TopExperiencesTable } from './top-experiences-table'
 import { RevenueAreaChart, type RevenueMetric } from '@/components/charts/revenue-area-chart'
 
@@ -346,7 +346,7 @@ export function AnalyticsShell({ initialSnapshot }: AnalyticsShellProps) {
                   currency={tenant.currency}
                   showComparison={comparison === 'previous' && shadow}
                   showAverage
-                  height={320}
+                  height={380}
                   loading={pending}
                   title={metric === 'revenue' ? 'Net revenue' : metric === 'bookings' ? 'Bookings' : metric === 'guests' ? 'Guests' : 'Occupancy'}
                   description={
@@ -356,7 +356,7 @@ export function AnalyticsShell({ initialSnapshot }: AnalyticsShellProps) {
                   }
                   className="xl:col-span-2"
                 />
-                <ChannelMixCard channels={snapshot.channels} currency={tenant.currency} loading={pending} onSeeAll={() => handleTabChange('channels')} />
+                <LossesCard losses={snapshot.losses} currency={tenant.currency} loading={pending} />
               </div>
 
               {/* ---------- the products ---------- */}

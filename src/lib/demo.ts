@@ -59,6 +59,7 @@ import type {
   User,
   WeatherSnapshot,
 } from '@/types'
+import { buildLosses } from '@/lib/data/losses'
 
 import {
   addDays,
@@ -1877,6 +1878,7 @@ function buildAnalytics(tenantId: string, preset: RangePreset): AnalyticsSnapsho
     funnel,
     heatmap,
     geo,
+    losses: buildLosses(rangeBookings, prevBookings),
     cohorts,
     insights,
   }

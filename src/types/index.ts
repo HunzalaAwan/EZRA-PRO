@@ -538,6 +538,33 @@ export interface CohortRow {
   retention: number[]
 }
 
+/** What did not travel in the range, and what it cost. */
+export interface LossBreakdown {
+  /** Every booking departing in the range, whatever its status. */
+  total: number
+  cancelled: number
+  noShows: number
+  /** Bookings with any money returned. */
+  refunded: number
+  /** Minor units returned to guests. */
+  refundAmount: number
+  /** Minor units of booked value that never materialised, after fees kept. */
+  lostRevenue: number
+  /** Minor units retained from cancellations under policy. */
+  feesKept: number
+  /** Percent of all bookings. */
+  cancellationRate: number
+  /** Percent of bookings expected to travel. */
+  noShowRate: number
+  /** Points of change against the comparison period. */
+  cancellationRateDelta: number
+  noShowRateDelta: number
+  /** Cancellations inside 24 hours of departure. */
+  lateCancellations: number
+  reasons: { reason: string; count: number }[]
+  byChannel: { channel: BookingChannel; label: string; rate: number; count: number }[]
+}
+
 export interface AnalyticsSnapshot {
   tenantId: string
   rangeLabel: string
@@ -551,6 +578,7 @@ export interface AnalyticsSnapshot {
   cohorts: CohortRow[]
   /** Leading-indicator callouts surfaced as "insights". */
   insights: Insight[]
+  losses: LossBreakdown
 }
 
 /**

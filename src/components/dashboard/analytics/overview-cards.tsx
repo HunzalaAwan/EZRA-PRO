@@ -49,10 +49,13 @@ const DIRECT_CHANNELS = new Set<BookingChannel>(['website_widget', 'direct', 'ph
 export function DeltaPill({
   value,
   goodWhenUp = true,
+  label,
   className,
 }: {
   value: number
   goodWhenUp?: boolean
+  /** Replaces the formatted percentage, e.g. for point changes. */
+  label?: string
   className?: string
 }) {
   const up = value > 0.5
@@ -68,7 +71,7 @@ export function DeltaPill({
       )}
     >
       <Icon aria-hidden="true" className="size-3" strokeWidth={2.5} />
-      {formatDelta(value)}
+      {label ?? formatDelta(value)}
     </span>
   )
 }

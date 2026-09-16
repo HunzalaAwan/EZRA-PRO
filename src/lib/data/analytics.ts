@@ -50,6 +50,7 @@ import type {
   TimeSeriesPoint,
   TrendDirection,
 } from '@/types'
+import { buildLosses } from './losses'
 import {
   addDays,
   clamp,
@@ -1620,6 +1621,7 @@ export function getAnalytics(tenantId: string, preset: RangePreset = '30d'): Ana
     heatmap,
     geo: buildGeo(currentRows, uplift),
     cohorts: buildCohorts(tenantId),
+    losses: buildLosses(currentRows, priorRows),
     insights: buildInsights(
       tenantId,
       facts.currency,
