@@ -5,6 +5,11 @@
  * paginated roster beneath, and a card list that takes over below `md` so the
  * table never side-scrolls on a phone.
  *
+ * Built like the reservations list: one line per guest, numbers right-aligned
+ * in tabular figures, colour reserved for the segment chip. When the roster is
+ * ordered by last booking it is cut into recency bands, so "who has gone
+ * quiet" is a heading rather than a calculation.
+ *
  * Everything here operates on a pre-joined, pre-trimmed working set handed down
  * from the server page — the tenant's full book is tens of thousands of guests
  * and has no business crossing the network.
@@ -16,6 +21,7 @@ import { useRouter } from 'next/navigation'
 import {
   ArrowUpRight,
   CalendarPlus,
+  ChevronRight,
   Copy,
   Download,
   Mail,
@@ -49,13 +55,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { IconButton } from '@/components/ui/icon-button'
 import { Pagination } from '@/components/ui/pagination'
 import { SearchInput } from '@/components/ui/search-input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Segmented } from '@/components/ui/segmented'
 import { toast } from '@/components/ui/toaster'
 import {
   SEGMENT_META,
@@ -91,7 +91,11 @@ export interface CustomersTableProps {
   className?: string
 }
 
-const PAGE_SIZES = [10, 25, 50]
+const PAGE_SIZES = [25, 50, 100]
+
+/* --------------------------------------------------------------------------
+   Cells
+   -------------------------------------------------------------------------- */
 
 function SegmentChip({ segment }: { segment: CustomerRow['segment'] }) {
   const meta = SEGMENT_META[segment]
@@ -109,14 +113,14 @@ function TagList({ tags, max = 2 }: { tags: string[]; max?: number }) {
   const shown = tags.slice(0, max)
   const rest = tags.length - shown.length
   return (
-    <span className="flex flex-wrap items-center gap-1">
+    <span className="flex flex-nowrap items-center gap-1 overflow-hidden">
       {shown.map((tag) => (
-        <Badge key={tag} size="sm" variant="outline" className="font-normal">
+        <Badge key={tag} size="sm" variant="outline" className="shrink-0 font-normal">
           {tag}
         </Badge>
       ))}
       {rest > 0 ? (
-        <Badge size="sm" variant="neutral" className="font-normal" title={tags.slice(max).join(', ')}>
+        <Badge size="sm" variant="neutral" className="shrink-0 font-normal" title={tags.slice(max).join(', ')}>
           +{rest}
         </Badge>
       ) : null}
@@ -174,6 +178,58 @@ function RowMenu({ row }: { row: CustomerRow }) {
     </DropdownMenu>
   )
 }
+
+/* --------------------------------------------------------------------------
+   Recency bands — the roster's natural chapters when sorted by last booking.
+   -------------------------------------------------------------------------- */
+
+const BANDS = [
+  { key: '0-week', label: 'Booked this week', maxDays: 7 },
+  { key: '1-month', label: 'Booked this month', maxDays: 30 },
+  { key: '2-quarter', label: 'Booked in the last 90 days', maxDays: 90 },
+  { key: '3-older', label: 'Quiet for more than 90 days', maxDays: Infinity },
+] as const
+
+const NEVER_BAND = { key: '4-never', label: 'Never booked' } as const
+
+function recencyKey(iso: string | null) {
+  if (!iso) return NEVER_BAND.key
+  const days = (NOW.getTime() - new Date(iso).getTime()) / 86_400_000
+  return (BANDS.find((band) => days <= band.maxDays) ?? BANDS[BANDS.length - 1]).key
+}
+
+function bandLabel(key: string) {
+  return key === NEVER_BAND.key ? NEVER_BAND.label : (BANDS.find((b) => b.key === key)?.label ?? key)
+}
+
+function BandHeader({ bandKey, rows, currency }: { bandKey: string; rows: CustomerRow[]; currency: CurrencyCode }) {
+  const value = rows.reduce((sum, row) => sum + row.lifetimeValue, 0)
+  const quiet = bandKey === '3-older' || bandKey === NEVER_BAND.key
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className={cn('text-[0.8125rem] font-semibold', quiet ? 'text-muted' : 'text-foreground')}>
+        {bandLabel(bandKey)}
+      </span>
+      <span className="hidden text-xs text-subtle tabular-nums sm:inline">
+        {formatNumber(rows.length)} {rows.length === 1 ? 'guest' : 'guests'} on this page ·{' '}
+        {formatCurrency(value, currency, { compact: true })} lifetime
+      </span>
+    </div>
+  )
+}
+
+/** Nine columns need the narrower gutter; the shared table keeps its roomier default. */
+function dense(columns: DataTableColumn<CustomerRow>[]): DataTableColumn<CustomerRow>[] {
+  return columns.map((column) => ({
+    ...column,
+    headerClassName: cn('px-3', column.headerClassName),
+    cellClassName: cn('px-3', column.cellClassName),
+  }))
+}
+
+/* ==========================================================================
+   TABLE
+   ========================================================================== */
 
 export function CustomersTable({
   rows,
@@ -245,119 +301,142 @@ export function CustomersTable({
     [router],
   )
 
+  /* Recency bands only make sense in last-booking order. */
+  const banded = sort.id === 'lastBooking'
+  const groupBy = React.useCallback((row: CustomerRow) => recencyKey(row.lastBookingAt), [])
+  const renderGroupHeader = React.useCallback(
+    (key: string, groupRows: CustomerRow[]) => <BandHeader bandKey={key} rows={groupRows} currency={currency} />,
+    [currency],
+  )
+
   const columns = React.useMemo<DataTableColumn<CustomerRow>[]>(
-    () => [
-      {
-        id: 'guest',
-        header: 'Guest',
-        sortable: true,
-        width: '26%',
-        cell: (row) => (
-          <div className="flex min-w-0 items-center gap-3">
-            <Avatar name={row.name} src={row.avatarUrl} size="sm" />
-            <div className="min-w-0">
-              <p className="truncate text-[0.8125rem] font-medium text-foreground">{row.name}</p>
-              <p className="truncate text-xs text-subtle">{row.email}</p>
+    () =>
+      dense([
+        {
+          id: 'guest',
+          header: 'Guest',
+          sortable: true,
+          cell: (row) => (
+            <div className="flex min-w-[11rem] max-w-[17rem] items-center gap-2.5">
+              <Avatar name={row.name} src={row.avatarUrl} size="xs" />
+              <div className="min-w-0 leading-tight">
+                <p className="flex items-center gap-1.5 text-[0.8125rem] font-semibold text-foreground">
+                  <span className="truncate">{row.name}</span>
+                  <span aria-label={row.countryName} title={row.countryName} className="shrink-0 text-[0.8125rem] leading-none">
+                    {countryFlag(row.countryCode)}
+                  </span>
+                </p>
+                <p className="truncate text-[0.6875rem] text-subtle">{row.email}</p>
+              </div>
             </div>
-          </div>
-        ),
-      },
-      {
-        id: 'country',
-        header: 'Country',
-        sortable: true,
-        hideBelow: 'lg',
-        width: '12%',
-        cell: (row) => (
-          <span className="flex items-center gap-2 text-xs text-muted">
-            <span aria-hidden="true" className="text-sm leading-none">
-              {countryFlag(row.countryCode)}
+          ),
+        },
+        {
+          id: 'segment',
+          header: 'Segment',
+          sortable: true,
+          hideBelow: 'md',
+          width: '6.5rem',
+          cell: (row) => <SegmentChip segment={row.segment} />,
+        },
+        {
+          id: 'bookings',
+          header: 'Trips',
+          sortable: true,
+          align: 'right',
+          numeric: true,
+          defaultSortDir: 'desc',
+          width: '3.5rem',
+          cell: (row) => <span className="text-[0.8125rem] font-medium text-foreground tabular-nums">{row.totalBookings}</span>,
+        },
+        {
+          id: 'value',
+          header: 'Lifetime value',
+          sortable: true,
+          align: 'right',
+          numeric: true,
+          defaultSortDir: 'desc',
+          width: '6.5rem',
+          cellClassName: 'whitespace-nowrap',
+          cell: (row) => (
+            <span className="flex flex-col items-end leading-tight">
+              <span className="text-[0.8125rem] font-semibold text-foreground tabular-nums">
+                {formatCurrency(row.lifetimeValue, currency)}
+              </span>
+              {row.totalBookings > 1 ? (
+                <span className="text-[0.6875rem] text-subtle tabular-nums">
+                  {formatCurrency(Math.round(row.lifetimeValue / row.totalBookings), currency)} per trip
+                </span>
+              ) : (
+                <span className="text-[0.6875rem] text-subtle">{row.totalBookings === 1 ? 'one trip' : 'no trips yet'}</span>
+              )}
             </span>
-            <span className="truncate">{row.countryName}</span>
-          </span>
-        ),
-      },
-      {
-        id: 'segment',
-        header: 'Segment',
-        sortable: true,
-        hideBelow: 'md',
-        width: '10%',
-        cell: (row) => <SegmentChip segment={row.segment} />,
-      },
-      {
-        id: 'bookings',
-        header: 'Trips',
-        sortable: true,
-        align: 'right',
-        numeric: true,
-        defaultSortDir: 'desc',
-        width: '7%',
-        cell: (row) => (
-          <span className="text-[0.8125rem] font-medium text-foreground">{row.totalBookings}</span>
-        ),
-      },
-      {
-        id: 'value',
-        header: 'Lifetime value',
-        sortable: true,
-        align: 'right',
-        numeric: true,
-        defaultSortDir: 'desc',
-        width: '13%',
-        cell: (row) => (
-          <span className="text-[0.8125rem] font-semibold text-foreground">
-            {formatCurrency(row.lifetimeValue, currency)}
-          </span>
-        ),
-      },
-      {
-        id: 'lastBooking',
-        header: 'Last booking',
-        sortable: true,
-        defaultSortDir: 'desc',
-        hideBelow: 'md',
-        width: '13%',
-        cell: (row) => (
-          <span className="text-xs text-muted">
-            {row.lastBookingAt ? formatRelative(row.lastBookingAt, NOW) : 'Never'}
-          </span>
-        ),
-      },
-      {
-        id: 'tags',
-        header: 'Tags',
-        hideBelow: 'lg',
-        width: '14%',
-        cell: (row) => <TagList tags={row.tags} />,
-      },
-      {
-        id: 'actions',
-        header: <span className="sr-only">Actions</span>,
-        align: 'right',
-        width: '1px',
-        cell: (row) => <RowMenu row={row} />,
-      },
-    ],
+          ),
+        },
+        {
+          id: 'lastBooking',
+          header: 'Last booking',
+          sortable: true,
+          defaultSortDir: 'desc',
+          hideBelow: 'md',
+          width: '8rem',
+          cellClassName: 'whitespace-nowrap',
+          cell: (row) =>
+            row.lastBookingAt ? (
+              <span className="flex flex-col leading-tight">
+                <span className="text-[0.8125rem] font-medium text-foreground">{formatRelative(row.lastBookingAt, NOW)}</span>
+                <span className="text-[0.6875rem] text-subtle tabular-nums">{formatDateShort(row.lastBookingAt)}</span>
+              </span>
+            ) : (
+              <span className="text-xs text-faint">Never</span>
+            ),
+        },
+        {
+          id: 'tags',
+          header: 'Tags',
+          hideBelow: 'lg',
+          width: '9.5rem',
+          cell: (row) => <TagList tags={row.tags} />,
+        },
+        {
+          id: 'actions',
+          header: <span className="sr-only">Actions</span>,
+          align: 'right',
+          width: '3rem',
+          cellClassName: 'pl-0',
+          cell: (row) => (
+            <span className="inline-flex items-center justify-end gap-0.5">
+              <RowMenu row={row} />
+              <ChevronRight aria-hidden="true" className="size-4 text-faint" />
+            </span>
+          ),
+        },
+      ]),
     [currency],
   )
 
   const selectedCount = selectedIds.length
-  const filterLabel =
-    segment === 'all' ? 'All segments' : `${SEGMENT_META[segment].label} guests`
+  const filterLabel = segment === 'all' ? 'All segments' : `${SEGMENT_META[segment].label} guests`
+  const from = sorted.length === 0 ? 0 : (currentPage - 1) * pageSize + 1
+  const to = Math.min(currentPage * pageSize, sorted.length)
+
+  const segmentOptions = [
+    { value: 'all' as SegmentFilter, label: 'All', ariaLabel: 'All segments' },
+    ...SEGMENT_ORDER.map((key) => ({
+      value: key as SegmentFilter,
+      label: SEGMENT_META[key].label,
+      icon: SEGMENT_META[key].icon,
+      ariaLabel: SEGMENT_META[key].label,
+    })),
+  ]
 
   return (
     <div className={cn('space-y-5', className)}>
-      <SegmentCards
-        segments={segments}
-        currency={currency}
-        value={segment}
-        onValueChange={setSegment}
-      />
+      <SegmentCards segments={segments} currency={currency} value={segment} onValueChange={setSegment} />
 
       <Card>
         {/* ---- toolbar ---- */}
-        <div className="flex flex-col gap-3 border-b border-line-subtle px-4 py-3.5 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-3 border-b border-line-subtle px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
             <SearchInput
               value={query}
@@ -367,22 +446,14 @@ export function CustomersTable({
               aria-label="Search guests"
               fieldClassName="w-full sm:w-72"
             />
-            <Select
+            <Segmented
+              size="sm"
+              hideLabelsOnMobile
+              label="Filter by segment"
+              options={segmentOptions}
               value={segment}
-              onValueChange={(next) => setSegment(next as SegmentFilter)}
-            >
-              <SelectTrigger size="sm" className="w-full sm:w-44" aria-label="Filter by segment">
-                <SelectValue placeholder="All segments" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All segments</SelectItem>
-                {SEGMENT_ORDER.map((key) => (
-                  <SelectItem key={key} value={key} description={SEGMENT_META[key].blurb}>
-                    {SEGMENT_META[key].label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onValueChange={setSegment}
+            />
 
             {segment !== 'all' || query ? (
               <Button
@@ -399,10 +470,12 @@ export function CustomersTable({
             ) : null}
           </div>
 
-          <div className="flex shrink-0 items-center gap-2">
-            <p className="tabular hidden text-xs text-subtle sm:block">
-              <span className="font-medium text-foreground">{formatNumber(sorted.length)}</span> of{' '}
-              {formatNumber(totalCount)} guests
+          <div className="flex shrink-0 items-center gap-3">
+            <p className="hidden text-xs text-subtle tabular-nums sm:block">
+              {sorted.length === 0
+                ? 'No guests'
+                : `Showing ${formatNumber(from)}–${formatNumber(to)} of ${formatNumber(sorted.length)}`}
+              {banded ? <span className="text-faint"> · {sort.dir === 'desc' ? 'most recent first' : 'quietest first'}</span> : null}
             </p>
             <Button
               variant="outline"
@@ -422,17 +495,13 @@ export function CustomersTable({
         {/* ---- bulk action bar ---- */}
         {selectedCount > 0 ? (
           <div className="flex flex-wrap items-center gap-2 border-b border-line-subtle bg-primary-soft/50 px-4 py-2.5 sm:px-5">
-            <span className="tabular text-xs font-semibold text-primary">
-              {formatNumber(selectedCount)} selected
-            </span>
+            <span className="text-xs font-semibold text-primary tabular-nums">{formatNumber(selectedCount)} selected</span>
             <span className="h-4 w-px bg-line" aria-hidden="true" />
             <Button
               variant="ghost"
               size="xs"
               leftIcon={<Mail className="size-3.5" />}
-              onClick={() =>
-                toast.success(`Campaign drafted for ${formatNumber(selectedCount)} guests`)
-              }
+              onClick={() => toast.success(`Campaign drafted for ${formatNumber(selectedCount)} guests`)}
             >
               Email
             </Button>
@@ -452,12 +521,7 @@ export function CustomersTable({
             >
               Export
             </Button>
-            <Button
-              variant="ghost"
-              size="xs"
-              className="ml-auto"
-              onClick={() => setSelectedIds([])}
-            >
+            <Button variant="ghost" size="xs" className="ml-auto" onClick={() => setSelectedIds([])}>
               Clear selection
             </Button>
           </div>
@@ -476,7 +540,10 @@ export function CustomersTable({
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
             stickyHeader
+            rowHeight="compact"
             ariaLabel="Guests"
+            groupBy={banded ? groupBy : undefined}
+            renderGroupHeader={renderGroupHeader}
             empty={
               <EmptyState
                 variant="no-results"
@@ -530,7 +597,7 @@ export function CustomersTable({
                       <p className="truncate text-xs text-subtle">{row.email}</p>
                       <div className="mt-1.5 flex flex-wrap items-center gap-2">
                         <SegmentChip segment={row.segment} />
-                        <span className="tabular text-[0.6875rem] text-muted">
+                        <span className="text-[0.6875rem] text-muted tabular-nums">
                           {row.totalBookings} {row.totalBookings === 1 ? 'trip' : 'trips'}
                         </span>
                         <span className="text-[0.6875rem] text-faint" aria-hidden="true">
@@ -541,7 +608,7 @@ export function CustomersTable({
                         </span>
                       </div>
                     </div>
-                    <span className="tabular shrink-0 text-sm font-semibold text-foreground">
+                    <span className="shrink-0 text-sm font-semibold text-foreground tabular-nums">
                       {formatCurrency(row.lifetimeValue, currency, { compact: true })}
                     </span>
                   </Link>
@@ -565,8 +632,8 @@ export function CustomersTable({
           />
           <p className="flex items-center gap-1.5 text-[0.6875rem] text-faint">
             <Users className="size-3" aria-hidden="true" />
-            Working set: the {formatNumber(rows.length)} highest-value and most recently active
-            guests of {formatNumber(totalCount)} on file.
+            Working set: the {formatNumber(rows.length)} highest-value and most recently active guests of{' '}
+            {formatNumber(totalCount)} on file.
           </p>
         </CardFooter>
       </Card>
