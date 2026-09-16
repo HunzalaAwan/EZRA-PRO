@@ -13,8 +13,8 @@ export const cardVariants = cva(
   {
     variants: {
       variant: {
-        default: 'border border-line bg-surface shadow-sm',
-        raised: 'border border-line-subtle bg-surface-raised shadow-lg',
+        default: 'border border-line bg-surface shadow-sm dark:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.06),0_1px_2px_0_rgb(0_0_0/0.4)]',
+        raised: 'border border-line-subtle bg-surface-raised shadow-lg dark:shadow-[inset_0_1px_0_0_rgb(255_255_255/0.07),0_12px_32px_-12px_rgb(0_0_0/0.7)]',
         glass: 'glass shadow-lg',
         outline: 'border border-line bg-transparent',
         /**
