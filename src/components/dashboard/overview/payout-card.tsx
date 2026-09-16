@@ -12,20 +12,24 @@ import type { CurrencyCode } from '@/types'
 /* ==========================================================================
    PayoutCard — the money on its way to the bank.
 
-   A bright card on the overview: a white ground washed with lilac, pink and
-   gold, with slow weather moving behind dark ink. It reads from the same
-   settlement seam as the Payments page, so the figure here is the figure
-   there: what lands next, what is in transit, what has already landed this
-   month, and what the processor took. The palette is fixed rather than
-   themed, so the card stays bright in dark mode, like a card in a wallet.
+   A vivid card on the overview: the brand violet as the body, melting into
+   hot pink and an orange glow at the top-left corner, with white ink and
+   slow weather behind the numbers. It reads from the same settlement seam as
+   the Payments page, so the figure here is the figure there: what lands
+   next, what is in transit, what has already landed this month, and what
+   the processor took. The palette is fixed rather than themed, so the card
+   looks the same in dark mode.
    ========================================================================== */
 
-/** Lilac into pink, warming to gold at the far corner, a shade deeper than pastel. */
-const GROUND =
-  'linear-gradient(135deg, color-mix(in oklab, white 66%, var(--color-reef-500)) 0%, color-mix(in oklab, white 62%, var(--aurora-pink)) 52%, color-mix(in oklab, white 54%, var(--accent)) 100%)'
-/** Field order follows CardAurora's light layout: top-right, bottom-left, lower-middle. */
-const FIELDS = ['var(--aurora-pink)', 'var(--color-reef-500)', 'var(--accent)']
-const RING: [string, string] = ['var(--aurora-pink)', 'var(--accent)']
+/** Orange corner, pink through the middle, violet everywhere else. */
+const GROUND = [
+  'radial-gradient(115% 95% at 6% 4%, var(--aurora-orange) 0%, color-mix(in oklab, var(--aurora-orange) 60%, var(--aurora-pink)) 20%, color-mix(in oklab, var(--aurora-pink) 55%, transparent) 42%, transparent 64%)',
+  'radial-gradient(70% 60% at 42% 58%, color-mix(in oklab, var(--aurora-pink) 45%, transparent) 0%, transparent 70%)',
+  'linear-gradient(160deg, var(--color-reef-500) 0%, var(--color-reef-600) 48%, var(--color-reef-700) 100%)',
+].join(', ')
+/** Field order follows CardAurora's dark layout: top-right glow, bottom-left, bottom-right. */
+const FIELDS = ['var(--aurora-pink)', 'var(--aurora-orange)', 'var(--color-reef-400)']
+const RING: [string, string] = ['var(--aurora-pink)', 'var(--aurora-orange)']
 
 export interface PayoutCardProps {
   balance: PayoutBalance
@@ -72,19 +76,19 @@ export function PayoutCard({ balance, currency, className }: PayoutCardProps) {
     <section
       aria-label="Payouts"
       className={cn(
-        'relative isolate flex flex-col overflow-hidden rounded-2xl border border-white/70 bg-white p-5 text-ink-950 shadow-md sm:p-6',
+        'relative isolate flex flex-col overflow-hidden rounded-2xl bg-reef-700 p-5 text-white shadow-md sm:p-6',
         className,
       )}
     >
-      <CardAurora tone="light" fields={3} colors={FIELDS} ground={GROUND} ring ringColors={RING} intensity={2.9} />
+      <CardAurora tone="dark" fields={3} colors={FIELDS} ground={GROUND} ringColors={RING} />
 
       {/* ---------- what lands next ---------- */}
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-[0.6875rem] font-semibold tracking-[0.12em] text-ink-950/60 uppercase">Next payout</p>
-          <p className="mt-1.5 text-[0.8125rem] font-medium text-ink-950/80">Arrives {arrives(balance.nextPayoutAt)}</p>
+          <p className="text-[0.6875rem] font-semibold tracking-[0.12em] text-white/70 uppercase">Next payout</p>
+          <p className="mt-1.5 text-[0.8125rem] font-medium text-white/85">Arrives {arrives(balance.nextPayoutAt)}</p>
         </div>
-        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white/75 text-reef-700 shadow-xs ring-1 ring-white/80 ring-inset">
+        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white/16 text-white ring-1 ring-white/20 ring-inset backdrop-blur-sm">
           <Landmark aria-hidden="true" className="size-4" strokeWidth={1.9} />
         </span>
       </div>
@@ -94,17 +98,17 @@ export function PayoutCard({ balance, currency, className }: PayoutCardProps) {
         format="currency"
         currency={currency}
         duration={1.3}
-        className="mt-5 block font-display text-[2.25rem] leading-none font-semibold tracking-[-0.035em] text-ink-950"
+        className="mt-5 block font-display text-[2.25rem] leading-none font-semibold tracking-[-0.035em] text-white"
       />
-      <p className="mt-2.5 font-mono text-[0.75rem] tracking-[0.06em] text-ink-950/65">{balance.destination}</p>
+      <p className="mt-2.5 font-mono text-[0.75rem] tracking-[0.06em] text-white/75">{balance.destination}</p>
 
       {/* ---------- the money around it ---------- */}
-      <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-ink-950/10 pt-5">
+      <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-4 border-t border-white/18 pt-5">
         {figures.map((figure) => (
           <div key={figure.label} className="min-w-0">
-            <dt className="truncate text-[0.6875rem] font-medium text-ink-950/60">{figure.label}</dt>
-            <dd className="mt-1 font-display text-[1.0625rem] leading-none font-semibold text-ink-950 tabular-nums">{figure.value}</dd>
-            <dd className="mt-1.5 text-[0.6875rem] text-ink-950/60">{figure.note}</dd>
+            <dt className="truncate text-[0.6875rem] font-medium text-white/70">{figure.label}</dt>
+            <dd className="mt-1 font-display text-[1.0625rem] leading-none font-semibold text-white tabular-nums">{figure.value}</dd>
+            <dd className="mt-1.5 text-[0.6875rem] text-white/70">{figure.note}</dd>
           </div>
         ))}
       </dl>
@@ -112,9 +116,9 @@ export function PayoutCard({ balance, currency, className }: PayoutCardProps) {
       <Link
         href="/dashboard/payments"
         className={cn(
-          'mt-5 inline-flex min-h-9 w-fit items-center gap-1.5 rounded-full bg-white/80 px-3.5 text-[0.8125rem] font-semibold text-reef-700 shadow-xs ring-1 ring-white/80 ring-inset',
-          'transition-colors duration-200 hover:bg-white',
-          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-reef-700',
+          'mt-5 inline-flex min-h-9 w-fit items-center gap-1.5 rounded-full bg-white/16 px-3.5 text-[0.8125rem] font-semibold text-white ring-1 ring-white/20 ring-inset backdrop-blur-sm',
+          'transition-colors duration-200 hover:bg-white/26',
+          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white',
         )}
       >
         View payouts

@@ -666,6 +666,7 @@ html.lenis body {
 
   /* The payout card's pink, between the brand violet and the gold accent. */
   --aurora-pink:    oklch(0.700 0.210 350);
+  --aurora-orange:  oklch(0.780 0.165 62);
 
   --bg-dashboard:   oklch(0.962 0.006 288);
   --navy:           oklch(0.290 0.095 286); /* deep indigo-violet */
@@ -724,6 +725,7 @@ html.lenis body {
   --ink-guests:     oklch(0.780 0.120 5);
 
   --aurora-pink:    oklch(0.680 0.200 350);
+  --aurora-orange:  oklch(0.760 0.160 62);
 
   --bg-dashboard:   oklch(0.140 0.020 288);
   --navy:           oklch(0.300 0.090 286);
