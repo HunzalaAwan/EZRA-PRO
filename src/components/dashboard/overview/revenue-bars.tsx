@@ -138,7 +138,7 @@ export function RevenueBars({ points, currency, className }: RevenueBarsProps) {
         />
       </div>
 
-      <div className="min-h-[236px] flex-1 px-2 pb-3" role="img" aria-label={`Daily revenue for ${rangeLabel} against the previous period.`}>
+      <div className="min-h-[236px] flex-1 px-2 pb-3 xl:min-h-0" style={{ height: 280 }} role="img" aria-label={`Daily revenue for ${rangeLabel} against the previous period.`}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 32, right: 8, bottom: 0, left: 0 }} barCategoryGap="24%" barGap={3}>
             <defs>

@@ -1,12 +1,12 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowUpRight, Landmark, TrendingDown, TrendingUp } from 'lucide-react'
+import { ArrowUpRight, Landmark } from 'lucide-react'
 
 import { CountUp } from '@/components/motion/count-up'
 import { CardAurora } from '@/components/dashboard/overview/card-aurora'
 import type { PayoutBalance } from '@/components/dashboard/payments/payout-summary'
-import { cn, formatCurrency, formatDelta, formatNumber, formatPercent, pluralize } from '@/lib/utils'
+import { cn, formatCurrency, formatNumber, pluralize } from '@/lib/utils'
 import type { CurrencyCode } from '@/types'
 
 /* ==========================================================================
@@ -50,33 +50,18 @@ function arrives(iso: string) {
 }
 
 export function PayoutCard({ balance, currency, className }: PayoutCardProps) {
-  const GrossIcon = balance.grossDelta >= 0 ? TrendingUp : TrendingDown
-
-  const figures: { label: string; value: string; note: React.ReactNode }[] = [
+  const figures: { label: string; value: string }[] = [
     {
       label: 'In transit',
       value: formatCurrency(balance.inTransit, currency),
-      note: `${formatNumber(balance.inTransitTransactions)} ${pluralize(balance.inTransitTransactions, 'transaction')}`,
     },
     {
-      label: 'Paid out this month',
+      label: 'Paid this month',
       value: formatCurrency(balance.paidOutThisMonth, currency),
-      note: `${formatNumber(balance.paidOutBatches)} settled ${pluralize(balance.paidOutBatches, 'batch', 'batches')}`,
     },
     {
-      label: 'Gross · last 30 days',
-      value: formatCurrency(balance.grossLast30, currency, { compact: true }),
-      note: (
-        <span className="inline-flex items-center gap-1 tabular-nums">
-          <GrossIcon aria-hidden="true" className="size-3" strokeWidth={2.5} />
-          {formatDelta(balance.grossDelta)} vs prior
-        </span>
-      ),
-    },
-    {
-      label: 'Processing fees',
+      label: 'Fees · 30 days',
       value: formatCurrency(balance.processingFees, currency, { compact: true }),
-      note: `${formatPercent(balance.feeRate, 2)} of gross`,
     },
   ]
 
@@ -84,7 +69,7 @@ export function PayoutCard({ balance, currency, className }: PayoutCardProps) {
     <section
       aria-label="Payouts"
       className={cn(
-        'relative isolate flex flex-col overflow-hidden rounded-2xl bg-reef-900 p-5 text-white shadow-md',
+        'relative isolate flex flex-col overflow-hidden rounded-2xl bg-reef-900 p-5 text-white shadow-md sm:p-6',
         className,
       )}
     >
@@ -94,7 +79,7 @@ export function PayoutCard({ balance, currency, className }: PayoutCardProps) {
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="text-[0.6875rem] font-semibold tracking-[0.12em] text-white/70 uppercase">Next payout</p>
-          <p className="mt-1 text-[0.8125rem] font-medium text-white/85">Arrives {arrives(balance.nextPayoutAt)}</p>
+          <p className="mt-1 text-[0.8125rem] text-white/85">Arrives {arrives(balance.nextPayoutAt)}</p>
         </div>
         <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white/16 text-white ring-1 ring-white/20 ring-inset backdrop-blur-sm">
           <Landmark aria-hidden="true" className="size-4" strokeWidth={1.9} />
@@ -106,17 +91,16 @@ export function PayoutCard({ balance, currency, className }: PayoutCardProps) {
         format="currency"
         currency={currency}
         duration={1.3}
-        className="mt-3.5 block font-display text-[2rem] leading-none font-semibold tracking-[-0.035em] text-white"
+        className="mt-6 block font-display text-[2.25rem] leading-none font-semibold tracking-[-0.035em] text-white"
       />
-      <p className="mt-2 font-mono text-[0.75rem] tracking-[0.06em] text-white/75">{balance.destination}</p>
+      <p className="mt-3 font-mono text-[0.8125rem] tracking-[0.08em] text-white/75">{balance.destination}</p>
 
       {/* ---------- the money around it ---------- */}
-      <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-white/18 pt-4">
+      <dl className="mt-auto grid grid-cols-3 gap-4 border-t border-white/18 pt-4">
         {figures.map((figure) => (
           <div key={figure.label} className="min-w-0">
-            <dt className="truncate text-[0.6875rem] font-medium text-white/70">{figure.label}</dt>
-            <dd className="mt-1 font-display text-base leading-none font-semibold text-white tabular-nums">{figure.value}</dd>
-            <dd className="mt-1 text-[0.6875rem] text-white/70">{figure.note}</dd>
+            <dt className="truncate text-[0.6875rem] font-medium text-white/65">{figure.label}</dt>
+            <dd className="mt-1 font-display text-lg leading-none font-semibold whitespace-nowrap text-white tabular-nums">{figure.value}</dd>
           </div>
         ))}
       </dl>
@@ -124,7 +108,7 @@ export function PayoutCard({ balance, currency, className }: PayoutCardProps) {
       <Link
         href="/dashboard/payments"
         className={cn(
-          'mt-4 inline-flex h-8 w-fit items-center gap-1.5 rounded-full bg-white/16 px-3.5 text-[0.8125rem] font-semibold text-white ring-1 ring-white/20 ring-inset backdrop-blur-sm',
+          'mt-5 inline-flex min-h-9 w-fit items-center gap-1.5 rounded-full bg-white/16 px-3.5 text-[0.8125rem] font-semibold text-white ring-1 ring-white/20 ring-inset backdrop-blur-sm',
           'transition-colors duration-200 hover:bg-white/26',
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white',
         )}
