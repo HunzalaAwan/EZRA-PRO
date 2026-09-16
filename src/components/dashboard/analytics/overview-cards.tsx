@@ -6,8 +6,19 @@ import { ArrowDownRight, ArrowUpRight, ChevronRight, Gauge, Minus, Wallet } from
 import { RadialGauge } from '@/components/charts/radial-gauge'
 import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
-import { cn, formatCurrency, formatDelta, formatNumber, formatPercent, percentChange, sum } from '@/lib/utils'
+import {
+  cn,
+  formatCurrency,
+  formatDateShort,
+  formatDelta,
+  formatNumber,
+  formatPercent,
+  fromDateKey,
+  percentChange,
+  sum,
+} from '@/lib/utils'
 import type { BookingChannel, ChannelBreakdown, CurrencyCode, TimeSeriesPoint } from '@/types'
+import { TAKE_RATE } from './channel-section'
 
 /* ==========================================================================
    The three cards that open the analytics overview: what you took, how full
@@ -26,6 +37,10 @@ export const CHANNEL_TONE: Record<BookingChannel, string> = {
   concierge: 'var(--chart-3)',
   google: 'var(--chart-7)',
 }
+
+/** Card processing alone; anything above it is a partner's cut. */
+const PROCESSING_RATE = 2.6
+const DIRECT_CHANNELS = new Set<BookingChannel>(['website_widget', 'direct', 'phone', 'walk_in'])
 
 /* --------------------------------------------------------------------------
    Small parts
@@ -124,6 +139,9 @@ export function RevenueSummaryCard({
   const delta = percentChange(current, previous)
   const daily = points.length > 0 ? current / points.length : 0
   const bookings = sum(points.map((p) => p.bookings))
+  const best = points.reduce<TimeSeriesPoint | null>((top, p) => (!top || p.revenue > top.revenue ? p : top), null)
+  const soft = points.reduce<TimeSeriesPoint | null>((low, p) => (!low || p.revenue < low.revenue ? p : low), null)
+  const aov = bookings > 0 ? current / bookings : 0
 
   return (
     <Card className={cn('flex flex-col p-5', className)}>
@@ -154,7 +172,28 @@ export function RevenueSummaryCard({
             <span className="ml-1 text-[0.6875rem] font-normal text-subtle">· {formatNumber(bookings)} bookings</span>
           </dd>
         </div>
+        <div>
+          <dt className="text-[0.6875rem] text-subtle">Average order</dt>
+          <dd className="mt-0.5 text-sm font-semibold text-foreground tabular-nums">{formatCurrency(Math.round(aov), currency)}</dd>
+        </div>
+        {best ? (
+          <div>
+            <dt className="text-[0.6875rem] text-subtle">Best day</dt>
+            <dd className="mt-0.5 text-sm font-semibold text-foreground tabular-nums">
+              {formatCurrency(best.revenue, currency, { compact: true })}
+              <span className="ml-1 text-[0.6875rem] font-normal text-subtle">{formatDateShort(fromDateKey(best.date))}</span>
+            </dd>
+          </div>
+        ) : null}
       </dl>
+
+      {best && soft ? (
+        <p className="mt-auto border-t border-line-subtle pt-3 text-[0.6875rem] leading-relaxed text-subtle">
+          The softest day, {formatDateShort(fromDateKey(soft.date))}, took{' '}
+          <span className="font-medium text-foreground tabular-nums">{formatCurrency(soft.revenue, currency, { compact: true })}</span>;
+          the best took {best.revenue > 0 && soft.revenue > 0 ? (best.revenue / soft.revenue).toFixed(1) : '—'}× that.
+        </p>
+      ) : null}
     </Card>
   )
 }
@@ -179,6 +218,9 @@ export function OccupancyGaugeCard({
   const cancelled = sum(points.map((p) => p.cancellations))
   const cancelRate = booked + cancelled > 0 ? (cancelled / (booked + cancelled)) * 100 : 0
   const empty = Math.max(0, 100 - occupancy)
+  const bestDay = points.reduce<TimeSeriesPoint | null>((top, p) => (!top || p.occupancy > top.occupancy ? p : top), null)
+  const softDay = points.reduce<TimeSeriesPoint | null>((low, p) => (!low || p.occupancy < low.occupancy ? p : low), null)
+  const fullDays = points.filter((p) => p.occupancy >= 95).length
 
   const legend = [
     { label: 'Seats sold', value: formatPercent(occupancy, 1), color: 'var(--series-occupancy)' },
@@ -202,6 +244,54 @@ export function OccupancyGaugeCard({
           ))}
         </ul>
       </div>
+
+      {/* ---------- every day in the range, as a strip ---------- */}
+      {points.length > 1 ? (
+        <div className="mt-3">
+          <div className="flex h-8 items-end gap-px" role="img" aria-label="Occupancy by day">
+            {points.map((p) => (
+              <span
+                key={p.date}
+                title={`${formatDateShort(fromDateKey(p.date))} · ${formatPercent(p.occupancy, 0)}`}
+                className="flex-1 rounded-t-[2px]"
+                style={{
+                  height: `${Math.max(6, p.occupancy)}%`,
+                  background: 'var(--series-occupancy)',
+                  opacity: 0.35 + (Math.max(0, Math.min(100, p.occupancy)) / 100) * 0.65,
+                }}
+              />
+            ))}
+          </div>
+          <div className="mt-1 flex justify-between text-[0.625rem] text-faint tabular-nums">
+            <span>{formatDateShort(fromDateKey(points[0].date))}</span>
+            <span>{formatDateShort(fromDateKey(points[points.length - 1].date))}</span>
+          </div>
+        </div>
+      ) : null}
+
+      <dl className="mt-3 grid grid-cols-3 gap-3 border-t border-line-subtle pt-3">
+        <div>
+          <dt className="text-[0.6875rem] text-subtle">Fullest day</dt>
+          <dd className="mt-0.5 text-sm font-semibold text-foreground tabular-nums">
+            {bestDay ? formatPercent(bestDay.occupancy, 0) : '—'}
+            {bestDay ? <span className="ml-1 text-[0.6875rem] font-normal text-subtle">{formatDateShort(fromDateKey(bestDay.date))}</span> : null}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[0.6875rem] text-subtle">Softest day</dt>
+          <dd className="mt-0.5 text-sm font-semibold text-foreground tabular-nums">
+            {softDay ? formatPercent(softDay.occupancy, 0) : '—'}
+            {softDay ? <span className="ml-1 text-[0.6875rem] font-normal text-subtle">{formatDateShort(fromDateKey(softDay.date))}</span> : null}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[0.6875rem] text-subtle">Sold-out days</dt>
+          <dd className="mt-0.5 text-sm font-semibold text-foreground tabular-nums">
+            {formatNumber(fullDays)}
+            <span className="ml-1 text-[0.6875rem] font-normal text-subtle">of {formatNumber(points.length)}</span>
+          </dd>
+        </div>
+      </dl>
     </Card>
   )
 }
@@ -212,17 +302,36 @@ export function OccupancyGaugeCard({
 
 export function TopChannelsCard({
   channels,
+  currency,
   loading = false,
   onSeeAll,
   className,
 }: {
   channels: ChannelBreakdown[]
+  currency: CurrencyCode
   loading?: boolean
   onSeeAll?: () => void
   className?: string
 }) {
   if (loading) return <CardSkeleton />
-  const top = [...channels].sort((a, b) => b.share - a.share).slice(0, 3)
+  const ordered = [...channels].sort((a, b) => b.share - a.share)
+  const top = ordered.slice(0, 3)
+  const totalRevenue = sum(ordered.map((c) => c.revenue))
+
+  // Website, direct, phone and walk-in pay only card processing; the rest pay a partner too.
+  const direct = ordered.filter((c) => DIRECT_CHANNELS.has(c.channel))
+  const directShare = totalRevenue > 0 ? (sum(direct.map((c) => c.revenue)) / totalRevenue) * 100 : 0
+  const commission = sum(
+    ordered.map((c) => c.revenue * (Math.max(0, TAKE_RATE[c.channel] - PROCESSING_RATE) / 100)),
+  )
+  const fastest = ordered.reduce<ChannelBreakdown | null>(
+    (best, c) => (!best || c.deltaPercent > best.deltaPercent ? c : best),
+    null,
+  )
+  const richest = ordered
+    .filter((c) => c.bookings > 0)
+    .map((c) => ({ channel: c, aov: c.revenue / c.bookings }))
+    .sort((a, b) => b.aov - a.aov)[0]
 
   return (
     <Card className={cn('flex flex-col p-5', className)}>
@@ -236,7 +345,7 @@ export function TopChannelsCard({
         </span>
       </div>
 
-      <ul className="mt-4 flex flex-1 flex-col gap-3.5">
+      <ul className="mt-4 flex flex-col gap-3">
         {top.map((channel) => (
           <li key={channel.channel}>
             <div className="flex items-center justify-between gap-3">
@@ -252,9 +361,55 @@ export function TopChannelsCard({
                 style={{ width: `${Math.max(2, Math.min(100, channel.share))}%`, background: CHANNEL_TONE[channel.channel] }}
               />
             </div>
+            <p className="mt-1.5 flex items-center gap-1.5 text-[0.6875rem] text-subtle tabular-nums">
+              <span>{formatCurrency(channel.revenue, currency, { compact: true })}</span>
+              <span aria-hidden="true">·</span>
+              <span>{formatNumber(channel.bookings)} bookings</span>
+              <span aria-hidden="true">·</span>
+              <span>
+                {channel.bookings > 0 ? formatCurrency(Math.round(channel.revenue / channel.bookings), currency) : '—'} avg
+              </span>
+              <DeltaPill value={channel.deltaPercent} className="ml-auto" />
+            </p>
           </li>
         ))}
       </ul>
+
+      {/* ---------- the economics behind the mix ---------- */}
+      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line-subtle pt-4">
+        <div>
+          <dt className="text-[0.6875rem] text-subtle">Direct share</dt>
+          <dd className="mt-0.5 text-sm font-semibold text-foreground tabular-nums">
+            {formatPercent(directShare, 0)}
+            <span className="ml-1 text-[0.6875rem] font-normal text-subtle">no commission</span>
+          </dd>
+        </div>
+        <div>
+          <dt className="text-[0.6875rem] text-subtle">Commission paid</dt>
+          <dd className="mt-0.5 text-sm font-semibold text-foreground tabular-nums">
+            {formatCurrency(Math.round(commission), currency, { compact: true })}
+            <span className="ml-1 text-[0.6875rem] font-normal text-subtle">to OTAs and partners</span>
+          </dd>
+        </div>
+        {fastest ? (
+          <div className="min-w-0">
+            <dt className="text-[0.6875rem] text-subtle">Fastest growing</dt>
+            <dd className="mt-0.5 flex items-center gap-1.5 text-sm font-semibold text-foreground">
+              <span className="truncate">{fastest.label}</span>
+              <DeltaPill value={fastest.deltaPercent} />
+            </dd>
+          </div>
+        ) : null}
+        {richest ? (
+          <div className="min-w-0">
+            <dt className="text-[0.6875rem] text-subtle">Highest avg order</dt>
+            <dd className="mt-0.5 flex items-center gap-1.5 text-sm font-semibold text-foreground tabular-nums">
+              <span className="truncate">{richest.channel.label}</span>
+              <span className="text-muted">{formatCurrency(Math.round(richest.aov), currency)}</span>
+            </dd>
+          </div>
+        ) : null}
+      </dl>
 
       {onSeeAll ? (
         <button

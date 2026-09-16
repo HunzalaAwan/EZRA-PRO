@@ -320,7 +320,7 @@ export function AnalyticsShell({ initialSnapshot }: AnalyticsShellProps) {
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 <RevenueSummaryCard points={snapshot.timeseries} currency={tenant.currency} comparison={comparison} loading={pending} />
                 <OccupancyGaugeCard occupancy={occupancy} points={snapshot.timeseries} loading={pending} />
-                <TopChannelsCard channels={snapshot.channels} loading={pending} onSeeAll={() => handleTabChange('channels')} className="md:col-span-2 xl:col-span-1" />
+                <TopChannelsCard channels={snapshot.channels} currency={tenant.currency} loading={pending} onSeeAll={() => handleTabChange('channels')} className="md:col-span-2 xl:col-span-1" />
               </div>
 
               {/* ---------- knobs ---------- */}

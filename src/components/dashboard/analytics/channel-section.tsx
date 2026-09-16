@@ -36,7 +36,8 @@ import type { BookingChannel, ChannelBreakdown, CurrencyCode } from '@/types'
  * processing, as a percent of gross. Operators tune these in
  * Settings → Channels; these are the platform defaults.
  */
-const TAKE_RATE: Record<BookingChannel, number> = {
+/** Processing plus partner commission, percent of gross, per channel. */
+export const TAKE_RATE: Record<BookingChannel, number> = {
   direct: 2.6,
   website_widget: 2.6,
   google: 2.6,
