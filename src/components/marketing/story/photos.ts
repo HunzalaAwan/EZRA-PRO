@@ -219,10 +219,10 @@ export const PHOTOS = {
     alt: 'A yoga pose in silhouette against a sunset sky',
     focus: '50% 50%',
   },
-  /** A produce market stall piled with vegetables and fruit. */
-  produceMarket: {
-    id: 'photo-1488459716781-31db52582fe9',
-    alt: 'A produce market stall piled high with vegetables and fruit',
+  /** A long table of guests sharing a supper-club dinner. */
+  supperClub: {
+    id: 'photo-1528605248644-14dd04022da1',
+    alt: 'A long table of guests sharing a supper-club dinner',
     focus: '50% 50%',
   },
   /** Confetti falling over a crowd at a night event. */

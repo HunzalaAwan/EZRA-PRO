@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils'
    ========================================================================== */
 
 const COLLAGE: { photo: Photo; rotate: string; speed: number; offset: string }[] = [
-  { photo: PHOTOS.produceMarket, rotate: '-rotate-3', speed: 0.5, offset: 'mt-10' },
+  { photo: PHOTOS.supperClub, rotate: '-rotate-3', speed: 0.5, offset: 'mt-10' },
   { photo: PHOTOS.kitchenClass, rotate: 'rotate-2', speed: 0.9, offset: 'mt-0' },
   { photo: PHOTOS.wineToast, rotate: '-rotate-1', speed: 0.7, offset: 'mt-14' },
   { photo: PHOTOS.sunsetYoga, rotate: 'rotate-3', speed: 1.1, offset: 'mt-4' },
