@@ -62,6 +62,8 @@ export interface SolutionPoint {
 export interface SolutionContent {
   /** The photograph on the hero stage. */
   hero: PhotoKey
+  /** The photograph on this trade's card when another page links to it: a local file, so it stays sharp. */
+  card: PhotoKey
   /** A second frame that sits behind it, for depth. */
   behind: PhotoKey
   /** The photographs on the hero's ring, in the order they go round. */
@@ -81,6 +83,7 @@ function tokens(list: Omit<SolutionToken, 'className' | 'depth'>[]): SolutionTok
 export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
   watersports: {
     hero: 'kayakCliffs',
+    card: 'solBoatParty',
     behind: 'kayakSunset',
     ring: ['heroKayakBay', 'solBoatParty', 'solSailingBay', 'kayakCliffs', 'solLongtail', 'diverWave', 'solFloaters', 'heroKayakRiver'],
     consoleLine: 'Two hulls, nine departures, and the tide on every one of them.',
@@ -119,6 +122,7 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
 
   tours: {
     hero: 'groupPond',
+    card: 'solTouristsMap',
     behind: 'fujiPagoda',
     ring: ['solTouristsMap', 'groupPond', 'solCoupleTravel', 'guideGroup', 'solRowboat', 'solRetroFamilies', 'guideBook', 'solOffroad'],
     consoleLine: 'Six hotels, twenty-three guests, two languages, one departure board.',
@@ -157,6 +161,7 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
 
   island: {
     hero: 'diversPrep',
+    card: 'solLongtail',
     behind: 'diversReef',
     ring: ['solIslandAerial', 'solLongtail', 'solBeachChair', 'diversPrep', 'solSailingBay', 'solPool', 'diverWave', 'solFloaters'],
     consoleLine: 'Twenty operators, one desk, every commission where it should be.',
@@ -195,6 +200,7 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
 
   adventure: {
     hero: 'cliffClimb',
+    card: 'solQuadRider',
     behind: 'summitLedge',
     ring: ['solParagliders', 'cliffClimb', 'solAtv', 'solHiker', 'solQuadRider', 'summitLedge', 'solOffroad', 'skierJump'],
     consoleLine: 'Guides, gear and weather, checked before anyone reaches the trailhead.',
@@ -233,6 +239,7 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
 
   restaurants: {
     hero: 'waitressOrder',
+    card: 'solCafeFriends',
     behind: 'restaurantRoom',
     ring: ['solCafeFriends', 'waitressOrder', 'solBarmanCouple', 'chefPlating', 'solWomenFood', 'heroToastService', 'solNfcPay', 'solCafeGift'],
     consoleLine: 'Forty covers a sitting, two sittings a night, every allergy on the pass.',
@@ -271,6 +278,7 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
 
   wellness: {
     hero: 'yogaSea',
+    card: 'solSpaFacial',
     behind: 'spaTreatment',
     ring: ['heroYogaClass', 'solSpaFacial', 'heroYogaSplit', 'solPool', 'yogaSea', 'solSpaMask', 'sunsetYoga', 'solFloaters'],
     consoleLine: 'Classes, packs and memberships on one calendar, with retention you can read.',

@@ -197,7 +197,7 @@ export function OtherTrades({ siblings }: { siblings: Vertical[] }) {
           className="-mx-4 mt-12 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] sm:mx-0 sm:grid sm:snap-none sm:grid-cols-3 sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-5 [&::-webkit-scrollbar]:hidden"
         >
           {siblings.map((item) => {
-            const photo = PHOTOS[SOLUTION_CONTENT[item.key].hero]
+            const photo = PHOTOS[SOLUTION_CONTENT[item.key].card]
             return (
               <StaggerItem as="li" key={item.key} distance={16} className="w-[70%] shrink-0 snap-start sm:w-auto sm:shrink">
                 <Link
@@ -212,10 +212,10 @@ export function OtherTrades({ siblings }: { siblings: Vertical[] }) {
                 >
                   <figure className="relative m-0 aspect-[4/5] overflow-hidden rounded-[1.125rem] bg-surface-sunken">
                     <Image
-                      src={photoUrl(photo, 600)}
+                      src={photoUrl(photo, 1200)}
                       alt=""
                       fill
-                      sizes="(min-width: 1024px) 15rem, (min-width: 640px) 33vw, 50vw"
+                      sizes="(min-width: 1024px) 15rem, (min-width: 640px) 33vw, 70vw"
                       className="object-cover transition-transform duration-700 ease-[var(--ease-out-expo)] group-hover:scale-[1.04] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
                       style={{ objectPosition: photo.focus }}
                     />
