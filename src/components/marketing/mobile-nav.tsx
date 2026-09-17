@@ -211,13 +211,6 @@ export function MobileNav({ open, onOpenChange }: MobileNavProps) {
               </p>
               <div className="mt-3 flex flex-col gap-2">
                 <Link
-                  href="/help"
-                  onClick={close}
-                  className="text-sm text-muted transition-colors duration-200 hover:text-primary"
-                >
-                  Help center
-                </Link>
-                <Link
                   href="/status"
                   onClick={close}
                   className="text-sm text-muted transition-colors duration-200 hover:text-primary"

@@ -22,7 +22,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
         actions={
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" leftIcon={<LifeBuoy />} asChild>
-              <Link href="/help">Help center</Link>
+              <Link href="/contact">Help</Link>
             </Button>
             <Button variant="outline" size="sm" rightIcon={<ExternalLink />} asChild>
               <Link href={`/book/${CURRENT_TENANT.slug}`}>View storefront</Link>

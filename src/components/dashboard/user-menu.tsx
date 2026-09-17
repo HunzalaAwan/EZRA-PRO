@@ -182,7 +182,7 @@ export function UserMenu({ className }: { className?: string }) {
           </DropdownMenuItem>
 
           <DropdownMenuItem asChild>
-            <Link href="/help">
+            <Link href="/contact">
               <LifeBuoy aria-hidden="true" />
               Help &amp; support
             </Link>

@@ -79,9 +79,9 @@ const CHANNELS = [
     id: 'support',
     icon: LifeBuoy,
     label: 'Existing operator?',
-    value: 'Help center',
-    href: '/help',
-    note: 'Guides, walkthroughs and in-app chat with the team.',
+    value: 'In-app chat',
+    href: '/login',
+    note: 'Sign in and use the chat in the bottom corner of the dashboard.',
   },
 ]
 

@@ -32,8 +32,8 @@ export const metadata: Metadata = {
 const DESTINATIONS = [
   { href: '/pricing', label: 'Pricing', note: 'Commission from 3%, no contract' },
   { href: '/solutions/watersports', label: 'Solutions', note: 'Six industries, six fits' },
-  { href: '/switch', label: 'Switch to EZRA Pro', note: 'Free migration, live in a weekend' },
-  { href: '/integrations', label: 'Integrations', note: 'Twenty tools, one inventory' },
+  { href: '/product/booking', label: 'Online booking', note: 'A checkout guests actually finish' },
+  { href: '/contact', label: 'Contact', note: 'A person replies within minutes' },
 ]
 
 export default function NotFound() {

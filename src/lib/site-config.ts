@@ -78,12 +78,6 @@ export const MARKETING_NAV: NavGroup[] = [
         icon: 'Share2',
       },
     ],
-    feature: {
-      title: 'Switch in a weekend',
-      description: 'We migrate your activities, guests and future bookings for free.',
-      href: '/switch',
-      icon: 'ArrowRightLeft',
-    },
   },
   {
     label: 'Solutions',
@@ -97,16 +91,6 @@ export const MARKETING_NAV: NavGroup[] = [
     ],
   },
   { label: 'Pricing', href: '/pricing' },
-  {
-    label: 'Resources',
-    items: [
-      { label: 'Customer stories', href: '/customers', description: 'How operators grew with EZRA Pro.', icon: 'Quote' },
-      { label: 'Help center', href: '/help', description: 'Guides, walkthroughs and answers.', icon: 'LifeBuoy' },
-      { label: 'Developer API', href: '/developers', description: 'REST + webhooks. Build anything.', icon: 'Code2' },
-      { label: 'Integrations', href: '/integrations', description: '40+ tools, connected in a click.', icon: 'Blocks' },
-      { label: 'Migration guide', href: '/switch', description: 'Moving from another platform, in a weekend.', icon: 'ArrowRightLeft' },
-    ],
-  },
 ]
 
 export const FOOTER_NAV: { heading: string; links: NavLink[] }[] = [
@@ -136,20 +120,9 @@ export const FOOTER_NAV: { heading: string; links: NavLink[] }[] = [
     heading: 'Company',
     links: [
       { label: 'About', href: '/about' },
-      { label: 'Customers', href: '/customers' },
       { label: 'Careers', href: '/careers', badge: 'Hiring' },
       { label: 'Contact', href: '/contact' },
       { label: 'Partners', href: '/partners' },
-    ],
-  },
-  {
-    heading: 'Resources',
-    links: [
-      { label: 'Help center', href: '/help' },
-      { label: 'Developer API', href: '/developers' },
-      { label: 'Integrations', href: '/integrations' },
-      { label: 'Switch to EZRA Pro', href: '/switch' },
-      { label: 'System status', href: '/status' },
     ],
   },
   {

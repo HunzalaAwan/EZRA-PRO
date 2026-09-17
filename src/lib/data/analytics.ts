@@ -1327,7 +1327,7 @@ function buildInsights(
             { decimals: 0 },
           )}% of your volume — a rebooking offer attached to the post-trip review request compounds directly on this.`,
           metric: money(Math.round(repeatAov)),
-          href: '/customers',
+          href: '/dashboard/customers',
           actionLabel: 'Open the guest directory',
         },
       })

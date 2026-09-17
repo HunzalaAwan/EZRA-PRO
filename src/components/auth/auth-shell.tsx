@@ -351,7 +351,7 @@ export function AuthShell({ title, subtitle, eyebrow, children, footer, side, cl
                 <Link href="/legal/terms" className="text-xs text-faint transition-colors duration-200 hover:text-foreground">
                   Terms
                 </Link>
-                <Link href="/help" className="text-xs text-faint transition-colors duration-200 hover:text-foreground">
+                <Link href="/contact" className="text-xs text-faint transition-colors duration-200 hover:text-foreground">
                   Help
                 </Link>
               </nav>
