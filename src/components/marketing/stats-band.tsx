@@ -74,13 +74,6 @@ export function StatsBand({ className }: StatsBandProps) {
           EZRA Pro by the numbers
         </h2>
 
-        {/* A single cool wash from the top edge so the band reads as its own
-            surface rather than a paler copy of the page. */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_72%_140%_at_50%_0%,color-mix(in_oklab,var(--primary)_10%,transparent)_0%,transparent_68%)]"
-        />
-
         <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
           <StaggerGroup
             as="ul"
@@ -103,7 +96,7 @@ export function StatsBand({ className }: StatsBandProps) {
                 {index > 0 ? (
                   <span
                     aria-hidden="true"
-                    className="absolute inset-y-8 left-0 hidden w-px bg-[linear-gradient(to_bottom,transparent,var(--border-strong),transparent)] lg:block"
+                    className="absolute inset-y-8 left-0 hidden w-px bg-line lg:block"
                   />
                 ) : null}
 

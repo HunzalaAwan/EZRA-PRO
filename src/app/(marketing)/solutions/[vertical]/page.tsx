@@ -7,7 +7,7 @@ import { ClosingCta } from '@/components/marketing/land/closing-cta'
 import { PricingSection } from '@/components/marketing/pricing-section'
 import { SOLUTION_CONTENT } from '@/components/marketing/solutions/solution-content'
 import { SolutionHero } from '@/components/marketing/solutions/solution-hero'
-import { ConsoleStage, MomentCards, OutcomeBand, PillarGrid } from '@/components/marketing/solutions/solution-sections'
+import { ConsoleStage, MomentTimeline, OutcomeBand, PillarGrid } from '@/components/marketing/solutions/solution-sections'
 import { Reveal } from '@/components/motion/reveal'
 import { StaggerGroup, StaggerItem } from '@/components/motion/stagger'
 import { FEATURE_BLOCKS, VERTICAL_PITCHES } from '@/content/marketing'
@@ -109,10 +109,10 @@ function decodeBlock(block: FeatureBlock): FeatureBlock {
    PAGE
 
    The order a first visit needs:
-     hero        the pitch, with the trade on a stage that leans in 3D
-     moments     three things the software handled, as photographs
-     console     the desk's view of the week, standing up out of the page
+     hero        the pitch, centred, with the trade standing up beneath it
+     moments     three things the software handled, on a timeline
      pillars     the four product blocks this trade leans on
+     console     the desk's view of the week, standing up out of the page
      outcomes    three numbers
      pricing     the price, plainly
      others      the other five trades
@@ -147,17 +147,17 @@ export default async function VerticalSolutionPage({ params }: { params: Promise
         proofLabel={decodeEntities(pitch.proofLabel)}
       />
 
-      <MomentCards vertical={vertical} moments={content.moments} />
-      <ConsoleStage vertical={vertical} line={content.consoleLine} />
+      <MomentTimeline vertical={vertical} moments={content.moments} />
       <PillarGrid vertical={vertical} features={features} tagline={decodeEntities(vertical.tagline)} />
+      <ConsoleStage vertical={vertical} line={content.consoleLine} />
       <OutcomeBand vertical={vertical} outcomes={content.outcomes} />
 
-      <PricingSection className="scroll-mt-4 bg-background py-16 sm:py-20" />
+      <PricingSection className="scroll-mt-4 bg-background py-20 sm:py-24" />
 
       {/* ---------- the other five ---------- */}
-      <section aria-labelledby="other-verticals-title" className="border-t border-line bg-surface-sunken py-14 sm:py-16">
+      <section aria-labelledby="other-verticals-title" className="border-t border-line bg-surface-sunken py-16 sm:py-20">
         <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-          <h2 id="other-verticals-title" className="text-[0.6875rem] font-semibold tracking-[0.2em] text-subtle uppercase">
+          <h2 id="other-verticals-title" className="text-center text-[0.75rem] font-semibold tracking-[0.16em] text-primary uppercase">
             Run more than one kind of business?
           </h2>
 
@@ -167,9 +167,9 @@ export default async function VerticalSolutionPage({ params }: { params: Promise
                 <Link
                   href={`/solutions/${item.key}`}
                   className={cn(
-                    'group flex h-full flex-col rounded-2xl border border-line bg-surface p-4',
-                    'transition-[transform,box-shadow,border-color] duration-300 ease-[var(--ease-out-expo)]',
-                    'hover:-translate-y-0.5 hover:border-line-strong hover:shadow-md',
+                    'group flex h-full flex-col rounded-2xl bg-surface p-4 shadow-[var(--shadow-sm)] ring-1 ring-black/[0.04]',
+                    'transition-[transform,box-shadow] duration-300 ease-[var(--ease-out-expo)]',
+                    'hover:-translate-y-0.5 hover:shadow-[var(--shadow-lg)]',
                     'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
                     'motion-reduce:transition-none motion-reduce:hover:translate-y-0',
                   )}
@@ -188,7 +188,7 @@ export default async function VerticalSolutionPage({ params }: { params: Promise
           </StaggerGroup>
 
           <Reveal delay={0.12} className="mt-8">
-            <p className="flex items-start gap-2.5 text-sm leading-relaxed text-muted">
+            <p className="flex items-start justify-center gap-2.5 text-sm leading-relaxed text-muted">
               <Layers className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
               One account covers every vertical. Multi-brand and multi-location are on Scale and Enterprise.
             </p>

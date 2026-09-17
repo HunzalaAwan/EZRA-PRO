@@ -1,88 +1,76 @@
 'use client'
 
 import * as React from 'react'
-import Image from 'next/image'
 import Link from 'next/link'
-import {
-  AnimatePresence,
-  motion,
-  useInView,
-  useMotionValue,
-  useSpring,
-  useTransform,
-} from 'motion/react'
-import { ArrowRight, Check, MessageSquareText, Play } from 'lucide-react'
+import { AnimatePresence, motion, useInView, useMotionValue, useScroll, useSpring, useTransform } from 'motion/react'
+import { ArrowRight, Check, FileCheck2, Play, Wallet } from 'lucide-react'
 
-import { photoUrl } from '@/components/marketing/story/photos'
+import { AppFrame } from '@/components/marketing/app-frame'
 import { Button } from '@/components/ui/button'
-import { Segmented } from '@/components/ui/segmented'
 import { useIsFinePointer } from '@/hooks/use-media-query'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { EASE_OUT_EXPO, SPRING_SOFT } from '@/lib/motion'
-import { HeroBackdrop } from './hero-backdrop'
-import { LAND_VERTICALS, type LandVerticalKey } from './verticals'
+import { cn } from '@/lib/utils'
+import { HeroConsole } from './hero-console'
+import { LAND_VERTICALS } from './verticals'
 
 /* ==========================================================================
-   LandHero — the product, working, for six different kinds of business.
+   LandHero — one column, centred, the product underneath.
 
-   Left: a headline that finishes itself with whichever trade is selected.
-   Right: a stack of photographs with a booking landing on top of it. The
-   stack cycles on its own until the visitor picks a trade, then it holds.
-   The pointer tilts the whole scene a few pixels; touch and reduced motion
-   get the same picture, still.
+   The headline finishes itself with a different trade every few seconds.
+   Under it, two pill buttons and one line of small print. Then the product:
+   the week calendar inside a browser frame, lying back a little until the
+   visitor scrolls, when it stands up to meet them. Three small pieces of
+   the product float around the frame at their own depths; the pointer moves
+   the whole scene by a few degrees. Touch and reduced motion get the frame
+   upright and still.
    ========================================================================== */
 
-const CYCLE_MS = 3800
+const CYCLE_MS = 3200
 
-/** Where each card sits in the stack, by distance from the top. */
-const SLOT = [
-  { x: 0, y: 0, rotate: 0, scale: 1, opacity: 1, z: 30 },
-  { x: -9, y: 4, rotate: -7, scale: 0.94, opacity: 1, z: 20 },
-  { x: 9, y: 7, rotate: 7, scale: 0.9, opacity: 1, z: 10 },
+const CHIP_DRIFT = [
+  { y: [0, -7, 0], duration: 7.4, delay: 0 },
+  { y: [0, 6, 0], duration: 8.6, delay: 1.1 },
+  { y: [0, -5, 0], duration: 9.2, delay: 0.5 },
 ] as const
-
-const HIDDEN = { x: 0, y: 8, rotate: 0, scale: 0.86, opacity: 0, z: 0 } as const
 
 export function LandHero() {
   const reduce = useReducedMotionSafe()
   const finePointer = useIsFinePointer()
-  const sceneRef = React.useRef<HTMLDivElement>(null)
-  const inView = useInView(sceneRef, { amount: 0.4 })
 
-  const [active, setActive] = React.useState<LandVerticalKey>('tours')
-  const [pinned, setPinned] = React.useState(false)
-
-  const index = LAND_VERTICALS.findIndex((v) => v.key === active)
+  /* ---------- the trade that finishes the headline ---------- */
+  const headingRef = React.useRef<HTMLHeadingElement>(null)
+  const inView = useInView(headingRef, { amount: 0.5 })
+  const [index, setIndex] = React.useState(0)
   const current = LAND_VERTICALS[index]
 
-  /* ---------- auto-cycle until the visitor chooses ---------- */
   React.useEffect(() => {
-    if (pinned || reduce || !inView) return
-    const id = window.setInterval(() => {
-      setActive((key) => {
-        const i = LAND_VERTICALS.findIndex((v) => v.key === key)
-        return LAND_VERTICALS[(i + 1) % LAND_VERTICALS.length].key
-      })
-    }, CYCLE_MS)
+    if (reduce || !inView) return
+    const id = window.setInterval(() => setIndex((i) => (i + 1) % LAND_VERTICALS.length), CYCLE_MS)
     return () => window.clearInterval(id)
-  }, [pinned, reduce, inView])
+  }, [reduce, inView])
 
-  const choose = React.useCallback((key: LandVerticalKey) => {
-    setActive(key)
-    setPinned(true)
-  }, [])
+  /* ---------- the frame stands up on scroll ---------- */
+  const stageRef = React.useRef<HTMLDivElement>(null)
+  const { scrollYProgress } = useScroll({ target: stageRef, offset: ['start end', 'start 32%'] })
+  const eased = useSpring(scrollYProgress, { stiffness: 120, damping: 26, mass: 0.8 })
+  const progress = reduce ? scrollYProgress : eased
+  const scrollRotateX = useTransform(progress, [0, 1], reduce ? [0, 0] : [16, 0])
+  const scrollScale = useTransform(progress, [0, 1], reduce ? [1, 1] : [0.94, 1])
+  const scrollY = useTransform(progress, [0, 1], reduce ? [0, 0] : [36, 0])
 
-  /* ---------- pointer tilt ---------- */
+  /* ---------- and leans with the pointer ---------- */
   const mx = useMotionValue(0)
   const my = useMotionValue(0)
   const sx = useSpring(mx, SPRING_SOFT)
   const sy = useSpring(my, SPRING_SOFT)
-  const stackX = useTransform(sx, (v) => v * 14)
-  const stackY = useTransform(sy, (v) => v * 10)
-  const stackRotateY = useTransform(sx, (v) => v * 11)
-  const stackRotateX = useTransform(sy, (v) => v * -8)
-  const chipX = useTransform(sx, (v) => v * -22)
-  const chipY = useTransform(sy, (v) => v * -16)
+  const pointerRotateY = useTransform(sx, (v) => v * 7)
+  const pointerRotateX = useTransform(sy, (v) => v * -5)
+  const rotateX = useTransform(() => scrollRotateX.get() + pointerRotateX.get())
+  const chipFarX = useTransform(sx, (v) => v * -26)
+  const chipFarY = useTransform(sy, (v) => v * -18)
+  const chipNearX = useTransform(sx, (v) => v * 18)
+  const chipNearY = useTransform(sy, (v) => v * 12)
 
   const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!finePointer || reduce) return
@@ -95,24 +83,28 @@ export function LandHero() {
     my.set(0)
   }
 
-  const spring = reduce ? { duration: 0 } : { type: 'spring' as const, stiffness: 210, damping: 26, mass: 0.9 }
+  const enter = (delay: number) => ({
+    initial: reduce ? false : { opacity: 0, y: 18 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.7, delay, ease: EASE_OUT_EXPO },
+  })
 
   return (
     <section
       aria-labelledby="hero-title"
-      onPointerMove={onPointerMove}
-      onPointerLeave={onPointerLeave}
-      className="relative isolate overflow-hidden bg-background pt-8 pb-14 sm:pt-12 sm:pb-16 lg:pt-14 lg:pb-20"
+      className="relative isolate overflow-hidden bg-[color-mix(in_oklab,var(--primary)_5%,var(--background))] pt-10 pb-16 sm:pt-14 sm:pb-20 lg:pt-16 lg:pb-24"
     >
-      <HeroBackdrop tiltX={sx} tiltY={sy} />
+      {/* the floor: a faint grid that fades before the fold */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[46rem] bg-grid opacity-[0.35] mask-radial" />
 
-      <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-12 lg:gap-8 lg:px-8">
+      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* ---------- copy ---------- */}
-        <div className="lg:col-span-6">
-
-          <h1
+        <div className="mx-auto flex max-w-4xl flex-col items-center text-center">
+          <motion.h1
+            ref={headingRef}
             id="hero-title"
-            className="font-display text-[2.5rem] leading-[1.02] font-semibold tracking-[-0.035em] text-balance text-foreground sm:text-5xl lg:text-[3.5rem] xl:text-[3.85rem]"
+            {...enter(0)}
+            className="font-display text-[2.75rem] leading-[1.02] font-semibold tracking-[-0.04em] text-balance text-foreground sm:text-6xl lg:text-[4.75rem]"
           >
             Take bookings for your
             <br />
@@ -130,128 +122,129 @@ export function LandHero() {
                 </motion.span>
               </AnimatePresence>
             </span>
-          </h1>
+          </motion.h1>
 
-          <p className="mt-5 max-w-xl text-[1.0625rem] leading-relaxed text-muted sm:text-lg">
-            Availability, deposits, staff rosters and next-day payouts for tours, restaurants,
-            events, classes and venues. One inventory behind your website, the marketplaces
-            and the phone.
-          </p>
+          <motion.p {...enter(0.08)} className="mt-6 max-w-2xl text-lg leading-relaxed text-pretty text-muted sm:text-xl">
+            Availability, deposits, staff rosters and next-day payouts for tours, restaurants, events,
+            classes and venues. Your website, the marketplaces and the phone all sell from one inventory.
+          </motion.p>
 
-          <div className="mt-7 max-w-xl">
-            <Segmented
-              size="sm"
-              fullWidth
-              hideLabelsOnMobile
-              label="Choose a type of business"
-              value={active}
-              onValueChange={choose}
-              options={LAND_VERTICALS.map((v) => ({ value: v.key, label: v.label, icon: v.icon, ariaLabel: v.label }))}
-            />
-          </div>
-
-          <div className="mt-7 flex flex-wrap items-center gap-3">
-            <Button asChild size="lg" rightIcon={<ArrowRight aria-hidden="true" />}>
+          <motion.div {...enter(0.16)} className="mt-9 flex flex-wrap items-center justify-center gap-3">
+            <Button asChild size="xl" className="rounded-full px-8" rightIcon={<ArrowRight aria-hidden="true" />}>
               <Link href="/signup">Start free</Link>
             </Button>
-            <Button asChild size="lg" variant="outline" leftIcon={<Play aria-hidden="true" />}>
+            <Button asChild size="xl" variant="outline" className="rounded-full bg-surface px-8" leftIcon={<Play aria-hidden="true" />}>
               <Link href="/dashboard">See it running</Link>
             </Button>
-          </div>
+          </motion.div>
 
-          <p className="mt-4 text-[0.8125rem] text-subtle">
+          <motion.p {...enter(0.22)} className="mt-5 text-[0.8125rem] text-subtle">
             No card to start · 4% flat booking fee · Free migration from FareHarbor, Peek Pro, OpenTable or Eventbrite
-          </p>
+          </motion.p>
         </div>
 
-        {/* ---------- scene ---------- */}
-        <div className="lg:col-span-6">
-          <div
-            ref={sceneRef}
-            className="relative mx-auto aspect-[5/4] w-full max-w-xl sm:aspect-[4/3] lg:aspect-[5/4]"
+        {/* ---------- the product ---------- */}
+        <div
+          ref={stageRef}
+          onPointerMove={onPointerMove}
+          onPointerLeave={onPointerLeave}
+          className="relative mx-auto mt-14 max-w-5xl [perspective:1800px] sm:mt-16"
+        >
+          <motion.div
+            style={{ rotateX, rotateY: pointerRotateY, scale: scrollScale, y: scrollY, transformOrigin: '50% 100%', transformStyle: 'preserve-3d' }}
+            className="will-change-transform"
           >
-            {/* card stack, leaning with the pointer */}
+            <AppFrame url="app.ezra.pro/blue-horizon/calendar" className="[transform:translateZ(0)]">
+              <HeroConsole />
+            </AppFrame>
+
+            {/* chips, at their own depths, desktop only */}
             <motion.div
-              style={{ x: stackX, y: stackY, rotateX: stackRotateX, rotateY: stackRotateY, transformPerspective: 1400, transformStyle: 'preserve-3d' }}
-              className="absolute inset-x-[8%] inset-y-[6%] lg:inset-x-[10%]"
+              aria-hidden="true"
+              style={{ x: chipNearX, y: chipNearY, z: 90 }}
+              className="absolute -left-12 top-[36%] z-20 hidden w-[17.5rem] lg:block"
             >
-              {LAND_VERTICALS.map((v, i) => {
-                const order = (i - index + LAND_VERTICALS.length) % LAND_VERTICALS.length
-                const slot = order < SLOT.length ? SLOT[order] : HIDDEN
-                return (
-                  <motion.figure
-                    key={v.key}
-                    aria-hidden={order !== 0}
-                    className="absolute inset-0 m-0 overflow-hidden rounded-[1.75rem] bg-surface-sunken shadow-2xl ring-1 ring-black/10"
-                    initial={false}
-                    animate={{
-                      x: `${slot.x}%`,
-                      y: `${slot.y}%`,
-                      rotate: slot.rotate,
-                      scale: slot.scale,
-                      opacity: slot.opacity,
-                      zIndex: slot.z,
-                    }}
-                    transition={spring}
+              <Drift index={0} reduce={reduce}>
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.div
+                    key={current.key}
+                    initial={reduce ? false : { opacity: 0, y: 12, scale: 0.97 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={reduce ? undefined : { opacity: 0, y: -8, scale: 0.98 }}
+                    transition={{ duration: 0.4, ease: EASE_OUT_EXPO }}
+                    className="rounded-2xl bg-surface p-4 shadow-[var(--shadow-xl)] ring-1 ring-black/[0.06]"
                   >
-                    <Image
-                      src={photoUrl(v.photo, 1200)}
-                      alt={order === 0 ? v.photo.alt : ''}
-                      fill
-                      priority={i < 3}
-                      sizes="(min-width: 1024px) 40vw, 90vw"
-                      className="object-cover"
-                      style={{ objectPosition: v.photo.focus }}
-                    />
-                    <figcaption className="absolute top-4 left-4 rounded-full bg-ink-950/70 px-3 py-1 text-[0.6875rem] font-semibold tracking-[0.08em] text-white uppercase backdrop-blur-sm">
-                      {v.label}
-                    </figcaption>
-                  </motion.figure>
-                )
-              })}
-            </motion.div>
-
-            {/* the booking that just landed */}
-            <motion.div style={{ x: chipX, y: chipY, z: 60 }} className="absolute -bottom-3 -left-2 z-40 w-[min(19rem,88%)] sm:-left-4 sm:bottom-2">
-              <AnimatePresence mode="wait" initial={false}>
-                <motion.div
-                  key={current.key}
-                  role="status"
-                  aria-live="polite"
-                  initial={reduce ? false : { opacity: 0, y: 16, scale: 0.96 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={reduce ? undefined : { opacity: 0, y: -10, scale: 0.98 }}
-                  transition={{ duration: 0.45, ease: EASE_OUT_EXPO }}
-                  className="rounded-2xl border border-line bg-surface p-4 shadow-xl"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-[0.6875rem] font-semibold tracking-[0.1em] text-subtle uppercase">New booking</p>
-                      <p className="mt-1 truncate font-display text-[0.9375rem] font-semibold text-foreground">
-                        {current.booking.title}
-                      </p>
-                      <p className="mt-0.5 text-[0.8125rem] text-muted">{current.booking.when}</p>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[0.625rem] font-semibold tracking-[0.12em] text-subtle uppercase">New booking</p>
+                        <p className="mt-1 truncate text-[0.9375rem] font-semibold text-foreground">{current.booking.title}</p>
+                        <p className="mt-0.5 text-[0.8125rem] text-muted">{current.booking.when}</p>
+                      </div>
+                      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-success text-white">
+                        <Check className="size-4" strokeWidth={2.5} />
+                      </span>
                     </div>
-                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-success text-white">
-                      <Check aria-hidden="true" className="size-4" strokeWidth={2.5} />
-                    </span>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between gap-3 border-t border-line-subtle pt-3">
-                    <span className="shrink-0 rounded-md bg-accent px-2 py-1 text-[0.75rem] font-semibold whitespace-nowrap text-on-accent">
-                      {current.booking.money}
-                    </span>
-                    <span className="inline-flex min-w-0 items-center gap-1.5 text-[0.75rem] text-subtle">
-                      <MessageSquareText aria-hidden="true" className="size-3.5 shrink-0" />
-                      <span className="truncate">{current.booking.note}</span>
-                    </span>
-                  </div>
-                </motion.div>
-              </AnimatePresence>
+                    <div className="mt-3 flex items-center justify-between gap-3 border-t border-line-subtle pt-3 text-[0.75rem]">
+                      <span className="font-semibold text-foreground">{current.booking.money}</span>
+                      <span className="truncate text-subtle">{current.booking.note}</span>
+                    </div>
+                  </motion.div>
+                </AnimatePresence>
+              </Drift>
             </motion.div>
 
-          </div>
+            <motion.div
+              aria-hidden="true"
+              style={{ x: chipFarX, y: chipFarY, z: 50 }}
+              className="absolute -right-8 top-[12%] z-20 hidden w-[15rem] lg:block"
+            >
+              <Drift index={1} reduce={reduce}>
+                <div className="flex items-center gap-3 rounded-2xl bg-surface p-3.5 shadow-[var(--shadow-xl)] ring-1 ring-black/[0.06]">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary text-on-primary">
+                    <Wallet className="size-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[0.625rem] font-semibold tracking-[0.12em] text-subtle uppercase">Payout · tomorrow</p>
+                    <p className="mt-0.5 truncate text-[0.9375rem] font-semibold text-foreground tabular-nums">$4,128.40</p>
+                  </div>
+                </div>
+              </Drift>
+            </motion.div>
+
+            <motion.div
+              aria-hidden="true"
+              style={{ x: chipNearX, y: chipNearY, z: 70 }}
+              className="absolute -right-6 bottom-[16%] z-20 hidden w-[14rem] lg:block"
+            >
+              <Drift index={2} reduce={reduce}>
+                <div className="flex items-center gap-3 rounded-2xl bg-surface p-3.5 shadow-[var(--shadow-xl)] ring-1 ring-black/[0.06]">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-success text-white">
+                    <FileCheck2 className="size-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[0.625rem] font-semibold tracking-[0.12em] text-subtle uppercase">Waivers signed</p>
+                    <p className="mt-0.5 truncate text-[0.9375rem] font-semibold text-foreground">4 of 4, before arrival</p>
+                  </div>
+                </div>
+              </Drift>
+            </motion.div>
+          </motion.div>
         </div>
       </div>
     </section>
+  )
+}
+
+/** A slow vertical drift so the chips read as hovering rather than pinned. */
+function Drift({ index, reduce, children, className }: { index: 0 | 1 | 2; reduce: boolean; children: React.ReactNode; className?: string }) {
+  const drift = CHIP_DRIFT[index]
+  return (
+    <motion.div
+      animate={reduce ? undefined : { y: [...drift.y] }}
+      transition={reduce ? undefined : { duration: drift.duration, delay: drift.delay, repeat: Infinity, ease: 'easeInOut' }}
+      className={cn('will-change-transform', className)}
+    >
+      {children}
+    </motion.div>
   )
 }

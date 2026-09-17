@@ -318,12 +318,7 @@ export function Integrations({
       <div className="mx-auto w-full max-w-7xl px-5 sm:px-6 lg:px-8">
         <SectionHeading
           eyebrow="Integrations"
-          title={
-            <>
-              Connect the tools{' '}
-              <span className="text-gradient-lagoon">you already run on</span>
-            </>
-          }
+          title="Connect the tools you already run on"
           description="Twenty first-party connections, live on day one. Keep your processor, your channels, your accounting and your inbox exactly where they are."
           align="center"
         />

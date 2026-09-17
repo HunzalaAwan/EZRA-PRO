@@ -6,7 +6,7 @@ import { DURATION } from '@/lib/motion'
 import { cn } from '@/lib/utils'
 
 export interface SectionHeadingProps {
-  /** Small uppercase kicker above the title, preceded by a gradient rule. */
+  /** Small uppercase kicker above the title. */
   eyebrow?: string
   /** The section title. Accepts nodes so callers can highlight a fragment. */
   title: ReactNode
@@ -56,13 +56,9 @@ export function SectionHeading({
           direction="up"
           distance={8}
           duration={DURATION.base}
-          className="flex items-center gap-3"
+          className="flex items-center"
         >
-          <span
-            aria-hidden="true"
-            className="h-0.5 w-7 shrink-0 rounded-full bg-primary"
-          />
-          <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.18em] text-primary">
+          <span className="text-[0.75rem] font-semibold uppercase tracking-[0.16em] text-primary">
             {eyebrow}
           </span>
         </Reveal>

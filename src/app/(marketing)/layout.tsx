@@ -26,7 +26,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
 
       <SiteHeader />
 
-      <main id="main-content" className="flex-1 pt-[6.25rem] lg:pt-[6.75rem]">
+      <main id="main-content" className="flex-1 pt-[6.25rem] [--font-display:var(--font-inter)] lg:pt-[6.75rem]">
         <PageTransition>{children}</PageTransition>
       </main>
 

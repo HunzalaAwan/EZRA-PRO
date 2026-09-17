@@ -1,11 +1,14 @@
 import type { Metadata } from 'next'
 
+import { FaqSection } from '@/components/marketing/faq-section'
+import { Integrations } from '@/components/marketing/integrations'
 import { ClosingCta } from '@/components/marketing/land/closing-cta'
-import { FeatureBento } from '@/components/marketing/land/feature-bento'
+import { FeatureRows } from '@/components/marketing/land/feature-rows'
 import { LandHero } from '@/components/marketing/land/land-hero'
-import { ProofStrip } from '@/components/marketing/land/proof-strip'
-import { SceneReel } from '@/components/marketing/land/scene-reel'
+import { Phases } from '@/components/marketing/land/phases'
+import { LogoCloud } from '@/components/marketing/logo-cloud'
 import { PricingSection } from '@/components/marketing/pricing-section'
+import { StatsBand } from '@/components/marketing/stats-band'
 
 export const metadata: Metadata = {
   title: 'EZRA Pro — Booking software for tours, restaurants, events and classes',
@@ -21,23 +24,29 @@ export const metadata: Metadata = {
 }
 
 /* ==========================================================================
-   Six sections, in the order a first visit needs them:
-     hero        the product working, for six kinds of business
-     reel        three moments it handled, told as a pinned film
-     features    five drawings of what it runs
-     proof       who uses it, and three numbers
-     pricing     the price, plainly
-     closing     the ask
+   The order a first visit needs:
+     hero          the claim, and the product under it
+     logos         who already runs on it
+     phases        one booking, from the first click to the money
+     features      three rows: inventory, checkout, analytics
+     numbers       four figures
+     integrations  the stack it plugs into
+     pricing       the price, plainly
+     faq           the questions operators ask
+     closing       the ask
    ========================================================================== */
 
 export default function LandingPage() {
   return (
     <>
       <LandHero />
-      <SceneReel />
-      <FeatureBento />
-      <ProofStrip />
-      <PricingSection className="scroll-mt-4 bg-background py-16 sm:py-20" />
+      <LogoCloud className="border-b border-line" />
+      <Phases />
+      <FeatureRows />
+      <StatsBand className="mt-20 sm:mt-24 lg:mt-32" />
+      <Integrations />
+      <PricingSection className="scroll-mt-4 border-t border-line bg-surface-sunken py-20 sm:py-24" />
+      <FaqSection />
       <ClosingCta />
     </>
   )

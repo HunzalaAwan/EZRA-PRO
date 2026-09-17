@@ -29,7 +29,7 @@ export function ClosingCta({ className }: { className?: string }) {
   return (
     <section
       aria-labelledby="closing-title"
-      className={cn('relative overflow-hidden border-t border-line bg-surface-sunken py-16 sm:py-20', className)}
+      className={cn('relative overflow-hidden border-t border-line bg-[color-mix(in_oklab,var(--primary)_5%,var(--background))] py-20 sm:py-24', className)}
     >
       <StaggerGroup
         as="ul"
@@ -70,7 +70,7 @@ export function ClosingCta({ className }: { className?: string }) {
       <Reveal className="mx-auto mt-12 max-w-2xl px-4 text-center sm:mt-16 sm:px-6">
         <h2
           id="closing-title"
-          className="font-display text-3xl font-semibold tracking-[-0.03em] text-balance text-foreground sm:text-4xl lg:text-[2.75rem] lg:leading-[1.08]"
+          className="font-display text-display-sm font-semibold tracking-[-0.035em] text-balance text-foreground md:text-display-md"
         >
           Your next season, on one calendar.
         </h2>
@@ -79,17 +79,17 @@ export function ClosingCta({ className }: { className?: string }) {
           bookings by the weekend.
         </p>
         <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
-          <Button asChild size="lg" rightIcon={<ArrowRight aria-hidden="true" />}>
+          <Button asChild size="xl" className="rounded-full px-8" rightIcon={<ArrowRight aria-hidden="true" />}>
             <Link href="/signup">Start free</Link>
           </Button>
-          <Button asChild size="lg" variant="outline">
+          <Button asChild size="xl" variant="outline" className="rounded-full bg-surface px-8">
             <Link href="/contact">Talk to a person</Link>
           </Button>
         </div>
         <ul className="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[0.8125rem] text-subtle">
           {PROMISES.map((p) => (
             <li key={p} className="inline-flex items-center gap-1.5">
-              <Check aria-hidden="true" className="size-3.5 text-accent" strokeWidth={2.5} />
+              <Check aria-hidden="true" className="size-3.5 text-success" strokeWidth={2.5} />
               {p}
             </li>
           ))}

@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { motion } from 'motion/react'
-import { ArrowRight, ChevronDown, HelpCircle, Mail, MessageCircle } from 'lucide-react'
+import { ArrowRight, ChevronDown, Mail, MessageCircle } from 'lucide-react'
 
 import {
   Accordion,
@@ -92,14 +92,11 @@ export function FaqSection({ id = 'faq', className }: FaqSectionProps) {
   }
 
   return (
-    <section id={id} className={cn('relative py-16 sm:py-20 bg-background border-t border-line/60', className)}>
+    <section id={id} className={cn('relative py-20 sm:py-24 bg-background border-t border-line/60', className)}>
       <div className="mx-auto w-full max-w-4xl px-4 sm:px-6 lg:px-8">
         {/* Header - Compact & Centered */}
         <div className="text-center max-w-2xl mx-auto">
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary uppercase tracking-wider">
-            <HelpCircle className="size-3.5" />
-            Frequently Asked Questions
-          </div>
+          <p className="text-[0.75rem] font-semibold tracking-[0.16em] text-primary uppercase">Questions</p>
           <h2 className="mt-3.5 font-display text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-[-0.03em] text-foreground text-balance">
             The questions operators ask most
           </h2>

@@ -464,14 +464,14 @@ export function SiteHeader({ className }: SiteHeaderProps) {
             {/* ---------- actions ---------- */}
             <div className="ml-auto flex shrink-0 items-center gap-1.5 lg:gap-2">
               <ThemeToggle size="sm" className="lg:size-10" />
-              <Button asChild variant="ghost" size="sm" className="hidden lg:inline-flex">
+              <Button asChild variant="ghost" size="sm" className="hidden rounded-full lg:inline-flex">
                 <Link href="/login">Sign in</Link>
               </Button>
               <Button
                 asChild
                 variant="primary"
                 size="sm"
-                className="hidden lg:inline-flex"
+                className="hidden rounded-full px-4 lg:inline-flex"
                 rightIcon={<ArrowRight />}
               >
                 <Link href="/signup">Start free</Link>
