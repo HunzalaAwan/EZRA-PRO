@@ -4,7 +4,7 @@ import type { VerticalKey } from '@/types'
 /* ==========================================================================
    What each solutions page shows that the generic pitch cannot: the pictures
    of that trade, three small pieces of the product as that operator sees
-   them, three moments the software handled, and the numbers it moved.
+   them, and three moments the software handled.
 
    Plain data, no JSX, so the server route can import it and hand it down.
    Icons are lucide names resolved in the client components.
@@ -51,14 +51,6 @@ export interface SolutionMoment {
   did: [string, string]
 }
 
-export interface SolutionOutcome {
-  value: number
-  prefix?: string
-  suffix?: string
-  decimals?: number
-  label: string
-}
-
 export interface SolutionContent {
   /** The photograph on the hero stage. */
   hero: PhotoKey
@@ -66,7 +58,6 @@ export interface SolutionContent {
   behind: PhotoKey
   tokens: SolutionToken[]
   moments: SolutionMoment[]
-  outcomes: SolutionOutcome[]
   /** The line above the console. */
   consoleLine: string
 }
@@ -113,11 +104,6 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
         did: ['Next-business-day payout', 'Crew tips split automatically'],
       },
     ],
-    outcomes: [
-      { value: 38, prefix: '+', suffix: '%', label: 'direct bookings in six months' },
-      { value: 0, label: 'oversells across two hulls, all season' },
-      { value: 1, suffix: ' day', label: 'from a card payment to money in the bank' },
-    ],
   },
 
   tours: {
@@ -154,11 +140,6 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
         line: "Viator sold the last two seats on tomorrow's volcano drive at half past four in the morning.",
         did: ['One basket of seats across every channel', 'Commission tracked per booking'],
       },
-    ],
-    outcomes: [
-      { value: 72, prefix: '−', suffix: '%', label: 'time spent on daily scheduling' },
-      { value: 4, suffix: ' min', label: 'median support reply, in season' },
-      { value: 23, suffix: ' guests', label: 'on one pickup list, sorted before the van leaves' },
     ],
   },
 
@@ -197,11 +178,6 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
         did: ['Per-partner commission', 'Statements that tie to bookings'],
       },
     ],
-    outcomes: [
-      { value: 3.1, suffix: 'x', decimals: 1, label: 'excursion attachment rate' },
-      { value: 104, prefix: '$', suffix: 'k', label: 'added revenue in the first season' },
-      { value: 20, suffix: ' operators', label: 'sold from a single desk' },
-    ],
   },
 
   adventure: {
@@ -238,11 +214,6 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
         line: 'Conditions turned. The 08:00 ascent went on hold, guests were told, deposits were kept under the policy they accepted.',
         did: ['Condition holds with one tap', 'Policy applied automatically'],
       },
-    ],
-    outcomes: [
-      { value: 100, suffix: '%', label: 'waivers signed before arrival' },
-      { value: 0, label: 'oversells since launch, across heli and raft' },
-      { value: 72, prefix: '−', suffix: '%', label: 'time on daily admin' },
     ],
   },
 
@@ -281,11 +252,6 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
         did: ['Buyouts and prepaid menus', 'Balance collected two weeks out'],
       },
     ],
-    outcomes: [
-      { value: 64, prefix: '−', suffix: '%', label: 'no-shows once deposits were on' },
-      { value: 1, suffix: ' day', label: 'from a card payment to money in the bank' },
-      { value: 15, suffix: ' min', label: 'to resell a cancelled table from the waitlist' },
-    ],
   },
 
   wellness: {
@@ -322,11 +288,6 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
         line: 'Twelve guests, three instalments each, one roster for the instructors and the kitchen.',
         did: ['Instalment billing for retreats', 'Instructor pay rates on the roster'],
       },
-    ],
-    outcomes: [
-      { value: 2.4, prefix: '+', suffix: 'x', decimals: 1, label: 'lifetime value from memberships' },
-      { value: 6, suffix: ' sites', label: 'run from one dashboard' },
-      { value: 98, suffix: '%', label: 'of cancelled seats refilled from the waitlist' },
     ],
   },
 }

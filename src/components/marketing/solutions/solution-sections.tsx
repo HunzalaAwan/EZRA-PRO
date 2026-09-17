@@ -7,17 +7,16 @@ import { CalendarDays, ChartSpline, Check, CreditCard, Share2, ShoppingCart, Sto
 import { AppFrame } from '@/components/marketing/app-frame'
 import { PHOTOS, photoUrl } from '@/components/marketing/story/photos'
 import { VerticalVisual } from '@/components/marketing/vertical-showcase'
-import { CountUp } from '@/components/motion/count-up'
 import { Reveal } from '@/components/motion/reveal'
 import { StaggerGroup, StaggerItem } from '@/components/motion/stagger'
 import { cn } from '@/lib/utils'
 import type { FeatureBlock, Vertical } from '@/types'
-import type { SolutionMoment, SolutionOutcome } from './solution-content'
+import type { SolutionMoment } from './solution-content'
 
 /* ==========================================================================
    The sections under the solutions hero, in the landing page's voice:
-   centred headings in a medium weight, pastel panels, white cards with soft
-   shadows, and numbers that count up. Reduced motion gets every final state.
+   centred headings in a medium weight, pastel panels and white cards with
+   soft shadows. Reduced motion gets every final state.
    ========================================================================== */
 
 function Heading({ id, label, title, description }: { id: string; label: string; title: string; description?: string }) {
@@ -175,33 +174,6 @@ export function ConsoleStage({ vertical, line }: { vertical: Vertical; line: str
             />
           </AppFrame>
         </Reveal>
-      </div>
-    </section>
-  )
-}
-
-/* --------------------------------------------------------------------------
-   Outcomes — three numbers that count up.
-   -------------------------------------------------------------------------- */
-
-export function OutcomeBand({ vertical, outcomes }: { vertical: Vertical; outcomes: SolutionOutcome[] }) {
-  return (
-    <section aria-labelledby="outcomes-title" className="bg-background-subtle py-20 sm:py-24">
-      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-        <h2 id="outcomes-title" className="text-center text-[0.75rem] font-medium tracking-[0.08em] text-primary uppercase">
-          What changed for {vertical.label.toLowerCase()} operators
-        </h2>
-
-        <div className="mx-auto mt-10 grid max-w-5xl gap-5 sm:grid-cols-3">
-          {outcomes.map((n, i) => (
-            <Reveal key={n.label} delay={i * 0.08} className="rounded-[1.5rem] bg-surface p-7 text-center shadow-[var(--shadow-sm)] ring-1 ring-black/[0.04]">
-              <p className="font-display text-[2.75rem] leading-none font-medium tracking-[-0.03em] text-foreground tabular-nums sm:text-[3.25rem]">
-                <CountUp value={n.value} prefix={n.prefix} suffix={n.suffix} decimals={n.decimals} duration={1.4} />
-              </p>
-              <p className="mx-auto mt-4 max-w-[18rem] text-[0.9375rem] leading-snug text-muted">{n.label}</p>
-            </Reveal>
-          ))}
-        </div>
       </div>
     </section>
   )

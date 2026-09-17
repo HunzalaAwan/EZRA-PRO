@@ -7,7 +7,7 @@ import { ClosingCta } from '@/components/marketing/land/closing-cta'
 import { PricingSection } from '@/components/marketing/pricing-section'
 import { SOLUTION_CONTENT } from '@/components/marketing/solutions/solution-content'
 import { SolutionHero } from '@/components/marketing/solutions/solution-hero'
-import { ConsoleStage, MomentTimeline, OutcomeBand, PillarGrid } from '@/components/marketing/solutions/solution-sections'
+import { ConsoleStage, MomentTimeline, PillarGrid } from '@/components/marketing/solutions/solution-sections'
 import { Reveal } from '@/components/motion/reveal'
 import { StaggerGroup, StaggerItem } from '@/components/motion/stagger'
 import { FEATURE_BLOCKS, VERTICAL_PITCHES } from '@/content/marketing'
@@ -113,7 +113,6 @@ function decodeBlock(block: FeatureBlock): FeatureBlock {
      moments     three things the software handled, on a timeline
      pillars     the four product blocks this trade leans on
      console     the desk's view of the week, standing up out of the page
-     outcomes    three numbers
      pricing     the price, plainly
      others      the other five trades
      closing     the ask
@@ -150,7 +149,6 @@ export default async function VerticalSolutionPage({ params }: { params: Promise
       <MomentTimeline vertical={vertical} moments={content.moments} />
       <PillarGrid vertical={vertical} features={features} tagline={decodeEntities(vertical.tagline)} />
       <ConsoleStage vertical={vertical} line={content.consoleLine} />
-      <OutcomeBand vertical={vertical} outcomes={content.outcomes} />
 
       <PricingSection className="scroll-mt-4 bg-background py-20 sm:py-24" />
 
