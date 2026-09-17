@@ -464,14 +464,14 @@ export function SiteHeader({ className }: SiteHeaderProps) {
             {/* ---------- actions ---------- */}
             <div className="ml-auto flex shrink-0 items-center gap-1.5 lg:gap-2">
               <ThemeToggle size="sm" className="lg:size-10" />
-              <Button asChild variant="ghost" size="sm" className="hidden rounded-[10px] lg:inline-flex">
+              <Button asChild variant="ghost" size="md" className="hidden rounded-[10px] lg:inline-flex">
                 <Link href="/login">Sign in</Link>
               </Button>
               <Button
                 asChild
                 variant="ink"
-                size="sm"
-                className="hidden rounded-[10px] px-4 lg:inline-flex"
+                size="md"
+                className="hidden rounded-[10px] px-5 lg:inline-flex"
                 rightIcon={<ArrowRight />}
               >
                 <Link href="/signup">Start free</Link>
@@ -503,8 +503,8 @@ export function SiteHeader({ className }: SiteHeaderProps) {
    ========================================================================== */
 
 const NAV_TRIGGER_CLASS = cn(
-  'relative flex h-9 cursor-pointer items-center gap-1 rounded-lg px-3',
-  'text-sm font-medium text-muted transition-colors duration-200 ease-[var(--ease-out-expo)]',
+  'relative flex h-10 cursor-pointer items-center gap-1 rounded-lg px-3.5',
+  'text-[0.9375rem] font-medium text-foreground/75 transition-colors duration-200 ease-[var(--ease-out-expo)]',
   'hover:text-foreground',
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
 )
