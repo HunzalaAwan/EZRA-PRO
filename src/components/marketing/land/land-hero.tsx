@@ -4,7 +4,23 @@ import * as React from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { AnimatePresence, motion, useInView } from 'motion/react'
-import { ArrowRight, Check, FileCheck2, Play, ShoppingCart, Wallet, type LucideIcon } from 'lucide-react'
+import {
+  ArrowRight,
+  CalendarCheck2,
+  Check,
+  FileCheck2,
+  ListOrdered,
+  MessageSquareText,
+  Package,
+  Play,
+  Repeat2,
+  ShoppingCart,
+  Ticket,
+  Users,
+  Utensils,
+  Wallet,
+  type LucideIcon,
+} from 'lucide-react'
 
 import { PHOTOS, photoUrl, type Photo } from '@/components/marketing/story/photos'
 import { Button } from '@/components/ui/button'
@@ -12,20 +28,21 @@ import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { EASE_OUT_EXPO } from '@/lib/motion'
 import { cn } from '@/lib/utils'
 import { HeroStage } from './hero-stage'
-import { LAND_VERTICALS } from './verticals'
+import { LAND_VERTICALS, type LandVerticalKey } from './verticals'
 
 /* ==========================================================================
    LandHero — the claim, then the product.
 
-   One centred column on a pale blue ground: a large headline that finishes
+   One centred column on a pale violet ground: a large headline that finishes
    itself with a different trade every few seconds, one paragraph, two
    buttons and a line of small print. Either side of it, on wide screens, a
-   photograph of a trade with two pieces of the product laid over it, drifting
-   slowly. Behind everything, three flat pastel shapes. Under it, the stage:
-   four working pieces of the product, one at a time.
+   photograph of that trade with two pieces of the product laid over it; the
+   photographs and the chips change with the word. Behind everything, three
+   flat pastel shapes. Under it, the stage: four working pieces of the
+   product, one at a time.
    ========================================================================== */
 
-const CYCLE_MS = 3200
+const CYCLE_MS = 3600
 
 const SHAPES = [
   {
@@ -52,33 +69,60 @@ interface Chip {
   detail: string
 }
 
-interface Side {
-  photo: Photo
-  rotate: number
-  /** The chip across the photograph's lower edge. */
-  chip: Chip
-  /** The smaller chip above the photograph. */
-  note: Chip
-  drift: number[]
-  duration: number
+/** What each trade shows either side of the headline. */
+interface Scene {
+  left: Photo
+  right: Photo
+  /** Above the left photograph. */
+  leftNote: Chip
+  /** Across the right photograph's lower edge. */
+  rightChip: Chip
+  /** Above the right photograph. */
+  rightNote: Chip
 }
 
-const SIDES: { left: Side; right: Side } = {
-  left: {
-    photo: PHOTOS.kayakCliffs,
-    rotate: -4,
-    chip: { icon: ShoppingCart, tone: 'primary', title: 'New booking', detail: 'Sunrise paddle · Sat 06:40 · $148 paid' },
-    note: { icon: FileCheck2, tone: 'success', title: 'Waivers signed', detail: '4 of 4, before arrival' },
-    drift: [0, -8, 0],
-    duration: 8.5,
+const SCENES: Record<LandVerticalKey, Scene> = {
+  tours: {
+    left: PHOTOS.kayakSunset,
+    right: PHOTOS.kayakGolden,
+    leftNote: { icon: FileCheck2, tone: 'success', title: 'Waivers signed', detail: '2 of 2, before the slip' },
+    rightChip: { icon: Wallet, tone: 'ink', title: 'Payout tomorrow', detail: '$4,128.40 · Bank of Maui ····4412' },
+    rightNote: { icon: Users, tone: 'primary', title: 'Guide roster', detail: 'Mara takes the 06:40' },
   },
-  right: {
-    photo: PHOTOS.chefClass,
-    rotate: 4,
-    chip: { icon: Wallet, tone: 'ink', title: 'Payout tomorrow', detail: '$4,128.40 · Bank of Maui ····4412' },
-    note: { icon: Check, tone: 'success', title: 'Table 9 resold', detail: 'From the waitlist, in order' },
-    drift: [0, 7, 0],
-    duration: 9.5,
+  restaurants: {
+    left: PHOTOS.chefPlating,
+    right: PHOTOS.waitressOrder,
+    leftNote: { icon: Utensils, tone: 'success', title: 'Allergy noted', detail: 'Nut allergy, on the ticket' },
+    rightChip: { icon: Wallet, tone: 'ink', title: 'Payout tomorrow', detail: '$6,240.00 · two sittings' },
+    rightNote: { icon: ListOrdered, tone: 'primary', title: 'Table 9 resold', detail: 'From the waitlist, in order' },
+  },
+  events: {
+    left: PHOTOS.weddingVenue,
+    right: PHOTOS.villaWedding,
+    leftNote: { icon: Users, tone: 'success', title: 'Seating chart', detail: 'Shared with 120 guests' },
+    rightChip: { icon: Wallet, tone: 'ink', title: 'Balance collected', detail: '$18,400 · on 1 Oct' },
+    rightNote: { icon: CalendarCheck2, tone: 'primary', title: 'Vendor schedule', detail: 'Sent to 6 suppliers' },
+  },
+  classes: {
+    left: PHOTOS.potteryClass,
+    right: PHOTOS.chefClass,
+    leftNote: { icon: Package, tone: 'success', title: 'Kit reserved', detail: '8 wheels, 8 aprons' },
+    rightChip: { icon: Wallet, tone: 'ink', title: 'Payout tomorrow', detail: '$1,360.00 · four classes' },
+    rightNote: { icon: Repeat2, tone: 'primary', title: 'Waitlist', detail: '2 notified, 1 took the seat' },
+  },
+  wellness: {
+    left: PHOTOS.sunsetYoga,
+    right: PHOTOS.yogaSea,
+    leftNote: { icon: Ticket, tone: 'success', title: 'Class pack', detail: '1 of 10 credits used' },
+    rightChip: { icon: Wallet, tone: 'ink', title: 'Payout tomorrow', detail: '$2,910.00 · Bank of Maui ····4412' },
+    rightNote: { icon: Repeat2, tone: 'primary', title: 'Memberships renewed', detail: '212 of 220 overnight' },
+  },
+  venues: {
+    left: PHOTOS.rooftopBar,
+    right: PHOTOS.confettiCrowd,
+    leftNote: { icon: MessageSquareText, tone: 'success', title: 'Text confirmation', detail: 'Delivered 14:02' },
+    rightChip: { icon: Wallet, tone: 'ink', title: 'Payout tomorrow', detail: '$3,480.00 · Friday terrace' },
+    rightNote: { icon: Check, tone: 'primary', title: 'Minimum spend', detail: '$50 held on the card' },
   },
 }
 
@@ -103,7 +147,41 @@ function ChipCard({ chip, className }: { chip: Chip; className?: string }) {
   )
 }
 
-function SideScene({ side, align, reduce, delay }: { side: Side; align: 'left' | 'right'; reduce: boolean; delay: number }) {
+/** A chip that swaps with the trade: the old one drops out, the new one rises in. */
+function SwapChip({ id, chip, reduce, className }: { id: string; chip: Chip; reduce: boolean; className?: string }) {
+  return (
+    <div className={cn('relative', className)}>
+      <AnimatePresence mode="popLayout" initial={false}>
+        <motion.div
+          key={id}
+          initial={reduce ? false : { opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={reduce ? undefined : { opacity: 0, y: -8 }}
+          transition={{ duration: 0.4, ease: EASE_OUT_EXPO }}
+        >
+          <ChipCard chip={chip} />
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  )
+}
+
+function SideScene({
+  align,
+  active,
+  reduce,
+  delay,
+  chip,
+  note,
+}: {
+  align: 'left' | 'right'
+  active: LandVerticalKey
+  reduce: boolean
+  delay: number
+  chip: Chip
+  note: Chip
+}) {
+  const drift = align === 'left' ? [0, -8, 0] : [0, 7, 0]
   return (
     <motion.div
       aria-hidden="true"
@@ -113,18 +191,44 @@ function SideScene({ side, align, reduce, delay }: { side: Side; align: 'left' |
       className={cn('absolute top-2 hidden w-[13.5rem] xl:block 2xl:w-[15rem]', align === 'left' ? 'left-8 2xl:-left-4' : 'right-8 2xl:-right-4')}
     >
       <motion.div
-        animate={reduce ? undefined : { y: side.drift }}
-        transition={reduce ? undefined : { duration: side.duration, repeat: Infinity, ease: 'easeInOut' }}
+        animate={reduce ? undefined : { y: drift }}
+        transition={reduce ? undefined : { duration: align === 'left' ? 8.5 : 9.5, repeat: Infinity, ease: 'easeInOut' }}
         className="relative will-change-transform"
       >
-        <ChipCard chip={side.note} className={cn('relative z-10 mb-3 w-[13rem]', align === 'left' ? 'ml-6' : 'mr-6')} />
+        <SwapChip id={`${active}-note`} chip={note} reduce={reduce} className={cn('z-10 mb-3 w-[13rem]', align === 'left' ? 'ml-6' : 'mr-6')} />
+
+        {/* every trade's photograph is mounted, so a swap is a crossfade and never a load */}
         <figure
           className="relative m-0 aspect-[4/5] overflow-hidden rounded-[1.5rem] bg-surface-sunken shadow-[var(--shadow-xl)] ring-1 ring-black/[0.06]"
-          style={{ transform: `rotate(${side.rotate}deg)` }}
+          style={{ transform: `rotate(${align === 'left' ? -4 : 4}deg)` }}
         >
-          <Image src={photoUrl(side.photo, 600)} alt="" fill sizes="15rem" className="object-cover" style={{ objectPosition: side.photo.focus }} />
+          {LAND_VERTICALS.map((v, i) => {
+            const photo = align === 'left' ? SCENES[v.key].left : SCENES[v.key].right
+            const shown = v.key === active
+            return (
+              <motion.div
+                key={v.key}
+                initial={false}
+                animate={{ opacity: shown ? 1 : 0, scale: shown ? 1 : 1.04 }}
+                transition={reduce ? { duration: 0 } : { duration: 0.7, ease: EASE_OUT_EXPO }}
+                className="absolute inset-0"
+                style={{ zIndex: shown ? 1 : 0 }}
+              >
+                <Image
+                  src={photoUrl(photo, 1200, 82)}
+                  alt=""
+                  fill
+                  priority={i === 0}
+                  sizes="(min-width: 1536px) 15rem, 13.5rem"
+                  className="object-cover"
+                  style={{ objectPosition: photo.focus }}
+                />
+              </motion.div>
+            )
+          })}
         </figure>
-        <ChipCard chip={side.chip} className={cn('absolute -bottom-5 z-10 w-[15rem]', align === 'left' ? 'left-8' : 'right-8')} />
+
+        <SwapChip id={`${active}-chip`} chip={chip} reduce={reduce} className={cn('absolute -bottom-5 z-10 w-[15rem]', align === 'left' ? 'left-8' : 'right-8')} />
       </motion.div>
     </motion.div>
   )
@@ -136,6 +240,7 @@ export function LandHero() {
   const inView = useInView(headingRef, { amount: 0.5 })
   const [index, setIndex] = React.useState(0)
   const current = LAND_VERTICALS[index]
+  const scene = SCENES[current.key]
 
   React.useEffect(() => {
     if (reduce || !inView) return
@@ -148,6 +253,13 @@ export function LandHero() {
     animate: { opacity: 1, y: 0 },
     transition: { duration: 0.7, delay, ease: EASE_OUT_EXPO },
   })
+
+  const bookingChip: Chip = {
+    icon: ShoppingCart,
+    tone: 'primary',
+    title: 'New booking',
+    detail: `${current.booking.title} · ${current.booking.when}`,
+  }
 
   return (
     <section aria-labelledby="hero-title" className="relative isolate overflow-hidden bg-cal-rain pt-12 pb-20 sm:pt-16 sm:pb-24 lg:pt-20">
@@ -164,8 +276,8 @@ export function LandHero() {
       </div>
 
       <div className="relative mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-        <SideScene side={SIDES.left} align="left" reduce={reduce} delay={0.35} />
-        <SideScene side={SIDES.right} align="right" reduce={reduce} delay={0.45} />
+        <SideScene align="left" active={current.key} reduce={reduce} delay={0.35} chip={bookingChip} note={scene.leftNote} />
+        <SideScene align="right" active={current.key} reduce={reduce} delay={0.45} chip={scene.rightChip} note={scene.rightNote} />
 
         <div className="mx-auto flex max-w-4xl flex-col items-center text-center">
           <motion.h1

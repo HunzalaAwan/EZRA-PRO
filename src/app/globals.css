@@ -789,7 +789,9 @@ html.lenis body {
    Calendly's palette: warm magnolia paper, midnight ink, steel secondary text,
    ash hairlines, and a set of flat pastels for panels and illustrations. The
    brand violet stays the primary (links, labels, product UI); buttons use the
-   ink variant so they read midnight on paper and paper on midnight.
+   ink variant so they read midnight on paper and paper on midnight. The
+   cloud/rain/sky trio is tinted toward the brand violet rather than
+   Calendly's blue, so the site's grounds match the dashboard.
    ============================================================================ */
 .cal {
   --bg:             #fcfbf8;
@@ -807,9 +809,9 @@ html.lenis body {
   --border-strong:  #d8dce0;
   --border-subtle:  #eef0f2;
 
-  --cal-cloud:      #f4f9ff;
-  --cal-rain:       #edf5ff;
-  --cal-sky:        #c1defe;
+  --cal-cloud:      #f5f3fe;
+  --cal-rain:       #efecfd;
+  --cal-sky:        #d6cdfb;
   --cal-cornflower: #6bb1ff;
   --cal-lake:       #4890e3;
   --cal-honeydew:   #f2f8de;
@@ -834,11 +836,11 @@ html.lenis body {
 }
 
 .dark .cal {
-  --bg:             #071a31;
-  --bg-subtle:      #0a2344;
-  --surface:        #0d2a4c;
-  --surface-raised: #10325a;
-  --surface-sunken: #061529;
+  --bg:             #110e2b;
+  --bg-subtle:      #17133a;
+  --surface:        #1c1741;
+  --surface-raised: #231d4e;
+  --surface-sunken: #0c0a20;
 
   --fg:             #fcfbf8;
   --fg-muted:       #c6ccd2;
@@ -849,9 +851,9 @@ html.lenis body {
   --border-strong:  rgb(252 251 248 / 0.18);
   --border-subtle:  rgb(252 251 248 / 0.06);
 
-  --cal-cloud:      #0c2d54;
-  --cal-rain:       #0f3560;
-  --cal-sky:        #114580;
+  --cal-cloud:      #1a1540;
+  --cal-rain:       #1e1845;
+  --cal-sky:        #3a2d79;
   --cal-cornflower: #6bb1ff;
   --cal-lake:       #4890e3;
   --cal-honeydew:   #2c3414;

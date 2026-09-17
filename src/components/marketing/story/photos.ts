@@ -256,6 +256,8 @@ export const PHOTOS = {
   chefClass: { id: '38939130', source: 'pexels', alt: 'A chef in a white jacket leading a cooking class in a bright kitchen', focus: '50% 40%' },
   /** A florist in an apron with a tablet among the flowers. */
   floristTablet: { id: '3932817', source: 'pexels', alt: 'A florist in an apron holding a tablet among cut flowers', focus: '50% 35%' },
+  /** Kayaks in golden evening light beneath limestone cliffs. */
+  kayakGolden: { id: '37527658', source: 'pexels', alt: 'Kayaks paddling in golden evening light beneath limestone cliffs', focus: '50% 55%' },
   /** A row of kayaks paddling beneath golden sea cliffs. */
   kayakCliffs: { id: '1683368', source: 'pexels', alt: 'A group of kayaks paddling beneath golden sea cliffs', focus: '50% 55%' },
   /** Divers gearing up at the surface in calm water. */
