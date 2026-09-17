@@ -1,24 +1,28 @@
 'use client'
 
 import * as React from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { AnimatePresence, motion, useInView } from 'motion/react'
-import { ArrowRight, Play } from 'lucide-react'
+import { ArrowRight, Check, FileCheck2, Play, ShoppingCart, Wallet, type LucideIcon } from 'lucide-react'
 
+import { PHOTOS, photoUrl, type Photo } from '@/components/marketing/story/photos'
 import { Button } from '@/components/ui/button'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { EASE_OUT_EXPO } from '@/lib/motion'
+import { cn } from '@/lib/utils'
 import { HeroStage } from './hero-stage'
 import { LAND_VERTICALS } from './verticals'
 
 /* ==========================================================================
    LandHero — the claim, then the product.
 
-   One centred column on a pale blue ground: the headline finishes itself
-   with a different trade every few seconds, one paragraph, two buttons and a
-   line of small print. Behind it, three flat pastel shapes drift very slowly
-   so the ground is alive without competing with the words. Under it, the
-   stage: four working pieces of the product, one at a time.
+   One centred column on a pale blue ground: a large headline that finishes
+   itself with a different trade every few seconds, one paragraph, two
+   buttons and a line of small print. Either side of it, on wide screens, a
+   photograph of a trade with two pieces of the product laid over it, drifting
+   slowly. Behind everything, three flat pastel shapes. Under it, the stage:
+   four working pieces of the product, one at a time.
    ========================================================================== */
 
 const CYCLE_MS = 3200
@@ -40,6 +44,91 @@ const SHAPES = [
     duration: 24,
   },
 ] as const
+
+interface Chip {
+  icon: LucideIcon
+  tone: 'primary' | 'success' | 'ink'
+  title: string
+  detail: string
+}
+
+interface Side {
+  photo: Photo
+  rotate: number
+  /** The chip across the photograph's lower edge. */
+  chip: Chip
+  /** The smaller chip above the photograph. */
+  note: Chip
+  drift: number[]
+  duration: number
+}
+
+const SIDES: { left: Side; right: Side } = {
+  left: {
+    photo: PHOTOS.kayakCliffs,
+    rotate: -4,
+    chip: { icon: ShoppingCart, tone: 'primary', title: 'New booking', detail: 'Sunrise paddle · Sat 06:40 · $148 paid' },
+    note: { icon: FileCheck2, tone: 'success', title: 'Waivers signed', detail: '4 of 4, before arrival' },
+    drift: [0, -8, 0],
+    duration: 8.5,
+  },
+  right: {
+    photo: PHOTOS.chefClass,
+    rotate: 4,
+    chip: { icon: Wallet, tone: 'ink', title: 'Payout tomorrow', detail: '$4,128.40 · Bank of Maui ····4412' },
+    note: { icon: Check, tone: 'success', title: 'Table 9 resold', detail: 'From the waitlist, in order' },
+    drift: [0, 7, 0],
+    duration: 9.5,
+  },
+}
+
+const TONE: Record<Chip['tone'], string> = {
+  primary: 'bg-primary text-on-primary',
+  success: 'bg-success text-white',
+  ink: 'bg-foreground text-background',
+}
+
+function ChipCard({ chip, className }: { chip: Chip; className?: string }) {
+  const Icon = chip.icon
+  return (
+    <div className={cn('flex items-center gap-3 rounded-2xl bg-surface p-3 shadow-[var(--shadow-xl)] ring-1 ring-black/[0.05]', className)}>
+      <span className={cn('grid size-9 shrink-0 place-items-center rounded-xl', TONE[chip.tone])}>
+        <Icon className="size-4" aria-hidden="true" />
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-[0.8125rem] font-medium text-foreground">{chip.title}</span>
+        <span className="block truncate text-[0.75rem] text-subtle">{chip.detail}</span>
+      </span>
+    </div>
+  )
+}
+
+function SideScene({ side, align, reduce, delay }: { side: Side; align: 'left' | 'right'; reduce: boolean; delay: number }) {
+  return (
+    <motion.div
+      aria-hidden="true"
+      initial={reduce ? false : { opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.8, delay, ease: EASE_OUT_EXPO }}
+      className={cn('absolute top-2 hidden w-[13.5rem] xl:block 2xl:w-[15rem]', align === 'left' ? 'left-8 2xl:-left-4' : 'right-8 2xl:-right-4')}
+    >
+      <motion.div
+        animate={reduce ? undefined : { y: side.drift }}
+        transition={reduce ? undefined : { duration: side.duration, repeat: Infinity, ease: 'easeInOut' }}
+        className="relative will-change-transform"
+      >
+        <ChipCard chip={side.note} className={cn('relative z-10 mb-3 w-[13rem]', align === 'left' ? 'ml-6' : 'mr-6')} />
+        <figure
+          className="relative m-0 aspect-[4/5] overflow-hidden rounded-[1.5rem] bg-surface-sunken shadow-[var(--shadow-xl)] ring-1 ring-black/[0.06]"
+          style={{ transform: `rotate(${side.rotate}deg)` }}
+        >
+          <Image src={photoUrl(side.photo, 600)} alt="" fill sizes="15rem" className="object-cover" style={{ objectPosition: side.photo.focus }} />
+        </figure>
+        <ChipCard chip={side.chip} className={cn('absolute -bottom-5 z-10 w-[15rem]', align === 'left' ? 'left-8' : 'right-8')} />
+      </motion.div>
+    </motion.div>
+  )
+}
 
 export function LandHero() {
   const reduce = useReducedMotionSafe()
@@ -74,13 +163,16 @@ export function LandHero() {
         ))}
       </div>
 
-      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mx-auto flex max-w-3xl flex-col items-center text-center">
+      <div className="relative mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+        <SideScene side={SIDES.left} align="left" reduce={reduce} delay={0.35} />
+        <SideScene side={SIDES.right} align="right" reduce={reduce} delay={0.45} />
+
+        <div className="mx-auto flex max-w-4xl flex-col items-center text-center">
           <motion.h1
             ref={headingRef}
             id="hero-title"
             {...enter(0)}
-            className="font-display text-[2.5rem] leading-[1.06] font-medium tracking-[-0.03em] text-balance text-foreground sm:text-[3.25rem] lg:text-[3.75rem]"
+            className="font-display text-[2.875rem] leading-[1.04] font-medium tracking-[-0.035em] text-balance text-foreground sm:text-[3.75rem] lg:text-[4.5rem] xl:text-[5rem]"
           >
             Take bookings for your{' '}
             <span className="relative inline-grid overflow-hidden align-top">
@@ -99,26 +191,26 @@ export function LandHero() {
             </span>
           </motion.h1>
 
-          <motion.p {...enter(0.08)} className="mt-6 max-w-xl text-[1.125rem] leading-[1.45] text-pretty text-muted sm:text-[1.25rem]">
+          <motion.p {...enter(0.08)} className="mt-7 max-w-2xl text-[1.125rem] leading-[1.45] text-pretty text-muted sm:text-[1.25rem] lg:text-[1.375rem]">
             Availability, deposits, staff rosters and next-day payouts for tours, restaurants, events, classes
             and venues. One inventory behind your website, the marketplaces and the phone.
           </motion.p>
 
-          <motion.div {...enter(0.16)} className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <Button asChild variant="ink" size="lg" className="rounded-[10px] px-6" rightIcon={<ArrowRight aria-hidden="true" />}>
+          <motion.div {...enter(0.16)} className="mt-9 flex flex-wrap items-center justify-center gap-3">
+            <Button asChild variant="ink" size="xl" className="rounded-[10px] px-7" rightIcon={<ArrowRight aria-hidden="true" />}>
               <Link href="/signup">Start free</Link>
             </Button>
-            <Button asChild variant="secondary" size="lg" className="rounded-[10px] px-6" leftIcon={<Play aria-hidden="true" />}>
+            <Button asChild variant="secondary" size="xl" className="rounded-[10px] px-7" leftIcon={<Play aria-hidden="true" />}>
               <Link href="/dashboard">See it running</Link>
             </Button>
           </motion.div>
 
-          <motion.p {...enter(0.22)} className="mt-4 text-[0.8125rem] text-subtle">
+          <motion.p {...enter(0.22)} className="mt-5 text-[0.875rem] text-subtle">
             No card to start · Free migration from FareHarbor, Peek Pro, OpenTable or Eventbrite
           </motion.p>
         </div>
 
-        <motion.div {...enter(0.3)} className="mt-14 sm:mt-16">
+        <motion.div {...enter(0.3)} className="mt-16 sm:mt-20 xl:mt-24">
           <HeroStage />
         </motion.div>
       </div>

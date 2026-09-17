@@ -81,6 +81,42 @@ const GROUND: Record<Vertical['accent'], string> = {
   reef: 'bg-cal-haze',
 }
 
+function TokenChip({ token }: { token: SolutionToken }) {
+  const Icon = ICONS[token.icon]
+  return (
+    <div className="flex items-center gap-3 rounded-2xl bg-surface p-3.5 shadow-[var(--shadow-xl)] ring-1 ring-black/[0.05]">
+      <span className={cn('grid size-9 shrink-0 place-items-center rounded-xl', TONE[token.tone])}>
+        <Icon className="size-4" />
+      </span>
+      <div className="min-w-0">
+        <p className="truncate text-[0.8125rem] font-medium text-foreground">{token.title}</p>
+        <p className="truncate text-[0.75rem] text-subtle">{token.detail}</p>
+      </div>
+    </div>
+  )
+}
+
+/** A token beside the headline, drifting, on wide screens only. */
+function SideToken({ token, align, reduce, delay }: { token: SolutionToken; align: 'left' | 'right'; reduce: boolean; delay: number }) {
+  return (
+    <motion.div
+      aria-hidden="true"
+      initial={reduce ? false : { opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.7, delay, ease: EASE_OUT_EXPO }}
+      className={cn('absolute top-[60%] hidden w-[16rem] xl:block', align === 'left' ? '-left-[9rem] 2xl:-left-[13rem]' : '-right-[9rem] 2xl:-right-[13rem]')}
+    >
+      <motion.div
+        animate={reduce ? undefined : { y: align === 'left' ? [0, -8, 0] : [0, 7, 0] }}
+        transition={reduce ? undefined : { duration: align === 'left' ? 8.5 : 9.5, repeat: Infinity, ease: 'easeInOut' }}
+        className="will-change-transform"
+      >
+        <TokenChip token={token} />
+      </motion.div>
+    </motion.div>
+  )
+}
+
 export interface SolutionHeroProps {
   vertical: Vertical
   content: SolutionContent
@@ -120,29 +156,34 @@ export function SolutionHero({ vertical, content, headline, body, bullets, proof
           </ol>
         </nav>
 
-        <div className="mx-auto mt-8 flex max-w-3xl flex-col items-center text-center sm:mt-10">
+        <div className="relative mx-auto mt-8 flex max-w-4xl flex-col items-center text-center sm:mt-10">
+          {/* two of the three product tokens sit beside the copy on wide screens */}
+          {content.tokens.slice(0, 2).map((token, i) => (
+            <SideToken key={token.key} token={token} align={i === 0 ? 'left' : 'right'} reduce={reduce} delay={0.5 + i * 0.12} />
+          ))}
+
           <motion.h1
             id="vertical-title"
             {...enter(0)}
-            className="font-display text-[2.5rem] leading-[1.06] font-medium tracking-[-0.03em] text-balance text-foreground sm:text-[3.25rem] lg:text-[3.75rem]"
+            className="font-display text-[2.875rem] leading-[1.04] font-medium tracking-[-0.035em] text-balance text-foreground sm:text-[3.75rem] lg:text-[4.5rem] xl:text-[5rem]"
           >
             {headline}
           </motion.h1>
 
-          <motion.p {...enter(0.08)} className="mt-6 max-w-xl text-[1.125rem] leading-[1.45] text-pretty text-muted sm:text-[1.25rem]">
+          <motion.p {...enter(0.08)} className="mt-7 max-w-2xl text-[1.125rem] leading-[1.45] text-pretty text-muted sm:text-[1.25rem] lg:text-[1.375rem]">
             {body}
           </motion.p>
 
-          <motion.div {...enter(0.16)} className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <Button asChild variant="ink" size="lg" className="rounded-[10px] px-6" rightIcon={<ArrowRight aria-hidden="true" />}>
+          <motion.div {...enter(0.16)} className="mt-9 flex flex-wrap items-center justify-center gap-3">
+            <Button asChild variant="ink" size="xl" className="rounded-[10px] px-7" rightIcon={<ArrowRight aria-hidden="true" />}>
               <Link href="/signup">Start free</Link>
             </Button>
-            <Button asChild variant="secondary" size="lg" className="rounded-[10px] px-6" leftIcon={<Play aria-hidden="true" />}>
+            <Button asChild variant="secondary" size="xl" className="rounded-[10px] px-7" leftIcon={<Play aria-hidden="true" />}>
               <Link href="/dashboard">See it running</Link>
             </Button>
           </motion.div>
 
-          <motion.p {...enter(0.22)} className="mt-4 text-[0.8125rem] text-subtle">
+          <motion.p {...enter(0.22)} className="mt-5 text-[0.875rem] text-subtle">
             <span className="font-medium text-foreground tabular-nums">{proofStat}</span> {proofLabel} · No card to start · Free migration
           </motion.p>
 
@@ -167,7 +208,6 @@ export function SolutionHero({ vertical, content, headline, body, bullets, proof
           </div>
 
           {content.tokens.map((token, i) => {
-            const Icon = ICONS[token.icon]
             const slot = CHIP_SLOTS[i]
             if (!slot) return null
             return (
@@ -177,17 +217,9 @@ export function SolutionHero({ vertical, content, headline, body, bullets, proof
                 initial={reduce ? false : { opacity: 0, y: 14 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.6 + i * 0.12, ease: EASE_OUT_EXPO }}
-                className={cn('absolute z-10 hidden w-[16rem] sm:block', slot)}
+                className={cn('absolute z-10 hidden w-[16rem] sm:block', i < 2 && 'xl:hidden', slot)}
               >
-                <div className="flex items-center gap-3 rounded-2xl bg-surface p-3.5 shadow-[var(--shadow-xl)] ring-1 ring-black/[0.05]">
-                  <span className={cn('grid size-9 shrink-0 place-items-center rounded-xl', TONE[token.tone])}>
-                    <Icon className="size-4" />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="truncate text-[0.8125rem] font-medium text-foreground">{token.title}</p>
-                    <p className="truncate text-[0.75rem] text-subtle">{token.detail}</p>
-                  </div>
-                </div>
+                <TokenChip token={token} />
               </motion.div>
             )
           })}
