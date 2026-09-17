@@ -56,6 +56,8 @@ export interface SolutionContent {
   hero: PhotoKey
   /** A second frame that sits behind it, for depth. */
   behind: PhotoKey
+  /** The photographs on the hero's ring, in the order they go round. */
+  ring: PhotoKey[]
   tokens: SolutionToken[]
   moments: SolutionMoment[]
   /** The line above the console. */
@@ -72,6 +74,7 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
   watersports: {
     hero: 'kayakCliffs',
     behind: 'kayakSunset',
+    ring: ['heroKayakBay', 'solBoatParty', 'solSailingBay', 'kayakCliffs', 'solLongtail', 'diverWave', 'solFloaters', 'heroKayakRiver'],
     consoleLine: 'Two hulls, nine departures, and the tide on every one of them.',
     tokens: tokens([
       { key: 'hold', icon: 'CloudRain', tone: 'info', title: 'Weather hold · 06:40', detail: '18 guests texted, refunds queued' },
@@ -109,6 +112,7 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
   tours: {
     hero: 'groupPond',
     behind: 'fujiPagoda',
+    ring: ['solTouristsMap', 'groupPond', 'solCoupleTravel', 'guideGroup', 'solRowboat', 'solRetroFamilies', 'guideBook', 'solOffroad'],
     consoleLine: 'Six hotels, twenty-three guests, two languages, one departure board.',
     tokens: tokens([
       { key: 'pickup', icon: 'Bus', tone: 'primary', title: 'Pickup list', detail: 'Hotel Aurora · 07:15 · 6 guests' },
@@ -146,6 +150,7 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
   island: {
     hero: 'diversPrep',
     behind: 'diversReef',
+    ring: ['solIslandAerial', 'solLongtail', 'solBeachChair', 'diversPrep', 'solSailingBay', 'solPool', 'diverWave', 'solFloaters'],
     consoleLine: 'Twenty operators, one desk, every commission where it should be.',
     tokens: tokens([
       { key: 'concierge', icon: 'ConciergeBell', tone: 'primary', title: 'Quick-book · Room 412', detail: 'Reef day, charged to the room' },
@@ -183,6 +188,7 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
   adventure: {
     hero: 'cliffClimb',
     behind: 'summitLedge',
+    ring: ['solParagliders', 'cliffClimb', 'solAtv', 'solHiker', 'solQuadRider', 'summitLedge', 'solOffroad', 'skierJump'],
     consoleLine: 'Guides, gear and weather, checked before anyone reaches the trailhead.',
     tokens: tokens([
       { key: 'waiver', icon: 'FileCheck2', tone: 'success', title: 'Waiver signed · 09:12', detail: 'On the phone, three days out' },
@@ -220,6 +226,7 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
   restaurants: {
     hero: 'waitressOrder',
     behind: 'restaurantRoom',
+    ring: ['solCafeFriends', 'waitressOrder', 'solBarmanCouple', 'chefPlating', 'solWomenFood', 'heroToastService', 'solNfcPay', 'solCafeGift'],
     consoleLine: 'Forty covers a sitting, two sittings a night, every allergy on the pass.',
     tokens: tokens([
       { key: 'deposit', icon: 'Landmark', tone: 'success', title: 'Deposit held · $60', detail: 'Party of four, 19:30' },
@@ -257,6 +264,7 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
   wellness: {
     hero: 'yogaSea',
     behind: 'spaTreatment',
+    ring: ['heroYogaClass', 'solSpaFacial', 'heroYogaSplit', 'solPool', 'yogaSea', 'solSpaMask', 'sunsetYoga', 'solFloaters'],
     consoleLine: 'Classes, packs and memberships on one calendar, with retention you can read.',
     tokens: tokens([
       { key: 'pack', icon: 'Ticket', tone: 'primary', title: 'Class pack · 8 of 10', detail: 'Renews when the last one is used' },

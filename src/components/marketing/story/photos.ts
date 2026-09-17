@@ -303,6 +303,32 @@ export const PHOTOS = {
   heroRooftopToast: { id: '34418030', source: 'pexels', alt: 'Two friends toasting with wine at a rooftop bar in the evening', focus: '50% 40%' },
   /** A bartender in a black apron stirring a cocktail. */
   heroBartender: { id: '16807989', source: 'pexels', alt: 'A bartender in a black apron stirring a cocktail at a wooden bar', focus: '50% 35%' },
+
+  /* ---- the user's own photographs, for the solutions heroes (public/photos) ---- */
+
+  solCafeGift: { id: 'sol-cafe-gift.jpg', source: 'local', alt: 'Friends at a café table handing over a wrapped gift', focus: '50% 40%' },
+  solIslandAerial: { id: 'sol-island-aerial.jpg', source: 'local', alt: 'A small green island ringed by turquoise water, from the air', focus: '50% 50%' },
+  solCafeFriends: { id: 'sol-cafe-friends.jpg', source: 'local', alt: 'Three friends laughing while photographing their dessert at a café', focus: '50% 40%' },
+  solCoupleTravel: { id: 'sol-couple-travel.jpg', source: 'local', alt: 'A traveller with a backpack and hat raising a map towards the sea', focus: '50% 35%' },
+  solSpaFacial: { id: 'sol-spa-facial.jpg', source: 'local', alt: 'A woman receiving a facial treatment at a spa', focus: '50% 40%' },
+  solBoatParty: { id: 'sol-boat-party.jpg', source: 'local', alt: 'Friends laughing on the bow of a boat in the tropics', focus: '50% 45%' },
+  solTouristsMap: { id: 'sol-tourists-map.jpg', source: 'local', alt: 'A couple in straw hats reading a map in a sunny square', focus: '50% 35%' },
+  solBarmanCouple: { id: 'sol-barman-couple.jpg', source: 'local', alt: 'A bartender taking an order from a couple at a pub table', focus: '50% 40%' },
+  solRowboat: { id: 'sol-rowboat.jpg', source: 'local', alt: 'Two men fishing from a rowboat on a bright lake', focus: '50% 50%' },
+  solWomenFood: { id: 'sol-women-food.jpg', source: 'local', alt: 'Two women sharing plates of food at a table', focus: '50% 40%' },
+  solRetroFamilies: { id: 'sol-retro-families.jpg', source: 'local', alt: 'A family in bright retro clothes beside a car on a sunny street', focus: '50% 45%' },
+  solQuadRider: { id: 'sol-quad-rider.jpg', source: 'local', alt: 'A rider in a red jacket and helmet on a quad bike in a forest', focus: '50% 45%' },
+  solParagliders: { id: 'sol-paragliders.jpg', source: 'local', alt: 'Three paragliders over a green landscape under a cloudy sky', focus: '50% 55%' },
+  solNfcPay: { id: 'sol-nfc-pay.jpg', source: 'local', alt: 'A guest paying a waiter by tapping a card at a café terrace', focus: '50% 40%' },
+  solSailingBay: { id: 'sol-sailing-bay.jpg', source: 'local', alt: 'A sailing boat at rest in a blue bay with green headlands', focus: '50% 55%' },
+  solFloaters: { id: 'sol-floaters.jpg', source: 'local', alt: 'Two women on pineapple floats in a clear sea', focus: '50% 50%' },
+  solPool: { id: 'sol-pool.jpg', source: 'local', alt: 'Sun loungers beside a resort pool under palm trees', focus: '50% 55%' },
+  solLongtail: { id: 'sol-longtail.jpg', source: 'local', alt: 'Three friends on a longtail boat on a lake ringed by limestone hills', focus: '50% 45%' },
+  solOffroad: { id: 'sol-offroad.jpg', source: 'local', alt: 'Two people on the roof of an off-road car looking at snowy mountains', focus: '50% 45%' },
+  solAtv: { id: 'sol-atv.jpg', source: 'local', alt: 'Two brothers in helmets riding a quad bike', focus: '50% 45%' },
+  solBeachChair: { id: 'sol-beach-chair.jpg', source: 'local', alt: 'A woman in a hat on a deck chair on a white tropical beach', focus: '50% 45%' },
+  solHiker: { id: 'sol-hiker.jpg', source: 'local', alt: 'A hiker with a backpack photographing a cloudy mountain range', focus: '50% 40%' },
+  solSpaMask: { id: 'sol-spa-mask.jpg', source: 'local', alt: 'A woman relaxing with a face mask at a spa', focus: '50% 40%' },
 } as const satisfies Record<string, Photo>
 
 export type PhotoKey = keyof typeof PHOTOS
