@@ -270,6 +270,33 @@ export const PHOTOS = {
   groupPond: { id: 'photo-1766415007432-80738e830722', alt: 'A tour group gathered around a guide beside a pond', focus: '50% 50%' },
   /** A wedding reception on a lawn in front of a villa at sunset. */
   villaWedding: { id: '33485961', source: 'pexels', alt: 'A wedding reception laid out on a lawn in front of a villa at sunset', focus: '50% 55%' },
+
+  /* ---- the landing hero's side cards, one pair per trade (Pexels) ------- */
+
+  /** A man in a yellow kayak paddling across a lake at sunrise. */
+  heroPaddler: { id: '16949958', source: 'pexels', alt: 'A man paddling a yellow kayak across a calm lake at sunrise', focus: '55% 50%' },
+  /** A guide in a blue shirt steering two guests in an inflatable kayak into a sea cave. */
+  heroKayakGuide: { id: '33425749', source: 'pexels', alt: 'A guide paddling two guests in a blue kayak towards a limestone sea cave', focus: '50% 50%' },
+  /** A chef plating a course with tweezers on a wooden board. */
+  heroChefTweezers: { id: '4253315', source: 'pexels', alt: 'A chef in a grey apron plating a course with tweezers on a wooden board', focus: '50% 40%' },
+  /** A guest raising a glass to a waitress in a restaurant full of greenery. */
+  heroToastService: { id: '15761511', source: 'pexels', alt: 'A guest raising a glass of wine to a waitress in a restaurant full of greenery', focus: '50% 40%' },
+  /** Reception tables laid under a bright canopy with greenery. */
+  heroReceptionTables: { id: '19870060', source: 'pexels', alt: 'Wedding reception tables laid under a bright canopy hung with greenery', focus: '50% 50%' },
+  /** A bride and groom under a shower of confetti in the sun. */
+  heroConfettiCouple: { id: '19796665', source: 'pexels', alt: 'A bride and groom laughing under a shower of confetti thrown by their guests', focus: '50% 45%' },
+  /** Two pairs of hands shaping a pot on a wheel. */
+  heroPotteryHands: { id: '33559399', source: 'pexels', alt: 'Two pairs of hands shaping a clay pot together on a pottery wheel', focus: '50% 50%' },
+  /** An instructor guiding a student in a yellow shirt at the wheel. */
+  heroPotteryLesson: { id: '9304291', source: 'pexels', alt: 'A pottery teacher guiding a student in a yellow shirt at the wheel', focus: '50% 40%' },
+  /** A yoga class in a bright studio, arms out in warrior pose. */
+  heroYogaClass: { id: '8436610', source: 'pexels', alt: 'A yoga class holding warrior pose in a bright studio with tall windows', focus: '50% 50%' },
+  /** An instructor adjusting a student's arm in a sunny studio. */
+  heroYogaTeacher: { id: '8436426', source: 'pexels', alt: 'A yoga instructor adjusting a student\'s raised arm in a sunny studio', focus: '50% 40%' },
+  /** Two friends toasting with wine at a rooftop bar in the evening. */
+  heroRooftopToast: { id: '34418030', source: 'pexels', alt: 'Two friends toasting with wine at a rooftop bar in the evening', focus: '50% 40%' },
+  /** A bartender in a black apron stirring a cocktail. */
+  heroBartender: { id: '16807989', source: 'pexels', alt: 'A bartender in a black apron stirring a cocktail at a wooden bar', focus: '50% 35%' },
 } as const satisfies Record<string, Photo>
 
 export type PhotoKey = keyof typeof PHOTOS

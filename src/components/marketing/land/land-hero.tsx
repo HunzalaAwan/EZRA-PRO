@@ -83,43 +83,43 @@ interface Scene {
 
 const SCENES: Record<LandVerticalKey, Scene> = {
   tours: {
-    left: PHOTOS.kayakSunset,
-    right: PHOTOS.kayakGolden,
+    left: PHOTOS.heroPaddler,
+    right: PHOTOS.heroKayakGuide,
     leftNote: { icon: FileCheck2, tone: 'success', title: 'Waivers signed', detail: '2 of 2, before the slip' },
     rightChip: { icon: Wallet, tone: 'ink', title: 'Payout tomorrow', detail: '$4,128.40 · Bank of Maui ····4412' },
     rightNote: { icon: Users, tone: 'primary', title: 'Guide roster', detail: 'Mara takes the 06:40' },
   },
   restaurants: {
-    left: PHOTOS.chefPlating,
-    right: PHOTOS.waitressOrder,
+    left: PHOTOS.heroChefTweezers,
+    right: PHOTOS.heroToastService,
     leftNote: { icon: Utensils, tone: 'success', title: 'Allergy noted', detail: 'Nut allergy, on the ticket' },
     rightChip: { icon: Wallet, tone: 'ink', title: 'Payout tomorrow', detail: '$6,240.00 · two sittings' },
     rightNote: { icon: ListOrdered, tone: 'primary', title: 'Table 9 resold', detail: 'From the waitlist, in order' },
   },
   events: {
-    left: PHOTOS.weddingVenue,
-    right: PHOTOS.villaWedding,
+    left: PHOTOS.heroReceptionTables,
+    right: PHOTOS.heroConfettiCouple,
     leftNote: { icon: Users, tone: 'success', title: 'Seating chart', detail: 'Shared with 120 guests' },
     rightChip: { icon: Wallet, tone: 'ink', title: 'Balance collected', detail: '$18,400 · on 1 Oct' },
     rightNote: { icon: CalendarCheck2, tone: 'primary', title: 'Vendor schedule', detail: 'Sent to 6 suppliers' },
   },
   classes: {
-    left: PHOTOS.potteryClass,
-    right: PHOTOS.chefClass,
+    left: PHOTOS.heroPotteryHands,
+    right: PHOTOS.heroPotteryLesson,
     leftNote: { icon: Package, tone: 'success', title: 'Kit reserved', detail: '8 wheels, 8 aprons' },
     rightChip: { icon: Wallet, tone: 'ink', title: 'Payout tomorrow', detail: '$1,360.00 · four classes' },
     rightNote: { icon: Repeat2, tone: 'primary', title: 'Waitlist', detail: '2 notified, 1 took the seat' },
   },
   wellness: {
-    left: PHOTOS.sunsetYoga,
-    right: PHOTOS.yogaSea,
+    left: PHOTOS.heroYogaClass,
+    right: PHOTOS.heroYogaTeacher,
     leftNote: { icon: Ticket, tone: 'success', title: 'Class pack', detail: '1 of 10 credits used' },
     rightChip: { icon: Wallet, tone: 'ink', title: 'Payout tomorrow', detail: '$2,910.00 · Bank of Maui ····4412' },
     rightNote: { icon: Repeat2, tone: 'primary', title: 'Memberships renewed', detail: '212 of 220 overnight' },
   },
   venues: {
-    left: PHOTOS.rooftopBar,
-    right: PHOTOS.confettiCrowd,
+    left: PHOTOS.heroRooftopToast,
+    right: PHOTOS.heroBartender,
     leftNote: { icon: MessageSquareText, tone: 'success', title: 'Text confirmation', detail: 'Delivered 14:02' },
     rightChip: { icon: Wallet, tone: 'ink', title: 'Payout tomorrow', detail: '$3,480.00 · Friday terrace' },
     rightNote: { icon: Check, tone: 'primary', title: 'Minimum spend', detail: '$50 held on the card' },
@@ -215,7 +215,7 @@ function SideScene({
                 style={{ zIndex: shown ? 1 : 0 }}
               >
                 <Image
-                  src={photoUrl(photo, 1200, 82)}
+                  src={photoUrl(photo, 1400, 85)}
                   alt=""
                   fill
                   priority={i === 0}
