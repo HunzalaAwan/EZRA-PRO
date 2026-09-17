@@ -2,7 +2,8 @@
 
 import * as React from 'react'
 import Image from 'next/image'
-import { CalendarDays, ChartSpline, Check, CreditCard, Share2, ShoppingCart, Store, UserCog, Users, type LucideIcon } from 'lucide-react'
+import Link from 'next/link'
+import { ArrowRight, CalendarDays, ChartSpline, Check, CreditCard, Share2, ShoppingCart, Store, UserCog, Users, type LucideIcon } from 'lucide-react'
 
 import { AppFrame } from '@/components/marketing/app-frame'
 import { PHOTOS, photoUrl } from '@/components/marketing/story/photos'
@@ -11,7 +12,7 @@ import { Reveal } from '@/components/motion/reveal'
 import { StaggerGroup, StaggerItem } from '@/components/motion/stagger'
 import { cn } from '@/lib/utils'
 import type { FeatureBlock, Vertical } from '@/types'
-import type { SolutionMoment } from './solution-content'
+import { SOLUTION_CONTENT, type SolutionMoment } from './solution-content'
 
 /* ==========================================================================
    The sections under the solutions hero, in the landing page's voice:
@@ -166,6 +167,74 @@ export function ConsoleStage({ vertical, line }: { vertical: Vertical; line: str
             />
           </AppFrame>
         </Reveal>
+      </div>
+    </section>
+  )
+}
+
+/* --------------------------------------------------------------------------
+   OtherTrades — the other five trades, each as the photograph from its own
+   hero with the name and the one-line pitch beneath. A card is a link; the
+   photograph eases in a touch on hover and the arrow moves with it.
+   -------------------------------------------------------------------------- */
+
+export function OtherTrades({ siblings }: { siblings: Vertical[] }) {
+  return (
+    <section aria-labelledby="other-trades-title" className="border-t border-line bg-background py-20 sm:py-24">
+      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+        <Heading
+          id="other-trades-title"
+          label="The other trades"
+          title="Run more than one kind of business?"
+          description="A dive shop with a café, a hotel with an excursion desk, a studio that runs retreats. One account covers every trade; multi-brand and multi-location are on Scale and Enterprise."
+        />
+
+        {/* a swipeable row on phones, a grid from sm */}
+        <StaggerGroup
+          as="ul"
+          stagger={0.06}
+          margin="-10%"
+          className="-mx-4 mt-12 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] sm:mx-0 sm:grid sm:snap-none sm:grid-cols-3 sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-5 [&::-webkit-scrollbar]:hidden"
+        >
+          {siblings.map((item) => {
+            const photo = PHOTOS[SOLUTION_CONTENT[item.key].hero]
+            return (
+              <StaggerItem as="li" key={item.key} distance={16} className="w-[70%] shrink-0 snap-start sm:w-auto sm:shrink">
+                <Link
+                  href={`/solutions/${item.key}`}
+                  className={cn(
+                    'group flex h-full flex-col rounded-[1.5rem] bg-surface p-2.5 shadow-[var(--shadow-sm)] ring-1 ring-black/[0.04]',
+                    'transition-[transform,box-shadow] duration-300 ease-[var(--ease-out-expo)]',
+                    'hover:-translate-y-1 hover:shadow-[var(--shadow-lg)]',
+                    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+                    'motion-reduce:transition-none motion-reduce:hover:translate-y-0',
+                  )}
+                >
+                  <figure className="relative m-0 aspect-[4/5] overflow-hidden rounded-[1.125rem] bg-surface-sunken">
+                    <Image
+                      src={photoUrl(photo, 600)}
+                      alt=""
+                      fill
+                      sizes="(min-width: 1024px) 15rem, (min-width: 640px) 33vw, 50vw"
+                      className="object-cover transition-transform duration-700 ease-[var(--ease-out-expo)] group-hover:scale-[1.04] motion-reduce:transition-none motion-reduce:group-hover:scale-100"
+                      style={{ objectPosition: photo.focus }}
+                    />
+                  </figure>
+                  <span className="flex flex-1 flex-col px-2 pt-4 pb-2">
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="text-[0.9375rem] font-medium text-foreground">{item.label}</span>
+                      <ArrowRight
+                        className="size-4 shrink-0 text-faint transition-[transform,color] duration-300 ease-[var(--ease-out-expo)] group-hover:translate-x-0.5 group-hover:text-primary"
+                        aria-hidden="true"
+                      />
+                    </span>
+                    <span className="mt-1.5 text-[0.8125rem] leading-snug text-muted">{item.tagline}</span>
+                  </span>
+                </Link>
+              </StaggerItem>
+            )
+          })}
+        </StaggerGroup>
       </div>
     </section>
   )
