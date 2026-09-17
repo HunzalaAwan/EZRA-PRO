@@ -1,7 +1,6 @@
 import type { Metadata } from 'next'
 
 import { FaqSection } from '@/components/marketing/faq-section'
-import { Integrations } from '@/components/marketing/integrations'
 import { ClosingCta } from '@/components/marketing/land/closing-cta'
 import { CustomerStories } from '@/components/marketing/land/customer-stories'
 import { FeatureAccordion } from '@/components/marketing/land/feature-accordion'
@@ -30,7 +29,6 @@ export const metadata: Metadata = {
      phases        before, during and after every booking
      features      there is more to a booking than taking it
      stories       real operators, real numbers
-     integrations  the stack it plugs into
      pricing       the price, plainly
      faq           the questions operators ask
      closing       the ask
@@ -44,7 +42,6 @@ export default function LandingPage() {
       <Phases />
       <FeatureAccordion />
       <CustomerStories />
-      <Integrations />
       <PricingSection className="scroll-mt-4 border-t border-line bg-background-subtle py-20 sm:py-24" />
       <FaqSection />
       <ClosingCta />
