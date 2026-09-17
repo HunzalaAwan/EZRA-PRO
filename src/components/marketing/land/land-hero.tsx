@@ -188,14 +188,14 @@ function SideScene({
       initial={reduce ? false : { opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.8, delay, ease: EASE_OUT_EXPO }}
-      className={cn('absolute top-2 hidden w-[13.5rem] xl:block 2xl:w-[15rem]', align === 'left' ? 'left-8 2xl:-left-4' : 'right-8 2xl:-right-4')}
+      className={cn('absolute top-2 hidden w-[10.5rem] lg:block xl:w-[13.5rem] 2xl:w-[15rem]', align === 'left' ? 'left-3 xl:left-8 2xl:-left-4' : 'right-3 xl:right-8 2xl:-right-4')}
     >
       <motion.div
         animate={reduce ? undefined : { y: drift }}
         transition={reduce ? undefined : { duration: align === 'left' ? 8.5 : 9.5, repeat: Infinity, ease: 'easeInOut' }}
         className="relative will-change-transform"
       >
-        <SwapChip id={`${active}-note`} chip={note} reduce={reduce} className={cn('z-10 mb-3 w-[13rem]', align === 'left' ? 'ml-6' : 'mr-6')} />
+        <SwapChip id={`${active}-note`} chip={note} reduce={reduce} className={cn('z-10 mb-3 w-[11rem] xl:w-[13rem]', align === 'left' ? 'ml-4 xl:ml-6' : 'mr-4 xl:mr-6')} />
 
         {/* every trade's photograph is mounted, so a swap is a crossfade and never a load */}
         <figure
@@ -219,7 +219,7 @@ function SideScene({
                   alt=""
                   fill
                   priority={i === 0}
-                  sizes="(min-width: 1536px) 15rem, 13.5rem"
+                  sizes="(min-width: 1536px) 15rem, (min-width: 1280px) 13.5rem, 10.5rem"
                   className="object-cover"
                   style={{ objectPosition: photo.focus }}
                 />
@@ -228,7 +228,7 @@ function SideScene({
           })}
         </figure>
 
-        <SwapChip id={`${active}-chip`} chip={chip} reduce={reduce} className={cn('absolute -bottom-5 z-10 w-[15rem]', align === 'left' ? 'left-8' : 'right-8')} />
+        <SwapChip id={`${active}-chip`} chip={chip} reduce={reduce} className={cn('absolute -bottom-5 z-10 w-[12.5rem] xl:w-[15rem]', align === 'left' ? 'left-5 xl:left-8' : 'right-5 xl:right-8')} />
       </motion.div>
     </motion.div>
   )
