@@ -38,8 +38,8 @@ import { LAND_VERTICALS, type LandVerticalKey } from './verticals'
    buttons and a line of small print. Either side of it, on wide screens, a
    photograph of that trade with two pieces of the product laid over it; the
    photographs and the chips change with the word. Behind everything, three
-   flat pastel shapes. Under it, the stage: four working pieces of the
-   product, one at a time.
+   flat pastel shapes. Under it, the stage: a field of colour with a deck
+   of four cards, one piece of the product each.
    ========================================================================== */
 
 const CYCLE_MS = 3600
@@ -322,10 +322,11 @@ export function LandHero() {
           </motion.p>
         </div>
 
-        <motion.div {...enter(0.3)} className="mt-16 sm:mt-20 xl:mt-24">
-          <HeroStage />
-        </motion.div>
       </div>
+
+      <motion.div {...enter(0.3)} className="mx-auto mt-16 w-full max-w-[96rem] px-3 sm:mt-20 sm:px-5 lg:px-6 xl:mt-24">
+        <HeroStage />
+      </motion.div>
     </section>
   )
 }

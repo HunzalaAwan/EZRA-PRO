@@ -7,7 +7,6 @@ import { CustomerStories } from '@/components/marketing/land/customer-stories'
 import { FeatureAccordion } from '@/components/marketing/land/feature-accordion'
 import { LandHero } from '@/components/marketing/land/land-hero'
 import { Phases } from '@/components/marketing/land/phases'
-import { ProductCards } from '@/components/marketing/land/product-cards'
 import { LogoCloud } from '@/components/marketing/logo-cloud'
 import { PricingSection } from '@/components/marketing/pricing-section'
 
@@ -26,9 +25,8 @@ export const metadata: Metadata = {
 
 /* ==========================================================================
    The order a first visit needs:
-     hero          the claim, and four working pieces of the product
+     hero          the claim, and a deck of four product cards on a field of colour
      logos         who already runs on it
-     cards         four things it does, two by two
      phases        before, during and after every booking
      features      there is more to a booking than taking it
      stories       real operators, real numbers
@@ -43,7 +41,6 @@ export default function LandingPage() {
     <>
       <LandHero />
       <LogoCloud className="border-b border-line" />
-      <ProductCards />
       <Phases />
       <FeatureAccordion />
       <CustomerStories />
