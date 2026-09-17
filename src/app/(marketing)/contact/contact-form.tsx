@@ -3,7 +3,7 @@
 import { useRef, useState, type FormEvent } from 'react'
 import Link from 'next/link'
 import { AnimatePresence, motion } from 'motion/react'
-import { ArrowRight, CalendarCheck, Check, Send } from 'lucide-react'
+import { ArrowRight, Briefcase, CalendarCheck, Check, Send } from 'lucide-react'
 import { z } from 'zod'
 
 import { Button } from '@/components/ui/button'
@@ -45,6 +45,15 @@ const contactSchema = z.object({
     .max(1200, 'Keep it under 1,200 characters — we will ask the rest on the call.'),
 })
 
+/** `?topic=careers`: an applicant sends a name, an email and a note. */
+const applySchema = contactSchema.pick({ name: true, email: true }).extend({
+  message: z
+    .string()
+    .trim()
+    .min(40, 'A few sentences, please: the role, what you have done, and where to see it.')
+    .max(1200, 'Keep it under 1,200 characters — we will ask the rest when we talk.'),
+})
+
 type FieldName = keyof z.infer<typeof contactSchema>
 
 const EMPTY_VALUES: Record<FieldName, string> = {
@@ -74,6 +83,7 @@ const TOPIC_PREFILL: Record<string, string> = {
   enterprise:
     'We run multiple locations or brands and need to talk about a custom commission and an SLA.',
   pricing: 'We would like someone to run our real numbers against Starter, Growth and Scale.',
+  careers: 'I would like to apply for a role. Here is what I would do at EZRA Pro, and a link to my work.',
 }
 
 export interface ContactFormProps {
@@ -94,6 +104,7 @@ export interface ContactFormProps {
 
 export function ContactForm({ topic, className }: ContactFormProps) {
   const reduceMotion = useReducedMotionSafe()
+  const hiring = topic === 'careers'
 
   const [values, setValues] = useState<Record<FieldName, string>>(() => ({
     ...EMPTY_VALUES,
@@ -117,7 +128,7 @@ export function ContactForm({ topic, className }: ContactFormProps) {
     event.preventDefault()
     if (status === 'submitting') return
 
-    const parsed = contactSchema.safeParse(values)
+    const parsed = (hiring ? applySchema : contactSchema).safeParse(values)
 
     if (!parsed.success) {
       const next: Partial<Record<FieldName, string>> = {}
@@ -141,8 +152,10 @@ export function ContactForm({ topic, className }: ContactFormProps) {
     setStatus('submitting')
     await new Promise((resolve) => setTimeout(resolve, 850))
     setStatus('success')
-    toast.success('Demo request received', {
-      description: 'Someone from the team will reply within one business day.',
+    toast.success(hiring ? 'Note received' : 'Demo request received', {
+      description: hiring
+        ? 'Someone on the team will read it and reply within a week.'
+        : 'Someone from the team will reply within one business day.',
     })
   }
 
@@ -166,8 +179,7 @@ export function ContactForm({ topic, className }: ContactFormProps) {
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }}
             transition={enter}
             className={cn(
-              'relative overflow-hidden rounded-3xl border border-line p-7 shadow-lg sm:p-10',
-              'bg-[linear-gradient(150deg,color-mix(in_oklab,var(--success)_11%,var(--surface))_0%,var(--surface)_58%,color-mix(in_oklab,var(--primary)_9%,var(--surface))_100%)]',
+              'relative overflow-hidden rounded-[1.5rem] bg-cal-honeydew p-7 sm:p-10',
             )}
           >
             <div role="status" aria-live="polite">
@@ -186,25 +198,45 @@ export function ContactForm({ topic, className }: ContactFormProps) {
                 <Check className="relative size-7" strokeWidth={2.75} aria-hidden="true" />
               </motion.span>
 
-              <h3 className="mt-6 font-display text-2xl font-semibold tracking-[-0.02em] text-foreground">
-                Thanks, {values.name.split(' ')[0] || 'there'} — that is booked in.
+              <h3 className="mt-6 font-display text-[1.5rem] leading-[1.2] font-medium tracking-[-0.02em] text-foreground">
+                {hiring
+                  ? `Thanks, ${values.name.split(' ')[0] || 'there'} — we have your note.`
+                  : `Thanks, ${values.name.split(' ')[0] || 'there'} — that is booked in.`}
               </h3>
               <p className="mt-3 max-w-lg text-sm leading-relaxed text-muted">
-                Your request is with the team. Someone who has actually migrated operators onto
-                EZRA Pro will reply to{' '}
-                <span className="font-medium text-foreground">{values.email}</span> within one
-                business day, usually a lot sooner.
+                {hiring ? (
+                  <>
+                    Someone on the team reads every note, and the person who would be your
+                    manager replies to{' '}
+                    <span className="font-medium text-foreground">{values.email}</span> within a
+                    week.
+                  </>
+                ) : (
+                  <>
+                    Your request is with the team. Someone who has actually migrated operators
+                    onto EZRA Pro will reply to{' '}
+                    <span className="font-medium text-foreground">{values.email}</span> within one
+                    business day, usually a lot sooner.
+                  </>
+                )}
               </p>
             </div>
 
             <ol className="mt-7 flex flex-col gap-3 border-t border-line-subtle pt-6">
-              {[
-                'We read your volume and vertical before we call — no discovery questionnaire.',
-                'Twenty minutes on a screen share, with your own numbers in the dashboard.',
-                'You leave with a migration date, or an honest "not yet". Both are fine.',
-              ].map((line, index) => (
+              {(hiring
+                ? [
+                    'Your note goes to the person who runs the team, not a screening tool.',
+                    'A first call of thirty minutes, then a short piece of real work, paid.',
+                    'A day with the team, and a decision within a week of it. Both ways.',
+                  ]
+                : [
+                    'We read your volume and vertical before we call — no discovery questionnaire.',
+                    'Twenty minutes on a screen share, with your own numbers in the dashboard.',
+                    'You leave with a migration date, or an honest "not yet". Both are fine.',
+                  ]
+              ).map((line, index) => (
                 <li key={line} className="flex items-start gap-3 text-sm leading-relaxed text-muted">
-                  <span className="mt-px inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-primary-soft text-[0.6875rem] font-bold text-primary tabular">
+                  <span className="mt-px inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-primary-soft text-[0.6875rem] font-semibold text-primary tabular">
                     {index + 1}
                   </span>
                   {line}
@@ -216,13 +248,14 @@ export function ContactForm({ topic, className }: ContactFormProps) {
               <Button
                 asChild
                 size="md"
-                variant="primary"
+                variant="ink"
+                className="rounded-[10px]"
                 rightIcon={<ArrowRight aria-hidden="true" />}
               >
-                <Link href="/signup">Start free while you wait</Link>
+                {hiring ? <Link href="/careers">Back to open roles</Link> : <Link href="/signup">Start free while you wait</Link>}
               </Button>
               <Button type="button" size="md" variant="ghost" onClick={reset}>
-                Send another request
+                {hiring ? 'Send another note' : 'Send another request'}
               </Button>
             </div>
           </motion.div>
@@ -237,17 +270,19 @@ export function ContactForm({ topic, className }: ContactFormProps) {
             animate={{ opacity: 1, y: 0 }}
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.99 }}
             transition={enter}
-            className="rounded-3xl border border-line bg-surface p-6 shadow-lg sm:p-8"
+            className="rounded-[1.5rem] bg-surface p-6 shadow-[var(--shadow-sm)] ring-1 ring-black/[0.04] sm:p-8"
           >
             <div className="flex items-center gap-3">
               <span className="inline-flex size-10 items-center justify-center rounded-xl bg-primary-soft text-primary">
-                <CalendarCheck className="size-5" aria-hidden="true" />
+                {hiring ? <Briefcase className="size-5" aria-hidden="true" /> : <CalendarCheck className="size-5" aria-hidden="true" />}
               </span>
               <div>
-                <h2 className="font-display text-lg font-semibold text-foreground">
-                  Book a 20-minute demo
+                <h2 className="font-display text-[1.125rem] font-medium text-foreground">
+                  {hiring ? 'Apply for a role' : 'Book a 20-minute demo'}
                 </h2>
-                <p className="text-sm text-muted">No slide deck. Your numbers, in the product.</p>
+                <p className="text-sm text-muted">
+                  {hiring ? 'A short note and a link to your work.' : 'No slide deck. Your numbers, in the product.'}
+                </p>
               </div>
             </div>
 
@@ -278,6 +313,7 @@ export function ContactForm({ topic, className }: ContactFormProps) {
                 </Field>
               </div>
 
+              {hiring ? null : (
               <Field label="Company" required error={errors.company}>
                 <Input
                   name="company"
@@ -288,7 +324,9 @@ export function ContactForm({ topic, className }: ContactFormProps) {
                   onChange={(event) => setValue('company', event.target.value)}
                 />
               </Field>
+              )}
 
+              {hiring ? null : (
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="What do you run?" required error={errors.vertical}>
                   {(control) => (
@@ -348,19 +386,29 @@ export function ContactForm({ topic, className }: ContactFormProps) {
                   )}
                 </Field>
               </div>
+              )}
 
               <Field
-                label="Anything we should know?"
-                optional
+                label={hiring ? 'Your note' : 'Anything we should know?'}
+                required={hiring}
+                optional={!hiring}
                 hint={`${values.message.length}/1200`}
                 error={errors.message}
-                description="The odd pricing rule, the season you are up against, the thing your current platform cannot do."
+                description={
+                  hiring
+                    ? 'Which role, what you have built or run before, and a link to your work.'
+                    : 'The odd pricing rule, the season you are up against, the thing your current platform cannot do.'
+                }
               >
                 <Textarea
                   name="message"
-                  rows={4}
+                  rows={hiring ? 7 : 4}
                   maxLength={1200}
-                  placeholder="We run six catamarans out of Lahaina and our current platform cannot hold capacity per hull…"
+                  placeholder={
+                    hiring
+                      ? 'Senior product engineer, Lisbon. I spent four years on the checkout at… and here is what I would fix first: …'
+                      : 'We run six catamarans out of Lahaina and our current platform cannot hold capacity per hull…'
+                  }
                   value={values.message}
                   error={Boolean(errors.message)}
                   onChange={(event) => setValue('message', event.target.value)}
@@ -371,18 +419,19 @@ export function ContactForm({ topic, className }: ContactFormProps) {
             <Button
               type="submit"
               size="lg"
-              variant="primary"
+              variant="ink"
               fullWidth
               loading={status === 'submitting'}
               rightIcon={<Send aria-hidden="true" />}
               className="mt-7"
             >
-              {status === 'submitting' ? 'Sending…' : 'Request my demo'}
+              {status === 'submitting' ? 'Sending…' : hiring ? 'Send my note' : 'Request my demo'}
             </Button>
 
             <p className="mt-4 text-center text-xs leading-relaxed text-subtle">
-              We reply to every request within one business day. No sequence of seven emails, and
-              nothing is shared with anyone.
+              {hiring
+                ? 'A person reads every note and replies within a week. Nothing is shared outside the team.'
+                : 'We reply to every request within one business day. No sequence of seven emails, and nothing is shared with anyone.'}
             </p>
           </motion.form>
         )}

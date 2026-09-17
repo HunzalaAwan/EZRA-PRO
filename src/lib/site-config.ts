@@ -122,7 +122,6 @@ export const FOOTER_NAV: { heading: string; links: NavLink[] }[] = [
       { label: 'About', href: '/about' },
       { label: 'Careers', href: '/careers', badge: 'Hiring' },
       { label: 'Contact', href: '/contact' },
-      { label: 'Partners', href: '/partners' },
     ],
   },
   {
