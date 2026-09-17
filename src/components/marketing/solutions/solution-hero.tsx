@@ -243,7 +243,7 @@ export function SolutionHero({ vertical, content, headline, body, bullets, proof
       {/* ---------- the copy ---------- */}
       <div className="relative z-10 mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         <nav aria-label="Breadcrumb" className="flex justify-center">
-          <ol className="flex flex-wrap items-center gap-1.5 text-[0.8125rem] text-subtle">
+          <ol className="flex flex-wrap items-center gap-2 text-[0.9375rem] text-muted sm:text-base">
             <li>
               <Link href="/" className="rounded transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
                 Home
@@ -252,7 +252,7 @@ export function SolutionHero({ vertical, content, headline, body, bullets, proof
             <li aria-hidden="true">/</li>
             <li className="text-muted">Solutions</li>
             <li aria-hidden="true">/</li>
-            <li aria-current="page" className="font-medium text-foreground">
+            <li aria-current="page" className="font-semibold text-foreground">
               {vertical.label}
             </li>
           </ol>
