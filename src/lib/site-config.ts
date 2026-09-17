@@ -131,8 +131,6 @@ export const FOOTER_NAV: { heading: string; links: NavLink[] }[] = [
       { label: 'Privacy', href: '/legal/privacy' },
       { label: 'Terms', href: '/legal/terms' },
       { label: 'Security', href: '/legal/security' },
-      { label: 'DPA', href: '/legal/dpa' },
-      { label: 'Accessibility', href: '/legal/accessibility' },
     ],
   },
 ]
