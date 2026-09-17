@@ -1,5 +1,6 @@
 'use client'
 
+import { OperatorLogoMark } from '@/components/marketing/operator-logos'
 import { Marquee } from '@/components/motion/marquee'
 import { Reveal } from '@/components/motion/reveal'
 import { LOGO_MARKS } from '@/content/marketing'
@@ -9,10 +10,9 @@ import { cn } from '@/lib/utils'
 /**
  * The social-proof strip that sits directly under the hero.
  *
- * The marks are set as typographic wordmarks rather than images: they stay
- * crisp at any density, theme themselves, cost nothing to load, and — because
- * they are real text — each one carries the operator's full name for screen
- * readers while showing only the short mark.
+ * The marks are drawn as inline vectors with a wordmark each (see
+ * operator-logos.tsx): they stay crisp at any density, theme themselves, cost
+ * nothing to load, and each carries the operator's full name for screen readers.
  *
  * `<Marquee>` renders the belt twice for a seamless loop and hides the second
  * copy from assistive tech; under `prefers-reduced-motion` it degrades to a
@@ -51,14 +51,15 @@ export function LogoCloud({ heading = DEFAULT_HEADING, speed = 48, className }: 
               key={logo.name}
               className={cn(
                 'group/mark inline-flex shrink-0 select-none items-center whitespace-nowrap',
-                'font-display text-sm font-semibold uppercase tracking-[0.24em] sm:text-[0.9375rem]',
-                'text-faint opacity-70',
+                'text-subtle opacity-80',
                 'transition-[color,opacity,transform] duration-300 ease-[var(--ease-out-expo)]',
                 'hover:-translate-y-0.5 hover:text-foreground hover:opacity-100',
               )}
             >
               <span className="sr-only">{logo.name}</span>
-              <span aria-hidden="true">{logo.mark}</span>
+              <span aria-hidden="true">
+                <OperatorLogoMark id={logo.mark} />
+              </span>
             </span>
           ))}
         </Marquee>
