@@ -16,7 +16,7 @@ import { SiteHeader } from '@/components/marketing/site-header'
 export default function MarketingLayout({ children }: { children: ReactNode }) {
   return (
     <SmoothScroll>
-    <div className="relative flex min-h-dvh flex-col bg-background">
+    <div className="cal relative flex min-h-dvh flex-col bg-background">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[80] focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2.5 focus:text-sm focus:font-semibold focus:text-on-primary focus:shadow-lg"
@@ -26,7 +26,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
 
       <SiteHeader />
 
-      <main id="main-content" className="flex-1 pt-[6.25rem] [--font-display:var(--font-inter)] lg:pt-[6.75rem]">
+      <main id="main-content" className="flex-1 pt-[6.25rem] font-sans [--font-display:var(--font-geist)] [--font-sans:var(--font-geist)] lg:pt-[6.75rem]">
         <PageTransition>{children}</PageTransition>
       </main>
 

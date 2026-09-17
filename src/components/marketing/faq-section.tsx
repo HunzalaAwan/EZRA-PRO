@@ -96,7 +96,7 @@ export function FaqSection({ id = 'faq', className }: FaqSectionProps) {
       <div className="mx-auto w-full max-w-4xl px-4 sm:px-6 lg:px-8">
         {/* Header - Compact & Centered */}
         <div className="text-center max-w-2xl mx-auto">
-          <p className="text-[0.75rem] font-semibold tracking-[0.16em] text-primary uppercase">Questions</p>
+          <p className="text-[0.75rem] font-medium tracking-[0.08em] text-primary uppercase">Questions</p>
           <h2 className="mt-3.5 font-display text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-[-0.03em] text-foreground text-balance">
             The questions operators ask most
           </h2>

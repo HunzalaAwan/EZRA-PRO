@@ -12,6 +12,8 @@ export interface Photo {
   alt: string
   /** Where the subject sits, so `object-position` keeps it in a tight crop. */
   focus?: string
+  /** Unsplash unless said otherwise; Pexels ids are the numeric part of the photo URL. */
+  source?: 'unsplash' | 'pexels'
 }
 
 export const PHOTOS = {
@@ -231,10 +233,48 @@ export const PHOTOS = {
     alt: 'Confetti falling over a crowd at a night event',
     focus: '50% 45%',
   },
+
+  /* ---- people, from Pexels ------------------------------------------- */
+
+  /** A café worker in a mustard apron holding a tablet, smiling, plants behind. */
+  cafeTablet: { id: '6205523', source: 'pexels', alt: 'A smiling café worker in a mustard apron holding a tablet', focus: '50% 30%' },
+  /** A waitress in a cap and apron taking an order at a window table. */
+  waitressOrder: { id: '4350091', source: 'pexels', alt: 'A waitress in an apron taking an order from a guest at a window table', focus: '50% 35%' },
+  /** A tour guide with a lanyard talking to a group of visitors outdoors. */
+  guideGroup: { id: '37573881', source: 'pexels', alt: 'A tour guide with a lanyard explaining something to a group of visitors', focus: '50% 40%' },
+  /** A café employee in a mustard apron, close portrait, smiling. */
+  cafeSmile: { id: '6205508', source: 'pexels', alt: 'A café employee in a mustard apron smiling behind the counter', focus: '50% 30%' },
+  /** A woman with a tablet sitting outside a Japanese dessert café. */
+  dessertCafe: { id: '4473364', source: 'pexels', alt: 'A café owner with a tablet sitting outside her dessert shop', focus: '50% 30%' },
+  /** A shop owner holding a tablet in a clothing store. */
+  storeTablet: { id: '36730466', source: 'pexels', alt: 'A shop owner holding a tablet between the rails of a clothing store', focus: '50% 25%' },
+  /** A diver in a wetsuit waving from the boat. */
+  diverWave: { id: '36741299', source: 'pexels', alt: 'A diver in a wetsuit with a mask on her head waving from a boat', focus: '50% 40%' },
+  /** A man readying scuba tanks on a boat deck. */
+  scubaDeck: { id: '34118369', source: 'pexels', alt: 'A man preparing scuba tanks on a boat deck', focus: '50% 40%' },
+  /** A chef leading a cooking class in a bright kitchen. */
+  chefClass: { id: '38939130', source: 'pexels', alt: 'A chef in a white jacket leading a cooking class in a bright kitchen', focus: '50% 40%' },
+  /** A florist in an apron with a tablet among the flowers. */
+  floristTablet: { id: '3932817', source: 'pexels', alt: 'A florist in an apron holding a tablet among cut flowers', focus: '50% 35%' },
+  /** A row of kayaks paddling beneath golden sea cliffs. */
+  kayakCliffs: { id: '1683368', source: 'pexels', alt: 'A group of kayaks paddling beneath golden sea cliffs', focus: '50% 55%' },
+  /** Divers gearing up at the surface in calm water. */
+  diversPrep: { id: '20051782', source: 'pexels', alt: 'Scuba divers at the surface preparing for a dive in calm water', focus: '50% 50%' },
+  /** A yoga class on the grass by the sea. */
+  yogaSea: { id: '39509205', source: 'pexels', alt: 'A yoga class on the grass beside the sea', focus: '50% 55%' },
+  /** A guide with a raised finger and a book in front of a mountain view. */
+  guideBook: { id: 'photo-1777523743673-fe2577163ede', alt: 'A tour guide holding a book and pointing while explaining a mountain view', focus: '50% 35%' },
+  /** A tour group listening to a guide beside a pond in a park. */
+  groupPond: { id: 'photo-1766415007432-80738e830722', alt: 'A tour group gathered around a guide beside a pond', focus: '50% 50%' },
+  /** A wedding reception on a lawn in front of a villa at sunset. */
+  villaWedding: { id: '33485961', source: 'pexels', alt: 'A wedding reception laid out on a lawn in front of a villa at sunset', focus: '50% 55%' },
 } as const satisfies Record<string, Photo>
 
 export type PhotoKey = keyof typeof PHOTOS
 
 export function photoUrl(photo: Photo, width = 1600, quality = 78) {
+  if (photo.source === 'pexels') {
+    return `https://images.pexels.com/photos/${photo.id}/pexels-photo-${photo.id}.jpeg?auto=compress&cs=tinysrgb&w=${width}`
+  }
   return `https://images.unsplash.com/${photo.id}?auto=format&fit=crop&w=${width}&q=${quality}`
 }

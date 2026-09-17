@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Instrument_Serif, Inter, Sora } from 'next/font/google'
+import { Geist, Instrument_Serif, Inter, Sora } from 'next/font/google'
 import { ThemeProvider, themeInitScript } from '@/components/providers/theme-provider'
 import { Toaster } from '@/components/ui/toaster'
 import './globals.css'
@@ -7,6 +7,13 @@ import './globals.css'
 const inter = Inter({
   subsets: ['latin'],
   variable: '--font-inter',
+  display: 'swap',
+})
+
+/** The marketing site's one grotesque, for headings and body alike. */
+const geist = Geist({
+  subsets: ['latin'],
+  variable: '--font-geist',
   display: 'swap',
 })
 
@@ -73,7 +80,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${sora.variable} ${instrumentSerif.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${geist.variable} ${sora.variable} ${instrumentSerif.variable}`}>
       <head>
         {/* Applies the stored theme before first paint — prevents a flash of the wrong scheme. */}
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />

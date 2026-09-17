@@ -62,6 +62,7 @@ const WEEK: Day[] = [
     slots: [
       { id: 'a', time: '06:40', name: 'Sunrise paddle', booked: 12, capacity: 14, tint: 'primary' },
       { id: 'b', time: '19:30', name: "Chef's table", booked: 10, capacity: 10, tint: 'accent', flag: 'full' },
+      { id: 'b2', time: '20:30', name: 'Wine flight', booked: 9, capacity: 20, tint: 'chart' },
     ],
   },
   {
@@ -79,6 +80,7 @@ const WEEK: Day[] = [
     slots: [
       { id: 'e', time: '10:30', name: 'Pottery, beginners', booked: 8, capacity: 8, tint: 'success', flag: 'full' },
       { id: 'f', time: '19:00', name: 'Wine flight', booked: 14, capacity: 20, held: 2, tint: 'accent' },
+      { id: 'f2', time: '20:30', name: 'Supper club', booked: 21, capacity: 24, tint: 'chart' },
     ],
   },
   {
@@ -95,6 +97,7 @@ const WEEK: Day[] = [
     slots: [
       { id: 'i', time: '12:30', name: 'Long lunch terrace', booked: 26, capacity: 40, tint: 'accent' },
       { id: 'j', time: '20:00', name: 'Supper club', booked: 18, capacity: 24, tint: 'chart' },
+      { id: 'j2', time: '21:30', name: 'Rooftop DJ set', booked: 88, capacity: 120, tint: 'primary' },
     ],
   },
   {
@@ -102,6 +105,7 @@ const WEEK: Day[] = [
     date: 12,
     slots: [
       { id: 'k', time: '07:00', name: 'Balloon flight', booked: 8, capacity: 8, tint: 'primary', flag: 'full' },
+      { id: 'l2', time: '10:00', name: 'Reef snorkel', booked: 30, capacity: 38, tint: 'info' },
       { id: 'l', time: '18:00', name: 'Rooftop gala', booked: 212, capacity: 300, tint: 'success' },
     ],
   },
@@ -135,8 +139,8 @@ export function HeroConsole({ className }: { className?: string }) {
   return (
     <div
       role="img"
-      aria-label="The EZRA Pro calendar for the week of 7 September: fourteen departures, sittings and classes across seven days, with sold-out slots, a weather hold and seats held by carts in progress."
-      className={cn('flex h-[19rem] sm:h-[22rem] lg:h-[25rem]', className)}
+      aria-label="The EZRA Pro calendar for the week of 7 September: eighteen departures, sittings and classes across seven days, with sold-out slots, a weather hold and seats held by carts in progress."
+      className={cn('flex h-[19rem] sm:h-[22rem] lg:h-[23.5rem]', className)}
     >
       {/* ---------- nav rail ---------- */}
       <div aria-hidden="true" className="hidden w-12 shrink-0 flex-col items-center gap-1 border-r border-line-subtle bg-surface py-3 sm:flex">
@@ -168,9 +172,9 @@ export function HeroConsole({ className }: { className?: string }) {
               7 – 13 September
             </p>
             <p className="mt-0.5 flex items-center gap-1.5 text-[0.625rem] text-subtle">
-              <span className="tabular">14 slots</span>
+              <span className="tabular">18 slots</span>
               <span className="text-faint">·</span>
-              <span className="tabular">411 seats sold</span>
+              <span className="tabular">559 seats sold</span>
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">

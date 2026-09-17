@@ -79,7 +79,7 @@ function tokens(list: Omit<SolutionToken, 'className' | 'depth'>[]): SolutionTok
 
 export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
   watersports: {
-    hero: 'barrel',
+    hero: 'kayakCliffs',
     behind: 'kayakSunset',
     consoleLine: 'Two hulls, nine departures, and the tide on every one of them.',
     tokens: tokens([
@@ -121,7 +121,7 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
   },
 
   tours: {
-    hero: 'balloonSunrise',
+    hero: 'groupPond',
     behind: 'fujiPagoda',
     consoleLine: 'Six hotels, twenty-three guests, two languages, one departure board.',
     tokens: tokens([
@@ -163,7 +163,7 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
   },
 
   island: {
-    hero: 'atoll',
+    hero: 'diversPrep',
     behind: 'diversReef',
     consoleLine: 'Twenty operators, one desk, every commission where it should be.',
     tokens: tokens([
@@ -247,7 +247,7 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
   },
 
   restaurants: {
-    hero: 'chefPlating',
+    hero: 'waitressOrder',
     behind: 'restaurantRoom',
     consoleLine: 'Forty covers a sitting, two sittings a night, every allergy on the pass.',
     tokens: tokens([
@@ -289,7 +289,7 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
   },
 
   wellness: {
-    hero: 'sunsetYoga',
+    hero: 'yogaSea',
     behind: 'spaTreatment',
     consoleLine: 'Classes, packs and memberships on one calendar, with retention you can read.',
     tokens: tokens([

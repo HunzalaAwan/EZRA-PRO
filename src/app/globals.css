@@ -239,6 +239,25 @@
   --color-navy:                 var(--navy);
   --color-navy-deep:            var(--navy-deep);
   --color-well:                 var(--well);
+
+  /* Marketing pastels (defined inside .cal, see the end of this file). */
+  --color-cal-cloud:      var(--cal-cloud);
+  --color-cal-rain:       var(--cal-rain);
+  --color-cal-sky:        var(--cal-sky);
+  --color-cal-cornflower: var(--cal-cornflower);
+  --color-cal-lake:       var(--cal-lake);
+  --color-cal-honeydew:   var(--cal-honeydew);
+  --color-cal-lime:       var(--cal-lime);
+  --color-cal-sunbeam:    var(--cal-sunbeam);
+  --color-cal-peach:      var(--cal-peach);
+  --color-cal-tangerine:  var(--cal-tangerine);
+  --color-cal-seafoam:    var(--cal-seafoam);
+  --color-cal-jade:       var(--cal-jade);
+  --color-cal-haze:       var(--cal-haze);
+  --color-cal-lavender:   var(--cal-lavender);
+  --color-cal-iris:       var(--cal-iris);
+  --color-cal-lilac:      var(--cal-lilac);
+  --color-cal-linen:      var(--cal-linen);
 }
 
 :root {
@@ -762,4 +781,103 @@ html.lenis body {
 .dark .ring-primary,
 .dark .focus-visible\:ring-primary:focus-visible {
   --tw-ring-color: var(--primary-ink);
+}
+
+/* ============================================================================
+   MARKETING: THE CALENDLY SCOPE
+   The public site wraps itself in `.cal`. Inside it the neutral tokens take
+   Calendly's palette: warm magnolia paper, midnight ink, steel secondary text,
+   ash hairlines, and a set of flat pastels for panels and illustrations. The
+   brand violet stays the primary (links, labels, product UI); buttons use the
+   ink variant so they read midnight on paper and paper on midnight.
+   ============================================================================ */
+.cal {
+  --bg:             #fcfbf8;
+  --bg-subtle:      #f5f3ee;
+  --surface:        #ffffff;
+  --surface-raised: #ffffff;
+  --surface-sunken: #f4f9ff;
+
+  --fg:             #071a31;
+  --fg-muted:       #3d464e;
+  --fg-subtle:      #5f6d77;
+  --fg-faint:       #93a0aa;
+
+  --border:         #e4e6e9;
+  --border-strong:  #d8dce0;
+  --border-subtle:  #eef0f2;
+
+  --cal-cloud:      #f4f9ff;
+  --cal-rain:       #edf5ff;
+  --cal-sky:        #c1defe;
+  --cal-cornflower: #6bb1ff;
+  --cal-lake:       #4890e3;
+  --cal-honeydew:   #f2f8de;
+  --cal-lime:       #dbee9f;
+  --cal-sunbeam:    #fcf1de;
+  --cal-peach:      #ffd39d;
+  --cal-tangerine:  #f8961f;
+  --cal-seafoam:    #baf0ec;
+  --cal-jade:       #5ddfd7;
+  --cal-haze:       #f7f4fc;
+  --cal-lavender:   #eae3fa;
+  --cal-iris:       #d4c2ff;
+  --cal-lilac:      #b89ffa;
+  --cal-linen:      #f5f3ee;
+
+  --shadow-xs: 0 1px 2px 0 rgb(95 109 119 / 0.06);
+  --shadow-sm: 0 4px 5px rgb(95 109 119 / 0.04), 0 6px 10px rgb(95 109 119 / 0.05);
+  --shadow-md: 0 4px 5px rgb(95 109 119 / 0.04), 0 4px 10px rgb(95 109 119 / 0.03), 0 10px 20px rgb(95 109 119 / 0.05);
+  --shadow-lg: 0 4px 5px rgb(95 109 119 / 0.04), 0 8px 15px rgb(95 109 119 / 0.03), 0 15px 30px rgb(95 109 119 / 0.06);
+  --shadow-xl: 0 4px 5px rgb(95 109 119 / 0.04), 0 8px 15px rgb(95 109 119 / 0.03), 0 30px 50px rgb(95 109 119 / 0.08);
+  --shadow-2xl: 0 4px 5px rgb(95 109 119 / 0.04), 0 10px 15px rgb(95 109 119 / 0.04), 0 40px 50px rgb(95 109 119 / 0.10);
+}
+
+.dark .cal {
+  --bg:             #071a31;
+  --bg-subtle:      #0a2344;
+  --surface:        #0d2a4c;
+  --surface-raised: #10325a;
+  --surface-sunken: #061529;
+
+  --fg:             #fcfbf8;
+  --fg-muted:       #c6ccd2;
+  --fg-subtle:      #a4aeb7;
+  --fg-faint:       #748491;
+
+  --border:         rgb(252 251 248 / 0.10);
+  --border-strong:  rgb(252 251 248 / 0.18);
+  --border-subtle:  rgb(252 251 248 / 0.06);
+
+  --cal-cloud:      #0c2d54;
+  --cal-rain:       #0f3560;
+  --cal-sky:        #114580;
+  --cal-cornflower: #6bb1ff;
+  --cal-lake:       #4890e3;
+  --cal-honeydew:   #2c3414;
+  --cal-lime:       #556425;
+  --cal-sunbeam:    #4a3119;
+  --cal-peach:      #8a5a1f;
+  --cal-tangerine:  #f8961f;
+  --cal-seafoam:    #0b4e50;
+  --cal-jade:       #5ddfd7;
+  --cal-haze:       #241a44;
+  --cal-lavender:   #3b2a6b;
+  --cal-iris:       #5b44a0;
+  --cal-lilac:      #b89ffa;
+  --cal-linen:      #0a2344;
+
+  --shadow-xs: 0 1px 2px 0 rgb(11 13 15 / 0.30);
+  --shadow-sm: 0 4px 5px rgb(11 13 15 / 0.20), 0 6px 10px rgb(11 13 15 / 0.20);
+  --shadow-md: 0 4px 5px rgb(11 13 15 / 0.20), 0 4px 10px rgb(11 13 15 / 0.20), 0 10px 20px rgb(11 13 15 / 0.20);
+  --shadow-lg: 0 4px 5px rgb(11 13 15 / 0.20), 0 8px 15px rgb(11 13 15 / 0.20), 0 15px 30px rgb(11 13 15 / 0.20);
+  --shadow-xl: 0 4px 5px rgb(11 13 15 / 0.20), 0 8px 15px rgb(11 13 15 / 0.20), 0 30px 50px rgb(11 13 15 / 0.20);
+  --shadow-2xl: 0 4px 5px rgb(11 13 15 / 0.20), 0 10px 15px rgb(11 13 15 / 0.20), 0 40px 50px rgb(11 13 15 / 0.20);
+}
+
+/* Calendly's headline voice: medium weight, tight, never bold. */
+.cal h1,
+.cal h2,
+.cal h3 {
+  font-weight: 500;
 }

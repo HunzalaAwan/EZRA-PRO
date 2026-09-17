@@ -38,7 +38,7 @@ export function LogoCloud({ heading = DEFAULT_HEADING, speed = 48, className }: 
       <Reveal duration={DURATION.base} distance={10} className="px-4 sm:px-6 lg:px-8">
         <h2
           id="logo-cloud-heading"
-          className="text-center text-[0.6875rem] font-semibold uppercase tracking-[0.2em] text-subtle"
+          className="text-center text-[0.75rem] font-medium uppercase tracking-[0.08em] text-subtle"
         >
           {heading}
         </h2>

@@ -29,7 +29,7 @@ export function ClosingCta({ className }: { className?: string }) {
   return (
     <section
       aria-labelledby="closing-title"
-      className={cn('relative overflow-hidden border-t border-line bg-[color-mix(in_oklab,var(--primary)_5%,var(--background))] py-20 sm:py-24', className)}
+      className={cn('relative overflow-hidden bg-cal-rain py-20 sm:py-24', className)}
     >
       <StaggerGroup
         as="ul"
@@ -70,19 +70,19 @@ export function ClosingCta({ className }: { className?: string }) {
       <Reveal className="mx-auto mt-12 max-w-2xl px-4 text-center sm:mt-16 sm:px-6">
         <h2
           id="closing-title"
-          className="font-display text-display-sm font-semibold tracking-[-0.035em] text-balance text-foreground md:text-display-md"
+          className="font-display text-[2rem] leading-[1.1] font-medium tracking-[-0.03em] text-balance text-foreground sm:text-[2.75rem] lg:text-[3rem]"
         >
           Your next season, on one calendar.
         </h2>
-        <p className="mt-4 text-base leading-relaxed text-muted sm:text-lg">
+        <p className="mt-5 text-[1.125rem] leading-[1.45] text-muted">
           Bring your products, tables or dates across this week. Most businesses are taking
           bookings by the weekend.
         </p>
         <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
-          <Button asChild size="xl" className="rounded-full px-8" rightIcon={<ArrowRight aria-hidden="true" />}>
+          <Button asChild variant="ink" size="lg" className="rounded-[10px] px-6" rightIcon={<ArrowRight aria-hidden="true" />}>
             <Link href="/signup">Start free</Link>
           </Button>
-          <Button asChild size="xl" variant="outline" className="rounded-full bg-surface px-8">
+          <Button asChild variant="secondary" size="lg" className="rounded-[10px] px-6">
             <Link href="/contact">Talk to a person</Link>
           </Button>
         </div>

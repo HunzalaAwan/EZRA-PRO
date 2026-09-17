@@ -51,6 +51,14 @@ export const buttonVariants = cva(
           'hover:-translate-y-px hover:shadow-[inset_0_1px_0_0_color-mix(in_oklab,white_34%,transparent),0_10px_26px_-8px_color-mix(in_oklab,var(--accent)_70%,transparent)]',
           'active:translate-y-0 active:scale-[0.98] active:shadow-[inset_0_2px_5px_0_color-mix(in_oklab,black_22%,transparent)]',
         ],
+        /** Filled with the text colour: midnight on the light site, paper in the dark. */
+        ink: [
+          'bg-foreground text-background',
+          'shadow-[inset_0_1px_0_0_color-mix(in_oklab,white_12%,transparent),0_1px_2px_0_color-mix(in_oklab,var(--color-foreground)_28%,transparent)]',
+          'hover:bg-[color-mix(in_oklab,var(--color-foreground)_86%,var(--color-background))]',
+          'hover:-translate-y-px hover:shadow-[0_10px_26px_-10px_color-mix(in_oklab,var(--color-foreground)_55%,transparent)]',
+          'active:translate-y-0 active:scale-[0.98]',
+        ],
         secondary: [
           'border border-line bg-surface-raised text-foreground shadow-xs',
           'hover:border-line-strong hover:bg-background-subtle hover:shadow-sm',

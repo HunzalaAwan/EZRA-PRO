@@ -3,12 +3,13 @@ import type { Metadata } from 'next'
 import { FaqSection } from '@/components/marketing/faq-section'
 import { Integrations } from '@/components/marketing/integrations'
 import { ClosingCta } from '@/components/marketing/land/closing-cta'
-import { FeatureRows } from '@/components/marketing/land/feature-rows'
+import { CustomerStories } from '@/components/marketing/land/customer-stories'
+import { FeatureAccordion } from '@/components/marketing/land/feature-accordion'
 import { LandHero } from '@/components/marketing/land/land-hero'
 import { Phases } from '@/components/marketing/land/phases'
+import { ProductCards } from '@/components/marketing/land/product-cards'
 import { LogoCloud } from '@/components/marketing/logo-cloud'
 import { PricingSection } from '@/components/marketing/pricing-section'
-import { StatsBand } from '@/components/marketing/stats-band'
 
 export const metadata: Metadata = {
   title: 'EZRA Pro — Booking software for tours, restaurants, events and classes',
@@ -25,11 +26,12 @@ export const metadata: Metadata = {
 
 /* ==========================================================================
    The order a first visit needs:
-     hero          the claim, and the product under it
+     hero          the claim, and four working pieces of the product
      logos         who already runs on it
-     phases        one booking, from the first click to the money
-     features      three rows: inventory, checkout, analytics
-     numbers       four figures
+     cards         four things it does, two by two
+     phases        before, during and after every booking
+     features      there is more to a booking than taking it
+     stories       real operators, real numbers
      integrations  the stack it plugs into
      pricing       the price, plainly
      faq           the questions operators ask
@@ -41,11 +43,12 @@ export default function LandingPage() {
     <>
       <LandHero />
       <LogoCloud className="border-b border-line" />
+      <ProductCards />
       <Phases />
-      <FeatureRows />
-      <StatsBand className="mt-20 sm:mt-24 lg:mt-32" />
+      <FeatureAccordion />
+      <CustomerStories />
       <Integrations />
-      <PricingSection className="scroll-mt-4 border-t border-line bg-surface-sunken py-20 sm:py-24" />
+      <PricingSection className="scroll-mt-4 border-t border-line bg-background-subtle py-20 sm:py-24" />
       <FaqSection />
       <ClosingCta />
     </>

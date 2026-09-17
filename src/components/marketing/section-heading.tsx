@@ -58,7 +58,7 @@ export function SectionHeading({
           duration={DURATION.base}
           className="flex items-center"
         >
-          <span className="text-[0.75rem] font-semibold uppercase tracking-[0.16em] text-primary">
+          <span className="text-[0.75rem] font-medium uppercase tracking-[0.08em] text-primary">
             {eyebrow}
           </span>
         </Reveal>
