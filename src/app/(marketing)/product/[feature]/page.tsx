@@ -5,7 +5,7 @@ import { notFound } from 'next/navigation'
 import { ClosingCta } from '@/components/marketing/land/closing-cta'
 import { PricingSection } from '@/components/marketing/pricing-section'
 import { PRODUCT_CONTENT, PRODUCT_KEYS, type ProductKey } from '@/components/marketing/product/product-content'
-import { FieldPanel, KeyPoints, ProductHero, ProductRows, RelatedProducts } from '@/components/marketing/product/product-sections'
+import { FieldPanel, KeyPoints, ProductHero, ProductRows } from '@/components/marketing/product/product-sections'
 
 /* ==========================================================================
    /product/[feature] — one page per piece of the product.
@@ -16,7 +16,6 @@ import { FieldPanel, KeyPoints, ProductHero, ProductRows, RelatedProducts } from
      rows      two things in detail, with a graphic each
      field     an operator, and what the product did for them
      pricing   the price, plainly
-     related   the rest of the product
      closing   the ask
    ========================================================================== */
 
@@ -47,13 +46,6 @@ export default async function ProductPage({ params }: { params: Promise<{ featur
   if (!key) notFound()
 
   const content = PRODUCT_CONTENT[key]
-  const related = PRODUCT_KEYS.filter((k) => k !== key).map((k) => ({
-    key: k,
-    label: PRODUCT_CONTENT[k].label,
-    icon: PRODUCT_CONTENT[k].icon,
-    line: PRODUCT_CONTENT[k].headline,
-  }))
-
   return (
     <>
       <ProductHero content={content}>{content.hero.node}</ProductHero>
@@ -65,7 +57,6 @@ export default async function ProductPage({ params }: { params: Promise<{ featur
       </ProductRows>
       <FieldPanel field={content.field} />
       <PricingSection className="scroll-mt-4 border-t border-line bg-background-subtle py-20 sm:py-24" />
-      <RelatedProducts items={related} />
       <ClosingCta />
     </>
   )

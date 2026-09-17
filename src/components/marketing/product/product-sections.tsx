@@ -38,8 +38,8 @@ import type { Chip, Panel, Point, ProductContent, ProductIcon, Row } from './pro
 /* ==========================================================================
    The sections of a product page, in the landing page's voice: a two-column
    hero with the product on a pastel panel, three points, alternating rows
-   with a graphic each, an operator in the field with two chips, and the
-   other five products. Reduced motion gets every final state.
+   with a graphic each, and an operator in the field with two chips.
+   Reduced motion gets every final state.
    ========================================================================== */
 
 const ICONS: Record<ProductIcon, LucideIcon> = {
@@ -268,48 +268,6 @@ export function FieldPanel({ field }: { field: ProductContent['field'] }) {
             <p className="mt-4 font-serif text-[1.5rem] leading-[1.3] text-foreground sm:text-[1.75rem]">&ldquo;{field.line}&rdquo;</p>
           </div>
         </Reveal>
-      </div>
-    </section>
-  )
-}
-
-/* --------------------------------------------------------------------------
-   The other five.
-   -------------------------------------------------------------------------- */
-
-export function RelatedProducts({ items }: { items: { key: string; label: string; icon: ProductIcon; line: string }[] }) {
-  return (
-    <section aria-labelledby="related-title" className="border-t border-line bg-background-subtle py-16 sm:py-20">
-      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
-        <h2 id="related-title" className="text-center text-[0.75rem] font-medium tracking-[0.08em] text-primary uppercase">
-          The rest of the product
-        </h2>
-        <StaggerGroup as="ul" stagger={0.05} className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {items.map((item) => {
-            const Icon = ICONS[item.icon]
-            return (
-              <StaggerItem as="li" key={item.key} distance={12}>
-                <Link
-                  href={`/product/${item.key}`}
-                  className={cn(
-                    'group flex h-full flex-col rounded-2xl bg-surface p-4 shadow-[var(--shadow-sm)] ring-1 ring-black/[0.04]',
-                    'transition-[transform,box-shadow] duration-300 ease-[var(--ease-out-expo)] hover:-translate-y-0.5 hover:shadow-[var(--shadow-lg)]',
-                    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary motion-reduce:transition-none motion-reduce:hover:translate-y-0',
-                  )}
-                >
-                  <span className="flex items-center justify-between gap-2">
-                    <span className="grid size-8 place-items-center rounded-lg bg-primary/10 text-primary">
-                      <Icon className="size-4" aria-hidden="true" />
-                    </span>
-                    <ArrowRight className="size-4 shrink-0 text-faint transition-[transform,color] duration-300 ease-[var(--ease-out-expo)] group-hover:translate-x-0.5 group-hover:text-primary" aria-hidden="true" />
-                  </span>
-                  <span className="mt-3 text-sm font-medium text-foreground">{item.label}</span>
-                  <span className="mt-1 text-[0.8125rem] leading-relaxed text-muted">{item.line}</span>
-                </Link>
-              </StaggerItem>
-            )
-          })}
-        </StaggerGroup>
       </div>
     </section>
   )
