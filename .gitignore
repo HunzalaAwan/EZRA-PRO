@@ -11,3 +11,6 @@ next-env.d.ts
 tsconfig.tsbuildinfo
 
 .next-dev2
+
+# the user's raw photo drops; web-sized copies live in public/photos
+/photoes

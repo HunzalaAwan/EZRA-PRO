@@ -12,8 +12,8 @@ export interface Photo {
   alt: string
   /** Where the subject sits, so `object-position` keeps it in a tight crop. */
   focus?: string
-  /** Unsplash unless said otherwise; Pexels ids are the numeric part of the photo URL. */
-  source?: 'unsplash' | 'pexels'
+  /** Unsplash unless said otherwise; Pexels ids are the numeric part of the photo URL; local ids are file names under public/photos. */
+  source?: 'unsplash' | 'pexels' | 'local'
 }
 
 export const PHOTOS = {
@@ -273,6 +273,10 @@ export const PHOTOS = {
 
   /* ---- the landing hero's side cards, one pair per trade (Pexels) ------- */
 
+  /** A couple in blue and orange kayaks on a river in low golden light, the user's own photograph. */
+  heroKayakRiver: { id: 'hero-kayak-river.jpg', source: 'local', alt: 'A couple in blue and orange kayaks paddling a calm river in golden evening light', focus: '55% 55%' },
+  /** A father and son in an orange kayak on a clear bay, a white resort on the shore behind, the user's own photograph. */
+  heroKayakBay: { id: 'hero-kayak-bay.jpg', source: 'local', alt: 'A father and son in life vests paddling an orange kayak across a clear bay', focus: '55% 60%' },
   /** A man in a yellow kayak paddling across a lake at sunrise. */
   heroPaddler: { id: '16949958', source: 'pexels', alt: 'A man paddling a yellow kayak across a calm lake at sunrise', focus: '55% 50%' },
   /** A guide in a blue shirt steering two guests in an inflatable kayak into a sea cave. */
@@ -304,6 +308,7 @@ export const PHOTOS = {
 export type PhotoKey = keyof typeof PHOTOS
 
 export function photoUrl(photo: Photo, width = 1600, quality = 78) {
+  if (photo.source === 'local') return `/photos/${photo.id}`
   if (photo.source === 'pexels') {
     return `https://images.pexels.com/photos/${photo.id}/pexels-photo-${photo.id}.jpeg?auto=compress&cs=tinysrgb&w=${width}`
   }

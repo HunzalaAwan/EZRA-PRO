@@ -83,8 +83,8 @@ interface Scene {
 
 const SCENES: Record<LandVerticalKey, Scene> = {
   tours: {
-    left: PHOTOS.heroPaddler,
-    right: PHOTOS.heroKayakGuide,
+    left: PHOTOS.heroKayakRiver,
+    right: PHOTOS.heroKayakBay,
     leftNote: { icon: FileCheck2, tone: 'success', title: 'Waivers signed', detail: '2 of 2, before the slip' },
     rightChip: { icon: Wallet, tone: 'ink', title: 'Payout tomorrow', detail: '$4,128.40 · Bank of Maui ····4412' },
     rightNote: { icon: Users, tone: 'primary', title: 'Guide roster', detail: 'Mara takes the 06:40' },
