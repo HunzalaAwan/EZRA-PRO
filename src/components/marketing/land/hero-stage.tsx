@@ -2,33 +2,31 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { AnimatePresence, animate, motion, useInView, useMotionValue, type AnimationPlaybackControls } from 'motion/react'
+import { motion, useMotionValueEvent, useScroll, useTransform, type MotionValue } from 'motion/react'
 import { ArrowRight, CalendarDays, Smartphone, ShoppingCart, Wallet, type LucideIcon } from 'lucide-react'
 
 import { BookingWidgetPreview } from '@/components/marketing/booking-widget-preview'
+import { useIsDesktop } from '@/hooks/use-media-query'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
-import { EASE_OUT_EXPO } from '@/lib/motion'
 import { cn } from '@/lib/utils'
 import { HostAppMock } from './host-app-mock'
 import { MiniCalendar } from './mini-calendar'
 import { PayoutMock } from './payout-mock'
 
 /* ==========================================================================
-   HeroStage — four pieces of the product, as a deck of cards on a field of
-   colour.
+   HeroStage — four pieces of the product, as a deck of cards that the
+   scroll deals.
 
-   A full-bleed rounded field whose soft colours shift with the active tab.
-   Above the cards, four round icon tabs; the active one is filled and wears
-   a ring that fills over seven seconds before the next card takes over.
-   The cards themselves are a deck: the active one sits in front, the next
-   two peek out above it, and on a change the front card falls to the back
-   of the pile while the next rises to the front. Each card is copy on the
-   left and a working product graphic on the right. The pointer resting on
-   the stage holds the timer; a click on a tab pins it. Below `md` the deck
-   becomes one card at a time. Reduced motion never auto-advances.
+   The stage is a tall strip of page. Inside it, a rounded field of colour
+   pins to the top of the window, and as the visitor scrolls, each card in
+   turn rises from the bottom and settles over the one before, which slips
+   back a step in the pile. When the fourth card has landed the field lets
+   go and the page scrolls on. The field's five soft colours follow the
+   card on top; the round tabs above show which card is up, the active one
+   wearing a ring that fills with the scroll, and a click on a tab scrolls
+   the page to that card. Below `md`, and under reduced motion, the four
+   cards simply stack in the flow with nothing pinned.
    ========================================================================== */
-
-const HOLD_MS = 7000
 
 export type StageKey = 'calendar' | 'checkout' | 'host' | 'payouts'
 
@@ -89,13 +87,18 @@ const TABS: Tab[] = [
   },
 ]
 
-/** Where a card sits by its distance from the front of the deck. */
-const SLOT = [
-  { y: 0, scale: 1, opacity: 1, z: 40 },
-  { y: -18, scale: 0.96, opacity: 1, z: 30 },
-  { y: -34, scale: 0.92, opacity: 0.8, z: 20 },
-  { y: -46, scale: 0.88, opacity: 0, z: 10 },
-] as const
+const COUNT = TABS.length
+
+/** Where, in the strip's scroll, each card after the first starts to rise, and how long the rise takes. */
+const RISE = 0.14
+const START = (index: number) => 0.2 + (index - 1) * 0.27
+
+/** The card on top for a given scroll progress. */
+function topCard(p: number) {
+  let top = 0
+  for (let i = 1; i < COUNT; i++) if (p >= START(i) + RISE / 2) top = i
+  return top
+}
 
 /** Five blobs, each with its own drift. */
 const BLOBS = [
@@ -106,10 +109,14 @@ const BLOBS = [
   { className: 'left-[35%] top-[10%] h-[50%] w-[36%]', drift: { x: [0, -20, 0], y: [0, 26, 0] }, duration: 27 },
 ] as const
 
-function StageCard({ tab }: { tab: Tab }) {
+/* --------------------------------------------------------------------------
+   One card
+   -------------------------------------------------------------------------- */
+
+function StageCard({ tab, className }: { tab: Tab; className?: string }) {
   const Icon = tab.icon
   return (
-    <article className="grid h-full overflow-hidden rounded-[2rem] bg-surface shadow-[var(--shadow-2xl)] ring-1 ring-black/[0.05] md:grid-cols-2">
+    <article className={cn('grid overflow-hidden rounded-[2rem] bg-surface shadow-[var(--shadow-2xl)] ring-1 ring-black/[0.05] md:h-full md:grid-cols-2', className)}>
       <div className="flex flex-col justify-center p-7 sm:p-9 lg:p-12">
         <p className="flex items-center gap-2">
           <span className="grid size-6 place-items-center rounded-full bg-primary text-on-primary">
@@ -130,152 +137,145 @@ function StageCard({ tab }: { tab: Tab }) {
           <ArrowRight className="size-4" aria-hidden="true" />
         </Link>
       </div>
-      <div className={cn('relative flex h-[24rem] items-start justify-center overflow-hidden px-6 pt-8 md:m-4 md:h-auto md:min-h-[26rem] md:rounded-[1.5rem] md:pt-10', tab.panel)}>
+      <div className={cn('relative flex h-[24rem] items-start justify-center overflow-hidden px-6 pt-8 md:m-4 md:h-auto md:min-h-0 md:rounded-[1.5rem] md:pt-10', tab.panel)}>
         {tab.node}
       </div>
     </article>
   )
 }
 
-export function HeroStage({ className }: { className?: string }) {
-  const reduce = useReducedMotionSafe()
-  const ref = React.useRef<HTMLDivElement>(null)
-  const inView = useInView(ref, { amount: 0.3 })
+/** A card in the pinned deck: rises in on its cue, then steps back as later cards land on it. */
+function DealtCard({ tab, index, progress }: { tab: Tab; index: number; progress: MotionValue<number> }) {
+  const start = START(index)
+  const rise = useTransform(progress, index === 0 ? [0, 1] : [start, start + RISE], index === 0 ? ['0%', '0%'] : ['135%', '0%'])
 
-  const [active, setActive] = React.useState(0)
-  const [pinned, setPinned] = React.useState(false)
-  const [paused, setPaused] = React.useState(false)
-
-  const auto = inView && !pinned && !reduce
-  const fill = useMotionValue(0)
-  const timer = React.useRef<AnimationPlaybackControls | null>(null)
-
-  React.useEffect(() => {
-    timer.current?.stop()
-    timer.current = null
-    if (!auto) {
-      fill.set(pinned || reduce ? 1 : 0)
-      return
-    }
-    fill.set(0)
-    timer.current = animate(fill, 1, {
-      duration: HOLD_MS / 1000,
-      ease: 'linear',
-      onComplete: () => setActive((i) => (i + 1) % TABS.length),
-    })
-    return () => {
-      timer.current?.stop()
-      timer.current = null
-    }
-  }, [auto, active, pinned, reduce, fill])
-
-  React.useEffect(() => {
-    if (!timer.current) return
-    if (paused) timer.current.pause()
-    else timer.current.play()
-  }, [paused])
-
-  const tab = TABS[active]
-  const spring = reduce ? { duration: 0 } : { type: 'spring' as const, stiffness: 190, damping: 26, mass: 0.9 }
+  // Every later card that lands pushes this one one step back in the pile.
+  const later = Array.from({ length: COUNT - index - 1 }, (_, k) => START(index + 1 + k))
+  const inputs = [0, ...later.flatMap((s) => [s, s + RISE]), 1]
+  const steps = later.length
+  const scale = useTransform(progress, inputs, [1, ...later.flatMap((_, k) => [1 - 0.04 * k, 1 - 0.04 * (k + 1)]), 1 - 0.04 * steps])
+  const shift = useTransform(progress, inputs, [0, ...later.flatMap((_, k) => [-18 * k, -18 * (k + 1)]), -18 * steps])
+  const fade = useTransform(progress, inputs, [1, ...later.flatMap((_, k) => [k < 2 ? 1 : 0.8, k + 1 < 2 ? 1 : 0.8]), steps < 2 ? 1 : 0.8])
 
   return (
-    <div
-      ref={ref}
-      data-tab={tab.key}
-      className={cn('mesh relative isolate overflow-hidden rounded-[2.5rem] px-4 py-10 sm:px-8 sm:py-14 lg:py-16', className)}
-      onPointerEnter={() => setPaused(true)}
-      onPointerLeave={() => setPaused(false)}
-      onFocusCapture={() => setPaused(true)}
-      onBlurCapture={() => setPaused(false)}
-    >
-      {/* ---------- the field of colour ---------- */}
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-        {BLOBS.map((blob, i) => (
-          <motion.span
-            key={i}
-            animate={reduce ? undefined : { x: [...blob.drift.x], y: [...blob.drift.y] }}
-            transition={reduce ? undefined : { duration: blob.duration, repeat: Infinity, ease: 'easeInOut' }}
-            className={cn('mesh-blob absolute rounded-full blur-[70px] will-change-transform sm:blur-[100px]', blob.className)}
-            style={{ backgroundColor: `var(--mesh-${i + 1})` }}
-          />
-        ))}
-      </div>
+    <motion.div style={{ y: rise, zIndex: 10 + index }} className="absolute inset-x-0 top-0 h-full will-change-transform">
+      <motion.div style={{ scale, y: shift, opacity: fade, transformOrigin: '50% 0%' }} className="h-full">
+        <StageCard tab={tab} />
+      </motion.div>
+    </motion.div>
+  )
+}
 
-      {/* ---------- tabs ---------- */}
-      <div role="tablist" aria-label="Four parts of the product" className="relative z-10 mx-auto flex justify-center gap-2 sm:gap-3">
-        {TABS.map((item, index) => {
-          const selected = index === active
-          const Icon = item.icon
-          return (
-            <button
-              key={item.key}
-              type="button"
-              role="tab"
-              id={`stage-tab-${item.key}`}
-              aria-selected={selected}
-              aria-label={item.label}
-              aria-controls={`stage-panel-${item.key}`}
-              onClick={() => {
-                setActive(index)
-                setPinned(true)
-              }}
-              className={cn(
-                'relative grid size-12 place-items-center rounded-full ring-1 transition-colors duration-300 sm:size-14',
-                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
-                selected ? 'bg-primary text-on-primary ring-primary' : 'bg-surface/90 text-muted ring-black/[0.06] hover:text-foreground',
-              )}
-            >
-              <Icon className="size-5 sm:size-6" aria-hidden="true" strokeWidth={1.9} />
-              {selected ? (
-                <svg aria-hidden="true" viewBox="0 0 56 56" className="absolute inset-[-5px] size-[calc(100%+10px)] -rotate-90">
-                  <circle cx="28" cy="28" r="26" fill="none" stroke="var(--color-primary)" strokeOpacity="0.25" strokeWidth="2" />
-                  <motion.circle cx="28" cy="28" r="26" fill="none" stroke="var(--color-primary)" strokeWidth="2" strokeLinecap="round" style={{ pathLength: fill }} />
-                </svg>
-              ) : null}
-              {selected ? <span aria-hidden="true" className="absolute -bottom-2 size-3 rotate-45 rounded-[2px] bg-primary" /> : null}
-            </button>
-          )
-        })}
-      </div>
+/* --------------------------------------------------------------------------
+   The stage
+   -------------------------------------------------------------------------- */
 
-      {/* ---------- the deck, md and up ---------- */}
-      <div className="relative z-10 mx-auto mt-14 hidden h-[34rem] max-w-5xl md:block [perspective:1400px]">
-        {TABS.map((item, index) => {
-          const order = (index - active + TABS.length) % TABS.length
-          const slot = SLOT[order]
-          return (
-            <motion.div
-              key={item.key}
-              role="tabpanel"
-              id={`stage-panel-${item.key}`}
-              aria-labelledby={`stage-tab-${item.key}`}
-              aria-hidden={order !== 0}
-              initial={false}
-              animate={{ y: slot.y, scale: slot.scale, opacity: slot.opacity, zIndex: slot.z }}
-              transition={spring}
-              style={{ transformOrigin: '50% 0%' }}
-              className="absolute inset-x-0 top-0 h-full will-change-transform"
-            >
-              <StageCard tab={item} />
-            </motion.div>
-          )
-        })}
-      </div>
+export function HeroStage({ className }: { className?: string }) {
+  const reduce = useReducedMotionSafe()
+  const desktop = useIsDesktop()
+  const pinned = desktop && !reduce
 
-      {/* ---------- one card at a time, below md ---------- */}
-      <div className="relative z-10 mt-10 md:hidden">
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={tab.key}
-            initial={reduce ? false : { opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={reduce ? undefined : { opacity: 0, y: -10 }}
-            transition={{ duration: 0.4, ease: EASE_OUT_EXPO }}
-          >
-            <StageCard tab={tab} />
-          </motion.div>
-        </AnimatePresence>
+  const stripRef = React.useRef<HTMLDivElement>(null)
+  const { scrollYProgress } = useScroll({ target: stripRef, offset: ['start 104px', 'end end'] })
+  const [active, setActive] = React.useState(0)
+  useMotionValueEvent(scrollYProgress, 'change', (p) => {
+    const next = topCard(p)
+    setActive((current) => (current === next ? current : next))
+  })
+
+  const ringFill = useTransform(scrollYProgress, [0, START(COUNT - 1) + RISE], [0, 1])
+  const tab = TABS[active]
+
+  /** Scroll the page so the chosen card is the one on top. */
+  const goTo = (index: number) => {
+    const strip = stripRef.current
+    if (!strip) return
+    const rect = strip.getBoundingClientRect()
+    const top = rect.top + window.scrollY - 104
+    const range = rect.height - (window.innerHeight - 104)
+    const p = index === 0 ? 0 : Math.min(START(index) + RISE + 0.03, 1)
+    window.scrollTo({ top: top + p * range, behavior: reduce ? 'auto' : 'smooth' })
+  }
+
+  /* ---------- the flow version: nothing pinned ---------- */
+  if (!pinned) {
+    return (
+      <div data-tab="calendar" className={cn('mesh relative isolate overflow-hidden rounded-[2.5rem] px-4 py-10 sm:px-8 sm:py-14', className)}>
+        <Field reduce={reduce} />
+        <ol className="relative z-10 mx-auto flex max-w-5xl flex-col gap-6">
+          {TABS.map((item) => (
+            <li key={item.key}>
+              <StageCard tab={item} className="md:h-auto md:min-h-[26rem]" />
+            </li>
+          ))}
+        </ol>
       </div>
+    )
+  }
+
+  /* ---------- the pinned deck ---------- */
+  return (
+    <div ref={stripRef} className={cn('relative h-[380vh]', className)}>
+      <div data-tab={tab.key} className="mesh sticky top-[104px] isolate flex h-[calc(100vh-7.5rem)] flex-col overflow-hidden rounded-[2.5rem] px-8 pt-8 pb-8">
+        <Field reduce={reduce} />
+
+        {/* ---------- tabs ---------- */}
+        <div role="tablist" aria-label="Four parts of the product" className="relative z-10 mx-auto flex shrink-0 justify-center gap-3">
+          {TABS.map((item, index) => {
+            const selected = index === active
+            const Icon = item.icon
+            return (
+              <button
+                key={item.key}
+                type="button"
+                role="tab"
+                id={`stage-tab-${item.key}`}
+                aria-selected={selected}
+                aria-label={item.label}
+                onClick={() => goTo(index)}
+                className={cn(
+                  'relative grid size-14 place-items-center rounded-full ring-1 transition-colors duration-300',
+                  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+                  selected ? 'bg-primary text-on-primary ring-primary' : 'bg-surface/90 text-muted ring-black/[0.06] hover:text-foreground',
+                )}
+              >
+                <Icon className="size-6" aria-hidden="true" strokeWidth={1.9} />
+                {selected ? (
+                  <svg aria-hidden="true" viewBox="0 0 56 56" className="absolute inset-[-5px] size-[calc(100%+10px)] -rotate-90">
+                    <circle cx="28" cy="28" r="26" fill="none" stroke="var(--color-primary)" strokeOpacity="0.25" strokeWidth="2" />
+                    <motion.circle cx="28" cy="28" r="26" fill="none" stroke="var(--color-primary)" strokeWidth="2" strokeLinecap="round" style={{ pathLength: ringFill }} />
+                  </svg>
+                ) : null}
+                {selected ? <span aria-hidden="true" className="absolute -bottom-2 size-3 rotate-45 rounded-[2px] bg-primary" /> : null}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* ---------- the deck ---------- */}
+        <div className="relative z-10 mx-auto mt-10 min-h-0 w-full max-w-5xl flex-1">
+          {TABS.map((item, index) => (
+            <DealtCard key={item.key} tab={item} index={index} progress={scrollYProgress} />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** The five soft colours behind everything, recoloured by the field's data-tab. */
+function Field({ reduce }: { reduce: boolean }) {
+  return (
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+      {BLOBS.map((blob, i) => (
+        <motion.span
+          key={i}
+          animate={reduce ? undefined : { x: [...blob.drift.x], y: [...blob.drift.y] }}
+          transition={reduce ? undefined : { duration: blob.duration, repeat: Infinity, ease: 'easeInOut' }}
+          className={cn('mesh-blob absolute rounded-full blur-[70px] will-change-transform sm:blur-[100px]', blob.className)}
+          style={{ backgroundColor: `var(--mesh-${i + 1})` }}
+        />
+      ))}
     </div>
   )
 }

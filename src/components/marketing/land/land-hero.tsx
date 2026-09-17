@@ -262,7 +262,7 @@ export function LandHero() {
   }
 
   return (
-    <section aria-labelledby="hero-title" className="relative isolate overflow-hidden bg-cal-rain pt-12 pb-20 sm:pt-16 sm:pb-24 lg:pt-20">
+    <section aria-labelledby="hero-title" className="relative isolate bg-cal-rain pt-12 pb-20 sm:pt-16 sm:pb-24 lg:pt-20">
       {/* the ground, alive */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[52rem] overflow-hidden">
         {SHAPES.map((shape, i) => (
