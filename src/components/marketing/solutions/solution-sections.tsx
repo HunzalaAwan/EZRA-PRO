@@ -3,7 +3,7 @@
 import * as React from 'react'
 import Image from 'next/image'
 import { motion, useScroll, useTransform } from 'motion/react'
-import { CalendarDays, ChartSpline, Check, CreditCard, Share2, ShoppingCart, Star, Store, UserCog, Users, type LucideIcon } from 'lucide-react'
+import { CalendarDays, ChartSpline, Check, CreditCard, Share2, ShoppingCart, Store, UserCog, Users, type LucideIcon } from 'lucide-react'
 
 import { SectionHeading } from '@/components/marketing/section-heading'
 import { PHOTOS, photoUrl } from '@/components/marketing/story/photos'
@@ -12,10 +12,9 @@ import { CountUp } from '@/components/motion/count-up'
 import { LeanCard } from '@/components/motion/lean-card'
 import { Reveal } from '@/components/motion/reveal'
 import { StaggerGroup, StaggerItem } from '@/components/motion/stagger'
-import { Avatar } from '@/components/ui/avatar'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { cn } from '@/lib/utils'
-import type { FeatureBlock, Testimonial, Vertical } from '@/types'
+import type { FeatureBlock, Vertical } from '@/types'
 import type { SolutionMoment, SolutionOutcome } from './solution-content'
 
 /* ==========================================================================
@@ -159,10 +158,10 @@ export function PillarGrid({ vertical, features, tagline }: { vertical: Vertical
 }
 
 /* --------------------------------------------------------------------------
-   Outcomes — three numbers, and one operator in their own words.
+   Outcomes — three numbers that count up.
    -------------------------------------------------------------------------- */
 
-export function OutcomeBand({ vertical, outcomes, testimonial }: { vertical: Vertical; outcomes: SolutionOutcome[]; testimonial: Testimonial | null }) {
+export function OutcomeBand({ vertical, outcomes }: { vertical: Vertical; outcomes: SolutionOutcome[] }) {
   return (
     <section aria-labelledby="outcomes-title" className="border-y border-line bg-surface-sunken py-16 sm:py-20">
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -180,36 +179,6 @@ export function OutcomeBand({ vertical, outcomes, testimonial }: { vertical: Ver
             </Reveal>
           ))}
         </div>
-
-        {testimonial ? (
-          <Reveal distance={22} className="mt-12">
-            <LeanCard max={3} className="rounded-[1.75rem] border border-line bg-surface p-7 shadow-sm sm:p-10">
-              <div role="img" aria-label={`Rated ${testimonial.rating} out of 5`} className="flex items-center gap-0.5">
-                {Array.from({ length: testimonial.rating }, (_, index) => (
-                  <Star key={index} className="size-4 fill-current text-accent" aria-hidden="true" />
-                ))}
-              </div>
-              <blockquote className="mt-5 font-serif text-[1.5rem] leading-[1.25] text-balance text-foreground sm:text-[1.875rem]">
-                “{testimonial.quote}”
-              </blockquote>
-              <figcaption className="mt-7 flex flex-wrap items-center gap-4 border-t border-line-subtle pt-6">
-                <Avatar name={testimonial.author} src={testimonial.avatarUrl} size="lg" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-foreground">{testimonial.author}</p>
-                  <p className="text-sm text-muted">
-                    {testimonial.role}, {testimonial.company}
-                  </p>
-                </div>
-                {testimonial.metric ? (
-                  <div className="text-right">
-                    <p className="font-display text-2xl font-semibold tracking-[-0.02em] text-primary tabular-nums">{testimonial.metric.value}</p>
-                    <p className="text-xs text-subtle">{testimonial.metric.label}</p>
-                  </div>
-                ) : null}
-              </figcaption>
-            </LeanCard>
-          </Reveal>
-        ) : null}
       </div>
     </section>
   )

@@ -10,7 +10,7 @@ import { SolutionHero } from '@/components/marketing/solutions/solution-hero'
 import { ConsoleStage, MomentCards, OutcomeBand, PillarGrid } from '@/components/marketing/solutions/solution-sections'
 import { Reveal } from '@/components/motion/reveal'
 import { StaggerGroup, StaggerItem } from '@/components/motion/stagger'
-import { FEATURE_BLOCKS, TESTIMONIALS, VERTICAL_PITCHES } from '@/content/marketing'
+import { FEATURE_BLOCKS, VERTICAL_PITCHES } from '@/content/marketing'
 import { VERTICALS, getVertical } from '@/lib/data/verticals'
 import { cn } from '@/lib/utils'
 import type { FeatureBlock, VerticalKey } from '@/types'
@@ -110,11 +110,10 @@ function decodeBlock(block: FeatureBlock): FeatureBlock {
 
    The order a first visit needs:
      hero        the pitch, with the trade on a stage that leans in 3D
-     running     what already sells on EZRA in this trade
      moments     three things the software handled, as photographs
      console     the desk's view of the week, standing up out of the page
      pillars     the four product blocks this trade leans on
-     outcomes    three numbers and one operator's words
+     outcomes    three numbers
      pricing     the price, plainly
      others      the other five trades
      closing     the ask
@@ -134,8 +133,6 @@ export default async function VerticalSolutionPage({ params }: { params: Promise
     .filter((block): block is FeatureBlock => Boolean(block))
     .map(decodeBlock)
 
-  const rawTestimonial = TESTIMONIALS.find((item) => item.vertical === key) ?? null
-  const testimonial = rawTestimonial ? { ...rawTestimonial, quote: decodeEntities(rawTestimonial.quote) } : null
   const siblings = VERTICALS.filter((item) => item.key !== key)
 
   return (
@@ -150,26 +147,10 @@ export default async function VerticalSolutionPage({ params }: { params: Promise
         proofLabel={decodeEntities(pitch.proofLabel)}
       />
 
-      {/* ---------- running today ---------- */}
-      <section aria-label="What sells on EZRA Pro in this trade" className="border-y border-line bg-surface-sunken py-8">
-        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-x-6 gap-y-3 px-4 sm:px-6 lg:px-8">
-          <p className="text-[0.6875rem] font-semibold tracking-[0.2em] text-subtle uppercase">Running today on EZRA Pro</p>
-          <ul className="flex flex-wrap gap-2">
-            {vertical.sampleActivities.map((activity) => (
-              <li key={activity}>
-                <span className="inline-flex items-center rounded-full border border-line bg-surface px-3.5 py-1.5 text-[0.8125rem] font-medium text-muted">
-                  {decodeEntities(activity)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-
       <MomentCards vertical={vertical} moments={content.moments} />
       <ConsoleStage vertical={vertical} line={content.consoleLine} />
       <PillarGrid vertical={vertical} features={features} tagline={decodeEntities(vertical.tagline)} />
-      <OutcomeBand vertical={vertical} outcomes={content.outcomes} testimonial={testimonial} />
+      <OutcomeBand vertical={vertical} outcomes={content.outcomes} />
 
       <PricingSection className="scroll-mt-4 bg-background py-16 sm:py-20" />
 
