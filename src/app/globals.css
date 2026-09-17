@@ -836,45 +836,81 @@ html.lenis body {
 }
 
 .dark .cal {
-  --bg:             #110e2b;
-  --bg-subtle:      #17133a;
-  --surface:        #1c1741;
-  --surface-raised: #231d4e;
-  --surface-sunken: #0c0a20;
+  /* Midnight rather than violet: a deep navy ground so the brand violet and
+     the pastels can carry the colour instead of the page. */
+  --bg:             #0b1020;
+  --bg-subtle:      #0f1528;
+  --surface:        #141b31;
+  --surface-raised: #1a2340;
+  --surface-sunken: #080c18;
 
-  --fg:             #fcfbf8;
-  --fg-muted:       #c6ccd2;
-  --fg-subtle:      #a4aeb7;
-  --fg-faint:       #748491;
+  --fg:             #f4f6fb;
+  --fg-muted:       #c3cad6;
+  --fg-subtle:      #97a3b5;
+  --fg-faint:       #66738a;
 
-  --border:         rgb(252 251 248 / 0.10);
-  --border-strong:  rgb(252 251 248 / 0.18);
-  --border-subtle:  rgb(252 251 248 / 0.06);
+  --border:         rgb(244 246 251 / 0.10);
+  --border-strong:  rgb(244 246 251 / 0.18);
+  --border-subtle:  rgb(244 246 251 / 0.06);
 
-  --cal-cloud:      #1a1540;
-  --cal-rain:       #1e1845;
-  --cal-sky:        #3a2d79;
+  --cal-cloud:      #131a34;
+  --cal-rain:       #10162e;
+  --cal-sky:        #3b3a90;
   --cal-cornflower: #6bb1ff;
   --cal-lake:       #4890e3;
-  --cal-honeydew:   #2c3414;
-  --cal-lime:       #556425;
-  --cal-sunbeam:    #4a3119;
-  --cal-peach:      #8a5a1f;
+  --cal-honeydew:   #0f2620;
+  --cal-lime:       #3f6a2a;
+  --cal-sunbeam:    #2a1d12;
+  --cal-peach:      #9a6320;
   --cal-tangerine:  #f8961f;
-  --cal-seafoam:    #0b4e50;
+  --cal-seafoam:    #0e3f40;
   --cal-jade:       #5ddfd7;
-  --cal-haze:       #241a44;
-  --cal-lavender:   #3b2a6b;
-  --cal-iris:       #5b44a0;
+  --cal-haze:       #141a37;
+  --cal-lavender:   #2a2562;
+  --cal-iris:       #5b48b0;
   --cal-lilac:      #b89ffa;
-  --cal-linen:      #0a2344;
+  --cal-linen:      #0f1528;
 
-  --shadow-xs: 0 1px 2px 0 rgb(11 13 15 / 0.30);
-  --shadow-sm: 0 4px 5px rgb(11 13 15 / 0.20), 0 6px 10px rgb(11 13 15 / 0.20);
-  --shadow-md: 0 4px 5px rgb(11 13 15 / 0.20), 0 4px 10px rgb(11 13 15 / 0.20), 0 10px 20px rgb(11 13 15 / 0.20);
-  --shadow-lg: 0 4px 5px rgb(11 13 15 / 0.20), 0 8px 15px rgb(11 13 15 / 0.20), 0 15px 30px rgb(11 13 15 / 0.20);
-  --shadow-xl: 0 4px 5px rgb(11 13 15 / 0.20), 0 8px 15px rgb(11 13 15 / 0.20), 0 30px 50px rgb(11 13 15 / 0.20);
-  --shadow-2xl: 0 4px 5px rgb(11 13 15 / 0.20), 0 10px 15px rgb(11 13 15 / 0.20), 0 40px 50px rgb(11 13 15 / 0.20);
+  /* Every shadow carries a one-pixel light hairline, so a card keeps an edge
+     on a dark ground where a dark shadow alone would vanish. */
+  --shadow-xs: 0 0 0 1px rgb(255 255 255 / 0.05), 0 1px 2px 0 rgb(0 0 0 / 0.35);
+  --shadow-sm: 0 0 0 1px rgb(255 255 255 / 0.06), 0 4px 5px rgb(0 0 0 / 0.25), 0 6px 10px rgb(0 0 0 / 0.25);
+  --shadow-md: 0 0 0 1px rgb(255 255 255 / 0.06), 0 4px 5px rgb(0 0 0 / 0.25), 0 4px 10px rgb(0 0 0 / 0.25), 0 10px 20px rgb(0 0 0 / 0.30);
+  --shadow-lg: 0 0 0 1px rgb(255 255 255 / 0.07), 0 4px 5px rgb(0 0 0 / 0.25), 0 8px 15px rgb(0 0 0 / 0.25), 0 15px 30px rgb(0 0 0 / 0.35);
+  --shadow-xl: 0 0 0 1px rgb(255 255 255 / 0.07), 0 4px 5px rgb(0 0 0 / 0.25), 0 8px 15px rgb(0 0 0 / 0.25), 0 30px 50px rgb(0 0 0 / 0.40);
+  --shadow-2xl: 0 0 0 1px rgb(255 255 255 / 0.08), 0 4px 5px rgb(0 0 0 / 0.25), 0 10px 15px rgb(0 0 0 / 0.25), 0 40px 50px rgb(0 0 0 / 0.45);
+}
+
+/* ----------------------------------------------------------------------------
+   Dark grounds get their colour from light, not pigment. The hero grounds
+   carry a violet glow at the top left, a green one at the top right and a
+   blue one low in the middle, over the navy; the panels carry one quiet
+   wash of their own hue that falls off to the ground. These are unlayered,
+   so they win over the utilities without touching the light theme.
+   -------------------------------------------------------------------------- */
+.dark .cal .bg-cal-rain {
+  background-image:
+    radial-gradient(70% 55% at 12% -8%, rgb(96 28 239 / 0.34), transparent 62%),
+    radial-gradient(48% 42% at 92% -2%, rgb(41 172 96 / 0.16), transparent 62%),
+    radial-gradient(46% 40% at 55% 104%, rgb(72 144 227 / 0.16), transparent 62%);
+}
+.dark .cal .bg-cal-cloud,
+.dark .cal .bg-cal-haze,
+.dark .cal .bg-cal-lavender {
+  background-image: linear-gradient(165deg, rgb(126 70 241 / 0.20), rgb(126 70 241 / 0) 58%);
+}
+.dark .cal .bg-cal-honeydew {
+  background-image: linear-gradient(165deg, rgb(41 172 96 / 0.24), rgb(41 172 96 / 0) 60%);
+}
+.dark .cal .bg-cal-sunbeam {
+  background-image: linear-gradient(165deg, rgb(248 150 31 / 0.22), rgb(248 150 31 / 0) 60%);
+}
+.dark .cal .bg-cal-seafoam {
+  background-image: linear-gradient(165deg, rgb(93 223 215 / 0.20), rgb(93 223 215 / 0) 60%);
+}
+.dark .cal .bg-cal-linen,
+.dark .cal .bg-background-subtle {
+  background-image: linear-gradient(180deg, rgb(126 70 241 / 0.05), rgb(126 70 241 / 0) 40%);
 }
 
 /* Calendly's headline voice: medium weight, tight, never bold. */
