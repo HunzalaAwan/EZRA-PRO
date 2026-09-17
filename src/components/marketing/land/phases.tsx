@@ -93,7 +93,7 @@ const PHASES: Phase[] = [
     title: 'Money in the bank the next business day.',
     body: 'Card money lands the next business day, itemised by departure, sitting or event, with tips split to the crew. The bookkeeper stops asking.',
     points: ['Next-business-day payouts', 'One flat 4% booking fee', 'Tips split automatically'],
-    photo: PHOTOS.cafeSmile,
+    photo: PHOTOS.solNfcPay,
     ground: 'bg-cal-sunbeam',
     chips: [
       { icon: Wallet, tone: 'ink', title: 'Payout tomorrow', detail: '$4,128.40 · Bank of Maui ····4412' },
