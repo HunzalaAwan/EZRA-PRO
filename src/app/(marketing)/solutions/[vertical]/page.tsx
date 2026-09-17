@@ -142,8 +142,6 @@ export default async function VerticalSolutionPage({ params }: { params: Promise
         headline={pitch.headline}
         body={decodeEntities(pitch.body)}
         points={SOLUTION_POINTS[key]}
-        proofStat={pitch.proofStat}
-        proofLabel={decodeEntities(pitch.proofLabel)}
       />
 
       <MomentTimeline vertical={vertical} moments={content.moments} />

@@ -171,11 +171,9 @@ export interface SolutionHeroProps {
   headline: string
   body: string
   points: SolutionPoint[]
-  proofStat: string
-  proofLabel: string
 }
 
-export function SolutionHero({ vertical, content, headline, body, points, proofStat, proofLabel }: SolutionHeroProps) {
+export function SolutionHero({ vertical, content, headline, body, points }: SolutionHeroProps) {
   const reduce = useReducedMotionSafe()
   const finePointer = useIsFinePointer()
   const photos = React.useMemo(() => content.ring.slice(0, 6).map((key) => PHOTOS[key]), [content.ring])
@@ -281,14 +279,10 @@ export function SolutionHero({ vertical, content, headline, body, points, proofS
             </Button>
           </motion.div>
 
-          <motion.p {...enter(0.22)} className="mt-5 text-[0.875rem] text-subtle">
-            <span className="font-medium text-foreground tabular-nums">{proofStat}</span> {proofLabel} · No card to start · Free migration
-          </motion.p>
-
           {/* four things it does for this trade, said the way the operator would */}
           <motion.ul
-            {...enter(0.28)}
-            className="mt-10 grid w-full max-w-2xl gap-x-8 gap-y-6 border-t border-black/[0.06] pt-8 text-left sm:grid-cols-2 lg:max-w-[29rem] lg:grid-cols-1 lg:gap-y-5 xl:max-w-[34rem] xl:grid-cols-2 2xl:max-w-2xl"
+            {...enter(0.24)}
+            className="mt-12 grid w-full max-w-2xl gap-x-8 gap-y-6 border-t border-black/[0.06] pt-8 text-left sm:grid-cols-2 lg:max-w-[29rem] lg:grid-cols-1 lg:gap-y-5 xl:max-w-[34rem] xl:grid-cols-2 2xl:max-w-2xl"
           >
             {points.map((point) => {
               const Icon = ICONS[point.icon]
