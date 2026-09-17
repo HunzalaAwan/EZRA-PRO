@@ -291,6 +291,8 @@ export const PHOTOS = {
   heroPotteryLesson: { id: '9304291', source: 'pexels', alt: 'A pottery teacher guiding a student in a yellow shirt at the wheel', focus: '50% 40%' },
   /** A yoga class in a bright studio, arms out in warrior pose. */
   heroYogaClass: { id: '8436610', source: 'pexels', alt: 'A yoga class holding warrior pose in a bright studio with tall windows', focus: '50% 50%' },
+  /** Two women in standing splits on pink mats by tall windows with plum curtains, one in blue and one in rose. */
+  heroYogaSplit: { id: '29735918', source: 'pexels', alt: 'Two women holding standing splits on yoga mats in front of tall sunny windows', focus: '50% 45%' },
   /** An instructor adjusting a student's arm in a sunny studio. */
   heroYogaTeacher: { id: '8436426', source: 'pexels', alt: 'A yoga instructor adjusting a student\'s raised arm in a sunny studio', focus: '50% 40%' },
   /** Two friends toasting with wine at a rooftop bar in the evening. */

@@ -112,7 +112,7 @@ const SCENES: Record<LandVerticalKey, Scene> = {
   },
   wellness: {
     left: PHOTOS.heroYogaClass,
-    right: PHOTOS.heroYogaTeacher,
+    right: PHOTOS.heroYogaSplit,
     leftNote: { icon: Ticket, tone: 'success', title: 'Class pack', detail: '1 of 10 credits used' },
     rightChip: { icon: Wallet, tone: 'ink', title: 'Payout tomorrow', detail: '$2,910.00 · Bank of Maui ····4412' },
     rightNote: { icon: Repeat2, tone: 'primary', title: 'Memberships renewed', detail: '212 of 220 overnight' },
