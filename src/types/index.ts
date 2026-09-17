@@ -733,6 +733,8 @@ export interface FaqItem {
 }
 
 export interface FeatureBlock {
+  /** One short line, for the compact cards on solutions pages. */
+  line: string
   id: string
   eyebrow: string
   title: string

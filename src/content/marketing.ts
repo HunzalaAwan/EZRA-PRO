@@ -56,6 +56,7 @@ export const LOGO_MARKS: { name: string; mark: string }[] = [
 export const FEATURE_BLOCKS: FeatureBlock[] = [
   {
     id: 'feat-checkout',
+    line: 'Three taps on a phone, Apple Pay on by default, no account to make.',
     eyebrow: 'Conversion',
     title: 'A checkout guests actually finish',
     description:
@@ -71,6 +72,7 @@ export const FEATURE_BLOCKS: FeatureBlock[] = [
   },
   {
     id: 'feat-calendar',
+    line: 'Drag a departure to move it. Assign a guide and double-bookings stop.',
     eyebrow: 'Operations',
     title: 'Every departure, guide and resource on one timeline',
     description:
@@ -86,6 +88,7 @@ export const FEATURE_BLOCKS: FeatureBlock[] = [
   },
   {
     id: 'feat-analytics',
+    line: 'Names the slot to cut, add or reprice, with the dollars attached.',
     eyebrow: 'Revenue',
     title: 'Analytics that tell you what to do next',
     description:
@@ -101,6 +104,7 @@ export const FEATURE_BLOCKS: FeatureBlock[] = [
   },
   {
     id: 'feat-payments',
+    line: 'Deposit at booking, balance on the day, money in the bank tomorrow.',
     eyebrow: 'Cash flow',
     title: 'Deposits today, payout tomorrow',
     description:
@@ -116,6 +120,7 @@ export const FEATURE_BLOCKS: FeatureBlock[] = [
   },
   {
     id: 'feat-crm',
+    line: 'Trips, allergies, certifications and notes on every guest, before they arrive.',
     eyebrow: 'Retention',
     title: 'Know your guests before they arrive',
     description:
@@ -131,6 +136,7 @@ export const FEATURE_BLOCKS: FeatureBlock[] = [
   },
   {
     id: 'feat-channels',
+    line: 'Viator, GetYourGuide and your own site read one seat count, live.',
     eyebrow: 'Distribution',
     title: 'OTAs that never oversell you',
     description:
@@ -146,6 +152,7 @@ export const FEATURE_BLOCKS: FeatureBlock[] = [
   },
   {
     id: 'feat-storefront',
+    line: 'Your colours, your photos, your domain. Guests never see our logo.',
     eyebrow: 'Brand',
     title: 'A storefront that looks like you',
     description:
@@ -161,6 +168,7 @@ export const FEATURE_BLOCKS: FeatureBlock[] = [
   },
   {
     id: 'feat-team',
+    line: 'The guide sees the manifest, the bookkeeper sees payouts, nobody else sees the bank.',
     eyebrow: 'Team',
     title: 'Roles that match how you actually work',
     description:

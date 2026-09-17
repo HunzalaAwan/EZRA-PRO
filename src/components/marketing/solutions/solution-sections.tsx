@@ -137,15 +137,7 @@ export function PillarGrid({ vertical, features, tagline }: { vertical: Vertical
                   </span>
                   <p className="mt-5 text-[0.75rem] font-medium tracking-[0.08em] text-subtle uppercase">{block.eyebrow}</p>
                   <h3 className="mt-2 font-display text-[1.25rem] leading-[1.25] font-medium tracking-[-0.02em] text-balance text-foreground">{block.title}</h3>
-                  <p className="mt-3 text-[0.9375rem] leading-[1.5] text-muted">{block.description}</p>
-                  <ul className="mt-5 flex flex-col gap-2.5 border-t border-line-subtle pt-5">
-                    {block.bullets.map((bullet) => (
-                      <li key={bullet} className="flex items-start gap-2.5 text-[0.8125rem] leading-relaxed text-subtle">
-                        <Check className="mt-0.5 size-3.5 shrink-0 text-success" strokeWidth={2.75} aria-hidden="true" />
-                        {bullet}
-                      </li>
-                    ))}
-                  </ul>
+                  <p className="mt-3 text-[0.9375rem] leading-[1.5] text-muted">{block.line}</p>
                 </article>
               </StaggerItem>
             )

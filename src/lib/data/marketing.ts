@@ -486,6 +486,7 @@ export const FEATURE_BLOCKS: FeatureBlock[] = [
     id: 'feat_calendar',
     eyebrow: 'Operations',
     title: 'A calendar that understands boats, not just time slots',
+    line: 'Departures are built from resources — hulls, vehicles, guides, gear, tables — so the schedule refuses to sell something you cannot physically run.',
     description:
       'Departures are built from resources — hulls, vehicles, guides, gear, tables — so the schedule refuses to sell something you cannot physically run. Drag a departure and every dependency moves with it.',
     icon: 'CalendarRange',
@@ -501,6 +502,7 @@ export const FEATURE_BLOCKS: FeatureBlock[] = [
     id: 'feat_analytics',
     eyebrow: 'Analytics',
     title: 'Numbers you can click into',
+    line: 'Every figure on every chart traces back to the bookings that produced it.',
     description:
       'Every figure on every chart traces back to the bookings that produced it. No parallel reporting warehouse, no "why does this not match the manifest" — one set of rows, read many ways.',
     icon: 'LineChart',
@@ -516,6 +518,7 @@ export const FEATURE_BLOCKS: FeatureBlock[] = [
     id: 'feat_checkout',
     eyebrow: 'Conversion',
     title: 'A checkout that does not lose the sale',
+    line: 'Three steps, no account required, Apple Pay and Google Pay on the first tap.',
     description:
       'Three steps, no account required, Apple Pay and Google Pay on the first tap. It loads in under a second on a phone with two bars at the beach, which is where most of your traffic actually is.',
     icon: 'Smartphone',
@@ -531,6 +534,7 @@ export const FEATURE_BLOCKS: FeatureBlock[] = [
     id: 'feat_manifest',
     eyebrow: 'On the ground',
     title: 'The dock works without signal',
+    line: 'Manifests cache to the device each morning.',
     description:
       'Manifests cache to the device each morning. Scan passes, check guests in, countersign waivers and add walk-ups with no connection at all — everything reconciles when you come back into range.',
     icon: 'ScanLine',
@@ -546,6 +550,7 @@ export const FEATURE_BLOCKS: FeatureBlock[] = [
     id: 'feat_channels',
     eyebrow: 'Distribution',
     title: 'One availability pool, every channel',
+    line: 'Viator, GetYourGuide, Expedia, Google Things to do, your own site and your concierge partners all draw from the same seats.',
     description:
       'Viator, GetYourGuide, Expedia, Google Things to do, your own site and your concierge partners all draw from the same seats. Sell one, and it is gone everywhere in seconds.',
     icon: 'Globe',
@@ -561,6 +566,7 @@ export const FEATURE_BLOCKS: FeatureBlock[] = [
     id: 'feat_pricing',
     eyebrow: 'Yield',
     title: 'Pricing that reacts to the season',
+    line: 'Rules on lead time, day of week, forecast occupancy and weather confidence, with hard floors and ceilings so a guest never sees a number you would not defend.',
     description:
       'Rules on lead time, day of week, forecast occupancy and weather confidence, with hard floors and ceilings so a guest never sees a number you would not defend. Every adjustment is logged and reversible.',
     icon: 'SlidersHorizontal',
@@ -576,6 +582,7 @@ export const FEATURE_BLOCKS: FeatureBlock[] = [
     id: 'feat_crm',
     eyebrow: 'Guests',
     title: 'A guest record, not a row in a booking list',
+    line: 'Every guest carries their history, party, waivers, preferences, spend and the reason they came back.',
     description:
       'Every guest carries their history, party, waivers, preferences, spend and the reason they came back. Segments are queryable and sync to your marketing tools without a CSV round-trip.',
     icon: 'Users',
@@ -591,6 +598,7 @@ export const FEATURE_BLOCKS: FeatureBlock[] = [
     id: 'feat_payments',
     eyebrow: 'Money',
     title: 'Deposits, balances and payouts that reconcile themselves',
+    line: 'Take a deposit in March, collect the balance automatically in July, refund to policy in one click.',
     description:
       'Take a deposit in March, collect the balance automatically in July, refund to policy in one click. Payouts arrive next business day with a statement that ties to the bookings behind it.',
     icon: 'Banknote',
@@ -606,6 +614,7 @@ export const FEATURE_BLOCKS: FeatureBlock[] = [
     id: 'feat_team',
     eyebrow: 'Team',
     title: 'Rosters, certifications and roles that fit a seasonal crew',
+    line: 'Assign guides by qualification, not by memory.',
     description:
       'Assign guides by qualification, not by memory. Certifications expire loudly, permissions are scoped to the job, and a summer hire sees today’s manifest and nothing else.',
     icon: 'UserCheck',
@@ -621,6 +630,7 @@ export const FEATURE_BLOCKS: FeatureBlock[] = [
     id: 'feat_platform',
     eyebrow: 'Platform',
     title: 'Your data, your domain, your rules',
+    line: 'White-label storefront on your own domain, an open API, webhooks for everything, and an export button that actually works.',
     description:
       'White-label storefront on your own domain, an open API, webhooks for everything, and an export button that actually works. Leaving is easy, which is the only honest reason to stay.',
     icon: 'PlugZap',
