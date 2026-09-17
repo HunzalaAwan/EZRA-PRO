@@ -19,7 +19,6 @@ import {
 } from '@/components/motion/backgrounds'
 import { Reveal } from '@/components/motion/reveal'
 import { StaggerGroup, StaggerItem } from '@/components/motion/stagger'
-import { ComparisonTable } from '@/components/marketing/comparison-table'
 import { CtaSection } from '@/components/marketing/cta-section'
 import { SectionHeading } from '@/components/marketing/section-heading'
 import { TestimonialMarquee } from '@/components/marketing/testimonials'
@@ -34,9 +33,9 @@ import { FAQS } from '@/content/marketing'
 import { cn } from '@/lib/utils'
 
 export const metadata: Metadata = {
-  title: 'Switch from FareHarbor or Peek Pro',
+  title: 'Switch to EZRA Pro',
   description:
-    'Move off FareHarbor or Peek Pro in a weekend, mid-season, without dropping a booking. We rebuild your activities, pricing, guests and future reservations for free — on every plan, including the free one.',
+    'Move off your current booking platform in a weekend, mid-season, without dropping a booking. We rebuild your activities, pricing, guests and future reservations for free — on every plan, including the free one.',
   alternates: { canonical: '/switch' },
   openGraph: {
     url: '/switch',
@@ -96,7 +95,7 @@ const STEPS = [
     when: 'Day 0 · 20 minutes',
     title: 'Send us the export',
     icon: Database,
-    body: 'A CSV out of FareHarbor or Peek Pro, or read-only access if you would rather we pull it. Nothing on your live site changes and you keep taking bookings exactly as you are.',
+    body: 'A CSV out of your current system, or read-only access if you would rather we pull it. Nothing on your live site changes and you keep taking bookings exactly as you are.',
     checks: ['Activities & pricing tiers', 'Guest records & waivers', 'Every future departure'],
   },
   {
@@ -164,7 +163,7 @@ export default function SwitchPage() {
                 blur
                 className="mt-6 font-display text-display-sm font-semibold tracking-[-0.032em] text-balance text-foreground sm:text-display-md"
               >
-                Leaving FareHarbor or Peek Pro?{' '}
+                Leaving your current platform?{' '}
                 <span className="text-gradient-brand">We do the move.</span>
               </Reveal>
 
@@ -231,7 +230,7 @@ export default function SwitchPage() {
 
                   <div className="mt-5 flex items-center gap-3 sm:gap-4">
                     <div className="flex min-w-0 flex-1 flex-col gap-2">
-                      {['FareHarbor', 'Peek Pro'].map((name) => (
+                      {['Your current platform', 'Spreadsheets & inboxes'].map((name) => (
                         <span
                           key={name}
                           className="truncate rounded-xl border border-line bg-surface-sunken px-3 py-2.5 text-center text-[0.8125rem] font-medium text-muted"
@@ -306,7 +305,6 @@ export default function SwitchPage() {
       {/* ================================================================
           THE HONEST TABLE
           ================================================================ */}
-      <ComparisonTable className="scroll-mt-4 border-y border-line bg-background-subtle" />
 
       {/* ================================================================
           HOW MIGRATION WORKS

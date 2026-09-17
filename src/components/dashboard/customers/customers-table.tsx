@@ -654,7 +654,7 @@ export function CustomersPageActions({ totalCount }: { totalCount: number }) {
         leftIcon={<Upload className="size-4" />}
         onClick={() =>
           toast.info('Import guests', {
-            description: 'Drop a CSV from FareHarbor, Peek or Rezdy — we map the columns for you.',
+            description: 'Drop a CSV from your old system — we map the columns for you.',
           })
         }
       >

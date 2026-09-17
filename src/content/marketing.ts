@@ -26,7 +26,7 @@ export const HERO = {
     'EZRA Pro runs availability, checkout, rosters, manifests and next-day payouts for experience operators worldwide — from city sightseeing and mountain ziplines to dive charters and sunset dining.',
   primaryCta: { label: 'Start free — no card', href: '/signup' },
   secondaryCta: { label: 'See a live demo', href: '/dashboard' },
-  microProof: '4% flat booking fee · Free migration from FareHarbor or Peek Pro · Live in a weekend',
+  microProof: '4% flat booking fee · Free migration from your current platform · Live in a weekend',
 } as const
 
 export const STATS: { value: string; label: string; hint?: string }[] = [
@@ -366,7 +366,7 @@ export const TESTIMONIALS: Testimonial[] = [
   {
     id: 'tst-1',
     quote:
-      'We came off FareHarbor mid-season, which everyone told us was insane. The migration took a weekend and we did not drop a single booking. Commission went from 6% to 4.5% — that is a crew member&rsquo;s salary back in our pocket.',
+      'We came off our old platform mid-season, which everyone told us was insane. The migration took a weekend and we did not drop a single booking. Commission went from 6% to 4.5% — that is a crew member&rsquo;s salary back in our pocket.',
     author: 'Kaimana Reyes',
     role: 'Owner',
     company: 'Blue Horizon Watersports',
@@ -469,7 +469,7 @@ export const FAQS: FaqItem[] = [
   {
     id: 'faq-1',
     category: 'migration',
-    question: 'How hard is it to move off FareHarbor or Peek Pro?',
+    question: 'How hard is it to move off my current platform?',
     answer:
       'Easier than you are expecting. Send us an export and we rebuild your activities, pricing tiers, add-ons, guest records and every future booking inside EZRA Pro — then you flip the switch when you are ready. Most operators go live over a weekend, mid-season, without pausing sales. Migration is free on every plan, including Starter.',
   },
@@ -485,7 +485,7 @@ export const FAQS: FaqItem[] = [
     category: 'pricing',
     question: 'Is the commission really lower, or is there a catch?',
     answer:
-      'Starter is 6% with no monthly fee — the same headline rate as FareHarbor and Peek, so you can move at zero risk. Growth drops it to 4.5% for $79/month and Scale to 3% for $249/month. If you take more than about $18k a month, Growth is already cheaper. We will do the arithmetic with your real numbers before you commit.',
+      'Starter is 6% with no monthly fee — the same headline rate as the big incumbents, so you can move at zero risk. Growth drops it to 4.5% for $79/month and Scale to 3% for $249/month. If you take more than about $18k a month, Growth is already cheaper. We will do the arithmetic with your real numbers before you commit.',
   },
   {
     id: 'faq-4',
@@ -614,7 +614,7 @@ export const INTEGRATIONS: Integration[] = [
 export const FINAL_CTA = {
   eyebrow: 'Switch in a weekend',
   headline: 'Your next season starts with better software',
-  body: 'Free migration from FareHarbor or Peek Pro. No contract, no setup fee, no card to start. See your own numbers in EZRA Pro before you commit to anything.',
+  body: 'Free migration from your current platform. No contract, no setup fee, no card to start. See your own numbers in EZRA Pro before you commit to anything.',
   primary: { label: 'Start free', href: '/signup' },
   secondary: { label: 'Book a 20-min demo', href: '/contact' },
   reassurance: ['Live in a weekend', 'Keep your bookings', 'Cancel any time'],

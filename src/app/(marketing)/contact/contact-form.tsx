@@ -70,7 +70,7 @@ const VOLUME_OPTIONS = [
 /** Deep-link topics used by the CTAs elsewhere on the site. */
 const TOPIC_PREFILL: Record<string, string> = {
   migration:
-    'We are currently on FareHarbor / Peek Pro and want to understand what moving would involve.',
+    'We are on another booking platform and want to understand what moving would involve.',
   enterprise:
     'We run multiple locations or brands and need to talk about a custom commission and an SLA.',
   pricing: 'We would like someone to run our real numbers against Starter, Growth and Scale.',
@@ -190,8 +190,8 @@ export function ContactForm({ topic, className }: ContactFormProps) {
                 Thanks, {values.name.split(' ')[0] || 'there'} — that is booked in.
               </h3>
               <p className="mt-3 max-w-lg text-sm leading-relaxed text-muted">
-                Your request is with the team. Someone who has actually migrated operators off
-                FareHarbor and Peek Pro will reply to{' '}
+                Your request is with the team. Someone who has actually migrated operators onto
+                EZRA Pro will reply to{' '}
                 <span className="font-medium text-foreground">{values.email}</span> within one
                 business day, usually a lot sooner.
               </p>

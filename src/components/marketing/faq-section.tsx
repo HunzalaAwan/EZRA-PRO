@@ -184,7 +184,7 @@ export function FaqSection({ id = 'faq', className }: FaqSectionProps) {
             </div>
             <div>
               <p className="text-sm font-semibold text-foreground">Have a specific operational question?</p>
-              <p className="text-xs text-muted">We reply within minutes. Free migration from FareHarbor &amp; Peek Pro.</p>
+              <p className="text-xs text-muted">We reply within minutes. Free migration from your current platform.</p>
             </div>
           </div>
 

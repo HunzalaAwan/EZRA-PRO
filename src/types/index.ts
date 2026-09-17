@@ -699,7 +699,7 @@ export interface ActivityFeedItem {
 export interface PricingPlan {
   id: PlanTier
   name: string
-  /** Per-booking commission percent, the FareHarbor/Peek model. */
+  /** Per-booking commission percent, the model most booking platforms use. */
   commissionPercent: number
   /** Optional monthly platform fee in minor units; 0 = commission only. */
   monthlyPrice: number

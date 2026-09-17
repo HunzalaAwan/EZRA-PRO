@@ -6,7 +6,7 @@ import { SignupForm } from '@/components/auth/signup-form'
 export const metadata: Metadata = {
   title: 'Create your account',
   description:
-    'Start free on EZRA Pro — 14 days, no card, and free migration from FareHarbor or Peek Pro when you are ready to switch.',
+    'Start free on EZRA Pro — 14 days, no card, and free migration from your current platform when you are ready to switch.',
 }
 
 export default function SignupPage() {

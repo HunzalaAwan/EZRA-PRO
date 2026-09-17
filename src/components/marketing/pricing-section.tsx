@@ -21,7 +21,7 @@ import type { PlanTier, PricingPlan } from '@/types'
    Operators shop on the per-booking commission, not the platform fee: a 1.5
    point difference on a $400k season is $6,000, while the fee difference is
    $948. So the commission is the display number and the fee is the supporting
-   line, which is the inverse of how FareHarbor and Peek present themselves.
+   line, which is the inverse of how the incumbents present themselves.
    ========================================================================== */
 
 export type BillingPeriod = 'monthly' | 'annual'
@@ -233,7 +233,7 @@ export function PricingSection({ id = 'pricing', className }: PricingSectionProp
               <br className="hidden sm:block" /> Keep more of the season.
             </>
           }
-          description="Commission is the number that decides your year. Ours starts where FareHarbor and Peek finish, and drops from there. No setup fee, no contract, free migration on every plan."
+          description="Commission is the number that decides your year. Ours starts below the industry's headline rate and drops from there. No setup fee, no contract, free migration on every plan."
           align="center"
         />
 
@@ -287,7 +287,7 @@ export function PricingSection({ id = 'pricing', className }: PricingSectionProp
         <Reveal delay={0.12} className="mx-auto mt-12 max-w-3xl">
           <p className="text-center text-sm leading-relaxed text-muted">
             Every plan includes unlimited activities, unlimited team members, free migration from
-            FareHarbor or Peek Pro, and next-day payouts. Commission is charged only on bookings you
+            your current platform, and next-day payouts. Commission is charged only on bookings you
             actually take.
           </p>
         </Reveal>

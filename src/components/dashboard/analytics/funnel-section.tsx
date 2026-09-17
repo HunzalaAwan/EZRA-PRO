@@ -22,7 +22,7 @@ import type { CurrencyCode, FunnelStage } from '@/types'
 /* ==========================================================================
    FunnelSection
 
-   Peek and FareHarbor stop at "bookings". This puts the four steps in front
+   Most booking platforms stop at "bookings". This puts the four steps in front
    of the booking on the same page, prices each one at your own average order
    value, and says which step is losing you the most money.
    ========================================================================== */

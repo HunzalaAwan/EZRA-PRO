@@ -13,7 +13,6 @@ import { StaggerGroup, StaggerItem } from '@/components/motion/stagger'
 import { CtaSection } from '@/components/marketing/cta-section'
 import { PricingSection } from '@/components/marketing/pricing-section'
 import { PricingTable } from '@/components/marketing/pricing-table'
-import { RoiCalculator } from '@/components/marketing/roi-calculator'
 import { SectionHeading } from '@/components/marketing/section-heading'
 import {
   Accordion,
@@ -253,11 +252,9 @@ export default function PricingPage() {
       </section>
 
       {/* ================================================================
-          PLANS · CALCULATOR · MATRIX
+          PLANS · MATRIX
           ================================================================ */}
       <PricingSection className="scroll-mt-4 border-y border-line bg-background-subtle" />
-
-      <RoiCalculator className="scroll-mt-4 bg-background" />
 
       <PricingTable className="scroll-mt-4 border-y border-line bg-surface-sunken" />
 

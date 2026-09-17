@@ -3,7 +3,7 @@
 /**
  * AnalyticsShowcase — "Analytics that tell you what to do next".
  *
- * The headline claim against FareHarbor and Peek, so it is argued with the
+ * The headline claim against the incumbents, so it is argued with the
  * product rather than described: the panel inside the `<AppFrame>` is the real
  * chart library (`RevenueAreaChart`, `StatCard`, `OccupancyHeatmap`) fed with
  * demo data shaped like an actual seasonal, weekend-peaked charter business.
@@ -402,7 +402,7 @@ export function AnalyticsShowcase({ className }: { className?: string }) {
               </div>
 
               <p className="mt-8 border-t border-line pt-6 text-sm leading-relaxed text-subtle">
-                FareHarbor and Peek hand you a report. EZRA Pro hands you a decision — with the
+                Other platforms hand you a report. EZRA Pro hands you a decision — with the
                 slot, the number and the dollar impact already worked out.
               </p>
             </Reveal>

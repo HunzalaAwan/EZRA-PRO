@@ -51,8 +51,6 @@ export const metadata: Metadata = {
     'watersports booking',
     'activity booking platform',
     'reservation system',
-    'FareHarbor alternative',
-    'Peek Pro alternative',
   ],
   openGraph: {
     type: 'website',

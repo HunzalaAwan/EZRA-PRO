@@ -2,7 +2,7 @@
  * EZRA PRO — public-site content.
  *
  * Everything an operator reads before they trust us with their season. The
- * audience is someone already running FareHarbor or Peek Pro who is doing the
+ * audience is someone already running another booking platform who is doing the
  * maths on switching mid-year, so the copy answers the questions they actually
  * ask — what it costs against what they pay now, how long migration takes, who
  * owns the guest list, what happens when the harbour loses signal — instead of
@@ -138,7 +138,7 @@ function featuresFor(plan: PlanTier): PricingPlan['features'] {
 /**
  * The industry's commission model, undercut deliberately.
  *
- * FareHarbor and Peek both sit around 6% passed to the guest as a booking fee.
+ * The incumbents both sit around 6% passed to the guest as a booking fee.
  * We match that at the free tier and then trade percentage points for a flat
  * monthly fee, which is strictly better for anyone doing real volume — the
  * break-even lines are spelled out in the blurbs so an operator can do the
@@ -299,7 +299,7 @@ export const TESTIMONIALS: Testimonial[] = [
   {
     id: 'tst_priya',
     quote:
-      'Peek could tell me what I sold. It could not tell me that guests who book more than three weeks out spend 22% more and almost never cancel. We shifted our ad spend to that window and the season paid for the whole platform by June.',
+      'Our old system could tell me what I sold. It could not tell me that guests who book more than three weeks out spend 22% more and almost never cancel. We shifted our ad spend to that window and the season paid for the whole platform by June.',
     author: 'Priya Raghunathan',
     role: 'Founder',
     company: 'Lantern Street Food Tours',
@@ -366,9 +366,9 @@ export const FAQS: FaqItem[] = [
   {
     id: 'faq_commission',
     category: 'pricing',
-    question: 'How does 4.5% compare with what I pay FareHarbor or Peek today?',
+    question: 'How does 4.5% compare with what I pay today?',
     answer:
-      'Both typically land around 6% of the booking, usually presented as a fee your guest pays. Growth is 4.5% plus $79 a month, so the crossover is about $5,300 of monthly bookings — roughly eighteen seats on a sunset sail. Above that you are saving; below it, Starter matches the 6% you already pay with no monthly fee at all. Scale drops to 3% and overtakes Growth past about $16,600 a month.',
+      'The incumbents typically land around 6% of the booking, usually presented as a fee your guest pays. Growth is 4.5% plus $79 a month, so the crossover is about $5,300 of monthly bookings — roughly eighteen seats on a sunset sail. Above that you are saving; below it, Starter matches the 6% you already pay with no monthly fee at all. Scale drops to 3% and overtakes Growth past about $16,600 a month.',
   },
   {
     id: 'faq_guest_fee',

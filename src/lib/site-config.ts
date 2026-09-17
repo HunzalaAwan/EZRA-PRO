@@ -104,7 +104,7 @@ export const MARKETING_NAV: NavGroup[] = [
       { label: 'Help center', href: '/help', description: 'Guides, walkthroughs and answers.', icon: 'LifeBuoy' },
       { label: 'Developer API', href: '/developers', description: 'REST + webhooks. Build anything.', icon: 'Code2' },
       { label: 'Integrations', href: '/integrations', description: '40+ tools, connected in a click.', icon: 'Blocks' },
-      { label: 'Migration guide', href: '/switch', description: 'Moving from FareHarbor or Peek Pro.', icon: 'ArrowRightLeft' },
+      { label: 'Migration guide', href: '/switch', description: 'Moving from another platform, in a weekend.', icon: 'ArrowRightLeft' },
     ],
   },
 ]
@@ -231,22 +231,3 @@ export const SOCIAL_LINKS: NavLink[] = [
   { label: 'YouTube', href: 'https://youtube.com', icon: 'Youtube', external: true },
 ]
 
-/** Competitor comparison used on the landing page and /switch. */
-export const COMPARISON_ROWS: {
-  feature: string
-  ezra: string | boolean
-  fareharbor: string | boolean
-  peek: string | boolean
-  hint?: string
-}[] = [
-  { feature: 'Commission on direct bookings', ezra: 'From 3%', fareharbor: '6%', peek: '6%+' },
-  { feature: 'Monthly platform fee', ezra: 'From $0', fareharbor: '$0', peek: '$0' },
-  { feature: 'Next-day payouts', ezra: true, fareharbor: false, peek: false },
-  { feature: 'Real-time analytics & insights', ezra: true, fareharbor: 'Basic reports', peek: 'Basic reports' },
-  { feature: 'Capacity optimisation suggestions', ezra: true, fareharbor: false, peek: false },
-  { feature: 'Offline / low-signal check-in', ezra: true, fareharbor: false, peek: 'Partial' },
-  { feature: 'Full data export, any time', ezra: true, fareharbor: 'On request', peek: 'On request' },
-  { feature: 'No long-term contract', ezra: true, fareharbor: false, peek: false },
-  { feature: 'Free white-glove migration', ezra: true, fareharbor: 'Paid', peek: 'Paid' },
-  { feature: 'Open REST API + webhooks', ezra: true, fareharbor: 'Limited', peek: 'Limited' },
-]

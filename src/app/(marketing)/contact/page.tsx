@@ -19,7 +19,7 @@ import { ContactForm } from './contact-form'
 export const metadata: Metadata = {
   title: 'Contact sales',
   description:
-    'Book a 20-minute demo with someone who has migrated operators off FareHarbor and Peek Pro. No slide deck — your own numbers, in the product. Median first reply under five minutes, seven days a week.',
+    'Book a 20-minute demo with someone who has migrated operators onto EZRA Pro. No slide deck — your own numbers, in the product. Median first reply under five minutes, seven days a week.',
   alternates: { canonical: '/contact' },
   openGraph: {
     url: '/contact',

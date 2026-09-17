@@ -34,7 +34,7 @@ import type { CurrencyCode, TimeSeriesPoint } from '@/types'
 
    The headline series with its prior-period shadow, a metric switcher, and a
    second chart that puts cancellations on the same axis as bookings — the
-   comparison FareHarbor makes you export two reports to see.
+   comparison other platforms make you export two reports to see.
    ========================================================================== */
 
 type ComparisonMode = 'previous' | 'year'

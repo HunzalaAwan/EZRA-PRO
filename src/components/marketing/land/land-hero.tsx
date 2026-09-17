@@ -318,7 +318,7 @@ export function LandHero() {
           </motion.div>
 
           <motion.p {...enter(0.22)} className="mt-5 text-[0.875rem] text-subtle">
-            No card to start · Free migration from FareHarbor, Peek Pro, OpenTable or Eventbrite
+            No card to start · Free migration from your current platform · Live in a weekend
           </motion.p>
         </div>
 

@@ -26,7 +26,7 @@ import { MobileNav, navIcon } from '@/components/marketing/mobile-nav'
 const ANNOUNCEMENT_KEY = 'ezra-announcement:migration-2026'
 
 const ANNOUNCEMENT = {
-  full: 'Free migration from FareHarbor & Peek Pro — live in a weekend',
+  full: 'Free migration from your current platform — live in a weekend',
   short: 'Free migration — live in a weekend',
   linkLabel: 'See how it works',
   href: '/switch',
