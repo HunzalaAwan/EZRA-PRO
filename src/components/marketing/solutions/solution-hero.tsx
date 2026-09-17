@@ -262,12 +262,12 @@ export function SolutionHero({ vertical, content, headline, body, bullets, proof
           <motion.h1
             id="vertical-title"
             {...enter(0)}
-            className="font-display text-[2.875rem] leading-[1.04] font-medium tracking-[-0.035em] text-balance text-foreground sm:text-[3.75rem] lg:text-[4.25rem] xl:text-[4.75rem]"
+            className="font-display text-[length:clamp(2.875rem,1.5rem_+_3.8vw,4.75rem)] leading-[1.04] font-medium tracking-[-0.035em] text-balance text-foreground"
           >
             {headline}
           </motion.h1>
 
-          <motion.p {...enter(0.08)} className="mt-7 max-w-2xl text-[1.125rem] leading-[1.45] text-pretty text-muted sm:text-[1.25rem] lg:text-[1.3125rem]">
+          <motion.p {...enter(0.08)} className="mt-7 max-w-2xl text-[1.125rem] leading-[1.45] text-pretty text-muted sm:text-[1.25rem] lg:max-w-[29rem] lg:text-[1.25rem] xl:max-w-[34rem] xl:text-[1.3125rem] 2xl:max-w-2xl">
             {body}
           </motion.p>
 

@@ -152,7 +152,7 @@ export function ProductHero({ content, children }: { content: ProductContent; ch
             <motion.h1
               id="product-title"
               {...enter(0.06)}
-              className="mt-5 font-display text-[2.5rem] leading-[1.06] font-medium tracking-[-0.035em] text-balance text-foreground sm:text-[3.25rem] lg:text-[3.75rem]"
+              className="mt-5 font-display text-[length:clamp(2.5rem,1.4rem_+_2.9vw,3.75rem)] leading-[1.06] font-medium tracking-[-0.035em] text-balance text-foreground"
             >
               {content.headline}
             </motion.h1>

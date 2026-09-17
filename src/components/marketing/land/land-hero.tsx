@@ -284,7 +284,7 @@ export function LandHero() {
             ref={headingRef}
             id="hero-title"
             {...enter(0)}
-            className="font-display text-[2.875rem] leading-[1.04] font-medium tracking-[-0.035em] text-balance text-foreground sm:text-[3.75rem] lg:text-[4.5rem] xl:text-[5rem]"
+            className="font-display text-[length:clamp(2.875rem,1.56rem_+_4.1vw,5.25rem)] leading-[1.04] font-medium tracking-[-0.035em] text-balance text-foreground"
           >
             Take bookings for your{' '}
             <span className="relative inline-grid overflow-hidden align-top">
@@ -303,7 +303,7 @@ export function LandHero() {
             </span>
           </motion.h1>
 
-          <motion.p {...enter(0.08)} className="mt-7 max-w-2xl text-[1.125rem] leading-[1.45] text-pretty text-muted sm:text-[1.25rem] lg:text-[1.375rem]">
+          <motion.p {...enter(0.08)} className="mt-7 max-w-2xl text-[1.125rem] leading-[1.45] text-pretty text-muted sm:text-[1.25rem] lg:max-w-[35rem] xl:max-w-2xl xl:text-[1.375rem]">
             Availability, deposits, staff rosters and next-day payouts for tours, restaurants, events, classes
             and venues. One inventory behind your website, the marketplaces and the phone.
           </motion.p>
