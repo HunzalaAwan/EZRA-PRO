@@ -28,6 +28,7 @@ export type TokenIcon =
   | 'Ticket'
   | 'Repeat2'
   | 'CalendarClock'
+  | 'Waves'
 
 export type TokenTone = 'primary' | 'accent' | 'success' | 'info'
 
@@ -49,6 +50,13 @@ export interface SolutionMoment {
   photo: PhotoKey
   line: string
   did: [string, string]
+}
+
+/** One thing the product does for this trade, said the way the operator would. */
+export interface SolutionPoint {
+  icon: TokenIcon
+  title: string
+  detail: string
 }
 
 export interface SolutionContent {
@@ -298,4 +306,49 @@ export const SOLUTION_CONTENT: Record<VerticalKey, SolutionContent> = {
       },
     ],
   },
+}
+
+/* ==========================================================================
+   Under the hero copy: four things the product does for this trade, each a
+   short claim and the concrete line behind it. Written as the operator would
+   say it, with the time, the count or the name in it.
+   ========================================================================== */
+
+export const SOLUTION_POINTS: Record<VerticalKey, SolutionPoint[]> = {
+  watersports: [
+    { icon: 'Ship', title: 'Capacity per hull', detail: 'Two boats, two counts. A full 09:00 on one never blocks the other.' },
+    { icon: 'CloudRain', title: 'Weather call at 06:40', detail: 'One tap texts every guest on the departure and queues the refunds.' },
+    { icon: 'FileCheck2', title: 'Waivers before the dock', detail: 'Signed at checkout, cert card photographed, both on the manifest.' },
+    { icon: 'Waves', title: 'Tide and swell on the manifest', detail: 'The skipper sees the swell beside the guest count, not in another app.' },
+  ],
+  tours: [
+    { icon: 'Bus', title: 'Pickups in hotel order', detail: 'The driver’s list runs the route north to south, not alphabetically.' },
+    { icon: 'Users', title: 'Guides rostered, never doubled', detail: 'Put Mara on the 09:00 and the 09:30 will not offer her.' },
+    { icon: 'ListOrdered', title: 'As many departures as the day holds', detail: 'Add a 16:30 for June and it is gone again in September.' },
+    { icon: 'Percent', title: 'Private and group, side by side', detail: 'Same slot, two prices, one seat count.' },
+  ],
+  island: [
+    { icon: 'Landmark', title: 'Twenty operators, one desk', detail: 'Every partner’s trips on the concierge’s screen, live.' },
+    { icon: 'Percent', title: 'Commission per partner', detail: 'Settled monthly with the statement attached. Nothing to reconcile.' },
+    { icon: 'ConciergeBell', title: 'Charged to the room', detail: 'Book the guest into the 14:00 snorkel and it lands on their folio.' },
+    { icon: 'Ship', title: 'Cruise days forecast', detail: 'Arrival manifests feed the week, so the desk staffs for 3,000, not 300.' },
+  ],
+  adventure: [
+    { icon: 'FileCheck2', title: 'Waiver signed before arrival', detail: 'No signature, no seat. The trailhead never has the argument.' },
+    { icon: 'Scale', title: 'Weight, age and fitness gates', detail: 'Set the limits once and checkout declines the booking politely.' },
+    { icon: 'Backpack', title: 'Kit per participant', detail: 'Helmets, harnesses and boots allocated by size when they book.' },
+    { icon: 'CloudRain', title: 'Condition holds', detail: 'A weather or avalanche rating closes the day and tells everyone at once.' },
+  ],
+  restaurants: [
+    { icon: 'CalendarClock', title: 'Seatings, not tables', detail: 'The 17:30 and the 20:00 sell separately, each with its own cover count.' },
+    { icon: 'BadgePlus', title: 'Deposits that end no-shows', detail: '$60 a head held at booking and released the moment they sit.' },
+    { icon: 'Utensils', title: 'Allergies on the pass', detail: 'The nut allergy from the booking prints on the kitchen ticket.' },
+    { icon: 'Ticket', title: 'Buyouts and private events', detail: 'Close the terrace for forty and the widget stops selling it.' },
+  ],
+  wellness: [
+    { icon: 'Repeat2', title: 'Packs, memberships and drop-ins', detail: 'All three on the same calendar, under one guest profile.' },
+    { icon: 'CalendarClock', title: 'Retreats on instalments', detail: 'Five days in October, paid in three parts by August.' },
+    { icon: 'ListOrdered', title: 'Waitlists that fill themselves', detail: 'A cancellation at 06:10 is filled from the list by 06:11.' },
+    { icon: 'Users', title: 'Instructors and their rates', detail: 'Cover a class and the pay follows the person who taught it.' },
+  ],
 }

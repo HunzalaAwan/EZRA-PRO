@@ -5,7 +5,7 @@ import { ArrowRight, Layers } from 'lucide-react'
 
 import { ClosingCta } from '@/components/marketing/land/closing-cta'
 import { PricingSection } from '@/components/marketing/pricing-section'
-import { SOLUTION_CONTENT } from '@/components/marketing/solutions/solution-content'
+import { SOLUTION_CONTENT, SOLUTION_POINTS } from '@/components/marketing/solutions/solution-content'
 import { SolutionHero } from '@/components/marketing/solutions/solution-hero'
 import { ConsoleStage, MomentTimeline, PillarGrid } from '@/components/marketing/solutions/solution-sections'
 import { Reveal } from '@/components/motion/reveal'
@@ -141,7 +141,7 @@ export default async function VerticalSolutionPage({ params }: { params: Promise
         content={content}
         headline={pitch.headline}
         body={decodeEntities(pitch.body)}
-        bullets={pitch.bullets.map(decodeEntities)}
+        points={SOLUTION_POINTS[key]}
         proofStat={pitch.proofStat}
         proofLabel={decodeEntities(pitch.proofLabel)}
       />

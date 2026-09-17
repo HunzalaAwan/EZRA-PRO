@@ -3,7 +3,6 @@ import type { Metadata } from 'next'
 import { FaqSection } from '@/components/marketing/faq-section'
 import { ClosingCta } from '@/components/marketing/land/closing-cta'
 import { CustomerStories } from '@/components/marketing/land/customer-stories'
-import { FeatureAccordion } from '@/components/marketing/land/feature-accordion'
 import { LandHero } from '@/components/marketing/land/land-hero'
 import { Phases } from '@/components/marketing/land/phases'
 import { LogoCloud } from '@/components/marketing/logo-cloud'
@@ -27,7 +26,6 @@ export const metadata: Metadata = {
      hero          the claim, and a deck of four product cards on a field of colour
      logos         who already runs on it
      phases        before, during and after every booking
-     features      there is more to a booking than taking it
      stories       real operators, real numbers
      pricing       the price, plainly
      faq           the questions operators ask
@@ -40,7 +38,6 @@ export default function LandingPage() {
       <LandHero />
       <LogoCloud className="border-b border-line" />
       <Phases />
-      <FeatureAccordion />
       <CustomerStories />
       <PricingSection className="scroll-mt-4 border-t border-line bg-background-subtle py-20 sm:py-24" />
       <FaqSection />

@@ -11,7 +11,6 @@ import {
   BadgePlus,
   Bus,
   CalendarClock,
-  Check,
   CloudRain,
   ConciergeBell,
   FileCheck2,
@@ -25,6 +24,7 @@ import {
   Ticket,
   Users,
   Utensils,
+  Waves,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -35,7 +35,7 @@ import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { EASE_OUT_EXPO, SPRING_SOFT } from '@/lib/motion'
 import { cn } from '@/lib/utils'
 import type { Vertical } from '@/types'
-import type { SolutionContent, SolutionToken, TokenTone } from './solution-content'
+import type { SolutionContent, SolutionPoint, SolutionToken, TokenTone } from './solution-content'
 
 /* ==========================================================================
    SolutionHero — the pitch for one trade, with the trade all around it.
@@ -67,6 +67,7 @@ const ICONS: Record<SolutionToken['icon'], LucideIcon> = {
   Ticket,
   Repeat2,
   CalendarClock,
+  Waves,
 }
 
 const TONE: Record<TokenTone, string> = {
@@ -169,12 +170,12 @@ export interface SolutionHeroProps {
   content: SolutionContent
   headline: string
   body: string
-  bullets: string[]
+  points: SolutionPoint[]
   proofStat: string
   proofLabel: string
 }
 
-export function SolutionHero({ vertical, content, headline, body, bullets, proofStat, proofLabel }: SolutionHeroProps) {
+export function SolutionHero({ vertical, content, headline, body, points, proofStat, proofLabel }: SolutionHeroProps) {
   const reduce = useReducedMotionSafe()
   const finePointer = useIsFinePointer()
   const photos = React.useMemo(() => content.ring.slice(0, 6).map((key) => PHOTOS[key]), [content.ring])
@@ -284,15 +285,25 @@ export function SolutionHero({ vertical, content, headline, body, bullets, proof
             <span className="font-medium text-foreground tabular-nums">{proofStat}</span> {proofLabel} · No card to start · Free migration
           </motion.p>
 
-          <motion.ul {...enter(0.28)} className="mt-7 grid gap-x-8 gap-y-2.5 text-left sm:grid-cols-2">
-            {bullets.map((bullet) => (
-              <li key={bullet} className="flex items-center gap-2 text-[0.9375rem] text-foreground">
-                <span className="grid size-5 shrink-0 place-items-center rounded-full bg-success-soft">
-                  <Check className="size-3 text-success" strokeWidth={3} aria-hidden="true" />
-                </span>
-                {bullet}
-              </li>
-            ))}
+          {/* four things it does for this trade, said the way the operator would */}
+          <motion.ul
+            {...enter(0.28)}
+            className="mt-10 grid w-full max-w-2xl gap-x-8 gap-y-6 border-t border-black/[0.06] pt-8 text-left sm:grid-cols-2 lg:max-w-[29rem] lg:grid-cols-1 lg:gap-y-5 xl:max-w-[34rem] xl:grid-cols-2 2xl:max-w-2xl"
+          >
+            {points.map((point) => {
+              const Icon = ICONS[point.icon]
+              return (
+                <li key={point.title} className="flex items-start gap-3.5">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-surface text-foreground shadow-[var(--shadow-sm)] ring-1 ring-black/[0.04]">
+                    <Icon className="size-4" aria-hidden="true" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-[0.9375rem] leading-snug font-medium text-foreground">{point.title}</span>
+                    <span className="mt-1 block text-[0.8125rem] leading-snug text-subtle">{point.detail}</span>
+                  </span>
+                </li>
+              )
+            })}
           </motion.ul>
         </div>
 
