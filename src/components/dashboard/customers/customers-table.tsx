@@ -293,7 +293,7 @@ export function CustomersTable({
           cell: (row) => (
             <div className="flex min-w-[11rem] max-w-[17rem] items-center gap-2.5">
               <Avatar name={row.name} src={row.avatarUrl} size="xs" />
-              <p className="min-w-0 truncate text-[0.875rem] font-medium text-foreground" title={row.email}>
+              <p className="min-w-0 truncate text-[0.875rem] text-foreground" title={row.email}>
                 {row.name}
               </p>
             </div>
@@ -530,7 +530,7 @@ export function CustomersTable({
                   >
                     <Avatar name={row.name} src={row.avatarUrl} size="md" />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-foreground">{row.name}</p>
+                      <p className="truncate text-sm text-foreground">{row.name}</p>
                       <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-muted">
                         <SegmentChip segment={row.segment} />
                         <span aria-hidden="true" className="text-faint">·</span>
