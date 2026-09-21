@@ -7,7 +7,6 @@ import {
   ArrowUpRight,
   Ban,
   CheckCheck,
-  ChevronRight,
   CircleX,
   Download,
   MessageSquare,
@@ -33,7 +32,7 @@ import {
   toDateKey,
 } from '@/lib/utils'
 import { Avatar } from '@/components/ui/avatar'
-import { Badge, StatusBadge } from '@/components/ui/badge'
+import { StatusBadge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -122,18 +121,44 @@ function PaymentCell({ row, currency }: { row: BookingRow; currency: CurrencyCod
   const due = booking.total - booking.amountPaid
   const note = PAYMENT_NOTE[booking.paymentStatus]
 
+  const quiet = booking.paymentStatus === 'paid' || closed
   return (
-    <span className="flex flex-col items-end leading-tight">
-      <span className={cn('text-[0.8125rem] font-semibold tabular-nums text-foreground', closed && 'line-through decoration-line-strong')}>
+    <span className="inline-flex items-center justify-end gap-1.5 whitespace-nowrap text-[0.8125rem] tabular-nums">
+      <span className={cn('text-foreground', closed && 'line-through decoration-line-strong text-subtle')}>
         {formatCurrency(booking.total, currency)}
       </span>
-      {!closed && due > 0 ? (
-        <span className="text-[0.6875rem] font-semibold tabular-nums text-warning">
-          {formatCurrency(due, currency)} due
+      {!quiet ? (
+        <span className={cn('text-xs', note.tone)}>
+          {due > 0 ? `${formatCurrency(due, currency)} due` : note.label}
         </span>
-      ) : (
-        <span className={cn('text-[0.6875rem] font-medium', note.tone)}>{note.label}</span>
-      )}
+      ) : null}
+    </span>
+  )
+}
+
+/* --------------------------------------------------------------------------
+   Status — a dot and a word, no pill.
+   -------------------------------------------------------------------------- */
+
+const STATUS_DOT: Record<string, { label: string; tone: string }> = {
+  confirmed: { label: 'Confirmed', tone: 'bg-success' },
+  checked_in: { label: 'Checked in', tone: 'bg-info' },
+  completed: { label: 'Completed', tone: 'bg-line-strong' },
+  pending: { label: 'Pending', tone: 'bg-warning' },
+  cancelled: { label: 'Cancelled', tone: 'bg-danger' },
+  no_show: { label: 'No show', tone: 'bg-danger' },
+  refunded: { label: 'Refunded', tone: 'bg-line-strong' },
+}
+
+function StatusDot({ status }: { status: string }) {
+  const meta = STATUS_DOT[status] ?? {
+    label: status.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase()),
+    tone: 'bg-line-strong',
+  }
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[0.8125rem] text-muted">
+      <span aria-hidden="true" className={cn('size-1.5 shrink-0 rounded-full', meta.tone)} />
+      {meta.label}
     </span>
   )
 }
@@ -184,25 +209,16 @@ function DayHeader({
 
   return (
     <div className="flex items-center justify-between gap-3">
-      <div className="flex min-w-0 items-center gap-2">
-        {relative ? (
-          <span
-            className={cn(
-              'rounded-full px-2 py-0.5 text-[0.625rem] font-bold tracking-[0.08em] uppercase',
-              relative === 'Today' ? 'bg-primary text-on-primary' : 'bg-surface text-muted ring-1 ring-line',
-            )}
-          >
-            {relative}
-          </span>
-        ) : null}
-        <span className={cn('truncate text-[0.8125rem] font-semibold', past ? 'text-muted' : 'text-foreground')}>
+      <div className="flex min-w-0 items-center gap-2 text-xs">
+        {relative ? <span className={cn('font-medium', relative === 'Today' ? 'text-primary' : 'text-muted')}>{relative}</span> : null}
+        {relative ? <span className="text-faint">·</span> : null}
+        <span className={cn('truncate', past ? 'text-subtle' : 'text-muted')}>
           {WEEKDAYS[date.getDay()]}, {formatDateShort(date)}
         </span>
       </div>
-      <span className="hidden shrink-0 text-xs text-subtle tabular-nums sm:inline">
-        {formatNumber(live)} {live === 1 ? 'booking' : 'bookings'} · {formatNumber(guests)}{' '}
-        {guests === 1 ? 'guest' : 'guests'} · {formatCurrency(takings, currency)}
-        {rows.length > live ? <span className="text-faint"> · {rows.length - live} cancelled</span> : null}
+      <span className="hidden shrink-0 text-xs text-faint tabular-nums sm:inline">
+        {formatNumber(guests)} {guests === 1 ? 'guest' : 'guests'} · {formatCurrency(takings, currency)}
+        {rows.length > live ? ` · ${rows.length - live} cancelled` : null}
       </span>
     </div>
   )
@@ -386,19 +402,19 @@ function BookingCard({
 
       <div className="pointer-events-none relative min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <span className="font-mono text-[0.75rem] font-semibold tracking-tight text-muted">{booking.reference}</span>
-          <StatusBadge kind="booking" status={booking.status} size="sm" showIcon={false} />
+          <span className="text-xs text-subtle tabular-nums">{booking.reference}</span>
+          <StatusDot status={booking.status} />
         </div>
 
         <div className="mt-2.5 flex items-center gap-2.5">
           <Avatar name={name} src={customer.avatarUrl} size="sm" />
           <span className="min-w-0">
-            <span className="block truncate text-sm font-medium text-foreground">{name}</span>
+            <span className="block truncate text-sm text-foreground">{name}</span>
             <span className="block truncate text-xs text-subtle">{customer.email}</span>
           </span>
         </div>
 
-        <p className="mt-2.5 flex items-center gap-2 truncate text-[0.8125rem] font-medium text-foreground">
+        <p className="mt-2.5 flex items-center gap-2 truncate text-[0.8125rem] text-foreground">
           <span aria-hidden="true" className="h-4 w-1 shrink-0 rounded-full" style={{ background: ACTIVITY_COLOR_VAR[activity.colorKey] }} />
           {activity.name}
         </p>
@@ -415,8 +431,8 @@ function BookingCard({
         </div>
 
         <div className="mt-3 flex items-center justify-between gap-2 border-t border-line-subtle pt-2.5">
-          <StatusBadge kind="payment" status={booking.paymentStatus} size="sm" />
-          <span className="text-sm font-semibold text-foreground tabular-nums">{formatCurrency(booking.total, currency)}</span>
+          <span className={cn('text-xs', PAYMENT_NOTE[booking.paymentStatus].tone)}>{PAYMENT_NOTE[booking.paymentStatus].label}</span>
+          <span className="text-sm text-foreground tabular-nums">{formatCurrency(booking.total, currency)}</span>
         </div>
       </div>
     </li>
@@ -524,11 +540,9 @@ export function BookingsTable({
             <span className="flex min-w-[8.5rem] max-w-[13rem] items-center gap-2.5">
               <Avatar name={name} src={customer.avatarUrl} size={density === 'compact' ? 'xs' : 'sm'} />
               <span className="flex min-w-0 items-center gap-1.5">
-                <span className="truncate text-[0.8125rem] font-semibold text-foreground">{name}</span>
+                <span className="truncate text-[0.8125rem] text-foreground">{name}</span>
                 {customer.segment === 'vip' ? (
-                  <Badge variant="accent" size="sm">
-                    VIP
-                  </Badge>
+                  <span className="shrink-0 text-[0.625rem] tracking-[0.08em] text-subtle uppercase">VIP</span>
                 ) : null}
               </span>
             </span>
@@ -543,7 +557,7 @@ export function BookingsTable({
         width: '6.5rem',
         cellClassName: 'whitespace-nowrap',
         cell: ({ booking }) => (
-          <span className="font-mono text-[0.75rem] font-medium tracking-tight text-muted">{booking.reference}</span>
+          <span className="text-[0.8125rem] text-muted tabular-nums">{booking.reference}</span>
         ),
       },
       {
@@ -551,7 +565,7 @@ export function BookingsTable({
         header: 'Email',
         hideBelow: 'wide',
         cell: ({ customer }) => (
-          <span className="block min-w-[8rem] max-w-[12rem] truncate text-xs text-muted" title={customer.email}>
+          <span className="block min-w-[8rem] max-w-[13rem] truncate text-[0.8125rem] text-muted" title={customer.email}>
             {customer.email}
           </span>
         ),
@@ -568,7 +582,7 @@ export function BookingsTable({
               className="h-4 w-1 shrink-0 rounded-full"
               style={{ background: ACTIVITY_COLOR_VAR[activity.colorKey] }}
             />
-            <span className="truncate text-[0.8125rem] font-medium text-foreground">{activity.name}</span>
+            <span className="truncate text-[0.8125rem] text-foreground">{activity.name}</span>
             {departure.status === 'cancelled' || departure.status === 'weather_hold' ? (
               <StatusBadge kind="departure" status={departure.status} size="sm" showIcon={false} className="shrink-0" />
             ) : null}
@@ -584,7 +598,7 @@ export function BookingsTable({
         defaultSortDir: 'desc',
         cell: ({ departure, activity }) => (
           <span className="whitespace-nowrap text-[0.8125rem] tabular-nums">
-            <span className="font-semibold text-foreground">
+            <span className="text-foreground">
               {grouped ? formatTime(departure.startsAt) : formatDateShort(departure.startsAt)}
             </span>
             <span className="text-subtle"> · {grouped ? formatDuration(activity.durationMinutes) : formatTime(departure.startsAt)}</span>
@@ -601,10 +615,7 @@ export function BookingsTable({
         defaultSortDir: 'desc',
         hideBelow: 'md',
         cell: ({ booking }) => (
-          <span className="inline-flex items-center justify-end gap-1 text-[0.8125rem] font-medium text-foreground tabular-nums">
-            <Users aria-hidden="true" className="size-3.5 text-faint" />
-            {booking.partySize}
-          </span>
+          <span className="text-[0.8125rem] text-foreground tabular-nums">{booking.partySize}</span>
         ),
       },
       {
@@ -623,7 +634,7 @@ export function BookingsTable({
         header: 'Status',
         sortable: true,
         width: '6rem',
-        cell: ({ booking }) => <StatusBadge kind="booking" status={booking.status} size="sm" />,
+        cell: ({ booking }) => <StatusDot status={booking.status} />,
       },
       {
         id: 'open',
@@ -632,9 +643,8 @@ export function BookingsTable({
         align: 'right',
         cellClassName: 'pl-0',
         cell: (row) => (
-          <span className="inline-flex items-center justify-end gap-0.5">
+          <span className="inline-flex items-center justify-end">
             {onRowAction ? <RowMenu row={row} onAction={onRowAction} /> : null}
-            <ChevronRight aria-hidden="true" className="size-4 text-faint" />
           </span>
         ),
       },
