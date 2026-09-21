@@ -37,7 +37,6 @@ import {
 import { cn, formatCurrency, formatNumber, formatRelative } from '@/lib/utils'
 import { NOW } from '@/lib/demo-core'
 import { Avatar } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { DataTable, type DataTableColumn, type DataTableSort } from '@/components/ui/data-table'
@@ -102,26 +101,6 @@ function SegmentChip({ segment }: { segment: CustomerRow['segment'] }) {
     <span className="inline-flex items-center gap-1.5 text-[0.8125rem] text-muted">
       <Icon className={cn('size-3.5', meta.text)} aria-hidden="true" />
       {meta.label}
-    </span>
-  )
-}
-
-function TagList({ tags, max = 2 }: { tags: string[]; max?: number }) {
-  if (tags.length === 0) return <span className="text-xs text-faint">—</span>
-  const shown = tags.slice(0, max)
-  const rest = tags.length - shown.length
-  return (
-    <span className="flex flex-nowrap items-center gap-1 overflow-hidden">
-      {shown.map((tag) => (
-        <span key={tag} className="shrink-0 rounded-md bg-surface-sunken px-1.5 py-0.5 text-[0.6875rem] text-muted">
-          {tag}
-        </span>
-      ))}
-      {rest > 0 ? (
-        <span className="shrink-0 text-[0.6875rem] text-subtle" title={tags.slice(max).join(', ')}>
-          +{rest}
-        </span>
-      ) : null}
     </span>
   )
 }
@@ -314,10 +293,9 @@ export function CustomersTable({
           cell: (row) => (
             <div className="flex min-w-[11rem] max-w-[17rem] items-center gap-2.5">
               <Avatar name={row.name} src={row.avatarUrl} size="xs" />
-              <div className="min-w-0 leading-tight">
-                <p className="truncate text-[0.875rem] font-medium text-foreground">{row.name}</p>
-                <p className="truncate text-xs text-subtle">{row.email}</p>
-              </div>
+              <p className="min-w-0 truncate text-[0.875rem] font-medium text-foreground" title={row.email}>
+                {row.name}
+              </p>
             </div>
           ),
         },
@@ -366,13 +344,6 @@ export function CustomersTable({
             ) : (
               <span className="text-[0.8125rem] text-faint">Never</span>
             ),
-        },
-        {
-          id: 'tags',
-          header: 'Tags',
-          hideBelow: 'lg',
-          width: '13rem',
-          cell: (row) => <TagList tags={row.tags} />,
         },
         {
           id: 'actions',
@@ -560,7 +531,6 @@ export function CustomersTable({
                     <Avatar name={row.name} src={row.avatarUrl} size="md" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-foreground">{row.name}</p>
-                      <p className="truncate text-xs text-subtle">{row.email}</p>
                       <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-muted">
                         <SegmentChip segment={row.segment} />
                         <span aria-hidden="true" className="text-faint">·</span>
