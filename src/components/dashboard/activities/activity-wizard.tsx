@@ -12,6 +12,7 @@ import {
   Check,
   CircleAlert,
   Compass,
+  DoorOpen,
   FileText,
   Gauge,
   Images,
@@ -20,6 +21,7 @@ import {
   Plus,
   Rocket,
   RotateCcw,
+  Route,
   Save,
   Sparkles,
   Star,
@@ -70,6 +72,7 @@ import { AddonEditor, type DraftAddOn } from './addon-editor'
 import {
   ScheduleEditor,
   defaultSchedule,
+  describeSchedule,
   formatClock,
   previewDepartures,
   type DraftSchedule,
@@ -98,6 +101,18 @@ import {
    refresh — or a detour to check a competitor's price — never loses the work.
    ========================================================================== */
 
+/** Where guests go: a guide meets them, they come to a venue, or there is no fixed place. */
+export type ArrivalMode = 'meet' | 'venue' | 'none'
+
+export const ARRIVAL_OPTIONS: { value: ArrivalMode; label: string; description: string; icon: typeof MapPin }[] = [
+  { value: 'meet', label: 'Meeting point', description: 'A guide or skipper meets guests at a set place.', icon: MapPin },
+  { value: 'venue', label: 'Venue address', description: 'Guests come to you during opening hours. Parks, studios, restaurants.', icon: DoorOpen },
+  { value: 'none', label: 'No fixed place', description: 'Pickup only, mobile, or the location is confirmed after booking.', icon: Route },
+]
+
+const defaultArrival = (category: VerticalKey): ArrivalMode =>
+  category === 'restaurants' || category === 'wellness' ? 'venue' : 'meet'
+
 export interface ActivityDraft {
   name: string
   tagline: string
@@ -112,7 +127,9 @@ export interface ActivityDraft {
   included: string[]
   excluded: string[]
   requirements: string[]
+  /** Required text only when arrivalMode is meet or venue. */
   meetingPoint: string
+  arrivalMode: ArrivalMode
   media: DraftMedia[]
   tiers: DraftTier[]
   addOns: DraftAddOn[]
@@ -150,6 +167,7 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
     excluded: [],
     requirements: [],
     meetingPoint: '',
+    arrivalMode: defaultArrival(category),
     media: [],
     tiers: [restaurant ? blankTier('Tasting menu', 8500) : blankTier('Adult', 14900)],
     addOns: [],
@@ -283,14 +301,15 @@ const STEP_SCHEMAS = [
       durationMinutes: z
         .number()
         .int()
-        .min(15, 'Departures run for at least 15 minutes')
-        .max(1440, 'Use multi-day products for anything over 24 hours'),
+        .min(0)
+        .max(1440, 'Use multi-day products for anything over 24 hours')
+        .refine((minutes) => minutes === 0 || minutes >= 15, 'Give it at least 15 minutes, or leave it flexible'),
       minAge: z.number().int().min(0).max(99),
-      maxCapacity: z.number().int().min(1, 'A departure needs at least one seat').max(500),
+      maxCapacity: z.number().int().min(0).max(500, 'Keep seats per departure under 500, or remove the limit'),
       minParticipants: z.number().int().min(1, 'At least one guest must be required'),
     })
-    .refine((draft) => draft.minParticipants <= draft.maxCapacity, {
-      message: 'Minimum participants cannot exceed the capacity',
+    .refine((draft) => draft.maxCapacity === 0 || draft.minParticipants <= draft.maxCapacity, {
+      message: 'Minimum participants cannot exceed the seat limit',
       path: ['minParticipants'],
     }),
 
@@ -301,7 +320,16 @@ const STEP_SCHEMAS = [
       .min(80, 'Describe the experience in at least 80 characters — this is the storefront copy'),
     highlights: nonEmptyList(3, 'Add at least three highlights'),
     included: nonEmptyList(1, 'List at least one thing that is included'),
-    meetingPoint: z.string().trim().min(10, 'Tell guests exactly where to meet you'),
+    meetingPoint: z.string().trim(),
+    arrivalMode: z.enum(['meet', 'venue', 'none']),
+  }).superRefine((draft, ctx) => {
+    if (draft.arrivalMode !== 'none' && draft.meetingPoint.length < 10) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['meetingPoint'],
+        message: draft.arrivalMode === 'meet' ? 'Tell guests exactly where to meet you' : 'Give the address and the entrance to use',
+      })
+    }
   }),
 
   z.object({
@@ -335,15 +363,39 @@ const STEP_SCHEMAS = [
     ),
   }),
 
-  z.object({
-    schedule: z.object({
-      weekdays: z.array(z.number()).min(1, 'Pick at least one day of the week'),
-      startTimes: z.array(z.string()).min(1, 'Add at least one start time'),
-      capacity: z.number().int().min(1).max(500),
-      seasonStart: z.string().min(1, 'Choose a season start'),
-      seasonEnd: z.string().min(1, 'Choose a season end'),
+  z
+    .object({
+      schedule: z.object({
+        mode: z.enum(['times', 'hours', 'dates']),
+        weekdays: z.array(z.number()),
+        startTimes: z.array(z.string()),
+        capacity: z.number().int().min(0).max(500),
+        seasonStart: z.string(),
+        seasonEnd: z.string(),
+        opensAt: z.string(),
+        closesAt: z.string(),
+        lastEntryMinutes: z.number().int().min(0),
+        entryInterval: z.number().int().min(0),
+        dates: z.array(z.object({ dateKey: z.string(), time: z.string() })),
+      }),
+    })
+    .superRefine(({ schedule }, ctx) => {
+      const issue = (key: string, message: string) => ctx.addIssue({ code: 'custom', path: ['schedule', key], message })
+      if (schedule.mode === 'dates') {
+        if (schedule.dates.length === 0) issue('dates', 'Add at least one date')
+        return
+      }
+      if (schedule.weekdays.length === 0) issue('weekdays', schedule.mode === 'hours' ? 'Pick at least one open day' : 'Pick at least one day of the week')
+      if (!schedule.seasonStart) issue('seasonStart', 'Choose a season start')
+      if (!schedule.seasonEnd) issue('seasonEnd', 'Choose a season end')
+      if (schedule.seasonStart && schedule.seasonEnd && schedule.seasonEnd < schedule.seasonStart) issue('seasonEnd', 'The season must end after it starts')
+      if (schedule.mode === 'times' && schedule.startTimes.length === 0) issue('startTimes', 'Add at least one start time')
+      if (schedule.mode === 'hours') {
+        if (!/^\d{2}:\d{2}$/.test(schedule.opensAt)) issue('opensAt', 'Pick an opening time')
+        if (!/^\d{2}:\d{2}$/.test(schedule.closesAt)) issue('closesAt', 'Pick a closing time')
+        if (schedule.closesAt <= schedule.opensAt) issue('closesAt', 'Closing must come after opening')
+      }
     }),
-  }),
 ]
 
 const CLOCK = /^\d{2}:\d{2}$/
@@ -761,12 +813,12 @@ function StorefrontPreview({
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-subtle">
           <span className="inline-flex items-center gap-1.5">
             <Timer className="size-3.5 text-faint" aria-hidden="true" />
-            {formatDuration(draft.durationMinutes)}
+            {draft.durationMinutes > 0 ? formatDuration(draft.durationMinutes) : 'Flexible'}
             {dining ? ' table' : ''}
           </span>
           <span className="inline-flex items-center gap-1.5">
             <Users className="size-3.5 text-faint" aria-hidden="true" />
-            {dining ? `Parties of ${draft.dining.minPartySize}–${draft.dining.maxPartySize}` : `Up to ${draft.maxCapacity}`}
+            {dining ? `Parties of ${draft.dining.minPartySize}–${draft.dining.maxPartySize}` : draft.maxCapacity > 0 ? `Up to ${draft.maxCapacity}` : 'No seat limit'}
           </span>
           {dining ? (
             <span className="inline-flex items-center gap-1.5">
@@ -806,7 +858,7 @@ function StorefrontPreview({
                   {new Intl.DateTimeFormat('en-US', { weekday: 'short', day: 'numeric' }).format(
                     new Date(`${day.dateKey}T00:00:00`),
                   )}{' '}
-                  · {formatClock(day.times[0])}
+                  · {day.open ? `${formatClock(day.open.from)}–${formatClock(day.open.to)}` : formatClock(day.times[0])}
                 </span>
               ))}
             </div>
@@ -1353,12 +1405,17 @@ function TourBasicsFields({ draft, patch, errors }: StepProps) {
       </fieldset>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Duration" required error={errors.durationMinutes}>
+        <Field
+          label="Duration"
+          error={errors.durationMinutes}
+          description="Leave it empty for open-ended activities: a park pass, a rental, a self-guided ride."
+        >
           <Input
             type="number"
-            min={15}
+            min={0}
             step={15}
-            value={draft.durationMinutes}
+            value={draft.durationMinutes > 0 ? draft.durationMinutes : ''}
+            placeholder="Flexible"
             suffix="minutes"
             onChange={(event) =>
               patch({ durationMinutes: Number.parseInt(event.target.value, 10) || 0 })
@@ -1375,16 +1432,34 @@ function TourBasicsFields({ draft, patch, errors }: StepProps) {
             onChange={(event) => patch({ minAge: Number.parseInt(event.target.value, 10) || 0 })}
           />
         </Field>
-        <Field label="Capacity per departure" required error={errors.maxCapacity}>
-          <Input
-            type="number"
-            min={1}
-            value={draft.maxCapacity}
-            suffix="seats"
-            onChange={(event) =>
-              patch({ maxCapacity: Number.parseInt(event.target.value, 10) || 0 })
-            }
-          />
+        <Field
+          label="Seats per departure"
+          error={errors.maxCapacity}
+          description={draft.maxCapacity > 0 ? 'The most guests one departure takes.' : 'No limit: sell as many as turn up.'}
+        >
+          <div className="flex items-center gap-3">
+            <Input
+              type="number"
+              min={1}
+              value={draft.maxCapacity > 0 ? draft.maxCapacity : ''}
+              placeholder="No limit"
+              suffix="seats"
+              disabled={draft.maxCapacity === 0}
+              className="flex-1"
+              onChange={(event) =>
+                patch({ maxCapacity: Number.parseInt(event.target.value, 10) || 0 })
+              }
+            />
+            <label className="inline-flex shrink-0 items-center gap-2 text-xs font-medium text-muted">
+              <Switch
+                size="sm"
+                checked={draft.maxCapacity === 0}
+                onCheckedChange={(value) => patch({ maxCapacity: value ? 0 : 16 })}
+                aria-label="No seat limit"
+              />
+              No limit
+            </label>
+          </div>
         </Field>
         <Field
           label="Minimum participants"
@@ -1404,6 +1479,18 @@ function TourBasicsFields({ draft, patch, errors }: StepProps) {
       </div>
 
       <div className="flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          onClick={() => patch({ durationMinutes: 0 })}
+          className={cn(
+            'rounded-full border px-2.5 py-1 text-xs font-medium transition-colors duration-200',
+            draft.durationMinutes === 0
+              ? 'border-primary/50 bg-primary-soft text-primary'
+              : 'border-line bg-surface text-muted hover:text-foreground',
+          )}
+        >
+          Flexible
+        </button>
         {[60, 90, 120, 180, 240, 480].map((minutes) => (
           <button
             key={minutes}
@@ -1513,14 +1600,79 @@ function DescriptionStep({ draft, patch, errors }: StepProps) {
         placeholder={copy.requirementsPlaceholder}
       />
 
-      <Field label={copy.venue} required error={errors.meetingPoint} description={copy.venueHelp}>
-        <Textarea
-          rows={3}
-          value={draft.meetingPoint}
-          placeholder={copy.venuePlaceholder}
-          onChange={(event) => patch({ meetingPoint: event.target.value })}
-        />
-      </Field>
+      {dining ? (
+        <Field label={copy.venue} required error={errors.meetingPoint} description={copy.venueHelp}>
+          <Textarea
+            rows={3}
+            value={draft.meetingPoint}
+            placeholder={copy.venuePlaceholder}
+            onChange={(event) => patch({ meetingPoint: event.target.value })}
+          />
+        </Field>
+      ) : (
+        <>
+          <fieldset>
+            <legend className="text-[0.8125rem] font-medium">Where guests go</legend>
+            <p className="mt-0.5 mb-2.5 text-xs text-muted">
+              A guided trip needs a meeting point. A park, a studio or a walk-in activity only needs an
+              address. A pickup or mobile service needs neither.
+            </p>
+            <RadioGroup
+              value={draft.arrivalMode}
+              onValueChange={(value) => patch({ arrivalMode: value as ArrivalMode })}
+              className="grid gap-2.5 lg:grid-cols-3"
+            >
+              {ARRIVAL_OPTIONS.map((option) => (
+                <RadioGroupCard
+                  key={option.value}
+                  value={option.value}
+                  label={option.label}
+                  description={option.description}
+                  icon={<option.icon aria-hidden="true" />}
+                />
+              ))}
+            </RadioGroup>
+          </fieldset>
+
+          {draft.arrivalMode === 'meet' ? (
+            <Field label="Meeting point" required error={errors.meetingPoint} description={copy.venueHelp}>
+              <Textarea
+                rows={3}
+                value={draft.meetingPoint}
+                placeholder={copy.venuePlaceholder}
+                onChange={(event) => patch({ meetingPoint: event.target.value })}
+              />
+            </Field>
+          ) : draft.arrivalMode === 'venue' ? (
+            <Field
+              label="Venue address"
+              required
+              error={errors.meetingPoint}
+              description="The address, the entrance to use, and where to park or be dropped off."
+            >
+              <Textarea
+                rows={3}
+                value={draft.meetingPoint}
+                placeholder="Kihei Adventure Park, 120 Piilani Hwy — main gate; free parking by the entrance."
+                onChange={(event) => patch({ meetingPoint: event.target.value })}
+              />
+            </Field>
+          ) : (
+            <Field
+              label="How guests find you"
+              error={errors.meetingPoint}
+              description="Optional. Pickup arrangements, a number to call on the day, or a note that the spot is confirmed after booking."
+            >
+              <Textarea
+                rows={2}
+                value={draft.meetingPoint}
+                placeholder="We collect you from your hotel lobby. The driver texts 15 minutes before."
+                onChange={(event) => patch({ meetingPoint: event.target.value })}
+              />
+            </Field>
+          )}
+        </>
+      )}
     </div>
   )
 }
@@ -1545,7 +1697,7 @@ function ReviewStep({
   const priced = draft.tiers.filter((tier) => tier.label.trim().length > 0)
   const fromPrice = priced.length === 0 ? 0 : Math.min(...priced.map((tier) => tier.price))
   const generated = previewDepartures(draft.schedule, nowIso, 14)
-  const departures = generated.reduce((acc, day) => acc + day.times.length, 0)
+  const departures = generated.reduce((acc, day) => acc + (day.open ? 1 : day.times.length), 0)
   const seats = generated.reduce((acc, day) => acc + day.seats, 0)
   const dining = isDining(draft)
   const d = draft.dining
@@ -1584,25 +1736,28 @@ function ReviewStep({
         { label: 'Name', value: draft.name, step: 0 },
         { label: 'Category', value: CATEGORY_OPTIONS.find((c) => c.value === draft.category)?.label, step: 0 },
         { label: 'Difficulty', value: draft.difficulty.charAt(0).toUpperCase() + draft.difficulty.slice(1), step: 0 },
-        { label: 'Duration', value: formatDuration(draft.durationMinutes), step: 0 },
+        { label: 'Duration', value: draft.durationMinutes > 0 ? formatDuration(draft.durationMinutes) : 'Flexible', step: 0 },
         {
           label: 'Capacity',
-          value: `${draft.minParticipants}–${draft.maxCapacity} guests · ages ${draft.minAge}+`,
+          value:
+            draft.maxCapacity > 0
+              ? `${draft.minParticipants}–${draft.maxCapacity} guests · ages ${draft.minAge}+`
+              : `From ${draft.minParticipants} ${pluralize(draft.minParticipants, 'guest')} · no seat limit · ages ${draft.minAge}+`,
           step: 0,
         },
         { label: 'Highlights', value: `${draft.highlights.filter(Boolean).length} bullets`, step: 1 },
-        { label: 'Meeting point', value: draft.meetingPoint, step: 1 },
+        {
+          label: draft.arrivalMode === 'meet' ? 'Meeting point' : draft.arrivalMode === 'venue' ? 'Venue' : 'Arrival',
+          value: draft.meetingPoint || 'No fixed place',
+          step: 1,
+        },
         { label: 'Media', value: `${draft.media.length} ${pluralize(draft.media.length, 'image')}`, step: 2 },
         {
           label: 'Pricing',
           value: `${priced.length} ${pluralize(priced.length, 'tier')} from ${formatCurrency(fromPrice, currency)} · ${draft.addOns.length} ${pluralize(draft.addOns.length, 'add-on')}`,
           step: 3,
         },
-        {
-          label: 'Schedule',
-          value: `${draft.schedule.startTimes.length} ${pluralize(draft.schedule.startTimes.length, 'time')} on ${draft.schedule.weekdays.length} ${pluralize(draft.schedule.weekdays.length, 'day')} · ${draft.schedule.capacity} seats each`,
-          step: 4,
-        },
+        { label: 'Schedule', value: describeSchedule(draft.schedule), step: 4 },
       ]
 
   const stats = dining
@@ -1612,8 +1767,12 @@ function ReviewStep({
         { label: priced.length === 0 ? 'Securing' : 'Menu from', value: priced.length === 0 ? formatLabel(BOOKING_MODE_OPTIONS, d.bookingMode) : formatCurrency(fromPrice, currency), icon: Tag },
       ]
     : [
-        { label: 'Departures · next 14 days', value: departures.toString(), icon: CalendarClock },
-        { label: 'Seats on sale', value: seats.toString(), icon: Users },
+        {
+          label: draft.schedule.mode === 'hours' ? 'Open days · next 14 days' : draft.schedule.mode === 'dates' ? 'Dates listed' : 'Departures · next 14 days',
+          value: departures.toString(),
+          icon: CalendarClock,
+        },
+        { label: 'Seats on sale', value: draft.schedule.capacity > 0 ? seats.toString() : 'No limit', icon: Users },
         { label: 'Lead price', value: formatCurrency(fromPrice, currency), icon: Tag },
       ]
 
