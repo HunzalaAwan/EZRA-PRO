@@ -17,6 +17,13 @@ import {
   Share2,
   Smartphone,
   Star,
+  CalendarCheck,
+  LayoutGrid,
+  LayoutList,
+  LayoutTemplate,
+  RectangleVertical,
+  ShieldCheck,
+  Zap,
 } from 'lucide-react'
 
 import { PageHeader } from '@/components/dashboard/page-header'
@@ -33,12 +40,22 @@ import {
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Segmented } from '@/components/ui/segmented'
+import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
+import { useStorefrontSettings } from '@/hooks/use-storefront-settings'
 import type { Storefront } from '@/lib/demo'
 import { SITE } from '@/lib/site-config'
+import {
+  DESKTOP_LAYOUTS,
+  MOBILE_LAYOUTS,
+  SECTION_META,
+  type DesktopLayout,
+  type MobileLayout,
+  type StorefrontSettings,
+} from '@/lib/storefront-settings'
 import { cn, formatCurrency, formatDuration, formatNumber, truncate } from '@/lib/utils'
 import type { Tenant } from '@/types'
 
@@ -119,6 +136,7 @@ export function StorefrontAdminClient({
   )
 
   const reduceMotion = useReducedMotionSafe()
+  const { settings, update, reset, isDefault } = useStorefrontSettings(CURRENT_TENANT.slug, CURRENT_TENANT.vertical)
   const [device, setDevice] = React.useState<'desktop' | 'mobile'>('desktop')
   const [embed, setEmbed] = React.useState<EmbedKey>('inline')
   const [domain, setDomain] = React.useState(CUSTOM_DOMAIN)
@@ -183,6 +201,107 @@ export function StorefrontAdminClient({
 
       <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,28rem)]">
         <div className="flex min-w-0 flex-col gap-6">
+          {/* ---------------- Layout and sections ---------------- */}
+          <Card>
+            <CardHeader>
+              <div className="min-w-0">
+                <CardTitle className="flex items-center gap-2">
+                  <LayoutTemplate className="size-4 text-primary" aria-hidden="true" />
+                  Layout and sections
+                </CardTitle>
+                <CardDescription>
+                  Choose what the homepage shows and how experiences are laid out. The preview
+                  follows as you go, and so does the live site.
+                </CardDescription>
+              </div>
+              <CardToolbar>
+                <Button variant="ghost" size="xs" onClick={reset} disabled={isDefault}>
+                  Reset to defaults
+                </Button>
+              </CardToolbar>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-6">
+              <ul className="divide-y divide-line-subtle rounded-xl border border-line">
+                {SECTION_META.map((meta) => {
+                  const on = settings.sections[meta.key]
+                  return (
+                    <li key={meta.key} className="flex items-start justify-between gap-4 px-4 py-3">
+                      <div className="min-w-0">
+                        <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
+                          {meta.label}
+                          {meta.key === 'departures' && CURRENT_TENANT.vertical !== 'tours' ? (
+                            <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-[0.6875rem] font-medium text-subtle">
+                              Off by default outside tours
+                            </span>
+                          ) : null}
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted">{meta.hint}</p>
+                        {meta.key === 'trust' && on ? (
+                          <label className="mt-2.5 inline-flex items-center gap-2 text-xs text-muted">
+                            <Switch
+                              size="sm"
+                              checked={settings.trustOnPhones}
+                              onCheckedChange={(value) => update({ trustOnPhones: value === true })}
+                              aria-label="Also show the trust strip on phones"
+                            />
+                            Also show on phones
+                          </label>
+                        ) : null}
+                      </div>
+                      <Switch
+                        checked={on}
+                        onCheckedChange={(value) =>
+                          update((current) => ({
+                            ...current,
+                            sections: { ...current.sections, [meta.key]: value === true },
+                          }))
+                        }
+                        aria-label={`Show ${meta.label}`}
+                      />
+                    </li>
+                  )
+                })}
+              </ul>
+
+              <div className="grid gap-5 sm:grid-cols-2">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Experiences on phones</p>
+                  <p className="mt-0.5 min-h-8 text-xs text-muted">
+                    {MOBILE_LAYOUTS.find((l) => l.value === settings.mobileLayout)?.hint}
+                  </p>
+                  <Segmented
+                    size="sm"
+                    label="Phone layout"
+                    value={settings.mobileLayout}
+                    onValueChange={(value: MobileLayout) => update({ mobileLayout: value })}
+                    options={MOBILE_LAYOUTS.map((l) => ({
+                      value: l.value,
+                      label: l.label,
+                      icon: l.value === 'cards' ? RectangleVertical : l.value === 'grid' ? LayoutGrid : LayoutList,
+                    }))}
+                  />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">Experiences on desktop</p>
+                  <p className="mt-0.5 min-h-8 text-xs text-muted">
+                    {DESKTOP_LAYOUTS.find((l) => l.value === settings.desktopLayout)?.hint}
+                  </p>
+                  <Segmented
+                    size="sm"
+                    label="Desktop layout"
+                    value={settings.desktopLayout}
+                    onValueChange={(value: DesktopLayout) => update({ desktopLayout: value })}
+                    options={DESKTOP_LAYOUTS.map((l) => ({
+                      value: l.value,
+                      label: l.label,
+                      icon: l.value === 'grid' ? LayoutGrid : LayoutList,
+                    }))}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* ---------------- Embed ---------------- */}
           <Card>
             <CardHeader>
@@ -456,7 +575,7 @@ export function StorefrontAdminClient({
                   </span>
                 </div>
 
-                <StorefrontFrame compact={device === 'mobile'} storefront={STOREFRONT} />
+                <StorefrontFrame compact={device === 'mobile'} storefront={STOREFRONT} settings={settings} />
               </motion.div>
 
               <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
@@ -588,10 +707,24 @@ function Td({
    MINI STOREFRONT
    ========================================================================== */
 
-function StorefrontFrame({ compact, storefront }: { compact: boolean; storefront: Storefront }) {
+function StorefrontFrame({
+  compact,
+  storefront,
+  settings,
+}: {
+  compact: boolean
+  storefront: Storefront
+  settings: StorefrontSettings
+}) {
   if (!storefront) return null
-  const { tenant, featured } = storefront
-  const cards = featured.slice(0, compact ? 2 : 3)
+  const { tenant, activities } = storefront
+  const layout = compact ? settings.mobileLayout : settings.desktopLayout
+  const count = layout === 'grid' ? (compact ? 4 : 6) : layout === 'list' ? 3 : compact ? 2 : 3
+  const cards = activities.slice(0, count)
+  const showTrust = settings.sections.trust && (!compact || settings.trustOnPhones)
+  const rating = activities.length
+    ? activities.reduce((sum, a) => sum + a.rating, 0) / activities.length
+    : 5
 
   return (
     <div className="bg-surface">
@@ -630,45 +763,115 @@ function StorefrontFrame({ compact, storefront }: { compact: boolean; storefront
         </div>
       </div>
 
-      {/* Cards */}
-      <div className="flex flex-col gap-2.5 p-3.5">
+      {/* Trust strip */}
+      {showTrust ? (
+        <div className={cn('grid gap-1.5 border-b border-line px-3.5 py-2.5', compact ? 'grid-cols-2' : 'grid-cols-4')}>
+          {[
+            { icon: ShieldCheck, label: 'Secure checkout' },
+            { icon: Zap, label: 'Instant confirmation' },
+            { icon: CalendarCheck, label: 'Free cancellation' },
+            { icon: Star, label: `${rating.toFixed(1)} rated` },
+          ].map((item) => (
+            <span key={item.label} className="flex items-center gap-1.5 text-[0.625rem] font-medium text-muted">
+              <item.icon className="size-3 shrink-0 text-primary" aria-hidden="true" />
+              <span className="truncate">{item.label}</span>
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {/* Next departures */}
+      {settings.sections.departures ? (
+        <div className="border-b border-line px-3.5 py-2.5">
+          <p className="text-[0.625rem] font-semibold uppercase tracking-[0.12em] text-primary">Next departures</p>
+          <div className="mt-1.5 flex gap-1.5 overflow-hidden">
+            {activities.slice(0, compact ? 2 : 3).map((activity, i) => (
+              <span key={activity.id} className="flex min-w-0 flex-1 flex-col rounded-lg border border-line bg-surface-raised px-2 py-1.5">
+                <span className="text-[0.625rem] font-semibold text-primary tabular">{['9:00 AM', '1:00 PM', '4:30 PM'][i]}</span>
+                <span className="truncate text-[0.6875rem] font-medium text-foreground">{activity.name}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Experiences */}
+      <div
+        className={cn(
+          'grid p-3.5',
+          layout === 'grid' ? (compact ? 'grid-cols-2 gap-2' : 'grid-cols-3 gap-2.5') : 'grid-cols-1 gap-2.5',
+        )}
+      >
         {cards.map((activity) => {
           const image =
             activity.media.find((m) => m.isPrimary)?.url ?? activity.media[0]?.url ?? undefined
+          const price = formatCurrency(activity.basePrice, activity.currency)
+          if (layout === 'list') {
+            return (
+              <article key={activity.id} className="flex gap-3 overflow-hidden rounded-xl border border-line bg-surface-raised p-2">
+                <span className="size-16 shrink-0 overflow-hidden rounded-lg bg-surface-sunken">
+                  {image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={image} alt="" className="size-full object-cover" loading="lazy" />
+                  ) : null}
+                </span>
+                <div className="flex min-w-0 flex-1 flex-col justify-between">
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-semibold text-foreground">{activity.name}</p>
+                    <p className="truncate text-[0.6875rem] text-muted">{activity.tagline}</p>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-1 text-[0.625rem] text-subtle">
+                      <Star className="size-2.5 fill-warning text-warning" aria-hidden="true" />
+                      {activity.rating.toFixed(2)} · {formatDuration(activity.durationMinutes)}
+                    </span>
+                    <span className="text-xs font-bold text-primary tabular">{price}</span>
+                  </div>
+                </div>
+              </article>
+            )
+          }
           return (
-            <article
-              key={activity.id}
-              className="flex gap-3 overflow-hidden rounded-xl border border-line bg-surface-raised p-2"
-            >
-              <span className="size-16 shrink-0 overflow-hidden rounded-lg bg-surface-sunken">
+            <article key={activity.id} className="overflow-hidden rounded-xl border border-line bg-surface-raised">
+              <span className={cn('block w-full overflow-hidden bg-surface-sunken', layout === 'grid' ? 'aspect-square' : compact ? 'h-24' : 'h-20')}>
                 {image ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={image} alt="" className="size-full object-cover" loading="lazy" />
                 ) : null}
               </span>
-              <div className="flex min-w-0 flex-1 flex-col justify-between">
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold text-foreground">{activity.name}</p>
-                  <p className="truncate text-[0.6875rem] text-muted">{activity.tagline}</p>
-                </div>
+              <div className={cn('flex min-w-0 flex-col', layout === 'grid' ? 'gap-0.5 p-2' : 'gap-1 p-2.5')}>
+                <p className="truncate text-xs font-semibold text-foreground">{activity.name}</p>
+                {layout === 'cards' ? <p className="line-clamp-1 text-[0.6875rem] text-muted">{activity.tagline}</p> : null}
                 <div className="flex items-center justify-between gap-2">
                   <span className="flex items-center gap-1 text-[0.625rem] text-subtle">
                     <Star className="size-2.5 fill-warning text-warning" aria-hidden="true" />
-                    {activity.rating.toFixed(2)} · {formatDuration(activity.durationMinutes)}
+                    {activity.rating.toFixed(1)}
                   </span>
-                  <span className="text-xs font-bold text-primary tabular">
-                    {formatCurrency(activity.basePrice, activity.currency)}
-                  </span>
+                  <span className="text-xs font-bold text-primary tabular">{price}</span>
                 </div>
               </div>
             </article>
           )
         })}
-
-        <p className="text-center text-[0.6875rem] text-subtle">
-          + {storefront.activities.length - cards.length} more experiences
-        </p>
       </div>
+      <p className="px-3.5 pb-3 text-center text-[0.6875rem] text-subtle">
+        + {Math.max(activities.length - cards.length, 0)} more experiences
+      </p>
+
+      {/* The bands below the catalogue */}
+      {(
+        [
+          ['about', 'About us · Meet the crew'],
+          ['reviews', `Guest reviews · ${rating.toFixed(2)} out of 5`],
+          ['contact', `Contact · ${tenant.contact.phone}`],
+        ] as const
+      )
+        .filter(([key]) => settings.sections[key])
+        .map(([key, label]) => (
+          <div key={key} className="border-t border-line px-3.5 py-2.5 text-[0.6875rem] font-medium text-muted">
+            {label}
+          </div>
+        ))}
     </div>
   )
 }

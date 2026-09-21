@@ -19,6 +19,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { StarRow } from '@/components/storefront/storefront-hero'
+import { useMediaQuery } from '@/hooks/use-media-query'
+import { useStorefrontSettings } from '@/hooks/use-storefront-settings'
+import type { DesktopLayout, MobileLayout } from '@/lib/storefront-settings'
+import type { VerticalKey } from '@/types'
 
 /* ==========================================================================
    FILTER MODEL
@@ -61,6 +65,21 @@ export interface ActivityShowcaseProps {
   featured: Activity[]
   currency: CurrencyCode
   basePath: string
+  /** The operator's saved layout is read for this tenant. */
+  tenantSlug: string
+  vertical: VerticalKey
+}
+
+/* ---------- layout classes, one static string per choice so Tailwind sees them ---------- */
+
+const GRID_MOBILE: Record<MobileLayout, string> = {
+  cards: 'grid-cols-1 gap-5',
+  grid: 'grid-cols-2 gap-3 sm:gap-5',
+  list: 'grid-cols-1 gap-3 sm:gap-5',
+}
+const GRID_DESKTOP: Record<DesktopLayout, string> = {
+  grid: 'sm:grid-cols-2 lg:grid-cols-3',
+  list: 'sm:grid-cols-1',
 }
 
 /* ==========================================================================
@@ -72,7 +91,13 @@ export function ActivityShowcase({
   featured,
   currency,
   basePath,
+  tenantSlug,
+  vertical,
 }: ActivityShowcaseProps) {
+  const { settings } = useStorefrontSettings(tenantSlug, vertical)
+  const wide = useMediaQuery('(min-width: 640px)', true)
+  const mobileLayout = settings.mobileLayout
+  const desktopLayout = settings.desktopLayout
   const [difficulty, setDifficulty] = React.useState<DifficultyLevel | null>(null)
   const [duration, setDuration] = React.useState<DurationKey | null>(null)
   const [price, setPrice] = React.useState<PriceKey | null>(null)
@@ -142,7 +167,11 @@ export function ActivityShowcase({
     return sorted
   }, [activities, difficulty, duration, price, sort, lowBand, highBand])
 
-  const showFeatured = activeCount === 0 && sort === 'recommended' && featured.length > 0
+  const showFeatured =
+    activeCount === 0 &&
+    sort === 'recommended' &&
+    featured.length > 0 &&
+    (wide || mobileLayout === 'cards')
   const heroCards = featured.slice(0, 2)
   const heroIds = new Set(showFeatured ? heroCards.map((a) => a.id) : [])
   const gridCards = filtered.filter((a) => !heroIds.has(a.id))
@@ -292,11 +321,17 @@ export function ActivityShowcase({
         ) : (
           <StaggerGroup
             stagger={0.05}
-            className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3"
+            className={cn('mt-6 grid', GRID_MOBILE[mobileLayout], GRID_DESKTOP[desktopLayout])}
           >
             {gridCards.map((activity) => (
               <StaggerItem key={activity.id} direction="up" className="h-full">
-                <ActivityCard activity={activity} currency={currency} basePath={basePath} />
+                <ActivityCard
+                  activity={activity}
+                  currency={currency}
+                  basePath={basePath}
+                  mobileLayout={mobileLayout}
+                  desktopLayout={desktopLayout}
+                />
               </StaggerItem>
             ))}
           </StaggerGroup>
@@ -437,28 +472,54 @@ function FeatureCard({
   )
 }
 
+/* ---------- the card, shaped by the two layout choices ----------
+   Every class is a static string keyed by the choice, so a phone list can
+   sit beside a desktop grid: the base classes handle phones, the sm: ones
+   take over from 640px. */
+
+const ROOT_MOBILE: Record<MobileLayout, string> = { cards: 'flex-col', grid: 'flex-col', list: 'flex-row' }
+const ROOT_DESKTOP: Record<DesktopLayout, string> = { grid: 'sm:flex-col', list: 'sm:flex-row' }
+const MEDIA_MOBILE: Record<MobileLayout, string> = {
+  cards: 'aspect-[4/3] w-full',
+  grid: 'aspect-square w-full',
+  list: 'w-28 shrink-0 self-stretch',
+}
+const MEDIA_DESKTOP: Record<DesktopLayout, string> = {
+  grid: 'sm:aspect-[4/3] sm:w-full sm:shrink sm:self-auto',
+  list: 'sm:aspect-auto sm:w-72 sm:min-h-44 sm:shrink-0 sm:self-stretch',
+}
+const BODY_MOBILE: Record<MobileLayout, string> = { cards: 'p-5', grid: 'p-3 sm:p-5', list: 'p-3.5 sm:p-5' }
+const BODY_DESKTOP: Record<DesktopLayout, string> = { grid: '', list: 'sm:justify-center' }
+
 function ActivityCard({
   activity,
   currency,
   basePath,
+  mobileLayout,
+  desktopLayout,
 }: {
   activity: Activity
   currency: CurrencyCode
   basePath: string
+  mobileLayout: MobileLayout
+  desktopLayout: DesktopLayout
 }) {
   const media = primaryMedia(activity)
+  const small = mobileLayout !== 'cards'
 
   return (
     <Link
       href={`${basePath}/${activity.slug}`}
       className={cn(
-        'group flex h-full flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-sm',
+        'group flex h-full overflow-hidden rounded-2xl border border-line bg-surface shadow-sm',
+        ROOT_MOBILE[mobileLayout],
+        ROOT_DESKTOP[desktopLayout],
         'transition-[transform,box-shadow,border-color] duration-500 ease-[var(--ease-out-expo)]',
         'hover:-translate-y-1 hover:border-primary/40 hover:shadow-xl',
         'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background',
       )}
     >
-      <div className="relative aspect-[4/3] w-full overflow-hidden bg-surface-sunken">
+      <div className={cn('relative overflow-hidden bg-surface-sunken', MEDIA_MOBILE[mobileLayout], MEDIA_DESKTOP[desktopLayout])}>
         {media ? (
           <Image
             src={media.url}
@@ -470,18 +531,28 @@ function ActivityCard({
         ) : null}
         <div className="absolute inset-0 bg-[linear-gradient(to_top,oklch(0.12_0.02_233/0.55),transparent_45%)]" />
 
-        <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/12 px-2.5 py-1 text-[0.6875rem] font-semibold text-white backdrop-blur-sm">
+        <span
+          className={cn(
+            'absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/12 px-2.5 py-1 text-[0.6875rem] font-semibold text-white backdrop-blur-sm',
+            mobileLayout === 'list' && 'hidden sm:inline-flex',
+          )}
+        >
           <Clock className="size-3" aria-hidden="true" />
           {formatDuration(activity.durationMinutes)}
         </span>
 
         {activity.featured ? (
-          <span className="absolute right-3 top-3 rounded-full bg-accent px-2.5 py-1 text-[0.6875rem] font-bold uppercase tracking-wider text-on-accent shadow-sm">
+          <span
+            className={cn(
+              'absolute right-3 top-3 rounded-full bg-accent px-2.5 py-1 text-[0.6875rem] font-bold uppercase tracking-wider text-on-accent shadow-sm',
+              small && 'hidden sm:block',
+            )}
+          >
             Featured
           </span>
         ) : null}
 
-        <div className="absolute inset-x-3 bottom-3 flex items-center gap-2">
+        <div className={cn('absolute inset-x-3 bottom-3 items-center gap-2', small ? 'hidden sm:flex' : 'flex')}>
           <StarRow value={activity.rating} size="sm" className="text-warning" />
           <span className="text-xs font-semibold tabular text-white">
             {activity.rating.toFixed(1)}
@@ -490,13 +561,25 @@ function ActivityCard({
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col p-5">
-        <h3 className="font-display text-[1.0625rem] font-semibold leading-snug tracking-tight text-foreground transition-colors duration-300 group-hover:text-primary">
+      <div className={cn('flex min-w-0 flex-1 flex-col', BODY_MOBILE[mobileLayout], BODY_DESKTOP[desktopLayout])}>
+        <h3
+          className={cn(
+            'font-display font-semibold leading-snug tracking-tight text-foreground transition-colors duration-300 group-hover:text-primary',
+            small ? 'text-[0.9375rem] sm:text-[1.0625rem]' : 'text-[1.0625rem]',
+          )}
+        >
           {activity.name}
         </h3>
-        <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-muted">{activity.tagline}</p>
+        <p
+          className={cn(
+            'mt-2 text-sm leading-relaxed text-muted',
+            mobileLayout === 'grid' ? 'hidden sm:line-clamp-2' : mobileLayout === 'list' ? 'line-clamp-1 sm:line-clamp-2' : 'line-clamp-2',
+          )}
+        >
+          {activity.tagline}
+        </p>
 
-        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-subtle">
+        <div className={cn('mt-4 flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-subtle', small ? 'hidden sm:flex' : 'flex')}>
           <span className="inline-flex items-center gap-1.5">
             <Users className="size-3.5" aria-hidden="true" />
             Up to {activity.maxCapacity}
@@ -510,20 +593,26 @@ function ActivityCard({
           <span className="inline-flex items-center gap-1.5">Ages {activity.minAge}+</span>
         </div>
 
-        <div className="mt-5 flex items-end justify-between gap-3 border-t border-line-subtle pt-4">
+        <div
+          className={cn(
+            'flex items-end justify-between gap-3 border-t border-line-subtle',
+            small ? 'mt-3 pt-3 sm:mt-5 sm:pt-4' : 'mt-5 pt-4',
+          )}
+        >
           <div className="min-w-0">
             <p className="text-[0.6875rem] font-medium uppercase tracking-[0.1em] text-faint">
               From
             </p>
-            <p className="font-display text-lg font-semibold tabular text-foreground">
+            <p className={cn('font-display font-semibold tabular text-foreground', small ? 'text-base sm:text-lg' : 'text-lg')}>
               {formatCurrency(activity.basePrice, currency)}
             </p>
           </div>
           <span
             className={cn(
-              'inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 text-[0.8125rem] font-medium text-foreground',
+              'h-9 shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-3.5 text-[0.8125rem] font-medium text-foreground',
               'transition-all duration-300 ease-[var(--ease-out-expo)]',
               'group-hover:border-primary group-hover:bg-primary group-hover:text-on-primary',
+              mobileLayout === 'grid' ? 'hidden sm:inline-flex' : 'inline-flex',
             )}
           >
             Book

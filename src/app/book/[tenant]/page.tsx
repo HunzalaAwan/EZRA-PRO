@@ -39,6 +39,7 @@ import { Reveal } from '@/components/motion/reveal'
 import { StaggerGroup, StaggerItem } from '@/components/motion/stagger'
 import { ActivityShowcase } from '@/components/storefront/activity-showcase'
 import { StarRow, StorefrontHero } from '@/components/storefront/storefront-hero'
+import { StorefrontSection, StorefrontSections } from '@/components/storefront/storefront-sections'
 import { TrustBar } from '@/components/storefront/trust-bar'
 
 interface TenantParams {
@@ -193,7 +194,8 @@ export default async function StorefrontHomePage({
   const foundedYear = new Date(tenant.createdAt).getFullYear()
 
   return (
-    <>
+    <StorefrontSections slug={tenant.slug} vertical={tenant.vertical}>
+      <StorefrontSection key="hero" id="hero">
       <StorefrontHero
         tenant={tenant}
         activities={activities}
@@ -203,11 +205,12 @@ export default async function StorefrontHomePage({
         guestsHosted={guestsHosted}
         todayKey={TODAY_KEY}
       />
-
-      <TrustBar rating={rating} reviewCount={reviewCount} />
-
-      {/* ==================== next departures ==================== */}
+      </StorefrontSection>
+      <StorefrontSection key="trust" id="trust">
+        <TrustBar rating={rating} reviewCount={reviewCount} />
+      </StorefrontSection>
       {upcoming.length > 0 ? (
+        <StorefrontSection key="departures" id="departures">
         <section className="border-b border-line-subtle bg-background py-10">
           <div className="mx-auto w-full max-w-[88rem] px-4 sm:px-6 lg:px-10">
             <div className="flex flex-wrap items-end justify-between gap-4">
@@ -267,17 +270,19 @@ export default async function StorefrontHomePage({
             </StaggerGroup>
           </div>
         </section>
+        </StorefrontSection>
       ) : null}
-
-      {/* ==================== catalogue ==================== */}
+      <StorefrontSection key="catalogue" id="catalogue">
       <ActivityShowcase
         activities={activities}
         featured={featured}
         currency={tenant.currency}
         basePath={base}
+        tenantSlug={tenant.slug}
+        vertical={tenant.vertical}
       />
-
-      {/* ==================== about ==================== */}
+      </StorefrontSection>
+      <StorefrontSection key="about" id="about">
       <section
         id="about"
         className="scroll-mt-24 border-y border-line-subtle bg-background-subtle py-16 sm:py-20"
@@ -368,9 +373,9 @@ export default async function StorefrontHomePage({
           </div>
         </div>
       </section>
-
-      {/* ==================== reviews ==================== */}
+      </StorefrontSection>
       {reviews.length > 0 ? (
+        <StorefrontSection key="reviews" id="reviews">
         <section id="reviews" className="scroll-mt-24 bg-background py-16 sm:py-20">
           <div className="mx-auto w-full max-w-[88rem] px-4 sm:px-6 lg:px-10">
             <Reveal className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -422,11 +427,12 @@ export default async function StorefrontHomePage({
             </StaggerGroup>
           </div>
         </section>
+        </StorefrontSection>
       ) : null}
-
-      {/* ==================== contact ==================== */}
-      <ContactBand tenant={tenant} base={base} />
-    </>
+      <StorefrontSection key="contact" id="contact">
+        <ContactBand tenant={tenant} base={base} />
+      </StorefrontSection>
+    </StorefrontSections>
   )
 }
 
