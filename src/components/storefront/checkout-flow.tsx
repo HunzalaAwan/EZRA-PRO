@@ -555,19 +555,6 @@ function GuestStep({
         </p>
       </div>
 
-      {/* Only the lead guest is needed to pay. Everyone else's name and
-          waiver are collected after, from an emailed link or at check-in. */}
-      <div className="flex items-start gap-3 rounded-2xl bg-surface-sunken p-4">
-        <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl bg-surface text-primary shadow-xs">
-          <Users className="size-4" aria-hidden="true" />
-        </span>
-        <p className="text-sm leading-relaxed text-muted">
-          <span className="font-semibold text-foreground">Booking for others too?</span> Only your
-          details are needed now. After you pay we email you a link so each guest can add their
-          name and sign the waiver in about a minute, or the crew can do it at check-in.
-        </p>
-      </div>
-
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="First name" error={errors.firstName} required>
           <Input
@@ -830,8 +817,8 @@ function PaymentStep({
         <p className="mt-1.5 text-xs leading-relaxed text-muted">
           {activity.cancellationPolicy.summary} Your card is charged{' '}
           {formatCurrency(total, tenant.currency, { decimals: true })} in {tenant.currency} by{' '}
-          {tenant.legalName}. Paying accepts the liability waiver for your own place; other
-          guests sign theirs from the link we send.
+          {tenant.legalName}. By paying you accept the liability waiver on behalf of everyone in your
+          party.
         </p>
       </div>
     </section>
@@ -1343,26 +1330,6 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
           >
             Download ticket
           </Button>
-        </div>
-      </motion.div>
-
-      {/* ---------- names and waivers, later ---------- */}
-      <motion.div
-        initial={reducedMotion ? false : { opacity: 0, y: 18 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.32, ease: [0.16, 1, 0.3, 1] }}
-        className="mt-5 flex items-start gap-3 rounded-2xl border border-line bg-surface p-5"
-      >
-        <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary">
-          <Users className="size-4" aria-hidden="true" />
-        </span>
-        <div>
-          <p className="text-sm font-semibold text-foreground">Names and waivers, when it suits you</p>
-          <p className="mt-1 text-sm leading-relaxed text-muted">
-            {quote.headcount > 1
-              ? `We have sent ${guest.email || 'your inbox'} a link for each of your ${quote.headcount - 1} other ${pluralize(quote.headcount - 1, 'guest')} to add their name and sign the waiver. About a minute each, no account needed, and anyone who has not done it by the day can do it with the crew at check-in.`
-              : `Your waiver is in the same email. It takes about a minute, and if you would rather, the crew can do it with you at check-in.`}
-          </p>
         </div>
       </motion.div>
 

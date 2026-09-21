@@ -70,26 +70,24 @@ export interface AvailabilityDay {
 
    Mirrors the maths in `@/lib/demo` so a quote produced here reconciles with
    the bookings the operator sees in the dashboard: 6% booking fee on the net,
-   then the tenant's statutory rate on top.
+   then card processing at cost on top.
    ========================================================================== */
 
 export const BOOKING_FEE_RATE = 0.06
 
+/** Card processing, passed through at cost: what Stripe charges on a card payment. */
+export const PROCESSING_FEE = { rate: 0.025, label: 'Card processing (2.5%)' } as const
+
+/** Kept for callers that looked fees up by tenant; every tenant now carries the same processing line. */
 export const TAX_BY_TENANT: Record<string, { rate: number; label: string }> = {
-  'blue-horizon': { rate: 0.04712, label: 'Hawaii GET (4.712%)' },
-  'coral-cay': { rate: 0.1, label: 'GST (10%)' },
-  saltline: { rate: 0.13, label: 'VAT (13%)' },
-  ridgeline: { rate: 0.15, label: 'GST (15%)' },
+  'blue-horizon': PROCESSING_FEE,
+  'coral-cay': PROCESSING_FEE,
+  saltline: PROCESSING_FEE,
+  ridgeline: PROCESSING_FEE,
 }
 
-const FEE_LABEL: Record<VerticalKey, string> = {
-  watersports: 'Booking & harbour fee',
-  island: 'Booking & reef levy',
-  tours: 'Booking fee',
-  restaurants: 'Service charge',
-  adventure: 'Booking & access fee',
-  wellness: 'Booking fee',
-}
+/** One plain label everywhere; the harbour levies and service charges are folded into it. */
+const FEE_LABEL: Partial<Record<VerticalKey, string>> = {}
 
 export interface QuoteSelection {
   tiers: { tierId: string; qty: number }[]
@@ -127,7 +125,7 @@ export function buildQuote(
   selection: QuoteSelection,
   priceMultiplier = 1,
 ): Quote {
-  const tax = TAX_BY_TENANT[tenantSlug] ?? { rate: 0, label: 'Tax' }
+  const tax = TAX_BY_TENANT[tenantSlug] ?? PROCESSING_FEE
   const ticketLines: QuoteLine[] = []
   let seats = 0
   let headcount = 0

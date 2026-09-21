@@ -17,7 +17,6 @@ import {
   Info,
   Languages,
   MapPin,
-  Minus,
   Navigation,
   ShieldCheck,
   Sparkles,
@@ -383,27 +382,20 @@ export function ActivityDetailView({
 
             {/* ---------- about ---------- */}
             <Section id="about" title="About this experience">
-              <p className="text-[0.9375rem] leading-relaxed text-muted">{activity.description}</p>
+              <ClampedText text={activity.description} />
 
-              <StaggerGroup
-                as="ul"
-                stagger={0.05}
-                className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2"
-              >
+              <ul className="mt-4 flex flex-wrap gap-2">
                 {activity.highlights.map((highlight) => (
-                  <StaggerItem
-                    as="li"
+                  <li
                     key={highlight}
-                    direction="up"
-                    className="flex items-start gap-2.5 rounded-xl border border-line-subtle bg-surface px-3.5 py-3"
+                    className="rounded-full border border-line-subtle bg-surface px-3 py-1.5 text-[0.8125rem] leading-snug text-foreground"
                   >
-                    <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
-                    <span className="text-sm leading-relaxed text-foreground">{highlight}</span>
-                  </StaggerItem>
+                    {highlight}
+                  </li>
                 ))}
-              </StaggerGroup>
+              </ul>
 
-              <div className="mt-6 flex items-start gap-3 rounded-xl border border-line-subtle bg-surface-sunken px-4 py-3.5">
+              <div className="mt-4 flex items-start gap-3 rounded-xl bg-surface-sunken px-4 py-3">
                 <Info className="mt-0.5 size-4 shrink-0 text-info" aria-hidden="true" />
                 <p className="text-sm leading-relaxed text-muted">
                   <span className="font-semibold text-foreground">
@@ -416,63 +408,34 @@ export function ActivityDetailView({
 
             {/* ---------- included ---------- */}
             <Section id="included" title="What's included">
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                <ul className="space-y-2.5">
-                  {activity.included.map((item) => (
-                    <li key={item} className="flex items-start gap-2.5">
-                      <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-success-soft">
-                        <Check className="size-3 text-success" aria-hidden="true" />
-                      </span>
-                      <span className="text-sm leading-relaxed text-foreground">{item}</span>
-                    </li>
-                  ))}
-                </ul>
-                <ul className="space-y-2.5">
-                  {activity.excluded.map((item) => (
-                    <li key={item} className="flex items-start gap-2.5">
-                      <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-surface-sunken">
-                        <Minus className="size-3 text-faint" aria-hidden="true" />
-                      </span>
-                      <span className="text-sm leading-relaxed text-subtle">{item}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {activity.addOns.length > 0 ? (
-                <div className="mt-6 rounded-xl border border-line bg-surface p-4">
-                  <p className="text-[0.8125rem] font-semibold text-foreground">
-                    Optional extras you can add at checkout
-                  </p>
-                  <ul className="mt-3 divide-y divide-line-subtle">
-                    {activity.addOns.map((addOn) => (
-                      <li key={addOn.id} className="flex items-baseline justify-between gap-4 py-2.5">
-                        <span className="min-w-0">
-                          <span className="text-sm font-medium text-foreground">{addOn.label}</span>
-                          <span className="mt-0.5 block text-xs text-subtle">
-                            {addOn.description}
-                          </span>
-                        </span>
-                        <span className="shrink-0 text-sm font-semibold tabular text-foreground">
-                          {formatCurrency(addOn.price, tenant.currency)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+              <ul className="grid grid-cols-1 gap-x-6 gap-y-2.5 sm:grid-cols-2">
+                {activity.included.map((item) => (
+                  <li key={item} className="flex items-start gap-2.5">
+                    <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-full bg-success-soft">
+                      <Check className="size-3 text-success" aria-hidden="true" />
+                    </span>
+                    <span className="text-sm leading-relaxed text-foreground">{item}</span>
+                  </li>
+                ))}
+              </ul>
+              {activity.excluded.length > 0 ? (
+                <p className="mt-4 text-sm leading-relaxed text-subtle">
+                  <span className="font-medium text-muted">Not included:</span>{' '}
+                  {activity.excluded.map((item) => item.replace(/\s*\(add below\)/i, '')).join(' · ')}
+                </p>
               ) : null}
             </Section>
 
             {/* ---------- what to bring ---------- */}
             <Section id="bring" title="What to bring">
-              <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+              <ul className="flex flex-wrap gap-2">
                 {packing.map((item) => (
                   <li
                     key={item}
-                    className="flex items-start gap-2.5 rounded-xl bg-surface-sunken px-3.5 py-3"
+                    className="flex items-center gap-2 rounded-full bg-surface-sunken px-3 py-1.5 text-[0.8125rem] leading-snug text-foreground"
                   >
-                    <Backpack className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
-                    <span className="text-sm leading-relaxed text-foreground">{item}</span>
+                    <Backpack className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
+                    {item}
                   </li>
                 ))}
               </ul>
@@ -543,22 +506,10 @@ export function ActivityDetailView({
                   </div>
                 </div>
 
-                <ul className="mt-5 space-y-3 border-t border-line-subtle pt-5 text-sm text-muted">
-                  <li className="flex items-start gap-2.5">
-                    <Check className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
-                    If we cancel for weather or sea state, you choose a full refund or a free
-                    reschedule. No arguments.
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <Check className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
-                    Changes to your date or party size are free up to 24 hours before, subject to
-                    space.
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <Check className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
-                    Refunds land back on the original card within 5–10 business days.
-                  </li>
-                </ul>
+                <p className="mt-4 flex items-start gap-2.5 border-t border-line-subtle pt-4 text-sm text-muted">
+                  <Check className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
+                  If we cancel for weather or sea state, you choose a full refund or a free reschedule.
+                </p>
               </div>
             </Section>
 
@@ -747,6 +698,27 @@ function Fact({ icon: Icon, children }: { icon: typeof Clock; children: React.Re
       <Icon className="size-4 shrink-0 text-primary" aria-hidden="true" />
       {children}
     </span>
+  )
+}
+
+/** A paragraph cut to three lines until the reader asks for the rest. */
+function ClampedText({ text }: { text: string }) {
+  const [open, setOpen] = React.useState(false)
+  const long = text.length > 220
+  return (
+    <div>
+      <p className={cn('text-[0.9375rem] leading-relaxed text-muted', !open && long && 'line-clamp-3')}>{text}</p>
+      {long ? (
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+          className="mt-2 text-sm font-semibold text-primary hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          {open ? 'Show less' : 'Read more'}
+        </button>
+      ) : null}
+    </div>
   )
 }
 
