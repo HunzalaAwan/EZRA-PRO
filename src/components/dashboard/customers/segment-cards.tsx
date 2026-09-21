@@ -12,9 +12,7 @@
 import * as React from 'react'
 import { Clock8, Crown, Repeat2, Sparkles, type LucideIcon } from 'lucide-react'
 import { motion } from 'motion/react'
-import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { cn, formatCurrency, formatDelta, formatNumber, formatPercent } from '@/lib/utils'
-import { Sparkline } from '@/components/charts/sparkline'
 import type { CurrencyCode, Customer } from '@/types'
 
 export type CustomerSegment = Customer['segment']
@@ -114,8 +112,6 @@ export function SegmentCards({
   onValueChange,
   className,
 }: SegmentCardsProps) {
-  const reduceMotion = useReducedMotionSafe()
-  const layoutId = React.useId()
 
   const ordered = React.useMemo(
     () =>
@@ -143,111 +139,24 @@ export function SegmentCards({
             aria-pressed={active}
             onClick={() => onValueChange(active ? 'all' : summary.segment)}
             className={cn(
-              'group relative isolate flex min-w-0 flex-col overflow-hidden rounded-2xl border p-4 text-left',
-              'transition-[transform,box-shadow,border-color] duration-300 ease-[var(--ease-out-expo)]',
+              'group relative flex min-w-0 flex-col rounded-2xl border p-4 text-left',
+              'transition-[border-color,background-color] duration-200',
               'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
-              'motion-reduce:transition-none motion-reduce:hover:translate-y-0',
-              active
-                ? cn('bg-surface-raised shadow-lg', meta.border)
-                : 'border-line bg-surface shadow-sm hover:-translate-y-0.5 hover:border-line-strong hover:shadow-md',
+              active ? 'border-primary/50 bg-primary-soft/40' : 'border-line bg-surface hover:border-line-strong',
             )}
           >
-            {/* Brand wash — permanent on the active card, a hover bloom otherwise. */}
-            <span
-              aria-hidden="true"
-              className={cn(
-                'pointer-events-none absolute inset-x-0 -top-12 -z-10 h-28 bg-gradient-to-b to-transparent blur-2xl',
-                'transition-opacity duration-500 ease-[var(--ease-out-expo)]',
-                meta.wash,
-                active ? 'opacity-100' : 'opacity-0 group-hover:opacity-60',
-              )}
-            />
-
-            {active ? (
-              <motion.span
-                aria-hidden="true"
-                layoutId={`segment-rail-${layoutId}`}
-                className={cn('absolute inset-y-3 left-0 w-0.5 rounded-full', meta.text, 'bg-current')}
-                transition={
-                  reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 34 }
-                }
-              />
-            ) : null}
-
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-2.5">
-                <span
-                  className={cn(
-                    'grid size-8 shrink-0 place-items-center rounded-lg transition-transform duration-300',
-                    'ease-[var(--ease-out-expo)] group-hover:scale-105 motion-reduce:group-hover:scale-100',
-                    meta.soft,
-                    meta.text,
-                  )}
-                >
-                  <Icon className="size-4" aria-hidden="true" />
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-[0.8125rem] font-semibold text-foreground">
-                    {meta.label}
-                  </span>
-                  <span className="block truncate text-[0.6875rem] text-subtle">{meta.blurb}</span>
-                </span>
-              </div>
-
-              <span
-                className={cn(
-                  'tabular shrink-0 rounded-md px-1.5 py-0.5 text-[0.6875rem] font-medium',
-                  active ? cn(meta.soft, meta.text) : 'bg-surface-sunken text-subtle',
-                )}
-              >
-                {formatPercent(summary.share, 0)}
-              </span>
+            <div className="flex items-center gap-2 text-[0.8125rem] text-muted">
+              <Icon className={cn('size-4', meta.text)} aria-hidden="true" />
+              <span className="truncate font-medium text-foreground">{meta.label}</span>
+              <span className="truncate text-subtle">· {meta.blurb}</span>
             </div>
 
-            <div className="mt-4 flex items-end justify-between gap-3">
-              <div className="min-w-0">
-                <p className="tabular font-display text-2xl leading-none font-semibold tracking-tight text-foreground">
-                  {formatNumber(summary.count)}
-                </p>
-                <p className="mt-1.5 truncate text-xs text-muted">
-                  <span className="tabular font-medium text-foreground">
-                    {formatCurrency(summary.avgLifetimeValue, currency, { compact: true })}
-                  </span>{' '}
-                  avg lifetime
-                </p>
-              </div>
-
-              <div className="flex shrink-0 flex-col items-end gap-1">
-                <Sparkline
-                  values={summary.trend}
-                  width={72}
-                  height={26}
-                  color={meta.chart}
-                  fill
-                  showLastDot
-                  ariaLabel={`${meta.label} segment size over the last ${summary.trend.length} weeks`}
-                />
-                <span className="flex items-center gap-1">
-                  <span
-                    className={cn(
-                      'tabular text-[0.6875rem] font-medium',
-                      Math.abs(summary.deltaPercent) < 0.5
-                        ? 'text-faint'
-                        : summary.deltaPercent > 0 === meta.growthIsGood
-                          ? 'text-success'
-                          : 'text-danger',
-                    )}
-                  >
-                    {formatDelta(summary.deltaPercent)}
-                  </span>
-                  <span className="text-[0.625rem] text-faint">4w</span>
-                </span>
-              </div>
-            </div>
-
-            <span className="sr-only">
-              {active ? 'Selected. Activate to clear this filter.' : 'Activate to filter the table.'}
-            </span>
+            <p className="mt-3 text-[1.75rem] leading-none font-medium tracking-tight text-foreground tabular-nums">
+              {formatNumber(summary.count)}
+            </p>
+            <p className="mt-2 text-xs text-muted tabular-nums">
+              {formatPercent(summary.share, 0)} of guests · {formatCurrency(summary.avgLifetimeValue, currency, { compact: true })} average lifetime
+            </p>
           </button>
         )
       })}

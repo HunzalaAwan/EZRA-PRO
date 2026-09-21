@@ -21,7 +21,6 @@ import { useRouter } from 'next/navigation'
 import {
   ArrowUpRight,
   CalendarPlus,
-  ChevronRight,
   Copy,
   Download,
   Mail,
@@ -35,9 +34,8 @@ import {
   X,
 } from 'lucide-react'
 
-import { cn, formatCurrency, formatDateShort, formatNumber, formatRelative } from '@/lib/utils'
+import { cn, formatCurrency, formatNumber, formatRelative } from '@/lib/utils'
 import { NOW } from '@/lib/demo-core'
-import { countryFlag } from '@/components/charts/geo-bars'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -101,10 +99,10 @@ function SegmentChip({ segment }: { segment: CustomerRow['segment'] }) {
   const meta = SEGMENT_META[segment]
   const Icon = meta.icon
   return (
-    <Badge size="sm" variant="neutral" className={cn('border-transparent', meta.soft, meta.text)}>
-      <Icon aria-hidden="true" />
+    <span className="inline-flex items-center gap-1.5 text-[0.8125rem] text-muted">
+      <Icon className={cn('size-3.5', meta.text)} aria-hidden="true" />
       {meta.label}
-    </Badge>
+    </span>
   )
 }
 
@@ -115,14 +113,14 @@ function TagList({ tags, max = 2 }: { tags: string[]; max?: number }) {
   return (
     <span className="flex flex-nowrap items-center gap-1 overflow-hidden">
       {shown.map((tag) => (
-        <Badge key={tag} size="sm" variant="outline" className="shrink-0 font-normal">
+        <span key={tag} className="shrink-0 rounded-md bg-surface-sunken px-1.5 py-0.5 text-[0.6875rem] text-muted">
           {tag}
-        </Badge>
+        </span>
       ))}
       {rest > 0 ? (
-        <Badge size="sm" variant="neutral" className="shrink-0 font-normal" title={tags.slice(max).join(', ')}>
+        <span className="shrink-0 text-[0.6875rem] text-subtle" title={tags.slice(max).join(', ')}>
           +{rest}
-        </Badge>
+        </span>
       ) : null}
     </span>
   )
@@ -207,12 +205,9 @@ function BandHeader({ bandKey, rows, currency }: { bandKey: string; rows: Custom
   const quiet = bandKey === '3-older' || bandKey === NEVER_BAND.key
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className={cn('text-[0.8125rem] font-semibold', quiet ? 'text-muted' : 'text-foreground')}>
-        {bandLabel(bandKey)}
-      </span>
-      <span className="hidden text-xs text-subtle tabular-nums sm:inline">
-        {formatNumber(rows.length)} {rows.length === 1 ? 'guest' : 'guests'} on this page ·{' '}
-        {formatCurrency(value, currency, { compact: true })} lifetime
+      <span className={cn('text-xs font-medium', quiet ? 'text-subtle' : 'text-muted')}>{bandLabel(bandKey)}</span>
+      <span className="hidden text-xs text-faint tabular-nums sm:inline">
+        {formatNumber(rows.length)} · {formatCurrency(value, currency, { compact: true })}
       </span>
     </div>
   )
@@ -320,13 +315,8 @@ export function CustomersTable({
             <div className="flex min-w-[11rem] max-w-[17rem] items-center gap-2.5">
               <Avatar name={row.name} src={row.avatarUrl} size="xs" />
               <div className="min-w-0 leading-tight">
-                <p className="flex items-center gap-1.5 text-[0.8125rem] font-semibold text-foreground">
-                  <span className="truncate">{row.name}</span>
-                  <span aria-label={row.countryName} title={row.countryName} className="shrink-0 text-[0.8125rem] leading-none">
-                    {countryFlag(row.countryCode)}
-                  </span>
-                </p>
-                <p className="truncate text-[0.6875rem] text-subtle">{row.email}</p>
+                <p className="truncate text-[0.875rem] font-medium text-foreground">{row.name}</p>
+                <p className="truncate text-xs text-subtle">{row.email}</p>
               </div>
             </div>
           ),
@@ -347,7 +337,7 @@ export function CustomersTable({
           numeric: true,
           defaultSortDir: 'desc',
           width: '3.5rem',
-          cell: (row) => <span className="text-[0.8125rem] font-medium text-foreground tabular-nums">{row.totalBookings}</span>,
+          cell: (row) => <span className="text-[0.8125rem] text-foreground tabular-nums">{row.totalBookings}</span>,
         },
         {
           id: 'value',
@@ -359,18 +349,7 @@ export function CustomersTable({
           width: '6.5rem',
           cellClassName: 'whitespace-nowrap',
           cell: (row) => (
-            <span className="flex flex-col items-end leading-tight">
-              <span className="text-[0.8125rem] font-semibold text-foreground tabular-nums">
-                {formatCurrency(row.lifetimeValue, currency)}
-              </span>
-              {row.totalBookings > 1 ? (
-                <span className="text-[0.6875rem] text-subtle tabular-nums">
-                  {formatCurrency(Math.round(row.lifetimeValue / row.totalBookings), currency)} per trip
-                </span>
-              ) : (
-                <span className="text-[0.6875rem] text-subtle">{row.totalBookings === 1 ? 'one trip' : 'no trips yet'}</span>
-              )}
-            </span>
+            <span className="text-[0.8125rem] text-foreground tabular-nums">{formatCurrency(row.lifetimeValue, currency)}</span>
           ),
         },
         {
@@ -383,19 +362,16 @@ export function CustomersTable({
           cellClassName: 'whitespace-nowrap',
           cell: (row) =>
             row.lastBookingAt ? (
-              <span className="flex flex-col leading-tight">
-                <span className="text-[0.8125rem] font-medium text-foreground">{formatRelative(row.lastBookingAt, NOW)}</span>
-                <span className="text-[0.6875rem] text-subtle tabular-nums">{formatDateShort(row.lastBookingAt)}</span>
-              </span>
+              <span className="text-[0.8125rem] text-muted">{formatRelative(row.lastBookingAt, NOW)}</span>
             ) : (
-              <span className="text-xs text-faint">Never</span>
+              <span className="text-[0.8125rem] text-faint">Never</span>
             ),
         },
         {
           id: 'tags',
           header: 'Tags',
           hideBelow: 'lg',
-          width: '9.5rem',
+          width: '13rem',
           cell: (row) => <TagList tags={row.tags} />,
         },
         {
@@ -404,12 +380,7 @@ export function CustomersTable({
           align: 'right',
           width: '3rem',
           cellClassName: 'pl-0',
-          cell: (row) => (
-            <span className="inline-flex items-center justify-end gap-0.5">
-              <RowMenu row={row} />
-              <ChevronRight aria-hidden="true" className="size-4 text-faint" />
-            </span>
-          ),
+          cell: (row) => <RowMenu row={row} />,
         },
       ]),
     [currency],
@@ -588,28 +559,16 @@ export function CustomersTable({
                   >
                     <Avatar name={row.name} src={row.avatarUrl} size="md" />
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="truncate text-sm font-medium text-foreground">{row.name}</p>
-                        <span aria-hidden="true" className="shrink-0 text-xs leading-none">
-                          {countryFlag(row.countryCode)}
-                        </span>
-                      </div>
+                      <p className="truncate text-sm font-medium text-foreground">{row.name}</p>
                       <p className="truncate text-xs text-subtle">{row.email}</p>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                      <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-muted">
                         <SegmentChip segment={row.segment} />
-                        <span className="text-[0.6875rem] text-muted tabular-nums">
-                          {row.totalBookings} {row.totalBookings === 1 ? 'trip' : 'trips'}
-                        </span>
-                        <span className="text-[0.6875rem] text-faint" aria-hidden="true">
-                          ·
-                        </span>
-                        <span className="text-[0.6875rem] text-muted">
-                          {row.lastBookingAt ? formatDateShort(row.lastBookingAt) : 'Never'}
-                        </span>
-                      </div>
+                        <span aria-hidden="true" className="text-faint">·</span>
+                        <span>{row.lastBookingAt ? formatRelative(row.lastBookingAt, NOW) : 'Never booked'}</span>
+                      </p>
                     </div>
-                    <span className="shrink-0 text-sm font-semibold text-foreground tabular-nums">
-                      {formatCurrency(row.lifetimeValue, currency, { compact: true })}
+                    <span className="shrink-0 text-sm font-medium text-foreground tabular-nums">
+                      {formatCurrency(row.lifetimeValue, currency)}
                     </span>
                   </Link>
                 </li>
