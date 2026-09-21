@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Check, Plus, Trash2 } from 'lucide-react'
+import { Check, Phone, Plus, Trash2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,10 +16,17 @@ import type { DiningSettings, ServicePeriod } from '@/lib/hospitality/types'
 import { cn, formatCurrency, formatDateShort } from '@/lib/utils'
 import type { CurrencyCode } from '@/types'
 
+import { Dot } from './shared'
+
 /* ==========================================================================
-   <HoursCapacity> — when you are open, how many you can seat, and how the
-   online book behaves. Saved locally in the demo; the preview on the right
-   shows tonight exactly as a guest would see it.
+   <HoursCapacity> — when the kitchen is open and when orders run.
+
+   Two shapes. A restaurant that takes tables by phone only needs the
+   service hours, the pickup and delivery windows and the closed days
+   (`mode="hours"`). A hotel restaurant with a book also sets last
+   seatings, turn times, covers per slot and the online booking rules
+   (`mode="full"`). Saved locally in the demo; the card on the right shows
+   today as the storefront tells it.
    ========================================================================== */
 
 const DAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
@@ -29,25 +36,32 @@ export interface HoursCapacityProps {
   settings: DiningSettings
   currency: CurrencyCode
   todayKey: string
-  /** Seats in the room, for the capacity line. */
+  /** "HH:MM" on the frozen clock. */
+  nowTime: string
+  /** Seats in the room, for the capacity line in full mode. */
   seats: number
+  mode: 'hours' | 'full'
+  /** Shown on the preview card: reservations are taken here. */
+  phone: string
 }
 
-export function HoursCapacity({ settings: initial, currency, todayKey, seats }: HoursCapacityProps) {
+export function HoursCapacity({ settings: initial, currency, todayKey, nowTime, seats, mode, phone }: HoursCapacityProps) {
   const [settings, setSettings] = React.useState(initial)
   const [closureDate, setClosureDate] = React.useState('')
   const [closureReason, setClosureReason] = React.useState('')
   const dirty = JSON.stringify(settings) !== JSON.stringify(initial)
+  const full = mode === 'full'
 
   const setPeriod = (id: string, change: (p: ServicePeriod) => ServicePeriod) => setSettings((s) => ({ ...s, periods: s.periods.map((p) => (p.id === id ? change(p) : p)) }))
   const setOrdering = (change: (o: DiningSettings['ordering']) => DiningSettings['ordering']) => setSettings((s) => ({ ...s, ordering: change(s.ordering) }))
 
   const save = () => {
-    toast.success('Hours and capacity saved', { description: 'The storefront and the QR card pick this up within a minute.' })
+    toast.success('Hours saved', { description: 'The storefront and the order windows pick this up within a minute.' })
   }
 
+  const now = hm(nowTime)
+  const weekday = new Date(`${todayKey}T12:00:00`).getDay()
   const tonight = settings.periods[settings.periods.length - 1]
-  const previewSlots = seatingTimes(tonight)
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
@@ -55,8 +69,8 @@ export function HoursCapacity({ settings: initial, currency, todayKey, seats }: 
         {/* ---------- services ---------- */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Services</CardTitle>
-            <CardDescription>Each service has its own hours, last seating and turn times. Online bookings only land inside these windows.</CardDescription>
+            <CardTitle className="text-sm">{full ? 'Services' : 'Opening hours'}</CardTitle>
+            <CardDescription>{full ? 'Each service has its own hours, last seating and turn times. Online bookings only land inside these windows.' : 'When the kitchen serves breakfast, lunch and dinner. Shown on the storefront and printed on the menu.'}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col divide-y divide-line-subtle">
             {settings.periods.map((p) => (
@@ -73,60 +87,71 @@ export function HoursCapacity({ settings: initial, currency, todayKey, seats }: 
                       )
                     })}
                   </div>
+                  {p.weekdays.length < 7 ? <p className="mt-2 text-xs text-subtle">Closed {DAY_NAMES.filter((_, i) => !p.weekdays.includes(i)).join(', ')}</p> : null}
                 </div>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <Field label="Opens">{(c) => <Input {...c} size="sm" type="time" value={p.startTime} onChange={(e) => setPeriod(p.id, (x) => ({ ...x, startTime: e.target.value }))} />}</Field>
-                  <Field label="Last seating">{(c) => <Input {...c} size="sm" type="time" value={p.lastSeating} onChange={(e) => setPeriod(p.id, (x) => ({ ...x, lastSeating: e.target.value }))} />}</Field>
-                  <Field label="Closes">{(c) => <Input {...c} size="sm" type="time" value={p.endTime} onChange={(e) => setPeriod(p.id, (x) => ({ ...x, endTime: e.target.value }))} />}</Field>
-                  <Field label="Table held for" description="1–2 · 3–4 · 5–6 · 7+ guests" className="sm:col-span-3">
-                    <div className="grid grid-cols-4 gap-2">
-                      {(['upTo2', 'upTo4', 'upTo6', 'larger'] as const).map((band) => (
-                        <Input key={band} size="sm" type="number" inputMode="numeric" min={30} max={240} step={15} value={p.turnMinutes[band]} onChange={(e) => setPeriod(p.id, (x) => ({ ...x, turnMinutes: { ...x.turnMinutes, [band]: Number(e.target.value || 0) } }))} suffix="min" aria-label={`Turn time ${band}`} />
-                      ))}
-                    </div>
-                  </Field>
-                  <Field label="Online covers per slot" description={`${p.slotMinutes}-minute slots`}>
-                    {(c) => <Input {...c} size="sm" type="number" inputMode="numeric" min={0} max={seats} value={p.maxCoversPerSlot} onChange={(e) => setPeriod(p.id, (x) => ({ ...x, maxCoversPerSlot: Number(e.target.value || 0) }))} />}
-                  </Field>
-                  <Field label="Slot interval" className="sm:col-span-2">
-                    <Segmented
-                      size="sm"
-                      label={`${p.name} slot interval`}
-                      options={[
-                        { value: '15', label: 'Every 15 min' },
-                        { value: '30', label: 'Every 30 min' },
-                      ]}
-                      value={String(p.slotMinutes)}
-                      onValueChange={(v) => setPeriod(p.id, (x) => ({ ...x, slotMinutes: Number(v) as 15 | 30 }))}
-                    />
-                  </Field>
-                </div>
+                {full ? (
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <Field label="Opens">{(c) => <Input {...c} size="sm" type="time" value={p.startTime} onChange={(e) => setPeriod(p.id, (x) => ({ ...x, startTime: e.target.value }))} />}</Field>
+                    <Field label="Last seating">{(c) => <Input {...c} size="sm" type="time" value={p.lastSeating} onChange={(e) => setPeriod(p.id, (x) => ({ ...x, lastSeating: e.target.value }))} />}</Field>
+                    <Field label="Closes">{(c) => <Input {...c} size="sm" type="time" value={p.endTime} onChange={(e) => setPeriod(p.id, (x) => ({ ...x, endTime: e.target.value }))} />}</Field>
+                    <Field label="Table held for" description="1–2 · 3–4 · 5–6 · 7+ guests" className="sm:col-span-3">
+                      <div className="grid grid-cols-4 gap-2">
+                        {(['upTo2', 'upTo4', 'upTo6', 'larger'] as const).map((band) => (
+                          <Input key={band} size="sm" type="number" inputMode="numeric" min={30} max={240} step={15} value={p.turnMinutes[band]} onChange={(e) => setPeriod(p.id, (x) => ({ ...x, turnMinutes: { ...x.turnMinutes, [band]: Number(e.target.value || 0) } }))} suffix="min" aria-label={`Turn time ${band}`} />
+                        ))}
+                      </div>
+                    </Field>
+                    <Field label="Online covers per slot" description={`${p.slotMinutes}-minute slots`}>
+                      {(c) => <Input {...c} size="sm" type="number" inputMode="numeric" min={0} max={seats} value={p.maxCoversPerSlot} onChange={(e) => setPeriod(p.id, (x) => ({ ...x, maxCoversPerSlot: Number(e.target.value || 0) }))} />}
+                    </Field>
+                    <Field label="Slot interval" className="sm:col-span-2">
+                      <Segmented
+                        size="sm"
+                        label={`${p.name} slot interval`}
+                        options={[
+                          { value: '15', label: 'Every 15 min' },
+                          { value: '30', label: 'Every 30 min' },
+                        ]}
+                        value={String(p.slotMinutes)}
+                        onValueChange={(v) => setPeriod(p.id, (x) => ({ ...x, slotMinutes: Number(v) as 15 | 30 }))}
+                      />
+                    </Field>
+                  </div>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)]">
+                    <Field label="Opens">{(c) => <Input {...c} size="sm" type="time" value={p.startTime} onChange={(e) => setPeriod(p.id, (x) => ({ ...x, startTime: e.target.value }))} />}</Field>
+                    <Field label="Closes">{(c) => <Input {...c} size="sm" type="time" value={p.endTime} onChange={(e) => setPeriod(p.id, (x) => ({ ...x, endTime: e.target.value, lastSeating: e.target.value }))} />}</Field>
+                    <Field label="Kitchen closes" description="Last orders, printed on the menu.">{(c) => <Input {...c} size="sm" type="time" value={p.lastSeating} onChange={(e) => setPeriod(p.id, (x) => ({ ...x, lastSeating: e.target.value }))} />}</Field>
+                  </div>
+                )}
               </div>
             ))}
           </CardContent>
         </Card>
 
-        {/* ---------- online booking rules ---------- */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Online booking</CardTitle>
-            <CardDescription>What the storefront lets a guest do without calling.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="Largest party online" description="Bigger parties are asked to call.">
-              {(c) => <Input {...c} size="sm" type="number" inputMode="numeric" min={1} max={30} value={settings.maxOnlineParty} onChange={(e) => setSettings((s) => ({ ...s, maxOnlineParty: Number(e.target.value || 0) }))} />}
-            </Field>
-            <Field label="Deposit from party of">
-              {(c) => <Input {...c} size="sm" type="number" inputMode="numeric" min={1} max={30} value={settings.depositFromParty} onChange={(e) => setSettings((s) => ({ ...s, depositFromParty: Number(e.target.value || 0) }))} />}
-            </Field>
-            <Field label="Deposit per cover" description="Charged for no-shows, refunded otherwise.">
-              {(c) => <Input {...c} size="sm" type="number" inputMode="decimal" min={0} step={5} value={settings.depositPerCover / 100} onChange={(e) => setSettings((s) => ({ ...s, depositPerCover: Math.round(Number(e.target.value || 0) * 100) }))} suffix={currency} />}
-            </Field>
-            <Field label="Hold a late table for" description="Then it goes back to walk-ins.">
-              {(c) => <Input {...c} size="sm" type="number" inputMode="numeric" min={0} max={60} step={5} value={settings.graceMinutes} onChange={(e) => setSettings((s) => ({ ...s, graceMinutes: Number(e.target.value || 0) }))} suffix="min" />}
-            </Field>
-          </CardContent>
-        </Card>
+        {/* ---------- online booking rules (book only) ---------- */}
+        {full ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">Online booking</CardTitle>
+              <CardDescription>What the storefront lets a guest do without calling.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <Field label="Largest party online" description="Bigger parties are asked to call.">
+                {(c) => <Input {...c} size="sm" type="number" inputMode="numeric" min={1} max={30} value={settings.maxOnlineParty} onChange={(e) => setSettings((s) => ({ ...s, maxOnlineParty: Number(e.target.value || 0) }))} />}
+              </Field>
+              <Field label="Deposit from party of">
+                {(c) => <Input {...c} size="sm" type="number" inputMode="numeric" min={1} max={30} value={settings.depositFromParty} onChange={(e) => setSettings((s) => ({ ...s, depositFromParty: Number(e.target.value || 0) }))} />}
+              </Field>
+              <Field label="Deposit per cover" description="Charged for no-shows, refunded otherwise.">
+                {(c) => <Input {...c} size="sm" type="number" inputMode="decimal" min={0} step={5} value={settings.depositPerCover / 100} onChange={(e) => setSettings((s) => ({ ...s, depositPerCover: Math.round(Number(e.target.value || 0) * 100) }))} suffix={currency} />}
+              </Field>
+              <Field label="Hold a late table for" description="Then it goes back to walk-ins.">
+                {(c) => <Input {...c} size="sm" type="number" inputMode="numeric" min={0} max={60} step={5} value={settings.graceMinutes} onChange={(e) => setSettings((s) => ({ ...s, graceMinutes: Number(e.target.value || 0) }))} suffix="min" />}
+              </Field>
+            </CardContent>
+          </Card>
+        ) : null}
 
         {/* ---------- ordering ---------- */}
         <Card>
@@ -147,7 +172,7 @@ export function HoursCapacity({ settings: initial, currency, todayKey, seats }: 
                     <div className={cn('mt-3 grid grid-cols-3 gap-3', !o.enabled && 'opacity-50')}>
                       <Field label="From">{(c) => <Input {...c} size="sm" type="time" value={o.startTime} disabled={!o.enabled} onChange={(e) => setOrdering((x) => ({ ...x, [kind]: { ...x[kind], startTime: e.target.value } }))} />}</Field>
                       <Field label="Until">{(c) => <Input {...c} size="sm" type="time" value={o.endTime} disabled={!o.enabled} onChange={(e) => setOrdering((x) => ({ ...x, [kind]: { ...x[kind], endTime: e.target.value } }))} />}</Field>
-                      <Field label="Lead time">{(c) => <Input {...c} size="sm" type="number" inputMode="numeric" min={5} max={180} step={5} value={o.leadMinutes} disabled={!o.enabled} onChange={(e) => setOrdering((x) => ({ ...x, [kind]: { ...x[kind], leadMinutes: Number(e.target.value || 0) } }))} suffix="min" />}</Field>
+                      <Field label={kind === 'pickup' ? 'Ready in' : 'Cooking time'}>{(c) => <Input {...c} size="sm" type="number" inputMode="numeric" min={5} max={180} step={5} value={o.leadMinutes} disabled={!o.enabled} onChange={(e) => setOrdering((x) => ({ ...x, [kind]: { ...x[kind], leadMinutes: Number(e.target.value || 0) } }))} suffix="min" />}</Field>
                     </div>
                   </div>
                 )
@@ -199,13 +224,15 @@ export function HoursCapacity({ settings: initial, currency, todayKey, seats }: 
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-3 rounded-lg bg-surface-sunken px-3 py-2.5">
-              <div>
-                <p className="text-[0.8125rem] text-foreground">Ordering from the table</p>
-                <p className="text-xs text-subtle">A QR card on each table opens the dine-in menu; orders land on the pass with the table name.</p>
+            {full ? (
+              <div className="flex items-center justify-between gap-3 rounded-lg bg-surface-sunken px-3 py-2.5">
+                <div>
+                  <p className="text-[0.8125rem] text-foreground">Ordering from the table</p>
+                  <p className="text-xs text-subtle">A QR card on each table opens the dine-in menu; orders land on the pass with the table name.</p>
+                </div>
+                <Switch size="sm" checked={settings.ordering.dineIn.enabled} onCheckedChange={(v) => setOrdering((x) => ({ ...x, dineIn: { enabled: v } }))} aria-label="QR ordering" />
               </div>
-              <Switch size="sm" checked={settings.ordering.dineIn.enabled} onCheckedChange={(v) => setOrdering((x) => ({ ...x, dineIn: { enabled: v } }))} aria-label="QR ordering" />
-            </div>
+            ) : null}
           </CardContent>
         </Card>
 
@@ -213,7 +240,7 @@ export function HoursCapacity({ settings: initial, currency, todayKey, seats }: 
         <Card>
           <CardHeader>
             <CardTitle className="text-sm">Closed days</CardTitle>
-            <CardDescription>Nothing can be booked or ordered on these dates. Existing reservations are flagged for you to call.</CardDescription>
+            <CardDescription>{full ? 'Nothing can be booked or ordered on these dates. Existing reservations are flagged for you to call.' : 'No orders are taken on these dates and the storefront says so.'}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             {settings.closures.length ? (
@@ -268,43 +295,71 @@ export function HoursCapacity({ settings: initial, currency, todayKey, seats }: 
       <div className="flex flex-col gap-4">
         <Card className="h-fit xl:sticky xl:top-20">
           <CardHeader>
-            <CardTitle className="text-sm">What a guest sees tonight</CardTitle>
+            <CardTitle className="text-sm">Today on the storefront</CardTitle>
             <CardDescription>
-              {tonight.name} · {DAY_NAMES[new Date(`${todayKey}T12:00:00`).getDay()]}
+              {DAY_NAMES[weekday]} · {nowTime}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            <div className="grid grid-cols-4 gap-1.5">
-              {previewSlots.map((t) => {
-                const full = hm(t) >= hm(tonight.lastSeating) - 45 && hm(t) < hm(tonight.lastSeating) - 15
+            <ul className="flex flex-col gap-2 text-[0.8125rem]">
+              {settings.periods.map((p) => {
+                const open = p.weekdays.includes(weekday)
+                const state = !open ? 'Closed today' : now < hm(p.startTime) ? `Opens ${p.startTime}` : now < hm(p.endTime) ? `Open until ${p.endTime}` : 'Finished'
+                const tone = !open || now >= hm(p.endTime) ? 'bg-line-strong' : now < hm(p.startTime) ? 'bg-info' : 'bg-success'
                 return (
-                  <span key={t} className={cn('rounded-md border px-1.5 py-1.5 text-center text-xs tabular-nums', full ? 'border-line-subtle text-faint line-through' : 'border-line text-foreground')}>
-                    {t}
-                  </span>
+                  <li key={p.id} className="flex items-center justify-between gap-3">
+                    <span className="inline-flex items-center gap-2 text-foreground">
+                      <Dot tone={tone} />
+                      {p.name}
+                    </span>
+                    <span className="text-muted tabular-nums">
+                      {p.startTime}–{p.endTime} <span className="text-subtle">· {state}</span>
+                    </span>
+                  </li>
                 )
               })}
-            </div>
-            <dl className="flex flex-col gap-1.5 text-xs text-muted">
+            </ul>
+            <dl className="flex flex-col gap-1.5 border-t border-line-subtle pt-3 text-xs text-muted">
               <div className="flex justify-between gap-3">
-                <dt>Parties online</dt>
-                <dd className="text-foreground tabular-nums">1–{settings.maxOnlineParty}</dd>
+                <dt>Pickup</dt>
+                <dd className="text-foreground tabular-nums">{settings.ordering.pickup.enabled ? `${settings.ordering.pickup.startTime}–${settings.ordering.pickup.endTime} · ready in ${settings.ordering.pickup.leadMinutes} min` : 'Off'}</dd>
               </div>
               <div className="flex justify-between gap-3">
-                <dt>Deposit</dt>
-                <dd className="text-foreground tabular-nums">
-                  {formatCurrency(settings.depositPerCover, currency)} per cover from {settings.depositFromParty}
-                </dd>
+                <dt>Delivery</dt>
+                <dd className="text-foreground tabular-nums">{settings.ordering.delivery.enabled ? `${settings.ordering.delivery.startTime}–${settings.ordering.delivery.endTime} · ${settings.ordering.delivery.zones.length} zones` : 'Off'}</dd>
               </div>
-              <div className="flex justify-between gap-3">
-                <dt>Room</dt>
-                <dd className="text-foreground tabular-nums">{seats} seats</dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt>Covers per slot</dt>
-                <dd className="text-foreground tabular-nums">{tonight.maxCoversPerSlot}</dd>
-              </div>
+              {full ? (
+                <>
+                  <div className="flex justify-between gap-3">
+                    <dt>Parties online</dt>
+                    <dd className="text-foreground tabular-nums">1–{settings.maxOnlineParty}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt>Deposit</dt>
+                    <dd className="text-foreground tabular-nums">
+                      {formatCurrency(settings.depositPerCover, currency)} per cover from {settings.depositFromParty}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt>Room</dt>
+                    <dd className="text-foreground tabular-nums">{seats} seats</dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt>{tonight.name} slots</dt>
+                    <dd className="text-foreground tabular-nums">{seatingTimes(tonight).length} × {tonight.maxCoversPerSlot} covers</dd>
+                  </div>
+                </>
+              ) : (
+                <div className="flex justify-between gap-3">
+                  <dt>Tables</dt>
+                  <dd className="inline-flex items-center gap-1.5 text-foreground">
+                    <Phone className="size-3" aria-hidden="true" />
+                    By phone · {phone}
+                  </dd>
+                </div>
+              )}
             </dl>
-            <p className="text-xs text-subtle">A struck-through time means that slot is already at its online limit; the phone can still take it.</p>
+            <p className="text-xs text-subtle">{full ? 'A struck-through time on the storefront means that slot is already at its online limit; the phone can still take it.' : 'Guests see these hours in the menu header and in the footer, and the order buttons switch off outside the windows.'}</p>
           </CardContent>
         </Card>
       </div>

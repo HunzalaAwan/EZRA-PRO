@@ -3,7 +3,7 @@
 import * as React from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Bike, Check, Minus, Plus, ShoppingBag, Star, X } from 'lucide-react'
+import { Bike, Check, Minus, Phone, Plus, Printer, ShoppingBag, Star, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -14,27 +14,32 @@ import { toast } from '@/components/ui/toaster'
 import { useCart } from '@/hooks/use-cart'
 import { cartTotals, type CartMode } from '@/lib/cart'
 import { hm } from '@/lib/hospitality/floor'
-import { DIETARY_META, type Menu, type MenuItem, type OrderingHours } from '@/lib/hospitality/types'
+import { DIETARY_META, type DietaryTag, type Menu, type MenuItem, type OrderingHours, type ServicePeriod } from '@/lib/hospitality/types'
 import { cn, formatCurrency } from '@/lib/utils'
 import type { CurrencyCode } from '@/types'
 
 /* ==========================================================================
-   <MenuBrowser> — the menu a guest orders from.
+   <MenuBrowser> — the menu, readable as a menu and orderable as a shop.
 
-   Categories along the top, dishes underneath with a photo where there is
-   one, and an Add button that opens the choices when a dish has them. The
-   order sits in a rail on the right on desktop and in a bar at the bottom
-   on a phone. Pickup or delivery is picked here and carried into checkout.
+   A guest at the table reads it like a printed card: sections, dishes,
+   prices, what is in them, what they are free of. A guest at home taps
+   Add and the order sits in a rail (desktop) or a bar (phone). Pickup or
+   delivery is picked here and carried to checkout. Print it and the shop
+   parts fall away.
    ========================================================================== */
 
 export interface MenuBrowserProps {
   menu: Menu
   ordering: OrderingHours
+  periods: ServicePeriod[]
   currency: CurrencyCode
   slug: string
   taxRate: number
   /** "HH:MM" on the frozen clock, for the open/closed line. */
   nowTime: string
+  /** 0 = Sunday, for which services run today. */
+  weekday: number
+  phone: string
 }
 
 const MODE_OPTIONS: { value: CartMode; label: string; icon: typeof ShoppingBag }[] = [
@@ -42,7 +47,9 @@ const MODE_OPTIONS: { value: CartMode; label: string; icon: typeof ShoppingBag }
   { value: 'delivery', label: 'Delivery', icon: Bike },
 ]
 
-export function MenuBrowser({ menu, ordering, currency, slug, taxRate, nowTime }: MenuBrowserProps) {
+const LEGEND: DietaryTag[] = ['vegetarian', 'vegan', 'gluten_free', 'dairy_free', 'nuts', 'shellfish']
+
+export function MenuBrowser({ menu, ordering, periods, currency, slug, taxRate, nowTime, weekday, phone }: MenuBrowserProps) {
   const { cart, add, setQty, setMode, setZone } = useCart(slug)
   const [activeCategory, setActiveCategory] = React.useState(menu.categories[0]?.id ?? '')
   const [choosing, setChoosing] = React.useState<MenuItem | null>(null)
@@ -50,8 +57,12 @@ export function MenuBrowser({ menu, ordering, currency, slug, taxRate, nowTime }
 
   const categories = menu.categories.filter((c) => menu.items.some((i) => i.categoryId === c.id && i.status !== 'hidden'))
   const totals = cartTotals(cart, ordering.delivery.zones, taxRate)
-  const window = ordering[cart.mode]
-  const open = window.enabled && hm(nowTime) >= hm(window.startTime) && hm(nowTime) < hm(window.endTime)
+  const hours = ordering[cart.mode]
+  const now = hm(nowTime)
+  const orderingOpen = hours.enabled && now >= hm(hours.startTime) && now < hm(hours.endTime)
+  const service = periods.find((p) => p.weekdays.includes(weekday) && hm(p.startTime) <= now && hm(p.endTime) > now)
+  const nextService = periods.find((p) => p.weekdays.includes(weekday) && hm(p.startTime) > now)
+  const popular = menu.items.filter((i) => i.popular && i.status === 'available' && i.imageUrl).slice(0, 6)
 
   /* ---------- scroll spy ---------- */
 
@@ -83,22 +94,59 @@ export function MenuBrowser({ menu, ordering, currency, slug, taxRate, nowTime }
     toast.success(`${item.name} added`, { description: formatCurrency(item.price, currency) })
   }
 
+  const qtyOf = (item: MenuItem) => cart.lines.filter((l) => l.itemId === item.id).reduce((s, l) => s + l.qty, 0)
+
   return (
-    <section id="menu" className="scroll-mt-20 bg-background py-12 sm:py-16">
+    <section id="menu" className="scroll-mt-20 bg-background py-12 sm:py-16 print:py-0">
       <div className="mx-auto w-full max-w-[88rem] px-4 sm:px-6 lg:px-10">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        {/* ---------- head ---------- */}
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-primary">The menu</p>
-            <h2 className="mt-2 font-display text-display-sm font-semibold tracking-tight text-foreground">Order for pickup or delivery</h2>
-            <p className="mt-2 max-w-[52ch] text-sm text-muted">
-              {open ? `${cart.mode === 'pickup' ? 'Pickup' : 'Delivery'} is open until ${window.endTime}. Orders are ready in about ${window.leadMinutes} minutes.` : `${cart.mode === 'pickup' ? 'Pickup' : 'Delivery'} opens at ${window.startTime}. Order now for later.`}
+            <h2 className="mt-2 font-display text-display-sm font-semibold tracking-tight text-foreground">{service ? `${service.name}, served until ${service.endTime}` : nextService ? `${nextService.name} from ${nextService.startTime}` : 'Closed for today'}</h2>
+            <p className="mt-2 max-w-[56ch] text-sm text-muted">
+              {periods.map((p) => `${p.name} ${p.startTime}–${p.endTime}`).join(' · ')}.{' '}
+              {orderingOpen ? `${cart.mode === 'pickup' ? 'Pickup' : 'Delivery'} until ${hours.endTime}, ready in about ${hours.leadMinutes} minutes.` : `${cart.mode === 'pickup' ? 'Pickup' : 'Delivery'} opens at ${hours.startTime}; order now for later.`}
             </p>
           </div>
-          <Segmented size="md" label="Order type" options={MODE_OPTIONS} value={cart.mode} onValueChange={setMode} />
+          <div className="flex flex-wrap items-center gap-2 print:hidden">
+            <Segmented size="md" label="Order type" options={MODE_OPTIONS} value={cart.mode} onValueChange={setMode} />
+            <Button variant="ghost" size="sm" leftIcon={<Printer aria-hidden="true" />} className="hidden sm:inline-flex" onClick={() => window.print()}>
+              Print
+            </Button>
+          </div>
         </div>
 
+        {/* ---------- popular ---------- */}
+        {popular.length >= 3 ? (
+          <div className="mt-8 print:hidden">
+            <p className="text-xs font-medium text-muted">Most ordered</p>
+            <ul className="no-scrollbar -mx-4 mt-3 flex snap-x gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+              {popular.map((item) => {
+                const sellable = item.channels.includes(cart.mode)
+                return (
+                  <li key={item.id} className="w-44 shrink-0 snap-start sm:w-52">
+                    <button type="button" disabled={!sellable} onClick={() => quickAdd(item)} className="group flex w-full flex-col overflow-hidden rounded-2xl border border-line bg-surface text-left transition-colors hover:border-primary/45 disabled:opacity-60">
+                      <span className="relative block aspect-[4/3] bg-surface-sunken">
+                        <Image src={item.imageUrl as string} alt={item.name} fill sizes="208px" className="object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
+                      </span>
+                      <span className="flex items-start justify-between gap-2 p-3">
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium text-foreground">{item.name}</span>
+                          <span className="block text-xs text-subtle">{sellable ? 'Tap to add' : 'Dine-in only'}</span>
+                        </span>
+                        <span className="shrink-0 text-sm text-foreground tabular-nums">{formatCurrency(item.price, currency)}</span>
+                      </span>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+        ) : null}
+
         {/* ---------- category rail ---------- */}
-        <div className="no-scrollbar sticky top-16 z-20 -mx-4 mt-8 flex gap-1 overflow-x-auto border-b border-line-subtle bg-background/90 px-4 py-2 backdrop-blur sm:top-[4.5rem] sm:mx-0 sm:px-0">
+        <div className="no-scrollbar sticky top-16 z-20 -mx-4 mt-8 flex gap-1 overflow-x-auto border-b border-line-subtle bg-background/90 px-4 py-2 backdrop-blur sm:top-[4.5rem] sm:mx-0 sm:px-0 print:hidden">
           {categories.map((c) => (
             <button key={c.id} type="button" aria-pressed={activeCategory === c.id} onClick={() => jump(c.id)} className={cn('shrink-0 rounded-full px-3.5 py-1.5 text-[0.8125rem] font-medium transition-colors', activeCategory === c.id ? 'bg-foreground text-background' : 'text-muted hover:bg-surface-sunken hover:text-foreground')}>
               {c.name}
@@ -106,58 +154,62 @@ export function MenuBrowser({ menu, ordering, currency, slug, taxRate, nowTime }
           ))}
         </div>
 
-        <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_21rem]">
-          {/* ---------- dishes ---------- */}
+        <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_21rem] print:block">
+          {/* ---------- the card ---------- */}
           <div className="flex flex-col gap-12">
             {categories.map((c) => {
               const items = menu.items.filter((i) => i.categoryId === c.id && i.status !== 'hidden')
               return (
-                <div key={c.id} id={`menu-${c.id}`} className="scroll-mt-32">
-                  <div className="flex items-baseline justify-between gap-4">
-                    <h3 className="font-display text-xl font-semibold tracking-tight text-foreground">{c.name}</h3>
+                <div key={c.id} id={`menu-${c.id}`} className="scroll-mt-32 break-inside-avoid">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-line pb-3">
+                    <h3 className="font-display text-2xl font-semibold tracking-tight text-foreground">{c.name}</h3>
                     {c.description ? <p className="text-sm text-subtle">{c.description}</p> : null}
                   </div>
-                  <ul className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <ul className="mt-4 grid gap-x-8 gap-y-3 sm:grid-cols-2 print:grid-cols-1">
                     {items.map((item) => {
                       const sellable = item.status === 'available' && item.channels.includes(cart.mode)
-                      const inCart = cart.lines.filter((l) => l.itemId === item.id).reduce((s, l) => s + l.qty, 0)
+                      const inCart = qtyOf(item)
                       return (
-                        <li key={item.id} className={cn('flex gap-4 rounded-2xl border border-line bg-surface p-3 transition-colors', sellable ? 'hover:border-line-strong' : 'opacity-70')}>
+                        <li key={item.id} className={cn('flex gap-4 rounded-2xl p-3 transition-colors -mx-3', sellable ? 'hover:bg-surface' : 'opacity-70')}>
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-baseline gap-2">
                               <p className="text-[0.9375rem] font-medium text-foreground">
                                 {item.name}
                                 {item.popular ? <Star aria-label="Popular" className="ml-1.5 inline size-3.5 fill-warning text-warning" /> : null}
                               </p>
+                              <span aria-hidden="true" className="mb-1 min-w-4 flex-1 border-b border-dotted border-line-strong print:border-line" />
                               <span className="shrink-0 text-[0.9375rem] text-foreground tabular-nums">{formatCurrency(item.price, currency)}</span>
                             </div>
-                            <p className="mt-1 line-clamp-2 text-sm text-muted">{item.description}</p>
-                            <div className="mt-3 flex items-center justify-between gap-3">
+                            <p className="mt-1 text-sm leading-relaxed text-muted">{item.description}</p>
+                            <div className="mt-2.5 flex items-center justify-between gap-3">
                               <span className="text-xs text-subtle">
                                 {item.tags.map((t) => DIETARY_META[t].short).join(' · ')}
-                                {item.status === 'sold_out' ? 'Sold out today' : !item.channels.includes(cart.mode) ? `${cart.mode === 'delivery' ? 'Pickup or dine-in only' : 'Dine-in only'}` : ''}
+                                {item.tags.length && (item.status === 'sold_out' || !item.channels.includes(cart.mode)) ? ' · ' : ''}
+                                {item.status === 'sold_out' ? 'Sold out today' : !item.channels.includes(cart.mode) ? (cart.mode === 'delivery' ? 'Pickup or in the restaurant' : 'In the restaurant only') : ''}
                               </span>
                               {sellable ? (
-                                inCart > 0 && item.modifiers.length === 0 ? (
-                                  <span className="inline-flex items-center rounded-full border border-line">
-                                    <button type="button" aria-label={`One fewer ${item.name}`} className="grid size-8 place-items-center text-muted" onClick={() => setQty(cart.lines.find((l) => l.itemId === item.id)!.key, inCart - 1)}>
-                                      <Minus className="size-3.5" />
-                                    </button>
-                                    <span className="min-w-[1.5rem] text-center text-sm tabular-nums">{inCart}</span>
-                                    <button type="button" aria-label={`One more ${item.name}`} className="grid size-8 place-items-center text-muted" onClick={() => quickAdd(item)}>
-                                      <Plus className="size-3.5" />
-                                    </button>
-                                  </span>
-                                ) : (
-                                  <Button size="xs" variant="secondary" leftIcon={<Plus />} onClick={() => quickAdd(item)}>
-                                    {inCart > 0 ? `Add · ${inCart} in order` : 'Add'}
-                                  </Button>
-                                )
+                                <span className="print:hidden">
+                                  {inCart > 0 && item.modifiers.length === 0 ? (
+                                    <span className="inline-flex items-center rounded-full border border-line bg-surface">
+                                      <button type="button" aria-label={`One fewer ${item.name}`} className="grid size-8 place-items-center text-muted" onClick={() => setQty(cart.lines.find((l) => l.itemId === item.id)!.key, inCart - 1)}>
+                                        <Minus className="size-3.5" />
+                                      </button>
+                                      <span className="min-w-[1.5rem] text-center text-sm tabular-nums">{inCart}</span>
+                                      <button type="button" aria-label={`One more ${item.name}`} className="grid size-8 place-items-center text-muted" onClick={() => quickAdd(item)}>
+                                        <Plus className="size-3.5" />
+                                      </button>
+                                    </span>
+                                  ) : (
+                                    <Button size="xs" variant="secondary" leftIcon={<Plus />} onClick={() => quickAdd(item)}>
+                                      {inCart > 0 ? `Add · ${inCart} in order` : 'Add'}
+                                    </Button>
+                                  )}
+                                </span>
                               ) : null}
                             </div>
                           </div>
                           {item.imageUrl ? (
-                            <div className="relative size-24 shrink-0 overflow-hidden rounded-xl bg-surface-sunken sm:size-28">
+                            <div className="relative size-24 shrink-0 overflow-hidden rounded-xl bg-surface-sunken sm:size-28 print:hidden">
                               <Image src={item.imageUrl} alt={item.name} fill sizes="112px" className="object-cover" />
                             </div>
                           ) : null}
@@ -168,10 +220,30 @@ export function MenuBrowser({ menu, ordering, currency, slug, taxRate, nowTime }
                 </div>
               )
             })}
+
+            {/* ---------- legend ---------- */}
+            <dl className="flex flex-wrap gap-x-5 gap-y-1.5 border-t border-line-subtle pt-5 text-xs text-subtle">
+              {LEGEND.map((t) => (
+                <div key={t} className="inline-flex items-center gap-1.5">
+                  <dt className="font-medium text-muted">{DIETARY_META[t].short}</dt>
+                  <dd>{DIETARY_META[t].label}</dd>
+                </div>
+              ))}
+              <div className="inline-flex items-center gap-1.5">
+                <dt>
+                  <Star aria-hidden="true" className="size-3 fill-warning text-warning" />
+                </dt>
+                <dd>Most ordered</dd>
+              </div>
+              <div className="ml-auto inline-flex items-center gap-1.5">
+                <Phone className="size-3" aria-hidden="true" />
+                <dd>Allergies and tables: {phone}</dd>
+              </div>
+            </dl>
           </div>
 
           {/* ---------- order rail ---------- */}
-          <aside className="hidden lg:block">
+          <aside className="hidden lg:block print:hidden">
             <div className="sticky top-32 rounded-2xl border border-line bg-surface p-5 shadow-sm">
               <CartBody slug={slug} ordering={ordering} currency={currency} taxRate={taxRate} onZone={setZone} />
             </div>
@@ -181,7 +253,7 @@ export function MenuBrowser({ menu, ordering, currency, slug, taxRate, nowTime }
 
       {/* ---------- phone bar ---------- */}
       {totals.count > 0 ? (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 p-3 backdrop-blur lg:hidden">
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 p-3 backdrop-blur lg:hidden print:hidden">
           <Button fullWidth size="lg" onClick={() => setCartOpen(true)}>
             View order · {totals.count} {totals.count === 1 ? 'item' : 'items'} · {formatCurrency(totals.total, currency)}
           </Button>
@@ -228,7 +300,7 @@ export function CartBody({ slug, ordering, currency, taxRate, onZone, compact = 
       ) : null}
 
       {cart.lines.length === 0 ? (
-        <p className="rounded-xl bg-surface-sunken px-4 py-6 text-center text-sm text-muted">Nothing yet. Add a dish from the menu.</p>
+        <p className="rounded-xl bg-surface-sunken px-4 py-6 text-center text-sm text-muted">Nothing yet. Tap Add on a dish.</p>
       ) : (
         <ul className="divide-y divide-line-subtle">
           {cart.lines.map((line) => (

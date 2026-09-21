@@ -1,6 +1,7 @@
 import { NOW, TODAY_KEY, getCustomersByTenant, isoLocal } from '@/lib/demo'
 import { addDays, createRng, hashSeed, rngInt, rngPick, rngWeighted, toDateKey } from '@/lib/utils'
 import type { Customer, Tenant } from '@/types'
+import { getWorkspaceProfile } from '@/lib/workspace-profile'
 
 import { getDiningSettings, getFloor, hm, mh, seatingTimes, turnMinutesFor } from './floor'
 import { getMenu } from './menu'
@@ -350,11 +351,11 @@ function pickLines(items: MenuItem[], type: OrderType, rng: () => number, serial
   return lines
 }
 
-function generateOrders(tenant: Tenant, customers: Customer[], tables: DiningTable[], reservations: TableReservation[]): Order[] {
+function generateOrders(tenant: Tenant, customers: Customer[], tables: DiningTable[], reservations: TableReservation[], tablesInUse: boolean): Order[] {
   const menu = getMenu(tenant.id)
   const settings = getDiningSettings(tenant.id)
   const rng = createRng(hashSeed(`orders:${tenant.id}`))
-  const typeWeights = ORDER_TYPE_WEIGHTS[tenant.id] ?? ORDER_TYPE_WEIGHTS.tnt_saltline
+  const typeWeights = (ORDER_TYPE_WEIGHTS[tenant.id] ?? ORDER_TYPE_WEIGHTS.tnt_saltline).filter(([type]) => tablesInUse || type !== 'dine_in')
   const addresses = ADDRESS_LINES[tenant.id] ?? ADDRESS_LINES.tnt_saltline
   const taxRate = 0.13
   const out: Order[] = []
@@ -460,18 +461,29 @@ function generateOrders(tenant: Tenant, customers: Customer[], tables: DiningTab
 
   /* ---- today: settled breakfast orders, the live board, and lunch pre-orders ---- */
   for (let i = 0; i < rngInt(rng, 4, 6); i++) {
-    push({ dayOffset: 0, placedMin: rngInt(rng, 8 * 60, 8 * 60 + 35), type: rngWeighted(rng, [['dine_in', 5], ['pickup', 3]]), status: 'completed', scheduledMin: null })
+    push({ dayOffset: 0, placedMin: rngInt(rng, 8 * 60, 8 * 60 + 35), type: tablesInUse ? rngWeighted(rng, [['dine_in', 5], ['pickup', 3]]) : 'pickup', status: 'completed', scheduledMin: null })
   }
-  const live: { type: OrderType; status: OrderStatus; ago: number; tableId?: string }[] = [
-    { type: 'dine_in', status: 'new', ago: 2, tableId: seatedTables[0] },
-    { type: 'pickup', status: 'new', ago: 4 },
-    { type: 'delivery', status: 'accepted', ago: 7 },
-    { type: 'dine_in', status: 'preparing', ago: 11, tableId: seatedTables[1] },
-    { type: 'pickup', status: 'preparing', ago: 14 },
-    { type: 'dine_in', status: 'ready', ago: 17, tableId: seatedTables[2] },
-    { type: 'delivery', status: 'out_for_delivery', ago: 26 },
-    { type: 'pickup', status: 'ready', ago: 19 },
-  ]
+  const live: { type: OrderType; status: OrderStatus; ago: number; tableId?: string }[] = tablesInUse
+    ? [
+        { type: 'dine_in', status: 'new', ago: 2, tableId: seatedTables[0] },
+        { type: 'pickup', status: 'new', ago: 4 },
+        { type: 'delivery', status: 'accepted', ago: 7 },
+        { type: 'dine_in', status: 'preparing', ago: 11, tableId: seatedTables[1] },
+        { type: 'pickup', status: 'preparing', ago: 14 },
+        { type: 'dine_in', status: 'ready', ago: 17, tableId: seatedTables[2] },
+        { type: 'delivery', status: 'out_for_delivery', ago: 26 },
+        { type: 'pickup', status: 'ready', ago: 19 },
+      ]
+    : [
+        { type: 'pickup', status: 'new', ago: 2 },
+        { type: 'delivery', status: 'new', ago: 4 },
+        { type: 'delivery', status: 'accepted', ago: 7 },
+        { type: 'pickup', status: 'preparing', ago: 11 },
+        { type: 'pickup', status: 'preparing', ago: 14 },
+        { type: 'delivery', status: 'preparing', ago: 16 },
+        { type: 'pickup', status: 'ready', ago: 19 },
+        { type: 'delivery', status: 'out_for_delivery', ago: 26 },
+      ]
   for (const entry of live) {
     push({ dayOffset: 0, placedMin: NOW_MIN - entry.ago, type: entry.type, status: entry.status, scheduledMin: null, tableId: entry.tableId })
   }
@@ -538,12 +550,13 @@ export function getDining(tenant: Tenant): DiningData {
     cache.set(tenant.id, empty)
     return empty
   }
-  const reservations = generateReservations(tenant, customers, tables)
-  const orders = generateOrders(tenant, customers, tables, reservations)
+  const tablesInUse = getWorkspaceProfile(tenant.vertical).modules.reservations
+  const reservations = tablesInUse ? generateReservations(tenant, customers, tables) : []
+  const orders = generateOrders(tenant, customers, tables, reservations, tablesInUse)
   const data: DiningData = {
     menu,
     zones,
-    tables: applyTableStatus(tables, reservations, orders),
+    tables: tablesInUse ? applyTableStatus(tables, reservations, orders) : tables,
     settings,
     reservations,
     orders,

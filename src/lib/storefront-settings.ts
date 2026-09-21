@@ -47,7 +47,6 @@ export const SECTION_META: { key: StorefrontSectionKey; label: string; hint: str
 
 /** The sections a restaurant storefront can switch on and off. The menu always shows. */
 export const RESTAURANT_SECTION_META: { key: StorefrontSectionKey; label: string; hint: string }[] = [
-  { key: 'reserve', label: 'Reserve a table', hint: 'Date, party and the free times tonight, right under the hero.' },
   { key: 'tastings', label: 'Tasting menus and events', hint: 'Prepaid seatings with their own dates and deposits.' },
   { key: 'about', label: 'About the kitchen', hint: 'Your story and the people behind the pass.' },
   { key: 'reviews', label: 'Guest reviews', hint: 'Six recent reviews with the overall rating.' },

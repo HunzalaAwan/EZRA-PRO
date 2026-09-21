@@ -43,8 +43,10 @@ export interface WorkspaceVocab {
 }
 
 export interface WorkspaceModules {
-  /** Tables, covers, orders, menu. */
+  /** Orders and a menu. */
   dining: boolean
+  /** A table book and a floor plan. Restaurants take reservations by phone, so only hotels have one. */
+  reservations: boolean
   /** Rooms, stays, housekeeping, rates. */
   lodging: boolean
   /** Departure-based experiences (also true for hotels that sell dinners and tours). */
@@ -98,7 +100,7 @@ const WORKSPACE: DashboardNavSection = {
 const EXPERIENCES: WorkspaceProfile = {
   family: 'experiences',
   storefront: 'experiences',
-  modules: { dining: false, lodging: false, experiences: true },
+  modules: { dining: false, reservations: false, lodging: false, experiences: true },
   nav: DASHBOARD_NAV,
   vocab: {
     booking: 'booking',
@@ -130,59 +132,60 @@ const EXPERIENCES: WorkspaceProfile = {
 }
 
 /* --------------------------------------------------------------------------
-   Restaurant — tables, covers, the pass and the door.
+   Restaurant — the pass, the menu and the hours. Tables are booked by
+   phone, so there is no book and no floor plan here.
    -------------------------------------------------------------------------- */
 
 const RESTAURANT_TODAY: DashboardNavItem[] = [
   { label: 'Overview', href: '/dashboard', icon: 'LayoutDashboard' },
-  { label: 'Reservations', href: '/dashboard/reservations', icon: 'CalendarCheck', countKey: 'reservationsToday' },
   { label: 'Orders', href: '/dashboard/orders', icon: 'ShoppingBag', countKey: 'liveOrders' },
-  { label: 'Floor plan', href: '/dashboard/floor', icon: 'LayoutGrid' },
 ]
 
 const RESTAURANT: WorkspaceProfile = {
   family: 'hospitality',
   storefront: 'restaurant',
-  modules: { dining: true, lodging: false, experiences: true },
+  modules: { dining: true, reservations: false, lodging: false, experiences: true },
   nav: [
     { items: RESTAURANT_TODAY },
     {
       heading: 'Kitchen',
       items: [
         { label: 'Menu', href: '/dashboard/menu', icon: 'UtensilsCrossed' },
-        { label: 'Hours & capacity', href: '/dashboard/hours', icon: 'Clock' },
+        { label: 'Hours', href: '/dashboard/hours', icon: 'Clock' },
       ],
     },
     GROW('Guests'),
     WORKSPACE,
   ],
   vocab: {
-    booking: 'reservation',
-    bookings: 'reservations',
+    booking: 'order',
+    bookings: 'orders',
     item: 'dish',
     items: 'dishes',
     catalogue: 'Menu',
-    unit: 'cover',
-    units: 'covers',
-    slot: 'seating',
-    slots: 'seatings',
+    unit: 'order',
+    units: 'orders',
+    slot: 'service',
+    slots: 'services',
     team: 'Staff',
-    newBooking: 'New reservation',
-    newBookingHref: '/dashboard/reservations?new=1',
+    newBooking: 'New order',
+    newBookingHref: '/dashboard/orders?new=1',
   },
   redirects: {
-    '/dashboard/bookings': '/dashboard/reservations',
-    '/dashboard/manifest': '/dashboard/floor',
-    '/dashboard/calendar': '/dashboard/reservations',
-    '/dashboard/resources': '/dashboard/floor',
+    '/dashboard/bookings': '/dashboard/orders',
+    '/dashboard/manifest': '/dashboard/orders',
+    '/dashboard/calendar': '/dashboard/hours',
+    '/dashboard/resources': '/dashboard/menu',
     '/dashboard/availability': '/dashboard/hours',
-    '/dashboard/front-desk': '/dashboard/floor',
-    '/dashboard/stays': '/dashboard/reservations',
-    '/dashboard/rooms': '/dashboard/floor',
-    '/dashboard/housekeeping': '/dashboard/floor',
+    '/dashboard/reservations': '/dashboard/orders',
+    '/dashboard/floor': '/dashboard/orders',
+    '/dashboard/front-desk': '/dashboard/orders',
+    '/dashboard/stays': '/dashboard/orders',
+    '/dashboard/rooms': '/dashboard/menu',
+    '/dashboard/housekeeping': '/dashboard/orders',
     '/dashboard/rates': '/dashboard/hours',
   },
-  overviewHint: 'covers',
+  overviewHint: 'orders',
 }
 
 /* --------------------------------------------------------------------------
@@ -192,7 +195,7 @@ const RESTAURANT: WorkspaceProfile = {
 const HOTEL: WorkspaceProfile = {
   family: 'hospitality',
   storefront: 'hotel',
-  modules: { dining: true, lodging: true, experiences: true },
+  modules: { dining: true, reservations: true, lodging: true, experiences: true },
   nav: [
     {
       items: [

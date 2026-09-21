@@ -20,7 +20,7 @@ export default async function ReservePage({ params, searchParams }: { params: Pr
   const storefront = getStorefront(slug)
   if (!storefront) notFound()
   const { tenant } = storefront
-  if (!getWorkspaceProfile(tenant.vertical).modules.dining) notFound()
+  if (!getWorkspaceProfile(tenant.vertical).modules.reservations) notFound()
 
   const date = typeof query.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(query.date) ? query.date : undefined
   const time = typeof query.time === 'string' && /^\d{2}:\d{2}$/.test(query.time) ? query.time : undefined

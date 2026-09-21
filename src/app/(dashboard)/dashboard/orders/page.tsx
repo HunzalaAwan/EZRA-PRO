@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 import { NOW_ISO } from '@/components/dashboard/activities/activity-data'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { OrdersBoard } from '@/components/dashboard/hospitality/orders-board'
-import { TODAY_KEY } from '@/lib/demo'
+import { TAX_RATE, TODAY_KEY, getCustomersByTenant } from '@/lib/demo'
 import { getDining, getLiveOrders } from '@/lib/hospitality'
 import { formatNumber } from '@/lib/utils'
 import { requireWorkspaceRoute } from '@/lib/workspace'
@@ -12,23 +12,42 @@ export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'Orders',
-  description: 'Dine-in, pickup and delivery orders on one pass, with the last two weeks underneath.',
+  description: 'Pickup and delivery orders on one pass, with the last two weeks underneath.',
 }
 
-export default async function OrdersPage() {
-  const { tenant } = await requireWorkspaceRoute('/dashboard/orders')
+export default async function OrdersPage({ searchParams }: { searchParams: Promise<{ new?: string }> }) {
+  const { tenant, profile } = await requireWorkspaceRoute('/dashboard/orders')
+  const params = await searchParams
   const dining = getDining(tenant)
   const live = getLiveOrders(tenant)
   const late = live.filter((o) => o.late).length
   const scheduled = live.filter((o) => o.scheduledFor).length
+  const nextNumber = dining.orders.reduce((max, o) => Math.max(max, Number(o.number.slice(1)) || 0), 1000) + 1
+  const recentGuests = getCustomersByTenant(tenant.id)
+    .filter((c) => c.totalBookings > 0)
+    .sort((a, b) => (b.lastBookingAt ?? '').localeCompare(a.lastBookingAt ?? ''))
+    .slice(0, 300)
 
   return (
     <>
       <PageHeader
         title="Orders"
-        description={`${formatNumber(live.length)} live${scheduled ? `, ${scheduled} scheduled for later` : ''}${late ? `, ${late} running late` : ''}. Pickup opens ${dining.settings.ordering.pickup.startTime}, delivery ${dining.settings.ordering.delivery.startTime} to ${dining.settings.ordering.delivery.endTime}.`}
+        description={`${formatNumber(live.length)} live${scheduled ? `, ${scheduled} scheduled for later` : ''}${late ? `, ${late} running late` : ''}. Pickup ${dining.settings.ordering.pickup.startTime} to ${dining.settings.ordering.pickup.endTime}, delivery ${dining.settings.ordering.delivery.startTime} to ${dining.settings.ordering.delivery.endTime}. Phone orders go on the pass from the New order button.`}
       />
-      <OrdersBoard orders={dining.orders} tables={dining.tables} currency={tenant.currency} todayKey={TODAY_KEY} nowIso={NOW_ISO} />
+      <OrdersBoard
+        orders={dining.orders}
+        tables={dining.tables}
+        menu={dining.menu}
+        ordering={dining.settings.ordering}
+        taxRate={TAX_RATE[tenant.id] ?? 0}
+        nextNumber={nextNumber}
+        recentGuests={recentGuests}
+        currency={tenant.currency}
+        todayKey={TODAY_KEY}
+        nowIso={NOW_ISO}
+        dineIn={profile.modules.reservations}
+        openNew={params.new === '1'}
+      />
     </>
   )
 }

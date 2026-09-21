@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   ArrowUpRight,
   Bike,
@@ -10,6 +11,7 @@ import {
   List,
   MapPin,
   Phone,
+  Plus,
   Printer,
   ShoppingBag,
   UtensilsCrossed,
@@ -31,13 +33,16 @@ import {
   ORDER_STATUS_META,
   ORDER_TYPE_LABEL,
   type DiningTable,
+  type Menu,
   type Order,
   type OrderStatus,
   type OrderType,
+  type OrderingHours,
 } from '@/lib/hospitality/types'
 import { cn, formatCurrency, formatDateShort, formatNumber } from '@/lib/utils'
-import type { CurrencyCode } from '@/types'
+import type { CurrencyCode, Customer } from '@/types'
 
+import { NewOrderDialog } from './new-order-dialog'
 import { StatTile, StatusWord, clock, guestName, minutesBetween, shortDuration } from './shared'
 
 /* ==========================================================================
@@ -93,13 +98,30 @@ function nextStep(order: Order): { label: string; status: OrderStatus } | null {
 export interface OrdersBoardProps {
   orders: Order[]
   tables: DiningTable[]
+  menu: Menu
+  ordering: OrderingHours
+  taxRate: number
+  /** The next ticket number for a phone order. */
+  nextNumber: number
+  recentGuests: Customer[]
   currency: CurrencyCode
   todayKey: string
   nowIso: string
+  /** Whether dine-in orders exist here (hotels with a book); restaurants are pickup and delivery only. */
+  dineIn?: boolean
+  openNew?: boolean
 }
 
-export function OrdersBoard({ orders: initial, tables, currency, todayKey, nowIso }: OrdersBoardProps) {
+export function OrdersBoard({ orders: initial, tables, menu, ordering, taxRate, nextNumber, recentGuests, currency, todayKey, nowIso, dineIn = false, openNew = false }: OrdersBoardProps) {
+  const router = useRouter()
   const [orders, setOrders] = React.useState(initial)
+  const [newOpen, setNewOpen] = React.useState(openNew)
+  const typeOptions: { value: TypeFilter; label: string; icon?: typeof ShoppingBag }[] = [
+    { value: 'all', label: 'All' },
+    ...(dineIn ? [{ value: 'dine_in' as TypeFilter, label: 'Dine-in', icon: UtensilsCrossed }] : []),
+    { value: 'pickup', label: 'Pickup', icon: ShoppingBag },
+    { value: 'delivery', label: 'Delivery', icon: Bike },
+  ]
   const [type, setType] = React.useState<TypeFilter>('all')
   const [view, setView] = React.useState<View>('board')
   const [query, setQuery] = React.useState('')
@@ -176,6 +198,15 @@ export function OrdersBoard({ orders: initial, tables, currency, todayKey, nowIs
       refunded: `${order.number} refunded ${formatCurrency(order.total, currency)}`,
     }
     toast(messages[status] ?? order.number)
+  }
+
+  const create = (order: Order) => {
+    setOrders((current) => [order, ...current])
+    setNewOpen(false)
+    if (openNew) router.replace('/dashboard/orders')
+    toast.success(`${order.number} taken over the phone`, {
+      description: `${ORDER_TYPE_LABEL[order.type]} · ${order.scheduledFor ? `for ${clock(order.scheduledFor)}` : `ready around ${clock(order.promisedAt)}`} · ${formatCurrency(order.total, currency)}`,
+    })
   }
 
   const selected = selectedId ? orders.find((o) => o.id === selectedId) ?? null : null
@@ -261,29 +292,29 @@ export function OrdersBoard({ orders: initial, tables, currency, todayKey, nowIs
             <Segmented
               size="sm"
               label="Order type"
-              options={[
-                { value: 'all', label: 'All' },
-                { value: 'dine_in', label: 'Dine-in', icon: UtensilsCrossed },
-                { value: 'pickup', label: 'Pickup', icon: ShoppingBag },
-                { value: 'delivery', label: 'Delivery', icon: Bike },
-              ]}
+              options={typeOptions}
               value={type}
               onValueChange={setType}
               hideLabelsOnMobile
             />
             {view === 'list' ? <SearchInput value={query} onValueChange={setQuery} placeholder="Order, guest or dish…" size="sm" aria-label="Search orders" fieldClassName="w-full sm:w-56" /> : null}
           </div>
-          <Segmented
-            size="sm"
-            label="View"
-            options={[
-              { value: 'board', label: 'Board', icon: Columns3 },
-              { value: 'list', label: 'History', icon: List },
-            ]}
-            value={view}
-            onValueChange={setView}
-            hideLabelsOnMobile
-          />
+          <div className="flex shrink-0 items-center gap-2">
+            <Segmented
+              size="sm"
+              label="View"
+              options={[
+                { value: 'board', label: 'Board', icon: Columns3 },
+                { value: 'list', label: 'History', icon: List },
+              ]}
+              value={view}
+              onValueChange={setView}
+              hideLabelsOnMobile
+            />
+            <Button size="sm" leftIcon={<Plus />} onClick={() => setNewOpen(true)}>
+              New order
+            </Button>
+          </div>
         </div>
 
         {view === 'board' ? (
@@ -328,6 +359,23 @@ export function OrdersBoard({ orders: initial, tables, currency, todayKey, nowIs
       </Card>
 
       <OrderSheet order={selected} currency={currency} tableName={selected?.tableId ? tableById.get(selected.tableId)?.name : undefined} onClose={() => setSelectedId(null)} onAdvance={advance} />
+      <NewOrderDialog
+        open={newOpen}
+        onOpenChange={(open) => {
+          setNewOpen(open)
+          if (!open && openNew) router.replace('/dashboard/orders')
+        }}
+        menu={menu}
+        ordering={ordering}
+        currency={currency}
+        taxRate={taxRate}
+        nextNumber={nextNumber + orders.length - initial.length}
+        guests={recentGuests}
+        todayKey={todayKey}
+        nowIso={nowIso}
+        tenantId={orders[0]?.tenantId ?? menu.items[0]?.tenantId ?? ''}
+        onCreate={create}
+      />
     </div>
   )
 }

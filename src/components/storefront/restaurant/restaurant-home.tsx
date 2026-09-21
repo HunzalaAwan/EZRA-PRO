@@ -5,7 +5,6 @@ import { ArrowRight, Bike, Clock, MapPin, Phone, Quote, ShoppingBag, UtensilsCro
 import { Reveal } from '@/components/motion/reveal'
 import { StaggerGroup, StaggerItem } from '@/components/motion/stagger'
 import { MenuBrowser } from '@/components/storefront/restaurant/menu-browser'
-import { ReserveWidget } from '@/components/storefront/restaurant/reserve-widget'
 import { StarRow } from '@/components/storefront/storefront-hero'
 import { StorefrontSection, StorefrontSections } from '@/components/storefront/storefront-sections'
 import { Avatar } from '@/components/ui/avatar'
@@ -16,12 +15,13 @@ import { formatCurrency, formatDuration, formatNumber, pluralize } from '@/lib/u
 import type { Activity, Tenant, User } from '@/types'
 
 /* ==========================================================================
-   The restaurant storefront — the whole page a guest lands on.
+   The restaurant storefront — a menu first, a shop second.
 
-   Hero with the two things they came to do (reserve, order), the menu with
-   the cart, the reservation widget, tasting menus and events, the kitchen's
-   story, reviews, and hours with the map. Sections are toggled from the
-   dashboard through <StorefrontSections>.
+   A short hero with the hours and the two ways in (see the menu, order
+   for pickup or delivery), then the menu itself, the tasting menus and
+   events, the kitchen's story, reviews, and hours with the phone for
+   tables. Sections are toggled from the dashboard through
+   <StorefrontSections>.
    ========================================================================== */
 
 export interface HomeReview {
@@ -55,25 +55,28 @@ const WEEKDAY = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday
 export function RestaurantHome({ tenant, menu, settings, tastings, reviews, story, crew, rating, reviewCount, guestsHosted, todayKey, nowTime, taxRate }: RestaurantHomeProps) {
   const base = `/book/${tenant.slug}`
   const now = hm(nowTime)
-  const current = settings.periods.find((p) => hm(p.startTime) <= now && hm(p.endTime) > now)
-  const next = settings.periods.find((p) => hm(p.startTime) > now)
+  const weekday = new Date(`${todayKey}T12:00:00`).getDay()
+  const todays = settings.periods.filter((p) => p.weekdays.includes(weekday))
+  const current = todays.find((p) => hm(p.startTime) <= now && hm(p.endTime) > now)
+  const next = todays.find((p) => hm(p.startTime) > now)
   const status = current ? `Open · ${current.name.toLowerCase()} until ${current.endTime}` : next ? `Opens for ${next.name.toLowerCase()} at ${next.startTime}` : 'Closed for today'
   const foundedYear = new Date(tenant.createdAt).getFullYear()
-  const cheapestMain = Math.min(...menu.items.filter((i) => i.categoryId.endsWith('_mains')).map((i) => i.price))
+  const tel = `tel:${tenant.contact.phone.replace(/[^+\d]/g, '')}`
+  const pickupOpen = settings.ordering.pickup.enabled && now >= hm(settings.ordering.pickup.startTime) && now < hm(settings.ordering.pickup.endTime)
 
   return (
     <StorefrontSections slug={tenant.slug} vertical={tenant.vertical}>
       <StorefrontSection key="hero" id="hero">
-        <section className="relative isolate min-h-[34rem] overflow-hidden bg-[#0b1417] text-white">
+        <section className="relative isolate overflow-hidden bg-[#0b1417] text-white">
           {tenant.branding.coverImage ? <Image src={tenant.branding.coverImage} alt="" fill priority sizes="100vw" className="object-cover opacity-70" /> : null}
-          <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(180deg,rgba(11,20,23,0.55)_0%,rgba(11,20,23,0.25)_40%,rgba(11,20,23,0.85)_100%)]" />
-          <div className="relative mx-auto flex w-full max-w-[88rem] flex-col justify-end px-4 pt-32 pb-12 sm:px-6 sm:pt-40 sm:pb-16 lg:px-10">
+          <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(180deg,rgba(11,20,23,0.55)_0%,rgba(11,20,23,0.3)_40%,rgba(11,20,23,0.88)_100%)]" />
+          <div className="relative mx-auto flex w-full max-w-[88rem] flex-col justify-end px-4 pt-28 pb-10 sm:px-6 sm:pt-36 sm:pb-14 lg:px-10">
             <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-white/70">
               {tenant.city} · {status}
             </p>
             <h1 className="mt-3 max-w-[16ch] font-display text-[length:clamp(2.5rem,1.4rem_+_3.6vw,4.5rem)] leading-[1.02] font-semibold tracking-tight">{tenant.name}</h1>
             <p className="mt-4 max-w-[46ch] text-base leading-relaxed text-white/80 sm:text-lg">{story.body[0]}</p>
-            <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-white/80">
+            <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-white/80">
               <span className="inline-flex items-center gap-2">
                 <StarRow value={rating} size="sm" className="text-warning" />
                 {rating.toFixed(1)} · {formatNumber(reviewCount)} {pluralize(reviewCount, 'review')}
@@ -84,40 +87,37 @@ export function RestaurantHome({ tenant, menu, settings, tastings, reviews, stor
                 {tenant.contact.addressLine.split(',')[0]}
               </span>
             </div>
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="mt-7 flex flex-wrap gap-3">
               <Button asChild size="lg" leftIcon={<UtensilsCrossed aria-hidden="true" />}>
-                <Link href={`${base}#reserve`}>Reserve a table</Link>
+                <Link href={`${base}#menu`}>See the menu</Link>
               </Button>
               <Button asChild size="lg" variant="glass" className="text-white" leftIcon={<ShoppingBag aria-hidden="true" />}>
                 <Link href={`${base}#menu`}>Order pickup or delivery</Link>
               </Button>
+              <Button asChild size="lg" variant="ghost" className="text-white hover:bg-white/10 hover:text-white" leftIcon={<Phone aria-hidden="true" />}>
+                <a href={tel}>Call to book a table</a>
+              </Button>
             </div>
-            <dl className="mt-10 grid max-w-2xl grid-cols-3 gap-4 border-t border-white/15 pt-6 text-white/80">
+            <dl className="mt-9 grid max-w-3xl grid-cols-2 gap-4 border-t border-white/15 pt-6 text-white/80 sm:grid-cols-4">
+              {settings.periods.map((p) => (
+                <div key={p.id}>
+                  <dt className="text-[0.6875rem] uppercase tracking-[0.12em] text-white/50">{p.name}</dt>
+                  <dd className="mt-1 text-sm tabular-nums">
+                    {p.startTime}–{p.endTime}
+                  </dd>
+                </div>
+              ))}
               <div>
-                <dt className="text-[0.6875rem] uppercase tracking-[0.12em] text-white/50">Services</dt>
-                <dd className="mt-1 text-sm">{settings.periods.map((p) => p.name).join(', ')}</dd>
-              </div>
-              <div>
-                <dt className="text-[0.6875rem] uppercase tracking-[0.12em] text-white/50">Delivery</dt>
-                <dd className="mt-1 text-sm">
-                  {settings.ordering.delivery.startTime}–{settings.ordering.delivery.endTime} · {settings.ordering.delivery.zones.length} zones
-                </dd>
-              </div>
-              <div>
-                <dt className="text-[0.6875rem] uppercase tracking-[0.12em] text-white/50">Mains from</dt>
-                <dd className="mt-1 text-sm tabular-nums">{Number.isFinite(cheapestMain) ? formatCurrency(cheapestMain, tenant.currency) : '—'}</dd>
+                <dt className="text-[0.6875rem] uppercase tracking-[0.12em] text-white/50">Pickup</dt>
+                <dd className="mt-1 text-sm">{pickupOpen ? `Ready in ${settings.ordering.pickup.leadMinutes} min` : `From ${settings.ordering.pickup.startTime}`}</dd>
               </div>
             </dl>
           </div>
         </section>
       </StorefrontSection>
 
-      <StorefrontSection key="reserve" id="reserve">
-        <ReserveWidget settings={settings} slug={tenant.slug} todayKey={todayKey} nowTime={nowTime} currency={tenant.currency} />
-      </StorefrontSection>
-
       <StorefrontSection key="menu" id="menu">
-        <MenuBrowser menu={menu} ordering={settings.ordering} currency={tenant.currency} slug={tenant.slug} taxRate={taxRate} nowTime={nowTime} />
+        <MenuBrowser menu={menu} ordering={settings.ordering} periods={settings.periods} currency={tenant.currency} slug={tenant.slug} taxRate={taxRate} nowTime={nowTime} weekday={weekday} phone={tenant.contact.phone} />
       </StorefrontSection>
 
       {tastings.length > 0 ? (
@@ -127,7 +127,7 @@ export function RestaurantHome({ tenant, menu, settings, tastings, reviews, stor
               <Reveal className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                   <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-primary">Tasting menus and events</p>
-                  <h2 className="mt-2 max-w-[22ch] font-display text-display-sm font-semibold tracking-tight text-foreground">Seatings with a set menu, booked ahead</h2>
+                  <h2 className="mt-2 max-w-[22ch] font-display text-display-sm font-semibold tracking-tight text-foreground">Set menus with a seat, booked ahead</h2>
                 </div>
                 <p className="max-w-[40ch] text-sm text-muted">Paid at booking, held for the whole evening. Dietary requirements are taken when you book.</p>
               </Reveal>
@@ -247,8 +247,8 @@ export function RestaurantHome({ tenant, menu, settings, tastings, reviews, stor
         <section id="contact" className="scroll-mt-20 border-t border-line-subtle bg-background py-14 sm:py-20">
           <div className="mx-auto w-full max-w-[88rem] px-4 sm:px-6 lg:px-10">
             <Reveal>
-              <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-primary">Hours and directions</p>
-              <h2 className="mt-3 max-w-[18ch] font-display text-display-sm font-semibold tracking-tight text-foreground">Find us, or let us find you</h2>
+              <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-primary">Hours, tables and directions</p>
+              <h2 className="mt-3 max-w-[18ch] font-display text-display-sm font-semibold tracking-tight text-foreground">Come in, call ahead, or let us come to you</h2>
             </Reveal>
             <div className="mt-8 grid gap-5 md:grid-cols-3">
               <Reveal className="rounded-2xl border border-line bg-surface p-6 shadow-sm">
@@ -259,9 +259,9 @@ export function RestaurantHome({ tenant, menu, settings, tastings, reviews, stor
                   {settings.periods.map((p) => (
                     <div key={p.id} className="flex justify-between gap-3">
                       <dt className="text-muted">{p.name}</dt>
-                      <dd className="text-foreground tabular-nums">
+                      <dd className="text-right text-foreground tabular-nums">
                         {p.startTime}–{p.endTime}
-                        {p.weekdays.length < 7 ? <span className="block text-right text-xs text-subtle">not {WEEKDAY.filter((_, i) => !p.weekdays.includes(i)).join(', ')}</span> : null}
+                        {p.weekdays.length < 7 ? <span className="block text-xs text-subtle">not {WEEKDAY.filter((_, i) => !p.weekdays.includes(i)).join(', ')}</span> : null}
                       </dd>
                     </div>
                   ))}
@@ -286,26 +286,25 @@ export function RestaurantHome({ tenant, menu, settings, tastings, reviews, stor
               </Reveal>
               <Reveal delay={0.06} className="rounded-2xl border border-line bg-surface p-6 shadow-sm">
                 <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <MapPin className="size-4 text-primary" aria-hidden="true" /> Where
+                  <Phone className="size-4 text-primary" aria-hidden="true" /> Tables
                 </h3>
-                <p className="mt-4 text-sm leading-relaxed text-foreground">{tenant.contact.addressLine}</p>
-                <p className="mt-2 text-sm text-muted">The last stretch is stepped and pedestrian only. Allow ten minutes from the bus square.</p>
+                <p className="mt-4 text-sm leading-relaxed text-foreground">We take tables by phone, so we can hear how many of you there are and where you would like to sit.</p>
+                <p className="mt-2 text-sm text-muted">Groups of eight or more and the private room, the same way. Walk-ins are always welcome at the bar.</p>
                 <div className="mt-5 flex flex-wrap gap-2">
-                  <Button asChild size="sm" variant="outline" rightIcon={<ArrowRight aria-hidden="true" />}>
-                    <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${tenant.name}, ${tenant.contact.addressLine}`)}`} target="_blank" rel="noreferrer">
-                      Directions
-                    </a>
+                  <Button asChild size="sm" leftIcon={<Phone aria-hidden="true" />}>
+                    <a href={tel}>{tenant.contact.phone}</a>
                   </Button>
-                  <Button asChild size="sm" variant="ghost" leftIcon={<Phone aria-hidden="true" />}>
-                    <a href={`tel:${tenant.contact.phone.replace(/[^+\d]/g, '')}`}>{tenant.contact.phone}</a>
+                  <Button asChild size="sm" variant="ghost">
+                    <a href={`mailto:${tenant.contact.email}`}>{tenant.contact.email}</a>
                   </Button>
                 </div>
               </Reveal>
               <Reveal delay={0.12} className="rounded-2xl border border-line bg-surface p-6 shadow-sm">
                 <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <Bike className="size-4 text-primary" aria-hidden="true" /> We deliver to
+                  <MapPin className="size-4 text-primary" aria-hidden="true" /> Where, and where we deliver
                 </h3>
-                <ul className="mt-4 space-y-2 text-sm">
+                <p className="mt-4 text-sm leading-relaxed text-foreground">{tenant.contact.addressLine}</p>
+                <ul className="mt-4 space-y-1.5 text-sm">
                   {settings.ordering.delivery.zones.map((z) => (
                     <li key={z.id} className="flex justify-between gap-3">
                       <span className="text-muted">{z.name}</span>
@@ -315,7 +314,11 @@ export function RestaurantHome({ tenant, menu, settings, tastings, reviews, stor
                     </li>
                   ))}
                 </ul>
-                <p className="mt-4 text-xs text-subtle">About {settings.ordering.delivery.leadMinutes} minutes to cook, then the ride. Groups of {settings.maxOnlineParty + 1} or more, call us for the private room.</p>
+                <Button asChild size="sm" variant="outline" className="mt-5" rightIcon={<ArrowRight aria-hidden="true" />}>
+                  <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${tenant.name}, ${tenant.contact.addressLine}`)}`} target="_blank" rel="noreferrer">
+                    Directions
+                  </a>
+                </Button>
               </Reveal>
             </div>
           </div>

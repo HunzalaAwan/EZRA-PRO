@@ -94,7 +94,6 @@ export function StorefrontHeader({ tenant, kind = 'experiences' }: StorefrontHea
     kind === 'restaurant'
       ? [
           { label: 'Menu', href: `${base}#menu` },
-          { label: 'Reserve', href: `${base}#reserve` },
           { label: 'About', href: `${base}#about` },
           { label: 'Contact', href: `${base}#contact` },
         ]
@@ -112,7 +111,7 @@ export function StorefrontHeader({ tenant, kind = 'experiences' }: StorefrontHea
           ]
   const cta =
     kind === 'restaurant'
-      ? { label: 'Reserve a table', href: `${base}#reserve`, browse: 'See the menu', browseHref: `${base}#menu` }
+      ? { label: 'Order online', href: `${base}#menu`, browse: 'See the menu', browseHref: `${base}#menu` }
       : kind === 'hotel'
         ? { label: 'Book a stay', href: `${base}#rooms`, browse: 'See the rooms', browseHref: `${base}#rooms` }
         : { label: 'Book now', href: `${base}#experiences`, browse: 'Browse experiences', browseHref: `${base}#experiences` }
