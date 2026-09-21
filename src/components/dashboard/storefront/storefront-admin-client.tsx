@@ -51,7 +51,7 @@ import { SITE } from '@/lib/site-config'
 import {
   DESKTOP_LAYOUTS,
   MOBILE_LAYOUTS,
-  SECTION_META,
+  sectionMetaFor,
   type DesktopLayout,
   type MobileLayout,
   type StorefrontSettings,
@@ -125,28 +125,37 @@ export interface StorefrontAdminClientProps {
  * itself, so the synthetic dataset stays out of the client bundle.
  */
 export function StorefrontAdminClient({
-  tenant: CURRENT_TENANT,
+  tenant,
   storefront: STOREFRONT,
 }: StorefrontAdminClientProps) {
-  const PUBLIC_PATH = `/book/${CURRENT_TENANT.slug}`
+  const PUBLIC_PATH = `/book/${tenant.slug}`
   const PUBLIC_URL = `https://ezrapro.com${PUBLIC_PATH}`
   const EMBED_SNIPPETS = React.useMemo(
-    () => embedSnippetsFor(CURRENT_TENANT, PUBLIC_URL),
-    [CURRENT_TENANT, PUBLIC_URL],
+    () => embedSnippetsFor(tenant, PUBLIC_URL),
+    [tenant, PUBLIC_URL],
   )
 
   const reduceMotion = useReducedMotionSafe()
-  const { settings, update, reset, isDefault } = useStorefrontSettings(CURRENT_TENANT.slug, CURRENT_TENANT.vertical)
+  const { settings, update, reset, isDefault } = useStorefrontSettings(tenant.slug, tenant.vertical)
   const [device, setDevice] = React.useState<'desktop' | 'mobile'>('desktop')
   const [embed, setEmbed] = React.useState<EmbedKey>('inline')
   const [domain, setDomain] = React.useState(CUSTOM_DOMAIN)
 
   const [seo, setSeo] = React.useState({
-    title: `Boat tours, snorkel & dive trips in Maui | ${CURRENT_TENANT.branding.logoText}`,
+    title:
+      tenant.vertical === 'restaurants'
+        ? `Reserve a table, order pickup or delivery in ${tenant.city} | ${tenant.branding.logoText}`
+        : tenant.vertical === 'hotels'
+          ? `Rooms, dining and experiences in ${tenant.city} | ${tenant.branding.logoText}`
+          : `Boat tours, snorkel & dive trips in ${tenant.city} | ${tenant.branding.logoText}`,
     description:
-      'Small-group catamaran sails, Molokini snorkel trips and two-tank dives out of Maalaea Harbor. Free cancellation up to 24 hours before departure.',
+      tenant.vertical === 'restaurants'
+        ? `Book a table or order ahead from ${tenant.name}. Live availability, instant confirmation, pickup and delivery.`
+        : tenant.vertical === 'hotels'
+          ? `Book direct at ${tenant.name} for the lowest rate, free cancellation on flexible plans and breakfast on the roof.`
+          : 'Small-group catamaran sails, Molokini snorkel trips and two-tank dives out of Maalaea Harbor. Free cancellation up to 24 hours before departure.',
     socialImage:
-      CURRENT_TENANT.branding.coverImage ??
+      tenant.branding.coverImage ??
       'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80',
   })
 
@@ -222,14 +231,14 @@ export function StorefrontAdminClient({
             </CardHeader>
             <CardContent className="flex flex-col gap-6">
               <ul className="divide-y divide-line-subtle rounded-xl border border-line">
-                {SECTION_META.map((meta) => {
+                {sectionMetaFor(tenant.vertical).map((meta) => {
                   const on = settings.sections[meta.key]
                   return (
                     <li key={meta.key} className="flex items-start justify-between gap-4 px-4 py-3">
                       <div className="min-w-0">
                         <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
                           {meta.label}
-                          {meta.key === 'departures' && CURRENT_TENANT.vertical !== 'tours' ? (
+                          {meta.key === 'departures' && tenant.vertical !== 'tours' ? (
                             <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-[0.6875rem] font-medium text-subtle">
                               Off by default outside tours
                             </span>
@@ -402,7 +411,7 @@ export function StorefrontAdminClient({
                 <div className="rounded-xl border border-line bg-surface p-4">
                   <p className="flex items-center gap-1.5 text-xs text-muted">
                     <span className="grid size-4 place-items-center rounded-full bg-primary text-[0.5rem] font-bold text-on-primary">
-                      {CURRENT_TENANT.branding.logoText.slice(0, 1)}
+                      {tenant.branding.logoText.slice(0, 1)}
                     </span>
                     {domain}
                     <span className="text-faint">› experiences</span>

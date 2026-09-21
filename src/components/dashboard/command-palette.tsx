@@ -16,8 +16,8 @@ import {
 } from 'lucide-react'
 
 import type { Activity } from '@/types'
-import { DASHBOARD_NAV } from '@/lib/site-config'
-import { CURRENT_TENANT } from '@/lib/demo-core'
+import { flattenNav } from '@/lib/workspace-profile'
+import { useWorkspace } from '@/components/dashboard/workspace-provider'
 import type { SearchResults } from '@/lib/demo'
 import { searchCommandPalette } from '@/lib/actions/search'
 import { cn, formatCurrency, formatDateShort, formatDuration } from '@/lib/utils'
@@ -172,14 +172,6 @@ function PaletteItem({
    Flattened navigation
    -------------------------------------------------------------------------- */
 
-const NAV_ENTRIES = DASHBOARD_NAV.flatMap((section) =>
-  section.items.map((item) => ({
-    label: item.label,
-    href: item.href,
-    icon: item.icon,
-    section: section.heading ?? 'Workspace overview',
-  })),
-)
 
 /* --------------------------------------------------------------------------
    PALETTE
@@ -189,6 +181,8 @@ export function CommandPalette() {
   const { open, setOpen, setNewBookingOpen } = useCommandPalette()
   const router = useRouter()
   const { resolvedTheme, toggleTheme } = useTheme()
+  const { tenant, profile } = useWorkspace()
+  const navEntries = React.useMemo(() => flattenNav(profile.nav), [profile])
 
   const [query, setQuery] = React.useState('')
   const [results, setResults] = React.useState<SearchResults>({
@@ -210,7 +204,7 @@ export function CommandPalette() {
 
     let cancelled = false
     const timer = window.setTimeout(() => {
-      searchCommandPalette(CURRENT_TENANT.id, trimmed).then((next) => {
+      searchCommandPalette(tenant.id, trimmed).then((next) => {
         if (!cancelled) setResults(next)
       })
     }, 150)
@@ -219,7 +213,7 @@ export function CommandPalette() {
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [query])
+  }, [query, tenant.id])
 
   const close = React.useCallback(
     (nextOpen: boolean) => {
@@ -290,7 +284,7 @@ export function CommandPalette() {
             </Command.Empty>
 
             <Command.Group heading="Navigation">
-              {NAV_ENTRIES.map((entry) => (
+              {navEntries.map((entry) => (
                 <PaletteItem
                   key={entry.href}
                   value={`nav ${entry.label} ${entry.section} ${entry.href}`}
@@ -358,7 +352,7 @@ export function CommandPalette() {
                     hint={`${customer.email} · ${customer.totalBookings} ${
                       customer.totalBookings === 1 ? 'booking' : 'bookings'
                     }`}
-                    trailing={formatCurrency(customer.lifetimeValue, CURRENT_TENANT.currency)}
+                    trailing={formatCurrency(customer.lifetimeValue, tenant.currency)}
                   />
                 ))}
               </Command.Group>
@@ -417,7 +411,7 @@ export function CommandPalette() {
               </span>
             </span>
             <span className="hidden items-center gap-1.5 text-[0.6875rem] text-faint sm:flex">
-              Searching {CURRENT_TENANT.name}
+              Searching {tenant.name}
             </span>
           </footer>
         </Command>

@@ -10,7 +10,20 @@ import type { VerticalKey } from '@/types'
    trade: only tour operators start with the "Next departures" strip on.
    ========================================================================== */
 
-export type StorefrontSectionKey = 'trust' | 'departures' | 'about' | 'reviews' | 'contact'
+export type StorefrontSectionKey =
+  | 'trust'
+  | 'departures'
+  | 'about'
+  | 'reviews'
+  | 'contact'
+  /* restaurants */
+  | 'menu'
+  | 'reserve'
+  | 'tastings'
+  /* hotels */
+  | 'rooms'
+  | 'dining'
+  | 'experiences'
 export type MobileLayout = 'cards' | 'grid' | 'list'
 export type DesktopLayout = 'grid' | 'list'
 
@@ -32,6 +45,30 @@ export const SECTION_META: { key: StorefrontSectionKey; label: string; hint: str
   { key: 'contact', label: 'Contact and directions', hint: 'Phone, email, hours and the meeting point.' },
 ]
 
+/** The sections a restaurant storefront can switch on and off. The menu always shows. */
+export const RESTAURANT_SECTION_META: { key: StorefrontSectionKey; label: string; hint: string }[] = [
+  { key: 'reserve', label: 'Reserve a table', hint: 'Date, party and the free times tonight, right under the hero.' },
+  { key: 'tastings', label: 'Tasting menus and events', hint: 'Prepaid seatings with their own dates and deposits.' },
+  { key: 'about', label: 'About the kitchen', hint: 'Your story and the people behind the pass.' },
+  { key: 'reviews', label: 'Guest reviews', hint: 'Six recent reviews with the overall rating.' },
+  { key: 'contact', label: 'Hours and directions', hint: 'Service hours, delivery zones, phone and the map.' },
+]
+
+/** The sections a hotel storefront can switch on and off. Rooms always show. */
+export const HOTEL_SECTION_META: { key: StorefrontSectionKey; label: string; hint: string }[] = [
+  { key: 'dining', label: 'Restaurant', hint: 'Reserve a table or order to the room.' },
+  { key: 'experiences', label: 'Experiences', hint: 'Dinners, walks and the spa, bookable by guests and visitors.' },
+  { key: 'about', label: 'About the house', hint: 'Your story and the people at the desk.' },
+  { key: 'reviews', label: 'Guest reviews', hint: 'Six recent reviews with the overall rating.' },
+  { key: 'contact', label: 'Location and contact', hint: 'Address, check-in hours, phone and the map.' },
+]
+
+export function sectionMetaFor(vertical: VerticalKey) {
+  if (vertical === 'restaurants') return RESTAURANT_SECTION_META
+  if (vertical === 'hotels') return HOTEL_SECTION_META
+  return SECTION_META
+}
+
 export const MOBILE_LAYOUTS: { value: MobileLayout; label: string; hint: string }[] = [
   { value: 'cards', label: 'Cards', hint: 'One tall photo card per experience.' },
   { value: 'grid', label: 'Grid', hint: 'Two compact cards per row.' },
@@ -52,6 +89,12 @@ export function defaultStorefrontSettings(vertical: VerticalKey): StorefrontSett
       about: true,
       reviews: true,
       contact: true,
+      menu: true,
+      reserve: true,
+      tastings: true,
+      rooms: true,
+      dining: true,
+      experiences: true,
     },
     trustOnPhones: false,
     mobileLayout: 'cards',

@@ -53,6 +53,20 @@ export const VERTICALS: Vertical[] = [
     accent: 'coral',
   },
   {
+    key: 'hotels',
+    label: 'Hotels & Stays',
+    tagline: 'Rooms, arrivals, housekeeping and the restaurant downstairs, in one front desk.',
+    icon: 'BedDouble',
+    sampleActivities: [
+      'River View Suite',
+      'Terrace Room',
+      'Rooftop Sunset Dinner',
+      'Spa Ritual',
+      'Late checkout',
+    ],
+    accent: 'sunset',
+  },
+  {
     key: 'adventure',
     label: 'Adventure & Outdoors',
     tagline: 'Guides, gear and vehicles scheduled in one pass.',

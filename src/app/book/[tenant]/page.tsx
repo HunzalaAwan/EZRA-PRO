@@ -15,6 +15,7 @@ import {
 
 import {
   NOW,
+  TAX_RATE,
   TODAY_KEY,
   getActivityById,
   getBookingRows,
@@ -38,6 +39,10 @@ import { Separator } from '@/components/ui/separator'
 import { Reveal } from '@/components/motion/reveal'
 import { StaggerGroup, StaggerItem } from '@/components/motion/stagger'
 import { ActivityShowcase } from '@/components/storefront/activity-showcase'
+import { HotelHome } from '@/components/storefront/hotel/hotel-home'
+import { RestaurantHome } from '@/components/storefront/restaurant/restaurant-home'
+import { getDiningSettings, getMenu } from '@/lib/hospitality'
+import { getWorkspaceProfile } from '@/lib/workspace-profile'
 import { StarRow, StorefrontHero } from '@/components/storefront/storefront-hero'
 import { StorefrontSection, StorefrontSections } from '@/components/storefront/storefront-sections'
 import { TrustBar } from '@/components/storefront/trust-bar'
@@ -118,6 +123,13 @@ const VERTICAL_STORY: Record<string, { heading: string; body: string[] }> = {
       'Every trip carries a marine biologist and a dive master, and our permits are tied to a reef-health programme we report into every quarter.',
     ],
   },
+  hotels: {
+    heading: 'A small hotel with a good kitchen',
+    body: [
+      'Twenty-eight rooms in a corner house above the river, run by people who grew up on these streets. The kitchen downstairs feeds the neighbourhood as much as the guests, and the rooftop is where everyone ends up at sunset.',
+      'We keep the house small so the desk knows your name by the second morning, and we would rather send you to the tasca round the corner than pretend we do everything.',
+    ],
+  },
   restaurants: {
     heading: 'A short menu, written every morning',
     body: [
@@ -192,6 +204,45 @@ export default async function StorefrontHomePage({
 
   const story = VERTICAL_STORY[tenant.vertical] ?? VERTICAL_STORY.tours
   const foundedYear = new Date(tenant.createdAt).getFullYear()
+  const kind = getWorkspaceProfile(tenant.vertical).storefront
+  const nowTime = `${String(NOW.getHours()).padStart(2, '0')}:${String(NOW.getMinutes()).padStart(2, '0')}`
+
+  if (kind === 'restaurant') {
+    return (
+      <RestaurantHome
+        tenant={tenant}
+        menu={getMenu(tenant.id)}
+        settings={getDiningSettings(tenant.id)}
+        tastings={activities}
+        reviews={reviews}
+        story={story}
+        crew={crew}
+        rating={rating}
+        reviewCount={reviewCount}
+        guestsHosted={guestsHosted}
+        todayKey={TODAY_KEY}
+        nowTime={nowTime}
+        taxRate={TAX_RATE[tenant.id] ?? 0}
+      />
+    )
+  }
+  if (kind === 'hotel') {
+    return (
+      <HotelHome
+        tenant={tenant}
+        menu={getMenu(tenant.id)}
+        dining={getDiningSettings(tenant.id)}
+        experiences={activities}
+        reviews={reviews}
+        story={story}
+        crew={crew}
+        rating={rating}
+        reviewCount={reviewCount}
+        guestsHosted={guestsHosted}
+        todayKey={TODAY_KEY}
+      />
+    )
+  }
 
   return (
     <StorefrontSections slug={tenant.slug} vertical={tenant.vertical}>

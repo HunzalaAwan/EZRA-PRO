@@ -1,31 +1,33 @@
 import type { Metadata } from 'next'
+import { requireWorkspaceRoute } from '@/lib/workspace'
 import Link from 'next/link'
 import { ExternalLink, LifeBuoy } from 'lucide-react'
 
 import { PageHeader } from '@/components/dashboard/page-header'
 import { SettingsNav } from '@/components/dashboard/settings/settings-nav'
 import { Button } from '@/components/ui/button'
-import { CURRENT_TENANT } from '@/lib/demo'
+
 
 export const metadata: Metadata = {
   title: 'Settings',
   description: 'Business profile, branding, booking rules, payments and billing.',
 }
 
-export default function SettingsLayout({ children }: { children: React.ReactNode }) {
+export default async function SettingsLayout({ children }: { children: React.ReactNode }) {
+  const { tenant } = await requireWorkspaceRoute('/dashboard/settings')
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         className="mb-0"
         title="Settings"
-        description={`Everything that shapes how ${CURRENT_TENANT.name} sells, schedules and gets paid.`}
+        description={`Everything that shapes how ${tenant.name} sells, schedules and gets paid.`}
         actions={
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" leftIcon={<LifeBuoy />} asChild>
               <Link href="/contact">Help</Link>
             </Button>
             <Button variant="outline" size="sm" rightIcon={<ExternalLink />} asChild>
-              <Link href={`/book/${CURRENT_TENANT.slug}`}>View storefront</Link>
+              <Link href={`/book/${tenant.slug}`}>View storefront</Link>
             </Button>
           </div>
         }

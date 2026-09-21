@@ -34,7 +34,7 @@ export function StorefrontSections({
   const { settings } = useStorefrontSettings(slug, vertical)
 
   const visible = (id: SectionId) =>
-    id === 'hero' || id === 'catalogue' ? true : settings.sections[id]
+    id === 'hero' || id === 'catalogue' || id === 'menu' || id === 'rooms' ? true : settings.sections[id]
 
   const items = React.Children.toArray(children).filter(
     (child): child is React.ReactElement<{ id: SectionId }> =>

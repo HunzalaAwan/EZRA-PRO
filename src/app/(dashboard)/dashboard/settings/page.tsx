@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
+import { requireWorkspaceRoute } from '@/lib/workspace'
 
-import { CURRENT_TENANT, NOW } from '@/lib/demo'
+import { NOW } from '@/lib/demo'
 import { GeneralSettingsClient } from '@/components/dashboard/settings/general-settings-client'
 
 export const metadata: Metadata = {
@@ -8,6 +9,7 @@ export const metadata: Metadata = {
   description: 'Business profile, contact details and workspace basics.',
 }
 
-export default function GeneralSettingsPage() {
-  return <GeneralSettingsClient tenant={CURRENT_TENANT} now={NOW} />
+export default async function GeneralSettingsPage() {
+  const { tenant } = await requireWorkspaceRoute('/dashboard/settings')
+  return <GeneralSettingsClient tenant={tenant} now={NOW} />
 }

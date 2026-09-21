@@ -1,10 +1,11 @@
 import type { Metadata } from 'next'
+import { requireWorkspaceRoute } from '@/lib/workspace'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
 import { PageHeader } from '@/components/dashboard/page-header'
 import { Button } from '@/components/ui/button'
-import { CURRENT_TENANT, getActivityById } from '@/lib/demo'
+import { getActivityById } from '@/lib/demo'
 import { getUsersByTenant } from '@/lib/demo'
 import { NOW_ISO } from '@/components/dashboard/activities/activity-data'
 import { ActivityWizard } from '@/components/dashboard/activities/activity-wizard'
@@ -26,11 +27,12 @@ export async function generateMetadata({ params }: EditActivityPageProps): Promi
    ========================================================================== */
 
 export default async function EditActivityPage({ params }: EditActivityPageProps) {
+  const { tenant } = await requireWorkspaceRoute('/dashboard/activities')
   const { id } = await params
   const activity = getActivityById(id)
   if (!activity) notFound()
 
-  const crew = getUsersByTenant(CURRENT_TENANT.id)
+  const crew = getUsersByTenant(tenant.id)
     .filter((user) => user.isBookable)
     .map((user) => ({ id: user.id, name: user.name, title: user.title, avatarUrl: user.avatarUrl }))
 
@@ -56,9 +58,9 @@ export default async function EditActivityPage({ params }: EditActivityPageProps
         activityId={activity.id}
         activity={activity}
         crew={crew}
-        currency={CURRENT_TENANT.currency}
-        tenantName={CURRENT_TENANT.name}
-        tenantSlug={CURRENT_TENANT.slug}
+        currency={tenant.currency}
+        tenantName={tenant.name}
+        tenantSlug={tenant.slug}
         defaultCategory={activity.category}
         nowIso={NOW_ISO}
       />

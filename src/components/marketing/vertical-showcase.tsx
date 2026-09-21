@@ -20,6 +20,7 @@ import {
   UtensilsCrossed,
   Waves,
   type LucideIcon,
+  BedDouble,
 } from 'lucide-react'
 import { SectionHeading } from '@/components/marketing/section-heading'
 import { GlowOrb, GridBackground } from '@/components/motion/backgrounds'
@@ -49,6 +50,7 @@ const AUTO_ADVANCE_MS = 8000
 
 /** lucide export names carried on `Vertical.icon`, resolved at render time. */
 const VERTICAL_ICONS: Record<string, LucideIcon> = {
+  BedDouble,
   Waves,
   Compass,
   UtensilsCrossed,

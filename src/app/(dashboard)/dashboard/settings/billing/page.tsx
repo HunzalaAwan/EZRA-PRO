@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
+import { requireWorkspaceRoute } from '@/lib/workspace'
 
-import { CURRENT_TENANT, NOW, getActivitiesByTenant, getKpis, getUsersByTenant } from '@/lib/demo'
+import { NOW, getActivitiesByTenant, getKpis, getUsersByTenant } from '@/lib/demo'
 import { BillingSettingsClient } from '@/components/dashboard/settings/billing-settings-client'
 
 export const metadata: Metadata = {
@@ -8,17 +9,18 @@ export const metadata: Metadata = {
   description: 'Your plan, usage and invoice history.',
 }
 
-export default function BillingSettingsPage() {
-  const activitiesUsed = getActivitiesByTenant(CURRENT_TENANT.id).filter(
+export default async function BillingSettingsPage() {
+  const { tenant } = await requireWorkspaceRoute('/dashboard/settings')
+  const activitiesUsed = getActivitiesByTenant(tenant.id).filter(
     (a) => a.status !== 'archived',
   ).length
 
   return (
     <BillingSettingsClient
-      tenant={CURRENT_TENANT}
+      tenant={tenant}
       now={NOW}
-      kpis={getKpis(CURRENT_TENANT.id, '30d')}
-      seatsUsed={getUsersByTenant(CURRENT_TENANT.id).length}
+      kpis={getKpis(tenant.id, '30d')}
+      seatsUsed={getUsersByTenant(tenant.id).length}
       activitiesUsed={activitiesUsed}
     />
   )

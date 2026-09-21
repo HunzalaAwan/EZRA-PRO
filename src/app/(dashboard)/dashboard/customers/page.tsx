@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { requireWorkspaceRoute } from '@/lib/workspace'
 
 import { PageHeader } from '@/components/dashboard/page-header'
 import {
@@ -10,7 +11,7 @@ import type {
   CustomerSegment,
   SegmentSummary,
 } from '@/components/dashboard/customers/segment-cards'
-import { CURRENT_TENANT, NOW, getBookingsByCustomer, getCustomersByTenant } from '@/lib/demo'
+import { NOW, getBookingsByCustomer, getCustomersByTenant } from '@/lib/demo'
 import { addDays, percentChange, sum } from '@/lib/utils'
 import type { Customer } from '@/types'
 
@@ -187,8 +188,8 @@ function buildWorkingSet(customers: Customer[]): CustomerRow[] {
   return picked.map(toRow)
 }
 
-export default function CustomersPage() {
-  const tenant = CURRENT_TENANT
+export default async function CustomersPage() {
+  const { tenant } = await requireWorkspaceRoute('/dashboard/customers')
   const customers = getCustomersByTenant(tenant.id)
 
   const segments = buildSegmentSummaries(customers)

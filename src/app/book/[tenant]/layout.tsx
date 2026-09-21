@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 
 import { TENANTS, getStorefront } from '@/lib/demo'
+import { getWorkspaceProfile } from '@/lib/workspace-profile'
 import type { Tenant } from '@/types'
 import { StorefrontFooter } from '@/components/storefront/storefront-footer'
 import { StorefrontHeader } from '@/components/storefront/storefront-header'
@@ -39,10 +40,16 @@ export async function generateMetadata({
   }
 
   const { tenant, activities } = storefront
-  const description = `Book ${activities.length} guided experiences with ${tenant.name} in ${tenant.city}. Live availability, instant confirmation and free cancellation.`
+  const kind = getWorkspaceProfile(tenant.vertical).storefront
+  const description =
+    kind === 'restaurant'
+      ? `${tenant.name} in ${tenant.city}: reserve a table, order for pickup or delivery, and book the tasting menu. Live availability and instant confirmation.`
+      : kind === 'hotel'
+        ? `${tenant.name} in ${tenant.city}: rooms, the restaurant and experiences, booked direct with instant confirmation and the best rate.`
+        : `Book ${activities.length} guided experiences with ${tenant.name} in ${tenant.city}. Live availability, instant confirmation and free cancellation.`
 
   return {
-    title: { absolute: `${tenant.name} — Book online` },
+    title: { absolute: kind === 'restaurant' ? `${tenant.name} — Reserve & order` : kind === 'hotel' ? `${tenant.name} — Book a stay` : `${tenant.name} — Book online` },
     description,
     applicationName: tenant.name,
     keywords: [tenant.name, tenant.city, tenant.vertical, 'book online', 'tickets', 'tours'],
@@ -206,7 +213,7 @@ export default async function StorefrontLayout({
         Skip to content
       </a>
 
-      <StorefrontHeader tenant={tenant} />
+      <StorefrontHeader tenant={tenant} kind={getWorkspaceProfile(tenant.vertical).storefront} />
 
       <main id="storefront-main" className="flex-1">
         {children}

@@ -45,6 +45,10 @@ const HERO_COPY: Record<VerticalKey, { eyebrow: string; sub: string }> = {
     eyebrow: 'Caldera-side dining',
     sub: 'A short menu built around the morning catch, the garden and whatever the boats brought in.',
   },
+  hotels: {
+    eyebrow: 'Rooms, terrace & kitchen',
+    sub: 'A small hotel with a good kitchen, a rooftop that faces the river, and staff who remember how you take your coffee.',
+  },
   adventure: {
     eyebrow: 'Alpine & backcountry',
     sub: 'Ridge lines, river valleys and glacier country with guides certified to take you there.',

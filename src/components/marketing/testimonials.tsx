@@ -79,6 +79,7 @@ const VERTICAL_TONE: Record<VerticalKey, SpotlightColor> = {
   watersports: 'lagoon',
   tours: 'reef',
   restaurants: 'coral',
+  hotels: 'coral',
   adventure: 'sunset',
   island: 'lagoon',
   wellness: 'reef',

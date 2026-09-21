@@ -5,7 +5,8 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Keyboard, LifeBuoy, LogOut, SlidersHorizontal, UserRound } from 'lucide-react'
 
-import { CURRENT_TENANT, CURRENT_USER } from '@/lib/demo-core'
+import { CURRENT_USER } from '@/lib/demo-core'
+import { useWorkspace } from '@/components/dashboard/workspace-provider'
 import { cn, titleCase } from '@/lib/utils'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -101,6 +102,7 @@ function ShortcutsDialog({
 }
 
 export function UserMenu({ className }: { className?: string }) {
+  const { tenant } = useWorkspace()
   const router = useRouter()
   const [shortcutsOpen, setShortcutsOpen] = React.useState(false)
 
@@ -155,7 +157,7 @@ export function UserMenu({ className }: { className?: string }) {
               {titleCase(CURRENT_USER.role)}
             </Badge>
             <Badge variant="outline" size="sm" className="max-w-full truncate">
-              {CURRENT_TENANT.name}
+              {tenant.name}
             </Badge>
           </div>
 

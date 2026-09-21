@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
+import { requireWorkspaceRoute } from '@/lib/workspace'
 
 import {
-  CURRENT_TENANT,
   NOW,
   getActivitiesByTenant,
   getCalendarEventsByDay,
@@ -18,17 +18,18 @@ export const metadata: Metadata = {
   description: 'The recurring rhythm behind your calendar, and what the next fortnight looks like.',
 }
 
-export default function AvailabilityPage() {
-  const windowDepartures = getDeparturesInRange(CURRENT_TENANT.id, addDays(NOW, -56), addDays(NOW, 56))
-  const observedDepartures = getDeparturesInRange(CURRENT_TENANT.id, addDays(NOW, -90), addDays(NOW, -1))
-  const activityById = new Map(getActivitiesByTenant(CURRENT_TENANT.id).map((a) => [a.id, a]))
+export default async function AvailabilityPage() {
+  const { tenant } = await requireWorkspaceRoute('/dashboard/availability')
+  const windowDepartures = getDeparturesInRange(tenant.id, addDays(NOW, -56), addDays(NOW, 56))
+  const observedDepartures = getDeparturesInRange(tenant.id, addDays(NOW, -90), addDays(NOW, -1))
+  const activityById = new Map(getActivitiesByTenant(tenant.id).map((a) => [a.id, a]))
 
   return (
     <AvailabilityPageClient
-      tenant={CURRENT_TENANT}
+      tenant={tenant}
       now={NOW}
       templates={deriveScheduleTemplates(windowDepartures, activityById)}
-      previewByDay={getCalendarEventsByDay(CURRENT_TENANT.id, NOW, addDays(NOW, 13))}
+      previewByDay={getCalendarEventsByDay(tenant.id, NOW, addDays(NOW, 13))}
       observedHours={deriveObservedHours(observedDepartures)}
     />
   )

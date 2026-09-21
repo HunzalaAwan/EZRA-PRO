@@ -30,6 +30,7 @@ import {
   UtensilsCrossed,
   Waves,
   type LucideIcon,
+  BedDouble,
 } from 'lucide-react'
 import { z } from 'zod'
 
@@ -70,6 +71,7 @@ import { Textarea } from '@/components/ui/textarea'
    ========================================================================== */
 
 const VERTICAL_ICONS: Record<string, LucideIcon> = {
+  BedDouble,
   Waves,
   Compass,
   UtensilsCrossed,

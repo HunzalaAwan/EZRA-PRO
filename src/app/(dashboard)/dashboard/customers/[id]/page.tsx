@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { requireWorkspaceRoute } from '@/lib/workspace'
 import { notFound } from 'next/navigation'
 
 import { PageHeader } from '@/components/dashboard/page-header'
@@ -10,7 +11,6 @@ import {
 } from '@/components/dashboard/customers/customer-detail'
 import {
   CHANNEL_LABELS,
-  CURRENT_TENANT,
   CURRENT_USER,
   getActivityById,
   getBookingsByCustomer,
@@ -137,9 +137,10 @@ function toMethods(payments: Payment[]): CustomerPaymentMethod[] {
 }
 
 export default async function CustomerDetailPage({ params }: RouteProps) {
+  const { tenant } = await requireWorkspaceRoute('/dashboard/customers')
   const { id } = await params
   const customer = getCustomerById(id)
-  if (!customer || customer.tenantId !== CURRENT_TENANT.id) notFound()
+  if (!customer || customer.tenantId !== tenant.id) notFound()
 
   const bookings = [...getBookingsByCustomer(customer.id)].sort((a, b) =>
     b.departureAt.localeCompare(a.departureAt),
@@ -175,7 +176,7 @@ export default async function CustomerDetailPage({ params }: RouteProps) {
     <>
       <PageHeader
         title={fullName}
-        description={`${customer.totalBookings} ${customer.totalBookings === 1 ? 'trip' : 'trips'} with ${CURRENT_TENANT.name}, ${stats.guestsHosted} ${stats.guestsHosted === 1 ? 'guest' : 'guests'} hosted.`}
+        description={`${customer.totalBookings} ${customer.totalBookings === 1 ? 'trip' : 'trips'} with ${tenant.name}, ${stats.guestsHosted} ${stats.guestsHosted === 1 ? 'guest' : 'guests'} hosted.`}
         breadcrumb={[
           { label: 'Guests', href: '/dashboard/customers' },
           { label: fullName },
@@ -188,7 +189,7 @@ export default async function CustomerDetailPage({ params }: RouteProps) {
         bookings={bookings.map(toEntry)}
         methods={toMethods(payments)}
         stats={stats}
-        currency={CURRENT_TENANT.currency}
+        currency={tenant.currency}
         tagSuggestions={TAG_SUGGESTIONS}
         operator={{
           name: CURRENT_USER.name,

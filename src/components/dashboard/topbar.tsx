@@ -2,13 +2,14 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { CalendarDays, MoonStar, Plus, Search, SunMedium } from 'lucide-react'
 
-import { DASHBOARD_NAV } from '@/lib/site-config'
+import { getWorkspaceProfile } from '@/lib/workspace-profile'
+import { useWorkspace } from '@/components/dashboard/workspace-provider'
 import type { NotificationItem } from '@/types'
 import type { NavCounts } from '@/components/dashboard/sidebar'
-import { CURRENT_TENANT, NOW } from '@/lib/demo-core'
+import { NOW } from '@/lib/demo-core'
 import { cn, formatDateLong, titleCase } from '@/lib/utils'
 import { useTheme } from '@/components/providers/theme-provider'
 import {
@@ -38,8 +39,11 @@ import { UserMenu } from '@/components/dashboard/user-menu'
    collapsed to "Details" rather than shown raw.
    ========================================================================== */
 
+/** Labels from every profile, later ones winning, so a deep link resolves before the workspace is known. */
 const NAV_LABEL_BY_HREF: Record<string, string> = Object.fromEntries(
-  DASHBOARD_NAV.flatMap((section) => section.items.map((item) => [item.href, item.label])),
+  (['watersports', 'restaurants', 'hotels'] as const).flatMap((vertical) =>
+    getWorkspaceProfile(vertical).nav.flatMap((section) => section.items.map((item) => [item.href, item.label] as const)),
+  ),
 )
 
 const EXTRA_SEGMENT_LABEL: Record<string, string> = {
@@ -58,7 +62,7 @@ interface Crumb {
   href: string
 }
 
-export function buildBreadcrumb(pathname: string): Crumb[] {
+export function buildBreadcrumb(pathname: string, labels: Record<string, string> = NAV_LABEL_BY_HREF): Crumb[] {
   const segments = pathname.split('/').filter(Boolean)
   const crumbs: Crumb[] = []
   let href = ''
@@ -66,7 +70,7 @@ export function buildBreadcrumb(pathname: string): Crumb[] {
   for (const segment of segments) {
     href += `/${segment}`
     const label =
-      NAV_LABEL_BY_HREF[href] ??
+      labels[href] ??
       EXTRA_SEGMENT_LABEL[segment] ??
       (RECORD_ID.test(segment) ? 'Details' : titleCase(decodeURIComponent(segment)))
     crumbs.push({ label, href })
@@ -85,7 +89,15 @@ export function buildBreadcrumb(pathname: string): Crumb[] {
 
 function RouteBreadcrumb({ className }: { className?: string }) {
   const pathname = usePathname() ?? '/dashboard'
-  const crumbs = buildBreadcrumb(pathname)
+  const { profile } = useWorkspace()
+  const labels = React.useMemo(
+    () => ({
+      ...NAV_LABEL_BY_HREF,
+      ...Object.fromEntries(profile.nav.flatMap((section) => section.items.map((item) => [item.href, item.label]))),
+    }),
+    [profile],
+  )
+  const crumbs = buildBreadcrumb(pathname, labels)
 
   if (crumbs.length <= 1) {
     return (
@@ -141,6 +153,12 @@ function RouteBreadcrumb({ className }: { className?: string }) {
 export function Topbar({ navCounts, notifications, className }: { navCounts: NavCounts; notifications: NotificationItem[]; className?: string }) {
   const { setOpen, setNewBookingOpen } = useCommandPalette()
   const { toggleTheme } = useTheme()
+  const { tenant, profile } = useWorkspace()
+  const router = useRouter()
+  const onNew = () => {
+    if (profile.family === 'hospitality') router.push(profile.vocab.newBookingHref)
+    else setNewBookingOpen(true)
+  }
 
   return (
     <header
@@ -178,7 +196,7 @@ export function Topbar({ navCounts, notifications, className }: { navCounts: Nav
       {/* Right — status and actions */}
       <div className="flex shrink-0 items-center gap-1">
         <SimpleTooltip
-          label={`Today in ${CURRENT_TENANT.city}, ${CURRENT_TENANT.country} — open the calendar`}
+          label={`Today in ${tenant.city}, ${tenant.country}`}
           side="bottom"
         >
           <Link
@@ -220,17 +238,17 @@ export function Topbar({ navCounts, notifications, className }: { navCounts: Nav
 
         <Button
           size="sm"
-          onClick={() => setNewBookingOpen(true)}
+          onClick={onNew}
           leftIcon={<Plus aria-hidden="true" />}
           className="hidden sm:inline-flex"
         >
-          New booking
+          {profile.vocab.newBooking}
         </Button>
 
         <IconButton
           size="sm"
-          aria-label="New booking"
-          onClick={() => setNewBookingOpen(true)}
+          aria-label={profile.vocab.newBooking}
+          onClick={onNew}
           className="sm:hidden"
         >
           <Plus aria-hidden="true" />

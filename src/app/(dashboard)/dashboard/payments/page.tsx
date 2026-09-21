@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
+import { requireWorkspaceRoute } from '@/lib/workspace'
 
 import { PageHeader } from '@/components/dashboard/page-header'
 import { PayoutSummary, RevenueFeesChart } from '@/components/dashboard/payments/payout-summary'
 import { PaymentsPageActions, PaymentsTable } from '@/components/dashboard/payments/payments-table'
-import { CURRENT_TENANT } from '@/lib/demo'
+
 import { bankLabel, buildBalance, buildDailyPoints, buildPayouts, buildSettled, toPaymentRow } from '@/lib/data/payouts'
 import { formatDateLong } from '@/lib/utils'
 
@@ -20,8 +21,8 @@ const WORKING_SET = 400
 
 /* ========================================================================== */
 
-export default function PaymentsPage() {
-  const tenant = CURRENT_TENANT
+export default async function PaymentsPage() {
+  const { tenant } = await requireWorkspaceRoute('/dashboard/payments')
   const currency = tenant.currency
 
   const settled = buildSettled(tenant.id)

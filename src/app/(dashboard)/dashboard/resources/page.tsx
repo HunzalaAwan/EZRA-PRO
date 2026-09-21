@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
+import { requireWorkspaceRoute } from '@/lib/workspace'
 
-import { CURRENT_TENANT, NOW, getActivitiesByTenant, getDeparturesInRange, getResourcesByTenant } from '@/lib/demo'
+import { NOW, getActivitiesByTenant, getDeparturesInRange, getResourcesByTenant } from '@/lib/demo'
 import { addDays } from '@/lib/utils'
 import { ResourcesPageClient, type ResourceImage } from '@/components/dashboard/resources/resources-page-client'
 import {
@@ -16,9 +17,10 @@ export const metadata: Metadata = {
   description: 'Your inventory: vessels, vehicles, kit and rooms — what is in service, what is down, and what runs on each.',
 }
 
-export default function ResourcesPage() {
-  const activities = getActivitiesByTenant(CURRENT_TENANT.id)
-  const upcomingDepartures = getDeparturesInRange(CURRENT_TENANT.id, NOW, addDays(NOW, 13))
+export default async function ResourcesPage() {
+  const { tenant } = await requireWorkspaceRoute('/dashboard/resources')
+  const activities = getActivitiesByTenant(tenant.id)
+  const upcomingDepartures = getDeparturesInRange(tenant.id, NOW, addDays(NOW, 13))
   const dependents = deriveResourceDependents(activities)
 
   // Until an operator uploads a photo of the boat itself, the card shows the
@@ -34,8 +36,8 @@ export default function ResourcesPage() {
 
   return (
     <ResourcesPageClient
-      tenant={CURRENT_TENANT}
-      initialResources={getResourcesByTenant(CURRENT_TENANT.id)}
+      tenant={tenant}
+      initialResources={getResourcesByTenant(tenant.id)}
       dependents={dependents}
       upcomingUse={deriveUpcomingResourceUse(upcomingDepartures)}
       upcomingRuns={deriveUpcomingResourceRuns(upcomingDepartures, activities)}

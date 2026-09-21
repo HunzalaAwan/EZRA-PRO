@@ -192,6 +192,13 @@ export const VERTICAL_PITCHES: Record<
   VerticalKey,
   { headline: string; body: string; proofStat: string; proofLabel: string; bullets: string[] }
 > = {
+  hotels: {
+    headline: 'Rooms, arrivals and the restaurant downstairs',
+    body: 'A front desk that knows who lands at three, a housekeeping board that knows which rooms they need, and a kitchen that charges dinner to the folio.',
+    proofStat: '2 min',
+    proofLabel: 'average check-in',
+    bullets: ['Arrivals, departures and in-house on one desk', 'Housekeeping board built from tonight’s book', 'Rates by season and plan, with channel sync', 'Table reservations and room service in the same account'],
+  },
   tours: {
     headline: 'Built for guided tours at scale',
     body: 'Multi-departure days, guide rostering, multi-language groups and private upgrades — with a manifest your guides can run from a phone.',

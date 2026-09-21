@@ -35,7 +35,9 @@ import { Segmented } from '@/components/ui/segmented'
 import { Separator } from '@/components/ui/separator'
 import { toast } from '@/components/ui/toaster'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
-import { CURRENT_TENANT, getActivitiesByTenant } from '@/lib/demo-core'
+import { getActivitiesByTenant } from '@/lib/demo-core'
+import { useWorkspace } from '@/components/dashboard/workspace-provider'
+import type { Tenant } from '@/types'
 import { cn, formatCurrency, formatDuration, formatNumber } from '@/lib/utils'
 
 /* ==========================================================================
@@ -149,26 +151,29 @@ interface BrandingValues {
   accentColor: string
 }
 
-const INITIAL: BrandingValues = {
-  logoText: CURRENT_TENANT.branding.logoText,
-  logoImage: null,
-  coverImage: CURRENT_TENANT.branding.coverImage ?? COVER_PRESETS[0].url,
-  primaryColor: CURRENT_TENANT.branding.primaryColor.toLowerCase(),
-  accentColor: CURRENT_TENANT.branding.accentColor.toLowerCase(),
+function initialFor(tenant: Tenant): BrandingValues {
+  return {
+    logoText: tenant.branding.logoText,
+    logoImage: null,
+    coverImage: tenant.branding.coverImage ?? COVER_PRESETS[0].url,
+    primaryColor: tenant.branding.primaryColor.toLowerCase(),
+    accentColor: tenant.branding.accentColor.toLowerCase(),
+  }
 }
 
-const PREVIEW_ACTIVITY =
-  getActivitiesByTenant(CURRENT_TENANT.id).find((a) => a.status === 'live' && a.featured) ??
-  getActivitiesByTenant(CURRENT_TENANT.id)[0]
-
-const PREVIEW_IMAGE =
-  PREVIEW_ACTIVITY.media.find((m) => m.isPrimary)?.url ?? PREVIEW_ACTIVITY.media[0]?.url
+function previewFor(tenant: Tenant) {
+  const activity = getActivitiesByTenant(tenant.id).find((a) => a.status === 'live' && a.featured) ?? getActivitiesByTenant(tenant.id)[0]
+  return { activity, image: activity.media.find((m) => m.isPrimary)?.url ?? activity.media[0]?.url }
+}
 
 /* ==========================================================================
    COMPONENT
    ========================================================================== */
 
 export function BrandingEditor() {
+  const { tenant } = useWorkspace()
+  const INITIAL = React.useMemo(() => initialFor(tenant), [tenant])
+  const { activity: PREVIEW_ACTIVITY, image: PREVIEW_IMAGE } = React.useMemo(() => previewFor(tenant), [tenant])
   const reduceMotion = useReducedMotionSafe()
   const fileInputRef = React.useRef<HTMLInputElement>(null)
 
@@ -666,6 +671,8 @@ function StorefrontPreview({
   values: BrandingValues
   compact: boolean
 }) {
+  const { tenant } = useWorkspace()
+  const { activity: PREVIEW_ACTIVITY, image: PREVIEW_IMAGE } = React.useMemo(() => previewFor(tenant), [tenant])
   const { primaryColor, accentColor, logoText, logoImage, coverImage } = values
   const onPrimary = readableOn(primaryColor)
   const onAccent = readableOn(accentColor)
@@ -726,7 +733,7 @@ function StorefrontPreview({
         />
         <div className="absolute inset-x-0 bottom-0 p-3" style={{ color: '#ffffff' }}>
           <p className="text-[0.625rem] font-semibold tracking-[0.14em] uppercase opacity-80">
-            {CURRENT_TENANT.city}
+            {tenant.city}
           </p>
           <p className="font-display text-sm font-semibold tracking-tight">
             Book the water, not the wait

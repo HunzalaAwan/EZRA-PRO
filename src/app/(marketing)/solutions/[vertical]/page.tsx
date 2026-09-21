@@ -8,7 +8,7 @@ import { SolutionHero } from '@/components/marketing/solutions/solution-hero'
 import { ConsoleStage, MomentTimeline, OtherTrades, PillarGrid } from '@/components/marketing/solutions/solution-sections'
 import { FEATURE_BLOCKS, VERTICAL_PITCHES } from '@/content/marketing'
 import { VERTICALS, getVertical } from '@/lib/data/verticals'
-import type { FeatureBlock, VerticalKey } from '@/types'
+import type { FeatureBlock, MarketingVerticalKey as VerticalKey } from '@/types'
 
 /* ==========================================================================
    ENTITIES — pitch bodies and feature copy are authored with HTML entities
@@ -40,14 +40,15 @@ function decodeEntities(input: string) {
    ROUTING
    ========================================================================== */
 
-const VERTICAL_KEYS = VERTICALS.map((vertical) => vertical.key)
+/** Hotels sell through the restaurants page, so they have no page of their own here. */
+const VERTICAL_KEYS = VERTICALS.map((vertical) => vertical.key).filter((key): key is VerticalKey => key !== 'hotels')
 
 function resolveVertical(slug: string): VerticalKey | null {
   return (VERTICAL_KEYS as string[]).includes(slug) ? (slug as VerticalKey) : null
 }
 
 export function generateStaticParams() {
-  return VERTICALS.map((vertical) => ({ vertical: vertical.key }))
+  return VERTICAL_KEYS.map((vertical) => ({ vertical }))
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ vertical: string }> }): Promise<Metadata> {

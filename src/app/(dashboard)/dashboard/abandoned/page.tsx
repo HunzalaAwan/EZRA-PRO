@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
+import { requireWorkspaceRoute } from '@/lib/workspace'
 
 import { PageHeader } from '@/components/dashboard/page-header'
 import { AbandonedClient } from '@/components/dashboard/recovery/abandoned-client'
 import { NOW_ISO } from '@/components/dashboard/activities/activity-data'
-import { CURRENT_TENANT } from '@/lib/demo'
+
 import { getAbandonedCheckouts } from '@/lib/data/abandoned'
 import { formatCurrency } from '@/lib/utils'
 
@@ -19,8 +20,8 @@ export const metadata: Metadata = {
    what it was worth, where it stopped, and one click to follow up.
    ========================================================================== */
 
-export default function AbandonedPage() {
-  const tenant = CURRENT_TENANT
+export default async function AbandonedPage() {
+  const { tenant } = await requireWorkspaceRoute('/dashboard/abandoned')
   const rows = getAbandonedCheckouts(tenant)
   const open = rows.filter((row) => row.status === 'open' || row.status === 'reminded')
   const openValue = open.reduce((sum, row) => sum + row.total, 0)

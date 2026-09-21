@@ -5,32 +5,42 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { motion } from 'motion/react'
 import {
+  BedDouble,
+  Brush,
+  CalendarCheck,
   CalendarClock,
   CalendarDays,
   ChartSpline,
   Circle,
   ClipboardList,
+  Clock,
+  Compass,
+  ConciergeBell,
   CreditCard,
   LayoutDashboard,
+  LayoutGrid,
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
   Ship,
+  ShoppingBag,
   ShoppingCart,
   Sparkles,
   Star,
   Store,
+  Tags,
   Ticket,
   UserCog,
   Users,
+  Utensils,
+  UtensilsCrossed,
   Waves,
   Zap,
 } from 'lucide-react'
 
 import type { DashboardNavItem } from '@/lib/site-config'
 import type { PlanTier } from '@/types'
-import { DASHBOARD_NAV } from '@/lib/site-config'
-import { CURRENT_TENANT } from '@/lib/demo-core'
+import { useWorkspace } from '@/components/dashboard/workspace-provider'
 import { cn, formatNumber } from '@/lib/utils'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { Logo } from '@/components/marketing/logo'
@@ -68,20 +78,31 @@ type IconComponent = React.ComponentType<{ className?: string; 'aria-hidden'?: b
  * route. This map costs exactly the 14 icons the nav actually uses.
  */
 const REGISTRY: Record<string, IconComponent> = {
+  BedDouble,
+  Brush,
+  CalendarCheck,
   CalendarClock,
   CalendarDays,
   ChartSpline,
   ClipboardList,
+  Clock,
+  Compass,
+  ConciergeBell,
   CreditCard,
   LayoutDashboard,
+  LayoutGrid,
   Settings,
   Ship,
+  ShoppingBag,
   ShoppingCart,
   Star,
   Store,
+  Tags,
   Ticket,
   UserCog,
   Users,
+  Utensils,
+  UtensilsCrossed,
   Waves,
 }
 
@@ -135,10 +156,11 @@ export function DashboardNavList({
 }: DashboardNavListProps) {
   const pathname = usePathname() ?? '/dashboard'
   const reduceMotion = useReducedMotionSafe()
+  const { profile } = useWorkspace()
 
   return (
     <div className={cn('flex flex-col gap-5', className)}>
-      {DASHBOARD_NAV.map((section, sectionIndex) => (
+      {profile.nav.map((section, sectionIndex) => (
         <div key={section.heading ?? `section-${sectionIndex}`}>
           {section.heading ? (
             collapsed ? (
@@ -268,8 +290,10 @@ const PLAN_BOOKING_QUOTA: Record<PlanTier, number> = {
 }
 
 export function PlanUsageCard({ className }: { className?: string }) {
-  const used = CURRENT_TENANT.stats.monthlyBookings
-  const quota = PLAN_BOOKING_QUOTA[CURRENT_TENANT.plan]
+  const { tenant, profile } = useWorkspace()
+  const used = tenant.stats.monthlyBookings
+  const quota = PLAN_BOOKING_QUOTA[tenant.plan]
+  const unitLabel = `${profile.vocab.bookings.charAt(0).toUpperCase()}${profile.vocab.bookings.slice(1)} this month`
   const percent = Math.min(100, Math.round((used / quota) * 100))
   const tone = percent >= 90 ? 'danger' : percent >= 75 ? 'warning' : 'primary'
 
@@ -288,12 +312,12 @@ export function PlanUsageCard({ className }: { className?: string }) {
       <div className="relative flex items-center justify-between gap-2">
         <span className="flex items-center gap-1.5 text-[0.8125rem] font-semibold tracking-[-0.01em] text-foreground capitalize">
           <Sparkles aria-hidden="true" className="size-3.5 text-primary" />
-          {CURRENT_TENANT.plan} plan
+          {tenant.plan} plan
         </span>
         <span className="text-[0.6875rem] font-semibold text-subtle tabular-nums">{percent}%</span>
       </div>
 
-      <p className="relative mt-2 text-[0.6875rem] text-subtle">Bookings this month</p>
+      <p className="relative mt-2 text-[0.6875rem] text-subtle">{unitLabel}</p>
       <p className="relative mt-0.5 text-sm font-semibold text-foreground tabular-nums">
         {formatNumber(used)}
         <span className="font-normal text-faint"> / {formatNumber(quota)}</span>

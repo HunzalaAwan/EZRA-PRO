@@ -374,6 +374,12 @@ function buildParticipants(
    ========================================================================== */
 
 const REVIEWS: Record<VerticalKey, string[]> = {
+  hotels: [
+    'The room was spotless, the rooftop dinner was the best meal of the trip, and they remembered our anniversary.',
+    'Check-in took two minutes and they had already put the cot in the room. Small hotel, big attention.',
+    'Breakfast on the terrace with the river below is worth the rate on its own.',
+    'Housekeeping was quiet and quick, the kitchen sent up soup when one of us was ill. Lovely people.',
+  ],
   watersports: [
     'The crew read the water perfectly and put us right on the reef while it was still glassy.',
     'Three turtles in the first ten minutes and a guide who actually knew their names.',

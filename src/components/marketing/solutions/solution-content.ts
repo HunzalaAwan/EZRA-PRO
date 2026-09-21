@@ -1,5 +1,5 @@
 import type { PhotoKey } from '@/components/marketing/story/photos'
-import type { VerticalKey } from '@/types'
+import type { MarketingVerticalKey as VerticalKey } from '@/types'
 
 /* ==========================================================================
    What each solutions page shows that the generic pitch cannot: the pictures

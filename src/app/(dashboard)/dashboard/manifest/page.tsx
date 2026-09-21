@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
+import { requireWorkspaceRoute } from '@/lib/workspace'
 
-import { CURRENT_TENANT, NOW, getManifest } from '@/lib/demo'
+import { NOW, getManifest } from '@/lib/demo'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { ManifestView } from '@/components/dashboard/bookings/manifest-view'
 
@@ -12,7 +13,8 @@ export const metadata: Metadata = {
     'The dock run sheet — every departure, crew, vessel and guest for the day, with one-tap check-in.',
 }
 
-export default function ManifestPage() {
+export default async function ManifestPage() {
+  const { tenant } = await requireWorkspaceRoute('/dashboard/manifest')
   return (
     <div className="flex flex-col gap-5 pb-16 print:gap-3 print:pb-0">
       <div className="print:hidden">
@@ -23,7 +25,7 @@ export default function ManifestPage() {
         />
       </div>
 
-      <ManifestView initialManifest={getManifest(CURRENT_TENANT.id, NOW)} />
+      <ManifestView initialManifest={getManifest(tenant.id, NOW)} />
     </div>
   )
 }

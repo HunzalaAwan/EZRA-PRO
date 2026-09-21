@@ -197,6 +197,7 @@ export function OtherTrades({ siblings }: { siblings: Vertical[] }) {
           className="-mx-4 mt-12 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] sm:mx-0 sm:grid sm:snap-none sm:grid-cols-3 sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-5 [&::-webkit-scrollbar]:hidden"
         >
           {siblings.map((item) => {
+            if (item.key === 'hotels') return null
             const photo = PHOTOS[SOLUTION_CONTENT[item.key].card]
             return (
               <StaggerItem as="li" key={item.key} distance={16} className="w-[70%] shrink-0 snap-start sm:w-auto sm:shrink">

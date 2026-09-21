@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Menu } from 'lucide-react'
 
-import { CURRENT_TENANT } from '@/lib/demo-core'
+import { useWorkspace } from '@/components/dashboard/workspace-provider'
 import { cn } from '@/lib/utils'
 import { IconButton } from '@/components/ui/icon-button'
 import {
@@ -32,6 +32,7 @@ import { TenantSwitcher } from '@/components/dashboard/tenant-switcher'
 export function MobileSidebar({ navCounts, className }: { navCounts: NavCounts; className?: string }) {
   const pathname = usePathname()
   const [open, setOpen] = React.useState(false)
+  const { tenant } = useWorkspace()
 
   React.useEffect(() => {
     setOpen(false)
@@ -54,7 +55,7 @@ export function MobileSidebar({ navCounts, className }: { navCounts: NavCounts; 
         <SheetHeader className="py-3.5 pl-4">
           <SheetTitle className="sr-only">Dashboard navigation</SheetTitle>
           <SheetDescription className="sr-only">
-            Jump to any section of the {CURRENT_TENANT.name} workspace.
+            Jump to any section of the {tenant.name} workspace.
           </SheetDescription>
           <Link
             href="/dashboard"

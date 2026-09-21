@@ -19,6 +19,10 @@ export type VerticalKey =
   | 'adventure'
   | 'island'
   | 'wellness'
+  | 'hotels'
+
+/** The verticals the marketing site has a solutions page for. Hotels sell through the restaurants page. */
+export type MarketingVerticalKey = Exclude<VerticalKey, 'hotels'>
 
 export interface Vertical {
   key: VerticalKey

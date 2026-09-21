@@ -1,11 +1,12 @@
 import type { Metadata } from 'next'
+import { requireWorkspaceRoute } from '@/lib/workspace'
 import Link from 'next/link'
 import { CalendarClock, Gauge, Plus, Radio, Store, Ticket } from 'lucide-react'
 
 import { PageHeader } from '@/components/dashboard/page-header'
 import { Button } from '@/components/ui/button'
 import { StatCard, StatGrid } from '@/components/ui/stat'
-import { CURRENT_TENANT } from '@/lib/demo'
+
 import { formatNumber, pluralize } from '@/lib/utils'
 import {
   getActivitySummaries,
@@ -20,8 +21,9 @@ export const metadata: Metadata = {
   description: 'Every experience you sell — pricing, availability and performance in one catalog.',
 }
 
-export default function ActivitiesPage() {
-  const summaries = getActivitySummaries(CURRENT_TENANT.id)
+export default async function ActivitiesPage() {
+  const { tenant } = await requireWorkspaceRoute('/dashboard/activities')
+  const summaries = getActivitySummaries(tenant.id)
   const totals = getCatalogTotals(summaries)
   const upcoming = summaries.reduce((acc, s) => acc + s.upcomingCount, 0)
 
@@ -30,11 +32,11 @@ export default function ActivitiesPage() {
       <PageHeader
         breadcrumb={[{ label: 'Catalog' }, { label: 'Activities' }]}
         title="Activities"
-        description={`${totals.live} live · ${totals.draft} ${pluralize(totals.draft, 'draft')} · ${totals.paused} paused across ${CURRENT_TENANT.name}.`}
+        description={`${totals.live} live · ${totals.draft} ${pluralize(totals.draft, 'draft')} · ${totals.paused} paused across ${tenant.name}.`}
         actions={
           <>
             <Button variant="secondary" asChild leftIcon={<Store />}>
-              <Link href={`/book/${CURRENT_TENANT.slug}`} target="_blank" rel="noopener">
+              <Link href={`/book/${tenant.slug}`} target="_blank" rel="noopener">
                 View storefront
               </Link>
             </Button>
@@ -78,7 +80,7 @@ export default function ActivitiesPage() {
             label: 'Revenue · 30 days',
             value: totals.revenue30d,
             format: 'currency',
-            currency: CURRENT_TENANT.currency,
+            currency: tenant.currency,
             deltaPercent: totals.revenueDeltaPercent,
             direction: totals.revenueDeltaPercent >= 0 ? 'up' : 'down',
             comparisonLabel: 'vs previous 30 days',
@@ -99,7 +101,7 @@ export default function ActivitiesPage() {
         />
       </StatGrid>
 
-      <ActivityCatalog summaries={summaries} tenantSlug={CURRENT_TENANT.slug} />
+      <ActivityCatalog summaries={summaries} tenantSlug={tenant.slug} />
     </div>
   )
 }

@@ -35,7 +35,8 @@ import { LossesCard } from './losses-card'
 import { TopExperiencesTable } from './top-experiences-table'
 import { RevenueAreaChart, type RevenueMetric } from '@/components/charts/revenue-area-chart'
 
-import { CURRENT_TENANT, CURRENT_USER, NOW, TODAY_KEY } from '@/lib/demo-core'
+import { CURRENT_USER, NOW, TODAY_KEY } from '@/lib/demo-core'
+import { useWorkspace } from '@/components/dashboard/workspace-provider'
 import { fetchAnalytics } from '@/lib/actions/dashboard'
 import { cn, formatNumber, sum } from '@/lib/utils'
 import type { AnalyticsSnapshot, DateRange, RangePreset } from '@/types'
@@ -102,7 +103,7 @@ export interface AnalyticsShellProps {
 }
 
 export function AnalyticsShell({ initialSnapshot }: AnalyticsShellProps) {
-  const tenant = CURRENT_TENANT
+  const { tenant } = useWorkspace()
   const reduceMotion = useReducedMotionSafe()
 
   const [preset, setPreset] = React.useState<RangePreset>('30d')

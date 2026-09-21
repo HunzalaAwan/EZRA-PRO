@@ -143,7 +143,15 @@ export interface DashboardNavItem {
   href: string
   icon: string
   /** Shown as a count chip; resolved at render time from live data. */
-  countKey?: 'pendingBookings' | 'todayDepartures' | 'unreadMessages' | 'abandonedCarts'
+  countKey?:
+    | 'pendingBookings'
+    | 'todayDepartures'
+    | 'unreadMessages'
+    | 'abandonedCarts'
+    | 'reservationsToday'
+    | 'liveOrders'
+    | 'arrivalsToday'
+    | 'roomsToClean'
   children?: { label: string; href: string }[]
   /** Hidden unless the tenant's plan enables this feature. */
   requiresFeature?: string

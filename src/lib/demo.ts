@@ -182,6 +182,18 @@ const COUNTRY_POOLS: Record<string, [string, string, number][]> = {
     ['Spain', 'ES', 4],
     ['Canada', 'CA', 3],
   ],
+  tnt_casavela: [
+    ['United Kingdom', 'GB', 20],
+    ['Portugal', 'PT', 14],
+    ['Spain', 'ES', 12],
+    ['France', 'FR', 12],
+    ['Germany', 'DE', 10],
+    ['United States', 'US', 10],
+    ['Brazil', 'BR', 7],
+    ['Netherlands', 'NL', 6],
+    ['Italy', 'IT', 5],
+    ['Canada', 'CA', 4],
+  ],
   tnt_ridgeline: [
     ['New Zealand', 'NZ', 28],
     ['Australia', 'AU', 24],
@@ -198,7 +210,7 @@ const COUNTRY_POOLS: Record<string, [string, string, number][]> = {
 const PHONE_PREFIX: Record<string, string> = {
   US: '+1', CA: '+1', AU: '+61', NZ: '+64', GB: '+44', DE: '+49', FR: '+33', IT: '+39',
   ES: '+34', NL: '+31', SE: '+46', GR: '+30', JP: '+81', KR: '+82', CN: '+86', IN: '+91',
-  BR: '+55', MX: '+52', SG: '+65',
+  BR: '+55', MX: '+52', SG: '+65', PT: '+351',
 }
 
 const EMAIL_DOMAINS = ['gmail.com', 'outlook.com', 'icloud.com', 'proton.me', 'hey.com', 'fastmail.com']
@@ -227,6 +239,7 @@ const TENANT_SHORT: Record<string, string> = {
   tnt_coralcay: 'cc',
   tnt_saltline: 'sl',
   tnt_ridgeline: 'rl',
+  tnt_casavela: 'cv',
 }
 
 /** Weighted pick over [name, code, weight] triples. */
@@ -449,6 +462,7 @@ const TAX_LABEL: Record<string, string> = {
   tnt_coralcay: 'GST (10%)',
   tnt_saltline: 'VAT (13%)',
   tnt_ridgeline: 'GST (15%)',
+  tnt_casavela: 'IVA (13%)',
 }
 
 const GUEST_NOTES = [

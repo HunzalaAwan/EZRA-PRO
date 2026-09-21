@@ -9,14 +9,16 @@ import { OverviewHeaderActions } from '@/components/dashboard/overview/quick-act
 import { RecentBookings } from '@/components/dashboard/overview/recent-bookings'
 import { RevenueBars } from '@/components/dashboard/overview/revenue-bars'
 import { Reveal } from '@/components/motion/reveal'
+import { HospitalityOverview } from '@/components/dashboard/hospitality/overview'
 import {
   CHANNEL_LABELS,
-  CURRENT_TENANT,
   CURRENT_USER,
   NOW,
   TODAY_KEY,
   getDashboardOverview,
+  getUsersByTenant,
 } from '@/lib/demo'
+import { getWorkspace } from '@/lib/workspace'
 import { getPayoutBalance } from '@/lib/data/payouts'
 import { formatDateLong, formatNumber, pluralize } from '@/lib/utils'
 
@@ -52,11 +54,13 @@ function greeting(hour: number): string {
    Row 4 — what to do next beside where the bookings come from.
    ========================================================================== */
 
-export default function DashboardOverviewPage() {
-  const tenant = CURRENT_TENANT
-  const overview = getDashboardOverview(tenant.id)
+export default async function DashboardOverviewPage() {
+  const { tenant, profile } = await getWorkspace()
+  if (profile.family === 'hospitality') return <HospitalityOverview tenant={tenant} profile={profile} />
 
-  const firstName = CURRENT_USER.name.split(' ')[0]
+  const overview = getDashboardOverview(tenant.id)
+  const owner = getUsersByTenant(tenant.id).find((u) => u.role === 'owner') ?? CURRENT_USER
+  const firstName = owner.name.split(' ')[0]
   const todayGuests = overview.todayDepartures.reduce((acc, e) => acc + e.departure.booked, 0)
 
   const headline =

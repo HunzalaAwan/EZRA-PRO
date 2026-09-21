@@ -4,8 +4,12 @@ import { PageTransition, RouteLoadingBar } from '@/components/motion/page-transi
 import { CommandPalette, CommandPaletteProvider } from '@/components/dashboard/command-palette'
 import { Sidebar, type NavCounts } from '@/components/dashboard/sidebar'
 import { Topbar } from '@/components/dashboard/topbar'
+import { WorkspaceProvider } from '@/components/dashboard/workspace-provider'
 import { countOpenAbandoned } from '@/lib/data/abandoned'
-import { BOOKINGS, CURRENT_TENANT, NOW, getDeparturesForDay, getNotifications } from '@/lib/demo'
+import { BOOKINGS, NOW, getDeparturesForDay, getNotifications } from '@/lib/demo'
+import { getHospitalityCounts } from '@/lib/hospitality'
+import { getWorkspaceTenant } from '@/lib/workspace'
+import type { Tenant } from '@/types'
 
 export const metadata: Metadata = {
   title: {
@@ -22,17 +26,18 @@ export const metadata: Metadata = {
  * keeps the shared layout's client bundle (and every route that mounts
  * inside it) free of the multi-thousand-row generation.
  */
-function computeNavCounts(): NavCounts {
+function computeNavCounts(tenant: Tenant): NavCounts {
   const pendingBookings = BOOKINGS.reduce(
     (total, booking) =>
-      booking.tenantId === CURRENT_TENANT.id && booking.status === 'pending' ? total + 1 : total,
+      booking.tenantId === tenant.id && booking.status === 'pending' ? total + 1 : total,
     0,
   )
   return {
     pendingBookings,
-    todayDepartures: getDeparturesForDay(CURRENT_TENANT.id, NOW).length,
-    unreadMessages: getNotifications(CURRENT_TENANT.id).filter((n) => !n.read).length,
-    abandonedCarts: countOpenAbandoned(CURRENT_TENANT),
+    todayDepartures: getDeparturesForDay(tenant.id, NOW).length,
+    unreadMessages: getNotifications(tenant.id).filter((n) => !n.read).length,
+    abandonedCarts: countOpenAbandoned(tenant),
+    ...getHospitalityCounts(tenant),
   }
 }
 
@@ -46,11 +51,13 @@ function computeNavCounts(): NavCounts {
  * `<Toaster />` is intentionally NOT mounted here — the root layout already
  * mounts it, and Sonner renders every toast once per mounted Toaster.
  */
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const navCounts = computeNavCounts()
-  const notifications = getNotifications(CURRENT_TENANT.id)
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const tenant = await getWorkspaceTenant()
+  const navCounts = computeNavCounts(tenant)
+  const notifications = getNotifications(tenant.id)
 
   return (
+    <WorkspaceProvider tenant={tenant}>
     <CommandPaletteProvider>
       <RouteLoadingBar />
 
@@ -78,5 +85,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <CommandPalette />
     </CommandPaletteProvider>
+    </WorkspaceProvider>
   )
 }

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
+import { requireWorkspaceRoute } from '@/lib/workspace'
 
-import { CURRENT_TENANT, NOW, TODAY_KEY, getActivitiesByTenant, getBookingRows } from '@/lib/demo'
+import { NOW, TODAY_KEY, getActivitiesByTenant, getBookingRows } from '@/lib/demo'
 import { BookingsPageClient } from '@/components/dashboard/bookings/bookings-page-client'
 
 export const dynamic = 'force-dynamic'
@@ -16,8 +17,8 @@ export const metadata: Metadata = {
  * keeps the payload lightweight (~250 KB) while preserving all filtering,
  * pagination, and interactive capabilities without browser latency.
  */
-export default function BookingsPage() {
-  const tenant = CURRENT_TENANT
+export default async function BookingsPage() {
+  const { tenant } = await requireWorkspaceRoute('/dashboard/bookings')
   const allRows = getBookingRows(tenant.id, 800)
   const activities = getActivitiesByTenant(tenant.id)
 

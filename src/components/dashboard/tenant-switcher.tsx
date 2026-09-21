@@ -2,12 +2,12 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { Check, ChevronsUpDown, Plus, Settings2 } from 'lucide-react'
 
 import type { PlanTier, Tenant, VerticalKey } from '@/types'
 import { cn } from '@/lib/utils'
-import { CURRENT_TENANT, TENANTS } from '@/lib/demo-core'
+import { TENANTS } from '@/lib/demo-core'
+import { useWorkspace } from '@/components/dashboard/workspace-provider'
 import { Badge, type BadgeVariant } from '@/components/ui/badge'
 import {
   DropdownMenu,
@@ -23,15 +23,16 @@ import { toast } from '@/components/ui/toaster'
 /* ==========================================================================
    TENANT SWITCHER
 
-   Switching workspaces is a demo affordance: it acknowledges the choice and
-   returns to the overview rather than re-seeding the whole app. Everything
-   else — plan, vertical, locale line — is read straight off the tenant.
+   Switching workspaces writes the workspace cookie through /dashboard/switch
+   and reloads on the overview, so every server component re-reads the new
+   business: a restaurant gets tables and orders, a hotel gets a front desk.
    ========================================================================== */
 
 const VERTICAL_LABEL: Record<VerticalKey, string> = {
   watersports: 'Watersports',
   tours: 'Tours & sightseeing',
   restaurants: 'Restaurants',
+  hotels: 'Hotels & stays',
   adventure: 'Adventure',
   island: 'Island & resort',
   wellness: 'Wellness',
@@ -91,25 +92,21 @@ export interface TenantSwitcherProps {
 }
 
 export function TenantSwitcher({ collapsed = false, className }: TenantSwitcherProps) {
-  const router = useRouter()
   const [open, setOpen] = React.useState(false)
-  const [activeId, setActiveId] = React.useState(CURRENT_TENANT.id)
-
-  const active = TENANTS.find((t) => t.id === activeId) ?? CURRENT_TENANT
+  const { tenant: active } = useWorkspace()
 
   const select = React.useCallback(
     (tenant: Tenant) => {
-      setActiveId(tenant.id)
-      if (tenant.id === CURRENT_TENANT.id) {
-        toast.success(`Now in ${tenant.name}`)
-      } else {
-        toast(`Switched to ${tenant.name}`, {
-          description: `${VERTICAL_LABEL[tenant.vertical]} · ${tenant.city}, ${tenant.country}`,
-        })
+      if (tenant.id === active.id) {
+        toast.success(`Already in ${tenant.name}`)
+        return
       }
-      router.push('/dashboard')
+      toast(`Switching to ${tenant.name}`, {
+        description: `${VERTICAL_LABEL[tenant.vertical]} · ${tenant.city}, ${tenant.country}`,
+      })
+      window.location.assign(`/dashboard/switch?to=${encodeURIComponent(tenant.id)}`)
     },
-    [router],
+    [active.id],
   )
 
   const trigger = collapsed ? (

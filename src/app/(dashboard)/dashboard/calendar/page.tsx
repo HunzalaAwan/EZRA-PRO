@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
+import { requireWorkspaceRoute } from '@/lib/workspace'
 
-import { CURRENT_TENANT, NOW, getCalendarEvents } from '@/lib/demo'
+import { NOW, getCalendarEvents } from '@/lib/demo'
 import { addDays } from '@/lib/utils'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { CalendarShell } from '@/components/dashboard/calendar/calendar-shell'
@@ -19,7 +20,8 @@ export const metadata: Metadata = {
  */
 const INITIAL_WINDOW = { from: addDays(NOW, -35), to: addDays(NOW, 42) }
 
-export default function CalendarPage() {
+export default async function CalendarPage() {
+  const { tenant } = await requireWorkspaceRoute('/dashboard/calendar')
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
@@ -28,7 +30,7 @@ export default function CalendarPage() {
       />
       <CalendarShell
         initialWindow={INITIAL_WINDOW}
-        initialEvents={getCalendarEvents(CURRENT_TENANT.id, INITIAL_WINDOW.from, INITIAL_WINDOW.to)}
+        initialEvents={getCalendarEvents(tenant.id, INITIAL_WINDOW.from, INITIAL_WINDOW.to)}
       />
     </div>
   )

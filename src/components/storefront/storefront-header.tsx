@@ -8,6 +8,7 @@ import { Check, Globe, Lock, Menu, Phone, ShieldCheck, Sparkles } from 'lucide-r
 
 import { cn, initials } from '@/lib/utils'
 import type { Tenant } from '@/types'
+import type { StorefrontKind } from '@/lib/workspace-profile'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
 import {
@@ -59,6 +60,8 @@ function defaultLanguage(locale: string) {
 
 export interface StorefrontHeaderProps {
   tenant: Tenant
+  /** What the business sells; decides the links and the button. */
+  kind?: StorefrontKind
 }
 
 /* ==========================================================================
@@ -68,12 +71,12 @@ export interface StorefrontHeaderProps {
    glass once the page moves, and stripped back to a trust bar on checkout.
    ========================================================================== */
 
-export function StorefrontHeader({ tenant }: StorefrontHeaderProps) {
+export function StorefrontHeader({ tenant, kind = 'experiences' }: StorefrontHeaderProps) {
   const pathname = usePathname()
   const base = `/book/${tenant.slug}`
 
   const isHome = pathname === base || pathname === `${base}/`
-  const isCheckout = pathname.startsWith(`${base}/checkout`)
+  const isCheckout = [`${base}/checkout`, `${base}/order`, `${base}/reserve`, `${base}/stay`].some((p) => pathname.startsWith(p))
 
   const [scrolled, setScrolled] = React.useState(false)
   const [menuOpen, setMenuOpen] = React.useState(false)
@@ -87,11 +90,32 @@ export function StorefrontHeader({ tenant }: StorefrontHeaderProps) {
   /** Transparent chrome is only safe where a dark hero image sits behind it. */
   const overHero = isHome && !scrolled && !menuOpen
 
-  const nav = [
-    { label: 'Experiences', href: `${base}#experiences` },
-    { label: 'About', href: `${base}#about` },
-    { label: 'Contact', href: `${base}#contact` },
-  ]
+  const nav =
+    kind === 'restaurant'
+      ? [
+          { label: 'Menu', href: `${base}#menu` },
+          { label: 'Reserve', href: `${base}#reserve` },
+          { label: 'About', href: `${base}#about` },
+          { label: 'Contact', href: `${base}#contact` },
+        ]
+      : kind === 'hotel'
+        ? [
+            { label: 'Rooms', href: `${base}#rooms` },
+            { label: 'Dining', href: `${base}#dining` },
+            { label: 'Experiences', href: `${base}#experiences` },
+            { label: 'Contact', href: `${base}#contact` },
+          ]
+        : [
+            { label: 'Experiences', href: `${base}#experiences` },
+            { label: 'About', href: `${base}#about` },
+            { label: 'Contact', href: `${base}#contact` },
+          ]
+  const cta =
+    kind === 'restaurant'
+      ? { label: 'Reserve a table', href: `${base}#reserve`, browse: 'See the menu', browseHref: `${base}#menu` }
+      : kind === 'hotel'
+        ? { label: 'Book a stay', href: `${base}#rooms`, browse: 'See the rooms', browseHref: `${base}#rooms` }
+        : { label: 'Book now', href: `${base}#experiences`, browse: 'Browse experiences', browseHref: `${base}#experiences` }
 
   const activeLanguage = LANGUAGES.find((l) => l.code === language) ?? LANGUAGES[0]
 
@@ -244,7 +268,7 @@ export function StorefrontHeader({ tenant }: StorefrontHeaderProps) {
                 variant={overHero ? 'glass' : 'primary'}
                 className={cn('hidden sm:inline-flex', overHero && 'text-white')}
               >
-                <Link href={`${base}#experiences`}>Book now</Link>
+                <Link href={cta.href}>{cta.label}</Link>
               </Button>
 
               {/* ---------- mobile ---------- */}
@@ -287,7 +311,7 @@ export function StorefrontHeader({ tenant }: StorefrontHeaderProps) {
 
                     <div className="mt-7 space-y-3">
                       <Button asChild fullWidth size="lg" onClick={() => setMenuOpen(false)}>
-                        <Link href={`${base}#experiences`}>Browse experiences</Link>
+                        <Link href={cta.browseHref}>{cta.browse}</Link>
                       </Button>
                       <Button
                         asChild

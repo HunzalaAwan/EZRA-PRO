@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { requireWorkspaceRoute } from '@/lib/workspace'
 
 import { PageHeader } from '@/components/dashboard/page-header'
 import {
@@ -12,7 +13,7 @@ import {
   type ReviewActivityOption,
   type ReviewItem,
 } from '@/components/dashboard/reviews/reviews-list'
-import { CHANNEL_LABELS, CURRENT_TENANT, CURRENT_USER, NOW, getBookingRows } from '@/lib/demo'
+import { CHANNEL_LABELS, CURRENT_USER, NOW, getBookingRows } from '@/lib/demo'
 import { addDays, average, formatDateShort, startOfWeek, toDateKey } from '@/lib/utils'
 import type { BookingRow } from '@/lib/demo'
 
@@ -105,8 +106,8 @@ function toReviewItem(row: BookingRow): ReviewItem {
   }
 }
 
-export default function ReviewsPage() {
-  const tenant = CURRENT_TENANT
+export default async function ReviewsPage() {
+  const { tenant } = await requireWorkspaceRoute('/dashboard/reviews')
   const rows = getBookingRows(tenant.id)
 
   const rated = rows
