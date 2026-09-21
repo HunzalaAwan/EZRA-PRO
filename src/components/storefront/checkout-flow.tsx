@@ -33,7 +33,6 @@ import {
 import type { Activity, Tenant } from '@/types'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -84,17 +83,6 @@ const guestSchema = z.object({
   phone: z.string().trim().regex(PHONE, 'Add a number we can reach you on'),
   country: z.string().min(2, 'Pick your country'),
   requests: z.string().max(500, 'Keep it under 500 characters').optional(),
-})
-
-const participantSchema = z.object({
-  firstName: z.string().trim().min(2, 'First name required'),
-  lastName: z.string().trim().min(2, 'Last name required'),
-  age: z
-    .string()
-    .trim()
-    .regex(/^\d{1,3}$/, 'Age required')
-    .refine((value) => Number(value) >= 1 && Number(value) <= 110, 'Check the age'),
-  waiver: z.literal(true, { message: 'The waiver must be accepted' }),
 })
 
 const paymentSchema = z.object({
@@ -233,7 +221,6 @@ const stepVariants = {
 
 const STEPS = [
   { key: 'guest', label: 'Your details' },
-  { key: 'participants', label: 'Guests' },
   { key: 'payment', label: 'Payment' },
 ] as const
 
@@ -274,20 +261,6 @@ export function CheckoutFlow({
     requests: '',
   })
 
-  const [participants, setParticipants] = React.useState(() =>
-    quote.ticketLines.flatMap((line) =>
-      Array.from({ length: line.quantity }, (_, index) => ({
-        id: `${line.id}-${index}`,
-        tierLabel: line.label,
-        seat: index + 1,
-        firstName: '',
-        lastName: '',
-        age: '',
-        waiver: false,
-      })),
-    ),
-  )
-
   const [payment, setPayment] = React.useState({
     cardName: '',
     cardNumber: '',
@@ -318,21 +291,6 @@ export function CheckoutFlow({
       }
     }
     if (index === 1) {
-      const next: Errors = {}
-      participants.forEach((participant, i) => {
-        const result = participantSchema.safeParse(participant)
-        if (!result.success) {
-          for (const [key, message] of Object.entries(collectErrors(result.error.issues))) {
-            next[`p${i}.${key}`] = message
-          }
-        }
-      })
-      if (Object.keys(next).length > 0) {
-        setErrors(next)
-        return false
-      }
-    }
-    if (index === 2) {
       const result = paymentSchema.safeParse(payment)
       if (!result.success) {
         setErrors(collectErrors(result.error.issues))
@@ -413,7 +371,7 @@ export function CheckoutFlow({
             Secure checkout
           </h1>
           <p className="mt-2 text-sm text-muted">
-            Three short steps. Your seats are held for the next 15 minutes.
+            Two short steps. Your seats are held for the next 15 minutes.
           </p>
 
           {/* ---------- progress ---------- */}
@@ -497,15 +455,6 @@ export function CheckoutFlow({
                   <GuestStep guest={guest} setGuest={setGuest} errors={errors} />
                 ) : null}
                 {step === 1 ? (
-                  <ParticipantsStep
-                    participants={participants}
-                    setParticipants={setParticipants}
-                    errors={errors}
-                    guest={guest}
-                    activity={activity}
-                  />
-                ) : null}
-                {step === 2 ? (
                   <PaymentStep
                     payment={payment}
                     setPayment={setPayment}
@@ -606,6 +555,19 @@ function GuestStep({
         </p>
       </div>
 
+      {/* Only the lead guest is needed to pay. Everyone else's name and
+          waiver are collected after, from an emailed link or at check-in. */}
+      <div className="flex items-start gap-3 rounded-2xl bg-surface-sunken p-4">
+        <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl bg-surface text-primary shadow-xs">
+          <Users className="size-4" aria-hidden="true" />
+        </span>
+        <p className="text-sm leading-relaxed text-muted">
+          <span className="font-semibold text-foreground">Booking for others too?</span> Only your
+          details are needed now. After you pay we email you a link so each guest can add their
+          name and sign the waiver in about a minute, or the crew can do it at check-in.
+        </p>
+      </div>
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="First name" error={errors.firstName} required>
           <Input
@@ -681,152 +643,6 @@ function GuestStep({
           placeholder="Celebrating our anniversary — no fuss needed, we're just happy to be here."
         />
       </Field>
-    </section>
-  )
-}
-
-/* ==========================================================================
-   STEP 2 — PARTICIPANTS
-   ========================================================================== */
-
-type Participant = {
-  id: string
-  tierLabel: string
-  seat: number
-  firstName: string
-  lastName: string
-  age: string
-  waiver: boolean
-}
-
-function ParticipantsStep({
-  participants,
-  setParticipants,
-  errors,
-  guest,
-  activity,
-}: {
-  participants: Participant[]
-  setParticipants: React.Dispatch<React.SetStateAction<Participant[]>>
-  errors: Errors
-  guest: GuestState
-  activity: Activity
-}) {
-  const update = (index: number, patch: Partial<Participant>) =>
-    setParticipants((prev) => prev.map((p, i) => (i === index ? { ...p, ...patch } : p)))
-
-  const allWaived = participants.every((p) => p.waiver)
-
-  return (
-    <section aria-labelledby="step-participants" className="space-y-5">
-      <div>
-        <h2 id="step-participants" className="font-display text-xl font-semibold tracking-tight">
-          Who is coming with you?
-        </h2>
-        <p className="mt-1.5 text-sm text-muted">
-          Names must match photo ID at check-in. Ages help us size gear correctly.
-        </p>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={() =>
-            update(0, { firstName: guest.firstName, lastName: guest.lastName })
-          }
-          disabled={!guest.firstName && !guest.lastName}
-        >
-          Use my name for guest 1
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={() =>
-            setParticipants((prev) => prev.map((p) => ({ ...p, waiver: !allWaived })))
-          }
-        >
-          {allWaived ? 'Clear all waivers' : 'Accept waiver for everyone'}
-        </Button>
-      </div>
-
-      <ol className="space-y-3">
-        {participants.map((participant, index) => {
-          const waiverError = errors[`p${index}.waiver`]
-          return (
-            <li
-              key={participant.id}
-              className={cn(
-                'rounded-2xl border bg-surface p-4 transition-colors duration-200',
-                waiverError ? 'border-danger/60' : 'border-line',
-              )}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-semibold text-foreground">
-                  Guest {index + 1}
-                  <span className="ml-2 rounded-full bg-surface-sunken px-2 py-0.5 text-[0.6875rem] font-medium text-muted">
-                    {participant.tierLabel}
-                  </span>
-                </p>
-                {participant.waiver ? (
-                  <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
-                    <Check className="size-3.5" aria-hidden="true" />
-                    Waiver signed
-                  </span>
-                ) : null}
-              </div>
-
-              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_6rem]">
-                <Field label="First name" labelSize="sm" error={errors[`p${index}.firstName`]}>
-                  <Input
-                    size="sm"
-                    value={participant.firstName}
-                    onChange={(e) => update(index, { firstName: e.target.value })}
-                    autoComplete="off"
-                  />
-                </Field>
-                <Field label="Last name" labelSize="sm" error={errors[`p${index}.lastName`]}>
-                  <Input
-                    size="sm"
-                    value={participant.lastName}
-                    onChange={(e) => update(index, { lastName: e.target.value })}
-                    autoComplete="off"
-                  />
-                </Field>
-                <Field label="Age" labelSize="sm" error={errors[`p${index}.age`]}>
-                  <Input
-                    size="sm"
-                    inputMode="numeric"
-                    value={participant.age}
-                    onChange={(e) =>
-                      update(index, { age: e.target.value.replace(/\D/g, '').slice(0, 3) })
-                    }
-                  />
-                </Field>
-              </div>
-
-              <label
-                htmlFor={`waiver-${participant.id}`}
-                className="mt-3 flex cursor-pointer items-start gap-2.5"
-              >
-                <Checkbox
-                  id={`waiver-${participant.id}`}
-                  checked={participant.waiver}
-                  onCheckedChange={(value) => update(index, { waiver: value === true })}
-                  className="mt-0.5"
-                />
-                <span className="text-xs leading-relaxed text-muted">
-                  I accept the liability waiver and confirm this guest meets the minimum age of{' '}
-                  {activity.minAge} and the stated requirements.
-                  {waiverError ? (
-                    <span className="mt-1 block font-medium text-danger">{waiverError}</span>
-                  ) : null}
-                </span>
-              </label>
-            </li>
-          )
-        })}
-      </ol>
     </section>
   )
 }
@@ -1014,7 +830,8 @@ function PaymentStep({
         <p className="mt-1.5 text-xs leading-relaxed text-muted">
           {activity.cancellationPolicy.summary} Your card is charged{' '}
           {formatCurrency(total, tenant.currency, { decimals: true })} in {tenant.currency} by{' '}
-          {tenant.legalName}.
+          {tenant.legalName}. Paying accepts the liability waiver for your own place; other
+          guests sign theirs from the link we send.
         </p>
       </div>
     </section>
@@ -1526,6 +1343,26 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
           >
             Download ticket
           </Button>
+        </div>
+      </motion.div>
+
+      {/* ---------- names and waivers, later ---------- */}
+      <motion.div
+        initial={reducedMotion ? false : { opacity: 0, y: 18 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.32, ease: [0.16, 1, 0.3, 1] }}
+        className="mt-5 flex items-start gap-3 rounded-2xl border border-line bg-surface p-5"
+      >
+        <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary">
+          <Users className="size-4" aria-hidden="true" />
+        </span>
+        <div>
+          <p className="text-sm font-semibold text-foreground">Names and waivers, when it suits you</p>
+          <p className="mt-1 text-sm leading-relaxed text-muted">
+            {quote.headcount > 1
+              ? `We have sent ${guest.email || 'your inbox'} a link for each of your ${quote.headcount - 1} other ${pluralize(quote.headcount - 1, 'guest')} to add their name and sign the waiver. About a minute each, no account needed, and anyone who has not done it by the day can do it with the crew at check-in.`
+              : `Your waiver is in the same email. It takes about a minute, and if you would rather, the crew can do it with you at check-in.`}
+          </p>
         </div>
       </motion.div>
 

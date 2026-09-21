@@ -44,6 +44,7 @@ import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from '@/compo
 import { Reveal } from '@/components/motion/reveal'
 import { StaggerGroup, StaggerItem } from '@/components/motion/stagger'
 import { BookingWidget, type AvailabilityDay } from '@/components/storefront/booking-widget'
+import { StickyRail } from '@/components/storefront/sticky-rail'
 import { StarRow } from '@/components/storefront/storefront-hero'
 import { TrustBar } from '@/components/storefront/trust-bar'
 
@@ -614,7 +615,7 @@ export function ActivityDetailView({
 
           {/* ---------- right rail ---------- */}
           <aside id="book" className="scroll-mt-28 hidden lg:block">
-            <div className="sticky top-24">
+            <StickyRail offset={96}>
               <BookingWidget
                 activity={activity}
                 tenantSlug={tenant.slug}
@@ -631,7 +632,7 @@ export function ActivityDetailView({
                 freeCancellationHours={activity.cancellationPolicy.freeCancellationHours}
                 className="mt-5 justify-center"
               />
-            </div>
+            </StickyRail>
           </aside>
         </div>
 
