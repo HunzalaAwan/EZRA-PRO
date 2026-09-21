@@ -143,7 +143,7 @@ export interface DashboardNavItem {
   href: string
   icon: string
   /** Shown as a count chip; resolved at render time from live data. */
-  countKey?: 'pendingBookings' | 'todayDepartures' | 'unreadMessages'
+  countKey?: 'pendingBookings' | 'todayDepartures' | 'unreadMessages' | 'abandonedCarts'
   children?: { label: string; href: string }[]
   /** Hidden unless the tenant's plan enables this feature. */
   requiresFeature?: string
@@ -176,6 +176,7 @@ export const DASHBOARD_NAV: DashboardNavSection[] = [
     items: [
       { label: 'Analytics', href: '/dashboard/analytics', icon: 'ChartSpline' },
       { label: 'Customers', href: '/dashboard/customers', icon: 'Users' },
+      { label: 'Abandoned carts', href: '/dashboard/abandoned', icon: 'ShoppingCart', countKey: 'abandonedCarts' },
       { label: 'Payments', href: '/dashboard/payments', icon: 'CreditCard' },
       { label: 'Reviews', href: '/dashboard/reviews', icon: 'Star' },
     ],

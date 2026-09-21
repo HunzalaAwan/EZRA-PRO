@@ -4,6 +4,7 @@ import { PageTransition, RouteLoadingBar } from '@/components/motion/page-transi
 import { CommandPalette, CommandPaletteProvider } from '@/components/dashboard/command-palette'
 import { Sidebar, type NavCounts } from '@/components/dashboard/sidebar'
 import { Topbar } from '@/components/dashboard/topbar'
+import { countOpenAbandoned } from '@/lib/data/abandoned'
 import { BOOKINGS, CURRENT_TENANT, NOW, getDeparturesForDay, getNotifications } from '@/lib/demo'
 
 export const metadata: Metadata = {
@@ -31,6 +32,7 @@ function computeNavCounts(): NavCounts {
     pendingBookings,
     todayDepartures: getDeparturesForDay(CURRENT_TENANT.id, NOW).length,
     unreadMessages: getNotifications(CURRENT_TENANT.id).filter((n) => !n.read).length,
+    abandonedCarts: countOpenAbandoned(CURRENT_TENANT),
   }
 }
 
