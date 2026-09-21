@@ -362,7 +362,7 @@ export function CalendarShell({
               leftIcon={<Plus aria-hidden="true" />}
               onClick={() => openCreate(cursor)}
             >
-              <span className="hidden sm:inline">New departure</span>
+              <span className="hidden sm:inline">Add availability</span>
               <span className="sm:hidden">New</span>
             </Button>
           </div>

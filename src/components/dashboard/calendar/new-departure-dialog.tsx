@@ -232,7 +232,7 @@ export function NewDepartureDialog({
       setSubmitting(false)
       onOpenChange(false)
       toast.success(
-        totalDepartures === 1 ? 'Departure scheduled' : `${totalDepartures} departures scheduled`,
+        totalDepartures === 1 ? 'Availability added' : `${totalDepartures} slots added`,
         {
           description: `${activity?.name ?? 'Activity'} · ${times.join(', ')} · ${
             repeat ? `repeating until ${until}` : date
@@ -248,10 +248,10 @@ export function NewDepartureDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="lg" className="max-h-[min(46rem,calc(100dvh-2rem))]">
         <DialogHeader divider>
-          <DialogTitle>Schedule a departure</DialogTitle>
+          <DialogTitle>Add availability</DialogTitle>
           <DialogDescription>
-            Add one slot or a repeating pattern. Capacity, crew and pricing can differ from the
-            activity defaults.
+            One time slot or a repeating pattern, for a departure, a sitting, a class or an event.
+            Capacity, crew and pricing can differ from the activity defaults.
           </DialogDescription>
         </DialogHeader>
 
@@ -326,7 +326,7 @@ export function NewDepartureDialog({
               label="Start times"
               error={errors.times}
               required
-              description="Each time creates its own departure on the selected date."
+              description="Each time creates its own slot on the selected date."
             >
               {(control) => (
                 <div className="flex flex-col gap-2">
@@ -530,7 +530,7 @@ export function NewDepartureDialog({
             <p className="tabular mr-auto hidden text-[0.75rem] text-subtle sm:block">
               {totalDepartures > 0 ? (
                 <>
-                  <span className="font-semibold text-foreground">{totalDepartures}</span> departure
+                  <span className="font-semibold text-foreground">{totalDepartures}</span> slot
                   {totalDepartures === 1 ? '' : 's'} will be created
                   {repeat ? ` across ${occurrences} day${occurrences === 1 ? '' : 's'}` : ''}
                 </>
@@ -553,7 +553,7 @@ export function NewDepartureDialog({
               loading={submitting}
               leftIcon={<CalendarPlus aria-hidden="true" />}
             >
-              {totalDepartures > 1 ? `Schedule ${totalDepartures}` : 'Schedule departure'}
+              {totalDepartures > 1 ? `Add ${totalDepartures} slots` : 'Add availability'}
             </Button>
           </DialogFooter>
         </form>

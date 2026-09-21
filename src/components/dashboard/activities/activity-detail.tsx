@@ -3,6 +3,7 @@
 import * as React from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
+import { useActivityOverride } from '@/hooks/use-activity-overrides'
 import {
   Archive,
   ArrowLeft,
@@ -457,11 +458,11 @@ function OverviewTab({ detail }: { detail: ActivityDetailData }) {
             <div className="mt-3 flex flex-wrap gap-1.5">
               <Badge size="sm" variant="neutral">
                 <Timer className="size-3" aria-hidden="true" />
-                {formatDuration(activity.durationMinutes)}
+                {activity.durationMinutes > 0 ? formatDuration(activity.durationMinutes) : 'Flexible'}
               </Badge>
               <Badge size="sm" variant="neutral">
                 <Users className="size-3" aria-hidden="true" />
-                {activity.minParticipants}–{activity.maxCapacity} guests
+                {activity.maxCapacity > 0 ? `${activity.minParticipants}–${activity.maxCapacity} guests` : 'No seat limit'}
               </Badge>
               <Badge size="sm" variant="neutral">
                 Ages {activity.minAge}+
@@ -1068,7 +1069,7 @@ export interface ActivityDetailProps {
 }
 
 export function ActivityDetail({ detail, tenantSlug, nowIso }: ActivityDetailProps) {
-  const { activity } = detail
+  const activity = useActivityOverride(detail.activity)
   const now = React.useMemo(() => new Date(nowIso), [nowIso])
   const hero = primaryMedia(activity)
   const accent = ACTIVITY_ACCENT[activity.colorKey]
@@ -1125,17 +1126,8 @@ export function ActivityDetail({ detail, tenantSlug, nowIso }: ActivityDetailPro
                 Preview storefront
               </Link>
             </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              leftIcon={<PencilLine />}
-              onClick={() =>
-                toast('Editing ' + activity.name, {
-                  description: 'Opening the activity editor with these details pre-filled.',
-                })
-              }
-            >
-              Edit
+            <Button variant="primary" size="sm" leftIcon={<PencilLine />} asChild>
+              <Link href={`/dashboard/activities/${activity.id}/edit`}>Edit</Link>
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

@@ -106,7 +106,7 @@ export function AgendaView({
           description="Nothing matches the current filters over the next two weeks. Widen the filters or schedule something new."
           action={
             <Button size="sm" onClick={() => onCreate(from)}>
-              New departure
+              Add availability
             </Button>
           }
           className="py-16"
@@ -161,7 +161,7 @@ export function AgendaView({
                 </span>
 
                 <IconButton
-                  aria-label={`New departure on ${toDateKey(group.date)}`}
+                  aria-label={`Add availability on ${toDateKey(group.date)}`}
                   size="xs"
                   variant="ghost"
                   onClick={() => onCreate(group.date)}

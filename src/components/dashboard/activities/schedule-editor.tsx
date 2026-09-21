@@ -84,14 +84,14 @@ export const SCHEDULE_MODES: { value: ScheduleMode; label: string; description: 
 ]
 
 export function defaultSchedule(nowIso: string): DraftSchedule {
-  const today = new Date(nowIso)
+  void nowIso
   return {
     mode: 'times',
     weekdays: [1, 2, 3, 4, 5, 6, 0],
     startTimes: ['09:00', '13:30'],
     capacity: 16,
-    seasonStart: toDateKey(today),
-    seasonEnd: toDateKey(addDays(today, 180)),
+    seasonStart: '',
+    seasonEnd: '',
     opensAt: '09:00',
     closesAt: '17:00',
     lastEntryMinutes: 60,
@@ -259,8 +259,8 @@ export function ScheduleEditor({ schedule, onChange, nowIso, errors, className }
           title={schedule.mode === 'hours' ? 'Open on' : 'Runs on'}
           hint={
             schedule.mode === 'hours'
-              ? 'Guests can book any of these days inside the season.'
-              : 'Departures are generated for every selected day inside the season.'
+              ? 'Guests can book any of these days, between the start and end dates if you set them.'
+              : 'Departures are generated for every selected day, between the start and end dates if you set them.'
           }
           schedule={schedule}
           onChange={onChange}
@@ -325,7 +325,7 @@ export function ScheduleEditor({ schedule, onChange, nowIso, errors, className }
 
         {schedule.mode !== 'dates' ? (
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Season starts" labelSize="sm" error={errors?.seasonStart}>
+            <Field label="Start date" labelSize="sm" error={errors?.seasonStart} description="Optional">
               <Input
                 type="date"
                 size="sm"
@@ -333,7 +333,7 @@ export function ScheduleEditor({ schedule, onChange, nowIso, errors, className }
                 onChange={(event) => set({ seasonStart: event.target.value })}
               />
             </Field>
-            <Field label="Season ends" labelSize="sm" error={errors?.seasonEnd}>
+            <Field label="End date" labelSize="sm" error={errors?.seasonEnd} description="Optional">
               <Input
                 type="date"
                 size="sm"
@@ -344,7 +344,7 @@ export function ScheduleEditor({ schedule, onChange, nowIso, errors, className }
           </div>
         ) : (
           <div className="rounded-xl border border-dashed border-line p-4 text-xs leading-relaxed text-muted">
-            Listed dates do not need a season. Each date sells until it starts, or until the seats run out.
+            Listed dates need no start or end date. Each one sells until it starts, or until the seats run out.
           </div>
         )}
       </div>
@@ -373,8 +373,8 @@ export function ScheduleEditor({ schedule, onChange, nowIso, errors, className }
             {schedule.mode === 'dates'
               ? 'No dates yet — add the first one above.'
               : schedule.mode === 'hours'
-                ? 'Nothing open yet — pick at least one day inside the season.'
-                : 'This rule generates nothing yet — pick at least one weekday and one start time inside the season.'}
+                ? 'Nothing open yet — pick at least one day.'
+                : 'This rule generates nothing yet — pick at least one weekday and one start time.'}
           </p>
         ) : (
           <ul className="mt-3 flex list-none flex-col gap-1.5 p-0">

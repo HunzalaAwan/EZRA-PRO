@@ -139,7 +139,7 @@ export function DayView({
             description="No departures are scheduled for this day. Schedule one and it will appear on every view instantly."
             action={
               <Button size="sm" onClick={() => onCreate(day)}>
-                New departure
+                Add availability
               </Button>
             }
             className="py-16"

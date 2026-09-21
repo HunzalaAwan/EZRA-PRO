@@ -35,7 +35,8 @@ import {
 } from 'lucide-react'
 import { z } from 'zod'
 
-import type { CurrencyCode, DifficultyLevel, VerticalKey } from '@/types'
+import type { Activity, CurrencyCode, DifficultyLevel, VerticalKey } from '@/types'
+import { saveActivityOverride } from '@/lib/activity-overrides'
 import {
   cn,
   formatCurrency,
@@ -51,6 +52,8 @@ import { Field } from '@/components/ui/field'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Avatar } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import { RadioGroup, RadioGroupCard } from '@/components/ui/radio-group'
 import {
@@ -113,13 +116,34 @@ export const ARRIVAL_OPTIONS: { value: ArrivalMode; label: string; description: 
 const defaultArrival = (category: VerticalKey): ArrivalMode =>
   category === 'restaurants' || category === 'wellness' ? 'venue' : 'meet'
 
+export type DurationUnit = 'minutes' | 'hours' | 'days'
+export const DURATION_UNITS: { value: DurationUnit; label: string; factor: number; placeholder: string }[] = [
+  { value: 'minutes', label: 'minutes', factor: 1, placeholder: '90' },
+  { value: 'hours', label: 'hours', factor: 60, placeholder: '2' },
+  { value: 'days', label: 'days', factor: 1440, placeholder: '3' },
+]
+const unitFor = (minutes: number): DurationUnit =>
+  minutes > 0 && minutes % 1440 === 0 ? 'days' : minutes > 0 && minutes % 60 === 0 ? 'hours' : 'minutes'
+
+/** A crew member the operator can put on the activity by default. */
+export interface WizardCrewMember {
+  id: string
+  name: string
+  title: string
+  avatarUrl: string
+}
+
 export interface ActivityDraft {
   name: string
   tagline: string
   category: VerticalKey
   difficulty: DifficultyLevel
+  /** 0 = flexible. */
   durationMinutes: number
+  /** How the duration is typed; the value is always stored in minutes. */
+  durationUnit: DurationUnit
   minAge: number
+  /** 0 = no seat limit. */
   maxCapacity: number
   minParticipants: number
   description: string
@@ -136,6 +160,8 @@ export interface ActivityDraft {
   schedule: DraftSchedule
   featured: boolean
   freeCancellationHours: number
+  /** Crew assigned to every departure by default. */
+  crewIds: string[]
   /** Restaurant settings; only read while the category is Dining. */
   dining: DiningDraft
 }
@@ -146,7 +172,7 @@ const STORAGE_KEY = 'ezra:activity-wizard:v2'
 export const isDining = (draft: Pick<ActivityDraft, 'category'>) => draft.category === 'restaurants'
 
 /** Generic defaults the operator has not touched can be swapped when the category changes. */
-const TOUR_BASICS = { durationMinutes: 120, maxCapacity: 16, minAge: 8 } as const
+const TOUR_BASICS = { durationMinutes: 0, maxCapacity: 0, minAge: 8 } as const
 
 export function createDefaultDraft(category: VerticalKey, nowIso: string): ActivityDraft {
   const dining = defaultDining()
@@ -158,6 +184,7 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
     category,
     difficulty: 'easy',
     durationMinutes: restaurant ? DINING_BASICS.durationMinutes : TOUR_BASICS.durationMinutes,
+    durationUnit: restaurant ? 'minutes' : 'hours',
     minAge: restaurant ? DINING_BASICS.minAge : TOUR_BASICS.minAge,
     maxCapacity: restaurant ? DINING_BASICS.maxCapacity : TOUR_BASICS.maxCapacity,
     minParticipants: 1,
@@ -176,7 +203,54 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
       : schedule,
     featured: false,
     freeCancellationHours: 24,
+    crewIds: [],
     dining,
+  }
+}
+
+/** The editor, filled in from an activity that already exists. */
+export function draftFromActivity(activity: Activity, nowIso: string): ActivityDraft {
+  const base = createDefaultDraft(activity.category, nowIso)
+  const restaurant = activity.category === 'restaurants'
+  return {
+    ...base,
+    name: activity.name,
+    tagline: activity.tagline,
+    difficulty: activity.difficulty,
+    durationMinutes: activity.durationMinutes,
+    durationUnit: unitFor(activity.durationMinutes),
+    minAge: activity.minAge,
+    maxCapacity: activity.maxCapacity,
+    minParticipants: activity.minParticipants || 1,
+    description: activity.description,
+    highlights: activity.highlights.length > 0 ? [...activity.highlights] : [''],
+    included: activity.included.length > 0 ? [...activity.included] : [''],
+    excluded: [...activity.excluded],
+    requirements: [...activity.requirements],
+    meetingPoint: activity.meetingPoint,
+    arrivalMode: activity.meetingPoint ? (restaurant || activity.category === 'wellness' ? 'venue' : 'meet') : 'none',
+    media: activity.media.map((item) => ({ id: item.id, url: item.url, alt: item.alt, isPrimary: item.isPrimary })),
+    tiers: activity.priceTiers.map((tier) => ({
+      id: tier.id,
+      label: tier.label,
+      price: tier.price,
+      compareAtPrice: tier.compareAtPrice ?? null,
+      minQuantity: tier.minQuantity,
+      maxQuantity: tier.maxQuantity,
+      description: tier.description ?? '',
+      countsTowardCapacity: tier.countsTowardCapacity,
+    })),
+    addOns: activity.addOns.map((addOn) => ({
+      id: addOn.id,
+      label: addOn.label,
+      price: addOn.price,
+      description: addOn.description,
+      maxPerBooking: addOn.maxPerBooking,
+      required: addOn.required,
+    })),
+    schedule: { ...base.schedule, capacity: activity.maxCapacity },
+    featured: activity.featured,
+    freeCancellationHours: activity.cancellationPolicy.freeCancellationHours,
   }
 }
 
@@ -302,7 +376,7 @@ const STEP_SCHEMAS = [
         .number()
         .int()
         .min(0)
-        .max(1440, 'Use multi-day products for anything over 24 hours')
+        .max(43200, 'Keep it under 30 days')
         .refine((minutes) => minutes === 0 || minutes >= 15, 'Give it at least 15 minutes, or leave it flexible'),
       minAge: z.number().int().min(0).max(99),
       maxCapacity: z.number().int().min(0).max(500, 'Keep seats per departure under 500, or remove the limit'),
@@ -386,9 +460,7 @@ const STEP_SCHEMAS = [
         return
       }
       if (schedule.weekdays.length === 0) issue('weekdays', schedule.mode === 'hours' ? 'Pick at least one open day' : 'Pick at least one day of the week')
-      if (!schedule.seasonStart) issue('seasonStart', 'Choose a season start')
-      if (!schedule.seasonEnd) issue('seasonEnd', 'Choose a season end')
-      if (schedule.seasonStart && schedule.seasonEnd && schedule.seasonEnd < schedule.seasonStart) issue('seasonEnd', 'The season must end after it starts')
+      if (schedule.seasonStart && schedule.seasonEnd && schedule.seasonEnd < schedule.seasonStart) issue('seasonEnd', 'The end date must come after the start date')
       if (schedule.mode === 'times' && schedule.startTimes.length === 0) issue('startTimes', 'Add at least one start time')
       if (schedule.mode === 'hours') {
         if (!/^\d{2}:\d{2}$/.test(schedule.opensAt)) issue('opensAt', 'Pick an opening time')
@@ -481,8 +553,8 @@ const DINING_STEP_SCHEMAS = [
         weekdays: z.array(z.number()).min(1, 'Pick at least one open day'),
         startTimes: z.array(z.string()).min(1, 'No sitting times yet — check the first and last seating on each service'),
         capacity: z.number().int().min(1).max(1000),
-        seasonStart: z.string().min(1, 'Choose a season start'),
-        seasonEnd: z.string().min(1, 'Choose a season end'),
+        seasonStart: z.string(),
+        seasonEnd: z.string(),
       }),
       dining: z.object({
         services: z
@@ -892,6 +964,14 @@ export interface ActivityWizardProps {
   defaultCategory: VerticalKey
   /** The frozen demo clock, serialised from the server. */
   nowIso: string
+  /** Bookable people in the workspace, offered as default crew. */
+  crew?: WizardCrewMember[]
+  /** Editing an existing activity: the draft starts from it and saving writes back to it. */
+  mode?: 'create' | 'edit'
+  activityId?: string
+  /** The activity being edited; the draft is built from it on the client. */
+  activity?: Activity
+  initialDraft?: ActivityDraft
 }
 
 export function ActivityWizard({
@@ -900,13 +980,21 @@ export function ActivityWizard({
   tenantSlug,
   defaultCategory,
   nowIso,
+  crew = [],
+  mode = 'create',
+  activityId,
+  activity,
+  initialDraft,
 }: ActivityWizardProps) {
   const router = useRouter()
   const reduceMotion = useReducedMotionSafe()
+  const editing = mode === 'edit' && Boolean(activityId)
+  const storageKey = editing ? `ezra:activity-wizard:edit:${activityId}` : STORAGE_KEY
+  const exitHref = editing ? `/dashboard/activities/${activityId}` : '/dashboard/activities'
 
   const initial = React.useMemo(
-    () => createDefaultDraft(defaultCategory, nowIso),
-    [defaultCategory, nowIso],
+    () => initialDraft ?? (activity ? draftFromActivity(activity, nowIso) : createDefaultDraft(defaultCategory, nowIso)),
+    [initialDraft, activity, defaultCategory, nowIso],
   )
 
   const [draft, setDraft] = React.useState<ActivityDraft>(initial)
@@ -922,7 +1010,7 @@ export function ActivityWizard({
   React.useEffect(() => {
     if (typeof window === 'undefined') return
     try {
-      const raw = window.sessionStorage.getItem(STORAGE_KEY)
+      const raw = window.sessionStorage.getItem(storageKey)
       if (!raw) return
       const parsed = JSON.parse(raw) as { draft?: Partial<ActivityDraft>; step?: number }
       if (parsed.draft) {
@@ -942,11 +1030,11 @@ export function ActivityWizard({
   React.useEffect(() => {
     if (typeof window === 'undefined') return
     try {
-      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ draft, step }))
+      window.sessionStorage.setItem(storageKey, JSON.stringify({ draft, step }))
     } catch {
       // Private mode or a full quota — the wizard still works in memory.
     }
-  }, [draft, step])
+  }, [draft, step, storageKey])
 
   const patch = React.useCallback((changes: Partial<ActivityDraft>) => {
     setDraft((current) => ({ ...current, ...changes }))
@@ -969,7 +1057,7 @@ export function ActivityWizard({
 
   const back = () => {
     if (step === 0) {
-      router.push('/dashboard/activities')
+      router.push(exitHref)
       return
     }
     goTo(step - 1, -1)
@@ -990,18 +1078,18 @@ export function ActivityWizard({
   }
 
   const reset = () => {
-    setDraft(createDefaultDraft(defaultCategory, nowIso))
+    setDraft(editing ? initial : createDefaultDraft(defaultCategory, nowIso))
     setStep(0)
     setFurthest(0)
     setErrors({})
     setShowErrors(false)
     setRestored(false)
     try {
-      window.sessionStorage.removeItem(STORAGE_KEY)
+      window.sessionStorage.removeItem(storageKey)
     } catch {
       /* nothing to clear */
     }
-    toast('Draft discarded')
+    toast(editing ? 'Changes discarded' : 'Draft discarded')
   }
 
   const submit = (mode: 'draft' | 'live') => {
@@ -1021,9 +1109,31 @@ export function ActivityWizard({
     setSubmitting(mode)
     window.setTimeout(() => {
       try {
-        window.sessionStorage.removeItem(STORAGE_KEY)
+        window.sessionStorage.removeItem(storageKey)
       } catch {
         /* already gone */
+      }
+      if (editing && activityId) {
+        saveActivityOverride(activityId, {
+          name: draft.name,
+          tagline: draft.tagline,
+          description: draft.description,
+          highlights: draft.highlights,
+          included: draft.included,
+          excluded: draft.excluded,
+          requirements: draft.requirements,
+          meetingPoint: draft.arrivalMode === 'none' ? '' : draft.meetingPoint,
+          difficulty: draft.difficulty,
+          durationMinutes: draft.durationMinutes,
+          maxCapacity: draft.maxCapacity,
+          minAge: draft.minAge,
+          minParticipants: draft.minParticipants,
+          featured: draft.featured,
+          crewIds: draft.crewIds,
+        })
+        toast.success('Changes saved', { description: `${draft.name} is updated on the storefront.` })
+        router.push(exitHref)
+        return
       }
       if (mode === 'live') {
         toast.success(`${draft.name} is live`, {
@@ -1197,9 +1307,18 @@ export function ActivityWizard({
                       />
                     )
                   ) : null}
+                  {step === 4 && crew.length > 0 ? (
+                    <CrewPicker
+                      crew={crew}
+                      selected={draft.crewIds}
+                      onChange={(crewIds) => patch({ crewIds })}
+                      dining={dining}
+                    />
+                  ) : null}
                   {step === 5 ? (
                     <ReviewStep
                       draft={draft}
+                      crew={crew}
                       currency={currency}
                       tenantName={tenantName}
                       tenantSlug={tenantSlug}
@@ -1218,16 +1337,18 @@ export function ActivityWizard({
               </Button>
 
               <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  leftIcon={<Save />}
-                  loading={submitting === 'draft'}
-                  disabled={submitting !== null}
-                  onClick={() => submit('draft')}
-                >
-                  Save as draft
-                </Button>
+                {editing ? null : (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    leftIcon={<Save />}
+                    loading={submitting === 'draft'}
+                    disabled={submitting !== null}
+                    onClick={() => submit('draft')}
+                  >
+                    Save as draft
+                  </Button>
+                )}
                 {isLast ? (
                   <Button
                     type="button"
@@ -1237,7 +1358,7 @@ export function ActivityWizard({
                     disabled={submitting !== null}
                     onClick={() => submit('live')}
                   >
-                    {dining ? 'Open the book' : 'Publish activity'}
+                    {editing ? 'Save changes' : dining ? 'Open the book' : 'Publish activity'}
                   </Button>
                 ) : (
                   <Button type="button" variant="primary" rightIcon={<ArrowRight />} onClick={advance}>
@@ -1379,6 +1500,14 @@ function BasicsStep({ draft, patch, errors }: StepProps) {
   )
 }
 
+/** The duration as typed in the chosen unit; empty while flexible. */
+function durationValue(draft: Pick<ActivityDraft, 'durationMinutes' | 'durationUnit'>): string {
+  if (draft.durationMinutes <= 0) return ''
+  const factor = DURATION_UNITS.find((unit) => unit.value === draft.durationUnit)?.factor ?? 1
+  const amount = draft.durationMinutes / factor
+  return String(Math.round(amount * 100) / 100)
+}
+
 function TourBasicsFields({ draft, patch, errors }: StepProps) {
   return (
     <>
@@ -1410,17 +1539,33 @@ function TourBasicsFields({ draft, patch, errors }: StepProps) {
           error={errors.durationMinutes}
           description="Leave it empty for open-ended activities: a park pass, a rental, a self-guided ride."
         >
-          <Input
-            type="number"
-            min={0}
-            step={15}
-            value={draft.durationMinutes > 0 ? draft.durationMinutes : ''}
-            placeholder="Flexible"
-            suffix="minutes"
-            onChange={(event) =>
-              patch({ durationMinutes: Number.parseInt(event.target.value, 10) || 0 })
-            }
-          />
+          <div className="flex gap-2">
+            <Input
+              type="number"
+              min={0}
+              step={draft.durationUnit === 'minutes' ? 15 : 0.5}
+              value={durationValue(draft)}
+              placeholder={DURATION_UNITS.find((unit) => unit.value === draft.durationUnit)?.placeholder}
+              className="flex-1"
+              onChange={(event) => {
+                const amount = Number.parseFloat(event.target.value)
+                const factor = DURATION_UNITS.find((unit) => unit.value === draft.durationUnit)?.factor ?? 1
+                patch({ durationMinutes: Number.isFinite(amount) && amount > 0 ? Math.round(amount * factor) : 0 })
+              }}
+            />
+            <Select value={draft.durationUnit} onValueChange={(value) => patch({ durationUnit: value as DurationUnit })}>
+              <SelectTrigger className="w-32 shrink-0" aria-label="Duration unit">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DURATION_UNITS.map((unit) => (
+                  <SelectItem key={unit.value} value={unit.value}>
+                    {unit.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </Field>
         <Field label="Minimum age" error={errors.minAge} description="0 means all ages welcome.">
           <Input
@@ -1435,31 +1580,16 @@ function TourBasicsFields({ draft, patch, errors }: StepProps) {
         <Field
           label="Seats per departure"
           error={errors.maxCapacity}
-          description={draft.maxCapacity > 0 ? 'The most guests one departure takes.' : 'No limit: sell as many as turn up.'}
+          description="Leave it empty for no seat limit."
         >
-          <div className="flex items-center gap-3">
-            <Input
-              type="number"
-              min={1}
-              value={draft.maxCapacity > 0 ? draft.maxCapacity : ''}
-              placeholder="No limit"
-              suffix="seats"
-              disabled={draft.maxCapacity === 0}
-              className="flex-1"
-              onChange={(event) =>
-                patch({ maxCapacity: Number.parseInt(event.target.value, 10) || 0 })
-              }
-            />
-            <label className="inline-flex shrink-0 items-center gap-2 text-xs font-medium text-muted">
-              <Switch
-                size="sm"
-                checked={draft.maxCapacity === 0}
-                onCheckedChange={(value) => patch({ maxCapacity: value ? 0 : 16 })}
-                aria-label="No seat limit"
-              />
-              No limit
-            </label>
-          </div>
+          <Input
+            type="number"
+            min={1}
+            value={draft.maxCapacity > 0 ? draft.maxCapacity : ''}
+            placeholder="16"
+            suffix="seats"
+            onChange={(event) => patch({ maxCapacity: Number.parseInt(event.target.value, 10) || 0 })}
+          />
         </Field>
         <Field
           label="Minimum participants"
@@ -1491,11 +1621,11 @@ function TourBasicsFields({ draft, patch, errors }: StepProps) {
         >
           Flexible
         </button>
-        {[60, 90, 120, 180, 240, 480].map((minutes) => (
+        {[60, 90, 120, 180, 240, 480, 1440, 4320].map((minutes) => (
           <button
             key={minutes}
             type="button"
-            onClick={() => patch({ durationMinutes: minutes })}
+            onClick={() => patch({ durationMinutes: minutes, durationUnit: unitFor(minutes) })}
             className={cn(
               'rounded-full border px-2.5 py-1 text-xs font-medium transition-colors duration-200',
               draft.durationMinutes === minutes
@@ -1503,11 +1633,67 @@ function TourBasicsFields({ draft, patch, errors }: StepProps) {
                 : 'border-line bg-surface text-muted hover:text-foreground',
             )}
           >
-            {formatDuration(minutes)}
+            {minutes >= 1440 ? `${minutes / 1440} ${pluralize(minutes / 1440, 'day')}` : formatDuration(minutes)}
           </button>
         ))}
       </div>
     </>
+  )
+}
+
+/* ==========================================================================
+   CREW — who is on it by default. Changed per departure from the calendar.
+   ========================================================================== */
+
+function CrewPicker({
+  crew,
+  selected,
+  onChange,
+  dining,
+}: {
+  crew: WizardCrewMember[]
+  selected: string[]
+  onChange: (ids: string[]) => void
+  dining: boolean
+}) {
+  return (
+    <section className="mt-6 border-t border-line-subtle pt-6">
+      <p className="text-[0.8125rem] font-medium">Who runs it</p>
+      <p className="mt-0.5 mb-2.5 text-xs text-muted">
+        Assigned to every {dining ? 'service' : 'departure'} by default and shown on the manifest. Change it for any
+        single day from the calendar.
+      </p>
+      <div className="grid gap-1.5 sm:grid-cols-2">
+        {crew.map((member) => {
+          const checked = selected.includes(member.id)
+          return (
+            <label
+              key={member.id}
+              className={cn(
+                'flex cursor-pointer items-center gap-2.5 rounded-lg border px-2.5 py-2 transition-colors duration-150',
+                checked ? 'border-primary/45 bg-primary-soft/50' : 'border-line hover:bg-surface-sunken',
+              )}
+            >
+              <Checkbox
+                size="sm"
+                checked={checked}
+                onCheckedChange={(value) =>
+                  onChange(value === true ? [...selected, member.id] : selected.filter((id) => id !== member.id))
+                }
+              />
+              <Avatar name={member.name} src={member.avatarUrl} size="xs" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[0.8125rem] font-medium text-foreground">{member.name}</span>
+                <span className="block truncate text-[0.6875rem] text-subtle">{member.title}</span>
+              </span>
+            </label>
+          )
+        })}
+      </div>
+      <p className="mt-2 text-xs text-subtle">
+        {selected.length === 0 ? 'Nobody yet. Leave it empty to assign crew departure by departure.' : `${selected.length} ${pluralize(selected.length, 'person', 'people')} on every one.`}
+      </p>
+    </section>
   )
 }
 
@@ -1679,6 +1865,7 @@ function DescriptionStep({ draft, patch, errors }: StepProps) {
 
 function ReviewStep({
   draft,
+  crew,
   currency,
   tenantName,
   tenantSlug,
@@ -1687,6 +1874,7 @@ function ReviewStep({
   onJump,
 }: {
   draft: ActivityDraft
+  crew: WizardCrewMember[]
   currency: CurrencyCode
   tenantName: string
   tenantSlug: string
@@ -1694,6 +1882,8 @@ function ReviewStep({
   patch: (changes: Partial<ActivityDraft>) => void
   onJump: (index: number) => void
 }) {
+  const crewNames = crew.filter((member) => draft.crewIds.includes(member.id)).map((member) => member.name)
+  const crewRow = { label: 'Crew', value: crewNames.length > 0 ? crewNames.join(', ') : 'Assigned per departure', step: 4 }
   const priced = draft.tiers.filter((tier) => tier.label.trim().length > 0)
   const fromPrice = priced.length === 0 ? 0 : Math.min(...priced.map((tier) => tier.price))
   const generated = previewDepartures(draft.schedule, nowIso, 14)
@@ -1731,6 +1921,7 @@ function ReviewStep({
           value: `${d.services.length} ${pluralize(d.services.length, 'service')} · ${draft.schedule.startTimes.length} ${pluralize(draft.schedule.startTimes.length, 'sitting')} a day on ${draft.schedule.weekdays.length} ${pluralize(draft.schedule.weekdays.length, 'day')} · ${draft.schedule.capacity} covers each`,
           step: 4,
         },
+        crewRow,
       ]
     : [
         { label: 'Name', value: draft.name, step: 0 },
@@ -1758,6 +1949,7 @@ function ReviewStep({
           step: 3,
         },
         { label: 'Schedule', value: describeSchedule(draft.schedule), step: 4 },
+        crewRow,
       ]
 
   const stats = dining

@@ -199,7 +199,7 @@ export function HourLines({
               <button
                 type="button"
                 onClick={() => onCreate(slot)}
-                aria-label={`New departure at ${hourLabel(hour)} on ${formatDateLong(day)}`}
+                aria-label={`Add availability at ${hourLabel(hour)} on ${formatDateLong(day)}`}
                 className={cn(
                   'flex size-full items-start justify-center pt-1 opacity-0 transition-opacity duration-150',
                   'hover:bg-primary-soft/40 hover:opacity-100 focus-visible:opacity-100',

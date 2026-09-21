@@ -193,7 +193,7 @@ export function MonthView({
                   <button
                     type="button"
                     onClick={() => onCreate(day)}
-                    aria-label={`New departure on ${formatDateLong(day)}`}
+                    aria-label={`Add availability on ${formatDateLong(day)}`}
                     className={cn(
                       'inline-flex size-5 items-center justify-center rounded-md text-faint',
                       'opacity-0 transition-all duration-150',
