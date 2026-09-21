@@ -3,14 +3,12 @@
 import * as React from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowRight, Clock, Flame, SlidersHorizontal, Sparkles, Users, X } from 'lucide-react'
+import { ArrowRight, Clock, Flame, SlidersHorizontal, Sparkles, Users } from 'lucide-react'
 
 import { cn, formatCurrency, formatDuration, formatNumber, pluralize } from '@/lib/utils'
 import type { Activity, CurrencyCode, DifficultyLevel } from '@/types'
 import { StaggerGroup, StaggerItem } from '@/components/motion/stagger'
 import { Reveal } from '@/components/motion/reveal'
-import { Button } from '@/components/ui/button'
-import { EmptyState } from '@/components/ui/empty-state'
 import {
   Select,
   SelectContent,
@@ -42,15 +40,7 @@ const DIFFICULTY_TONE: Record<DifficultyLevel, string> = {
   extreme: 'text-danger',
 }
 
-type DurationKey = 'short' | 'half' | 'full'
-type PriceKey = 'low' | 'mid' | 'high'
 type SortKey = 'recommended' | 'price-asc' | 'price-desc' | 'rating' | 'duration'
-
-const DURATION_BUCKETS: { key: DurationKey; label: string; test: (m: number) => boolean }[] = [
-  { key: 'short', label: 'Under 2 hours', test: (m) => m <= 120 },
-  { key: 'half', label: 'Half day', test: (m) => m > 120 && m <= 300 },
-  { key: 'full', label: 'Full day', test: (m) => m > 300 },
-]
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: 'recommended', label: 'Recommended' },
@@ -98,51 +88,12 @@ export function ActivityShowcase({
   const wide = useMediaQuery('(min-width: 640px)', true)
   const mobileLayout = settings.mobileLayout
   const desktopLayout = settings.desktopLayout
-  const [difficulty, setDifficulty] = React.useState<DifficultyLevel | null>(null)
-  const [duration, setDuration] = React.useState<DurationKey | null>(null)
-  const [price, setPrice] = React.useState<PriceKey | null>(null)
   const [sort, setSort] = React.useState<SortKey>('recommended')
 
-  /* ---------- price bands, derived from this operator's own catalogue ---------- */
-
-  const { lowBand, highBand, showPriceFilter } = React.useMemo(() => {
-    const sorted = activities.map((a) => a.basePrice).sort((a, b) => a - b)
-    if (sorted.length < 3) return { lowBand: 0, highBand: 0, showPriceFilter: false }
-    const low = sorted[Math.floor(sorted.length / 3)]
-    const high = sorted[Math.floor((sorted.length * 2) / 3)]
-    return { lowBand: low, highBand: high, showPriceFilter: high > low }
-  }, [activities])
-
-  const difficulties = React.useMemo(() => {
-    const order: DifficultyLevel[] = ['easy', 'moderate', 'challenging', 'extreme']
-    const present = new Set(activities.map((a) => a.difficulty))
-    return order.filter((d) => present.has(d))
-  }, [activities])
-
-  const durations = React.useMemo(
-    () => DURATION_BUCKETS.filter((b) => activities.some((a) => b.test(a.durationMinutes))),
-    [activities],
-  )
-
-  const activeCount = [difficulty, duration, price].filter(Boolean).length
+  /* ---------- the catalogue, in the chosen order ---------- */
 
   const filtered = React.useMemo(() => {
-    const rows = activities.filter((activity) => {
-      if (difficulty && activity.difficulty !== difficulty) return false
-      if (duration) {
-        const bucket = DURATION_BUCKETS.find((b) => b.key === duration)
-        if (bucket && !bucket.test(activity.durationMinutes)) return false
-      }
-      if (price) {
-        if (price === 'low' && activity.basePrice > lowBand) return false
-        if (price === 'mid' && (activity.basePrice <= lowBand || activity.basePrice > highBand))
-          return false
-        if (price === 'high' && activity.basePrice <= highBand) return false
-      }
-      return true
-    })
-
-    const sorted = [...rows]
+    const sorted = [...activities]
     switch (sort) {
       case 'price-asc':
         sorted.sort((a, b) => a.basePrice - b.basePrice)
@@ -165,22 +116,15 @@ export function ActivityShowcase({
         )
     }
     return sorted
-  }, [activities, difficulty, duration, price, sort, lowBand, highBand])
+  }, [activities, sort])
 
   const showFeatured =
-    activeCount === 0 &&
     sort === 'recommended' &&
     featured.length > 0 &&
     (wide || mobileLayout === 'cards')
   const heroCards = featured.slice(0, 2)
   const heroIds = new Set(showFeatured ? heroCards.map((a) => a.id) : [])
   const gridCards = filtered.filter((a) => !heroIds.has(a.id))
-
-  const clear = () => {
-    setDifficulty(null)
-    setDuration(null)
-    setPrice(null)
-  }
 
   return (
     <section id="experiences" className="scroll-mt-24 bg-background py-16 sm:py-20 lg:py-24">
@@ -222,77 +166,6 @@ export function ActivityShowcase({
           </div>
         </Reveal>
 
-        {/* ---------- filter chips ---------- */}
-        <Reveal
-          delay={0.06}
-          className="mt-8 flex flex-wrap items-center gap-2 border-y border-line-subtle py-4"
-        >
-          <FilterChip active={activeCount === 0} onClick={clear}>
-            All experiences
-            <span className="ml-1 tabular text-[0.6875rem] opacity-60">{activities.length}</span>
-          </FilterChip>
-
-          <ChipDivider />
-
-          {difficulties.map((level) => (
-            <FilterChip
-              key={level}
-              active={difficulty === level}
-              onClick={() => setDifficulty(difficulty === level ? null : level)}
-            >
-              <span className={cn('size-1.5 rounded-full bg-current', DIFFICULTY_TONE[level])} />
-              {DIFFICULTY_LABEL[level]}
-            </FilterChip>
-          ))}
-
-          <ChipDivider />
-
-          {durations.map((bucket) => (
-            <FilterChip
-              key={bucket.key}
-              active={duration === bucket.key}
-              onClick={() => setDuration(duration === bucket.key ? null : bucket.key)}
-            >
-              <Clock className="size-3.5" aria-hidden="true" />
-              {bucket.label}
-            </FilterChip>
-          ))}
-
-          {showPriceFilter ? (
-            <>
-              <ChipDivider />
-              <FilterChip active={price === 'low'} onClick={() => setPrice(price === 'low' ? null : 'low')}>
-                Under {formatCurrency(lowBand, currency)}
-              </FilterChip>
-              <FilterChip active={price === 'mid'} onClick={() => setPrice(price === 'mid' ? null : 'mid')}>
-                {formatCurrency(lowBand, currency)} – {formatCurrency(highBand, currency)}
-              </FilterChip>
-              <FilterChip
-                active={price === 'high'}
-                onClick={() => setPrice(price === 'high' ? null : 'high')}
-              >
-                {formatCurrency(highBand, currency)}+
-              </FilterChip>
-            </>
-          ) : null}
-
-          {activeCount > 0 ? (
-            <button
-              type="button"
-              onClick={clear}
-              className="ml-auto inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-surface-sunken hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              <X className="size-3.5" aria-hidden="true" />
-              Clear {activeCount} {pluralize(activeCount, 'filter')}
-            </button>
-          ) : null}
-        </Reveal>
-
-        <p className="mt-5 text-sm text-subtle" aria-live="polite">
-          Showing {filtered.length} of {activities.length}{' '}
-          {pluralize(activities.length, 'experience')}
-        </p>
-
         {/* ---------- featured ---------- */}
         {showFeatured ? (
           <StaggerGroup stagger={0.08} className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -305,20 +178,7 @@ export function ActivityShowcase({
         ) : null}
 
         {/* ---------- grid ---------- */}
-        {filtered.length === 0 ? (
-          <EmptyState
-            variant="no-results"
-            surface="dashed"
-            className="mt-8"
-            title="Nothing matches that combination"
-            description="Try widening the duration or price band — we run something most days of the week."
-            action={
-              <Button variant="secondary" onClick={clear}>
-                Reset filters
-              </Button>
-            }
-          />
-        ) : (
+        {/* ---------- grid ---------- */}
           <StaggerGroup
             stagger={0.05}
             className={cn('mt-6 grid', GRID_MOBILE[mobileLayout], GRID_DESKTOP[desktopLayout])}
@@ -335,51 +195,10 @@ export function ActivityShowcase({
               </StaggerItem>
             ))}
           </StaggerGroup>
-        )}
       </div>
     </section>
   )
 }
-
-/* ==========================================================================
-   CHIPS
-   ========================================================================== */
-
-function ChipDivider() {
-  return <span aria-hidden="true" className="mx-1 hidden h-5 w-px bg-line sm:block" />
-}
-
-function FilterChip({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean
-  onClick: () => void
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-xs font-semibold tracking-tight',
-        'transition-all duration-200 ease-[var(--ease-out-expo)]',
-        'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-        active
-          ? 'border-primary bg-primary text-on-primary shadow-sm'
-          : 'border-line bg-surface text-muted hover:border-line-strong hover:text-foreground',
-      )}
-    >
-      {children}
-    </button>
-  )
-}
-
-/* ==========================================================================
-   CARDS
-   ========================================================================== */
 
 function primaryMedia(activity: Activity) {
   return activity.media.find((m) => m.isPrimary) ?? activity.media[0]
