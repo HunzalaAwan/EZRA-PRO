@@ -6,7 +6,6 @@ import Link from 'next/link'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   ArrowLeft,
-  ArrowRight,
   CalendarPlus,
   Check,
   ChevronDown,
@@ -213,17 +212,6 @@ const COUNTRIES = [
  * `AnimatePresence`'s `custom`, so the *exiting* panel always leaves toward the
  * side the user came from — even after a back-then-forward sequence.
  */
-const stepVariants = {
-  enter: (direction: number) => ({ opacity: 0, x: direction * 44 }),
-  center: { opacity: 1, x: 0 },
-  exit: (direction: number) => ({ opacity: 0, x: direction * -44 }),
-}
-
-const STEPS = [
-  { key: 'guest', label: 'Your details' },
-  { key: 'payment', label: 'Payment' },
-] as const
-
 /* ==========================================================================
    <CheckoutFlow>
    ========================================================================== */
@@ -243,8 +231,6 @@ export function CheckoutFlow({
     [activity, tenant.slug, selection, departure.priceMultiplier],
   )
 
-  const [step, setStep] = React.useState(0)
-  const [direction, setDirection] = React.useState(1)
   const [errors, setErrors] = React.useState<Errors>({})
   const [submitting, setSubmitting] = React.useState(false)
   const [confirmed, setConfirmed] = React.useState(false)
@@ -271,55 +257,48 @@ export function CheckoutFlow({
 
   const brand = detectBrand(payment.cardNumber)
 
-  /* ---------- navigation ---------- */
+  /* ---------- validation and payment, one page ---------- */
 
-  const goTo = (next: number) => {
-    setDirection(next > step ? 1 : -1)
-    setErrors({})
-    setStep(next)
-    if (typeof window !== 'undefined') {
-      window.scrollTo({ top: 0, behavior: reducedMotion ? 'auto' : 'smooth' })
-    }
+  const focusFirstInvalid = () => {
+    window.requestAnimationFrame(() => {
+      const control = document.querySelector<HTMLElement>('[aria-invalid="true"]')
+      control?.scrollIntoView({ block: 'center', behavior: reducedMotion ? 'auto' : 'smooth' })
+      control?.focus({ preventScroll: true })
+    })
   }
 
-  const validateStep = (index: number): boolean => {
-    if (index === 0) {
-      const result = guestSchema.safeParse(guest)
-      if (!result.success) {
-        setErrors(collectErrors(result.error.issues))
-        return false
-      }
+  /** Both schemas at once, so a guest sees every problem in one pass. */
+  const validate = (scope: 'guest' | 'all'): boolean => {
+    const next: Errors = {}
+    const guestResult = guestSchema.safeParse(guest)
+    if (!guestResult.success) Object.assign(next, collectErrors(guestResult.error.issues))
+    if (scope === 'all') {
+      const paymentResult = paymentSchema.safeParse(payment)
+      if (!paymentResult.success) Object.assign(next, collectErrors(paymentResult.error.issues))
     }
-    if (index === 1) {
-      const result = paymentSchema.safeParse(payment)
-      if (!result.success) {
-        setErrors(collectErrors(result.error.issues))
-        return false
-      }
+    setErrors(next)
+    if (Object.keys(next).length > 0) {
+      focusFirstInvalid()
+      return false
     }
-    setErrors({})
     return true
   }
 
-  const next = () => {
-    if (!validateStep(step)) return
-    if (step < STEPS.length - 1) {
-      goTo(step + 1)
-      return
-    }
-    pay()
-  }
-
   const pay = () => {
+    if (!validate('all')) return
     setSubmitting(true)
     window.setTimeout(() => {
       setSubmitting(false)
       setConfirmed(true)
-      if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'auto' })
+      window.scrollTo({ top: 0, behavior: 'auto' })
     }, 1400)
   }
 
   const expressPay = (method: string) => {
+    if (!validate('guest')) {
+      toast.error('Add your contact details first, so we know where to send the tickets')
+      return
+    }
     setSubmitting(true)
     window.setTimeout(() => {
       setSubmitting(false)
@@ -371,62 +350,8 @@ export function CheckoutFlow({
             Secure checkout
           </h1>
           <p className="mt-2 text-sm text-muted">
-            Two short steps. Your seats are held for the next 15 minutes.
+            Your details and payment on one page. Seats are held for the next 15 minutes.
           </p>
-
-          {/* ---------- progress ---------- */}
-          <ol className="mt-8 flex items-center gap-2" aria-label="Checkout progress">
-            {STEPS.map((entry, index) => {
-              const done = index < step
-              const active = index === step
-              return (
-                <li key={entry.key} className="flex flex-1 items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => (index < step ? goTo(index) : undefined)}
-                    disabled={index > step}
-                    aria-current={active ? 'step' : undefined}
-                    className={cn(
-                      'group flex min-w-0 flex-1 flex-col gap-2 text-left',
-                      index < step && 'cursor-pointer',
-                      index > step && 'cursor-default',
-                    )}
-                  >
-                    <span className="relative h-1.5 w-full overflow-hidden rounded-full bg-surface-sunken">
-                      <motion.span
-                        className="absolute inset-y-0 left-0 rounded-full bg-primary"
-                        initial={false}
-                        animate={{ width: done || active ? '100%' : '0%' }}
-                        transition={{ duration: reducedMotion ? 0 : 0.5, ease: [0.16, 1, 0.3, 1] }}
-                      />
-                    </span>
-                    <span className="flex items-center gap-1.5">
-                      <span
-                        className={cn(
-                          'grid size-5 shrink-0 place-items-center rounded-full text-[0.625rem] font-bold tabular transition-colors duration-300',
-                          done
-                            ? 'bg-primary text-on-primary'
-                            : active
-                              ? 'bg-primary-soft text-primary ring-1 ring-primary'
-                              : 'bg-surface-sunken text-faint',
-                        )}
-                      >
-                        {done ? <Check className="size-3" aria-hidden="true" /> : index + 1}
-                      </span>
-                      <span
-                        className={cn(
-                          'truncate text-xs font-semibold transition-colors duration-300',
-                          active ? 'text-foreground' : done ? 'text-muted' : 'text-faint',
-                        )}
-                      >
-                        {entry.label}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              )
-            })}
-          </ol>
 
           {/* ---------- mobile summary ---------- */}
           <MobileSummary
@@ -439,66 +364,37 @@ export function CheckoutFlow({
             reducedMotion={reducedMotion}
           />
 
-          {/* ---------- steps ---------- */}
-          <div className="relative mt-8 overflow-hidden">
-            <AnimatePresence mode="wait" initial={false} custom={direction}>
-              <motion.div
-                key={step}
-                custom={direction}
-                variants={stepVariants}
-                initial={reducedMotion ? false : 'enter'}
-                animate="center"
-                exit={reducedMotion ? undefined : 'exit'}
-                transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-              >
-                {step === 0 ? (
-                  <GuestStep guest={guest} setGuest={setGuest} errors={errors} />
-                ) : null}
-                {step === 1 ? (
-                  <PaymentStep
-                    payment={payment}
-                    setPayment={setPayment}
-                    errors={errors}
-                    brand={brand}
-                    activity={activity}
-                    tenant={tenant}
-                    total={quote.total}
-                    submitting={submitting}
-                    onExpressPay={expressPay}
-                  />
-                ) : null}
-              </motion.div>
-            </AnimatePresence>
+          {/* ---------- details, then payment, one page ---------- */}
+          <div className="mt-8 space-y-10">
+            <GuestStep guest={guest} setGuest={setGuest} errors={errors} />
+            <div className="border-t border-line-subtle pt-10">
+              <PaymentStep
+                payment={payment}
+                setPayment={setPayment}
+                errors={errors}
+                brand={brand}
+                activity={activity}
+                tenant={tenant}
+                total={quote.total}
+                submitting={submitting}
+                onExpressPay={expressPay}
+              />
+            </div>
           </div>
 
           {/* ---------- actions ---------- */}
           <div className="mt-8 flex flex-col-reverse gap-3 border-t border-line-subtle pt-6 sm:flex-row sm:items-center sm:justify-between">
-            {step > 0 ? (
-              <Button
-                variant="ghost"
-                onClick={() => goTo(step - 1)}
-                leftIcon={<ArrowLeft aria-hidden="true" />}
-                disabled={submitting}
-              >
-                Back
-              </Button>
-            ) : (
-              <Button asChild variant="ghost" leftIcon={<ArrowLeft aria-hidden="true" />}>
-                <Link href={`${basePath}/${activity.slug}`}>Change booking</Link>
-              </Button>
-            )}
-
+            <Button asChild variant="ghost" leftIcon={<ArrowLeft aria-hidden="true" />}>
+              <Link href={`${basePath}/${activity.slug}`}>Change booking</Link>
+            </Button>
             <Button
               size="lg"
-              onClick={next}
+              onClick={pay}
               loading={submitting}
-              rightIcon={step < STEPS.length - 1 ? <ArrowRight aria-hidden="true" /> : undefined}
-              leftIcon={step === STEPS.length - 1 ? <Lock aria-hidden="true" /> : undefined}
+              leftIcon={<Lock aria-hidden="true" />}
               className="sm:min-w-52"
             >
-              {step < STEPS.length - 1
-                ? 'Continue'
-                : `Pay ${formatCurrency(quote.total, tenant.currency, { decimals: true })}`}
+              Pay {formatCurrency(quote.total, tenant.currency, { decimals: true })}
             </Button>
           </div>
         </div>
