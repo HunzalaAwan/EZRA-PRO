@@ -11,7 +11,6 @@ import type { Tenant, VerticalKey } from '@/types'
    ========================================================================== */
 
 export type StorefrontSectionKey =
-  | 'trust'
   | 'departures'
   | 'about'
   | 'reviews'
@@ -56,15 +55,12 @@ export interface StorefrontSettings {
   version: 1
   /** Which optional sections the homepage shows. The hero and the experiences always show. */
   sections: Record<StorefrontSectionKey, boolean>
-  /** The trust strip is desktop-only unless this is on. */
-  trustOnPhones: boolean
   mobileLayout: MobileLayout
   desktopLayout: DesktopLayout
   brand: StorefrontBrand
 }
 
 export const SECTION_META: { key: StorefrontSectionKey; label: string; hint: string }[] = [
-  { key: 'trust', label: 'Trust strip', hint: 'Secure checkout, instant confirmation, cancellation, rating.' },
   { key: 'departures', label: 'Next departures', hint: 'A live strip of the next six departures. Built for tour operators.' },
   { key: 'about', label: 'About and crew', hint: 'Your story, the numbers, and the people on the day.' },
   { key: 'reviews', label: 'Guest reviews', hint: 'Six recent reviews with the overall rating.' },
@@ -109,7 +105,6 @@ export function defaultStorefrontSettings(vertical: VerticalKey): StorefrontSett
   return {
     version: 1,
     sections: {
-      trust: true,
       departures: vertical === 'tours',
       about: true,
       reviews: true,
@@ -121,7 +116,6 @@ export function defaultStorefrontSettings(vertical: VerticalKey): StorefrontSett
       dining: true,
       experiences: true,
     },
-    trustOnPhones: false,
     mobileLayout: 'cards',
     desktopLayout: 'grid',
     brand: defaultBrand(),

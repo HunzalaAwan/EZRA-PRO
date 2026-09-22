@@ -4,7 +4,6 @@ import * as React from 'react'
 
 import { useStorefrontSettings } from '@/hooks/use-storefront-settings'
 import type { StorefrontSectionKey } from '@/lib/storefront-settings'
-import { cn } from '@/lib/utils'
 import type { VerticalKey } from '@/types'
 
 /* ==========================================================================
@@ -41,17 +40,5 @@ export function StorefrontSections({
       React.isValidElement<{ id: SectionId }>(child) && visible(child.props.id),
   )
 
-  return (
-    <>
-      {items.map((child) =>
-        child.props.id === 'trust' ? (
-          <div key={child.key ?? 'trust'} className={cn(!settings.trustOnPhones && 'hidden md:block')}>
-            {child}
-          </div>
-        ) : (
-          child
-        ),
-      )}
-    </>
-  )
+  return <>{items}</>
 }

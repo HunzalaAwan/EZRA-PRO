@@ -45,7 +45,6 @@ import { getDiningSettings, getMenu } from '@/lib/hospitality'
 import { getWorkspaceProfile } from '@/lib/workspace-profile'
 import { StarRow, StorefrontHero } from '@/components/storefront/storefront-hero'
 import { StorefrontSection, StorefrontSections } from '@/components/storefront/storefront-sections'
-import { TrustBar } from '@/components/storefront/trust-bar'
 
 interface TenantParams {
   tenant: string
@@ -256,9 +255,6 @@ export default async function StorefrontHomePage({
         guestsHosted={guestsHosted}
         todayKey={TODAY_KEY}
       />
-      </StorefrontSection>
-      <StorefrontSection key="trust" id="trust">
-        <TrustBar rating={rating} reviewCount={reviewCount} />
       </StorefrontSection>
       {upcoming.length > 0 ? (
         <StorefrontSection key="departures" id="departures">

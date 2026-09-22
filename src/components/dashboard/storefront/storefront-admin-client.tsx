@@ -19,13 +19,10 @@ import {
   Share2,
   Smartphone,
   Star,
-  CalendarCheck,
   LayoutGrid,
   LayoutList,
   LayoutTemplate,
   RectangleVertical,
-  ShieldCheck,
-  Zap,
 } from 'lucide-react'
 
 import { PageHeader } from '@/components/dashboard/page-header'
@@ -405,17 +402,6 @@ export function StorefrontAdminClient({
                           ) : null}
                         </p>
                         <p className="mt-0.5 text-xs text-muted">{meta.hint}</p>
-                        {meta.key === 'trust' && on ? (
-                          <label className="mt-2.5 inline-flex items-center gap-2 text-xs text-muted">
-                            <Switch
-                              size="sm"
-                              checked={settings.trustOnPhones}
-                              onCheckedChange={(value) => update({ trustOnPhones: value === true })}
-                              aria-label="Also show the trust strip on phones"
-                            />
-                            Also show on phones
-                          </label>
-                        ) : null}
                       </div>
                       <Switch
                         checked={on}
@@ -892,7 +878,6 @@ function StorefrontFrame({
   const layout = compact ? settings.mobileLayout : settings.desktopLayout
   const count = layout === 'grid' ? (compact ? 4 : 6) : layout === 'list' ? 3 : compact ? 2 : 3
   const cards = activities.slice(0, count)
-  const showTrust = settings.sections.trust && (!compact || settings.trustOnPhones)
   const rating = activities.length
     ? activities.reduce((sum, a) => sum + a.rating, 0) / activities.length
     : 5
@@ -943,23 +928,6 @@ function StorefrontFrame({
           {brand.heroSubtitle && !compact ? <p className="mt-0.5 line-clamp-1 text-[0.6875rem] text-ink-200">{brand.heroSubtitle}</p> : null}
         </div>
       </div>
-
-      {/* Trust strip */}
-      {showTrust ? (
-        <div className={cn('grid gap-1.5 border-b border-line px-3.5 py-2.5', compact ? 'grid-cols-2' : 'grid-cols-4')}>
-          {[
-            { icon: ShieldCheck, label: 'Secure checkout' },
-            { icon: Zap, label: 'Instant confirmation' },
-            { icon: CalendarCheck, label: 'Free cancellation' },
-            { icon: Star, label: `${rating.toFixed(1)} rated` },
-          ].map((item) => (
-            <span key={item.label} className="flex items-center gap-1.5 text-[0.625rem] font-medium text-muted">
-              <item.icon className="size-3 shrink-0" aria-hidden="true" style={{ color: brand.primaryColor }} />
-              <span className="truncate">{item.label}</span>
-            </span>
-          ))}
-        </div>
-      ) : null}
 
       {/* Next departures */}
       {settings.sections.departures ? (
