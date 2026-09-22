@@ -121,7 +121,7 @@ export function ConversionFunnel({
                 <span className="flex shrink-0 items-baseline gap-2">
                   <span className="tabular text-xs font-semibold text-foreground">{formatNumber(stage.value)}</span>
                   {index > 0 ? (
-                    <span className="tabular text-[11px] text-subtle">{formatPercent(stage.conversionRate, 1)}</span>
+                    <span className="tabular text-xs text-subtle">{formatPercent(stage.conversionRate, 1)}</span>
                   ) : null}
                 </span>
               </div>
@@ -138,7 +138,7 @@ export function ConversionFunnel({
               </div>
 
               {next ? (
-                <div className="flex items-center gap-1.5 pl-1 pt-1 text-[11px] text-subtle">
+                <div className="flex items-center gap-1.5 pl-1 pt-1 text-xs text-subtle">
                   <ChevronDown className="size-3 shrink-0" aria-hidden="true" />
                   <span className="tabular font-medium text-muted">{formatNumber(lost)}</span>
                   <span>lost</span>

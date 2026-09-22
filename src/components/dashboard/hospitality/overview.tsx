@@ -291,7 +291,7 @@ export function HospitalityOverview({ tenant, profile }: { tenant: Tenant; profi
           <CardContent className="p-0">
             <table className="w-full text-[0.8125rem]">
               <thead>
-                <tr className="border-y border-line-subtle text-left text-[0.6875rem] font-medium tracking-wide text-subtle uppercase">
+                <tr className="border-y border-line-subtle text-left text-xs font-medium tracking-wide text-subtle uppercase">
                   <th className="px-5 py-2 sm:px-6">Dish</th>
                   <th className="px-3 py-2 text-right">Sold</th>
                   <th className="px-3 py-2 text-right">Revenue</th>
@@ -496,7 +496,7 @@ function DayTimeline({ dining, weekday }: { dining: DiningData; weekday: number 
       <span aria-hidden="true" />
       <div className="relative h-3.5">
         {tracks[0].segments.map((s) => (
-          <span key={`${s.from}-label`} className={cn('absolute top-0 text-[0.625rem] whitespace-nowrap text-muted', s.off && 'opacity-40')} style={{ left: pos(s.from) }}>
+          <span key={`${s.from}-label`} className={cn('absolute top-0 text-xs whitespace-nowrap text-muted', s.off && 'opacity-40')} style={{ left: pos(s.from) }}>
             {s.label}
           </span>
         ))}
@@ -522,11 +522,11 @@ function DayTimeline({ dining, weekday }: { dining: DiningData; weekday: number 
         {ticks
           .filter((h) => Math.abs(h * 60 - NOW_MIN) > 80)
           .map((h) => (
-            <span key={h} className="absolute -translate-x-1/2 text-[0.625rem] text-faint tabular-nums" style={{ left: pos(h * 60) }}>
+            <span key={h} className="absolute -translate-x-1/2 text-xs text-faint tabular-nums" style={{ left: pos(h * 60) }}>
               {h === 24 ? '00' : String(h).padStart(2, '0')}
             </span>
           ))}
-        <span className="absolute -translate-x-1/2 rounded bg-foreground px-1 text-[0.625rem] font-medium text-background tabular-nums" style={{ left: pos(NOW_MIN), top: -2 }}>
+        <span className="absolute -translate-x-1/2 rounded bg-foreground px-1 text-xs font-medium text-background tabular-nums" style={{ left: pos(NOW_MIN), top: -2 }}>
           {NOW_TIME}
         </span>
       </div>
@@ -554,7 +554,7 @@ function PeakHours({ hourly, tone }: { hourly: number[]; tone: string }) {
       </div>
       <div className="mt-2 flex gap-1.5 border-t border-line-subtle pt-1.5">
         {hours.map((h) => (
-          <span key={h} className={cn('min-w-0 flex-1 overflow-visible text-center text-[0.625rem] whitespace-nowrap tabular-nums', h === nowHour ? 'font-semibold text-foreground' : 'text-subtle')}>
+          <span key={h} className={cn('min-w-0 flex-1 overflow-visible text-center text-xs whitespace-nowrap tabular-nums', h === nowHour ? 'font-semibold text-foreground' : 'text-subtle')}>
             {h % 3 === 0 || h === nowHour ? String(h).padStart(2, '0') : ''}
           </span>
         ))}
@@ -623,7 +623,7 @@ function WeekColumns({ days, types, currency }: { days: ReturnType<typeof fortni
       <div className="flex h-36 items-end gap-2">
         {days.map((d) => (
           <div key={d.date} className="flex h-full min-w-0 flex-1 flex-col justify-end gap-1" title={`${SHORT_DAYS[d.weekday]} · ${formatCurrency(d.total, currency as never)} · ${d.orders} orders`}>
-            <span className="text-center text-[0.625rem] text-subtle tabular-nums">{d.total ? formatCurrency(d.total, currency as never, { compact: true }) : ''}</span>
+            <span className="text-center text-xs text-subtle tabular-nums">{d.total ? formatCurrency(d.total, currency as never, { compact: true }) : ''}</span>
             <div className="flex flex-col-reverse gap-px" style={{ height: `${(d.total / max) * 100}%`, minHeight: d.total ? 4 : 0 }}>
               {types.map((t, j) => {
                 const v = d.revenue[t]
@@ -637,7 +637,7 @@ function WeekColumns({ days, types, currency }: { days: ReturnType<typeof fortni
       </div>
       <div className="mt-2 flex gap-2 border-t border-line-subtle pt-1.5">
         {days.map((d) => (
-          <span key={d.date} className={cn('min-w-0 flex-1 truncate text-center text-[0.625rem] tabular-nums', d.date === TODAY_KEY ? 'font-semibold text-foreground' : 'text-subtle')}>
+          <span key={d.date} className={cn('min-w-0 flex-1 truncate text-center text-xs tabular-nums', d.date === TODAY_KEY ? 'font-semibold text-foreground' : 'text-subtle')}>
             {SHORT_DAYS[d.weekday]}
           </span>
         ))}

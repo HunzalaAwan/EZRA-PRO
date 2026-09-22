@@ -385,7 +385,7 @@ export function AvailabilityPageClient({
                           {events.slice(0, 3).map((event) => (
                             <li
                               key={event.departure.id}
-                              className="flex items-center gap-1.5 text-[0.6875rem]"
+                              className="flex items-center gap-1.5 text-xs"
                             >
                               <span
                                 aria-hidden="true"
@@ -401,7 +401,7 @@ export function AvailabilityPageClient({
                             </li>
                           ))}
                           {events.length > 3 ? (
-                            <li className="text-[0.6875rem] text-faint">
+                            <li className="text-xs text-faint">
                               +{events.length - 3} more
                             </li>
                           ) : null}

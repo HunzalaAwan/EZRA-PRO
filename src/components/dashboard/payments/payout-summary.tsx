@@ -181,7 +181,7 @@ export function PayoutSummary({ balance, currency, className }: PayoutSummaryPro
               <CalendarClock className="size-5" aria-hidden="true" />
             </span>
             <div className="min-w-0">
-              <p className="text-[0.6875rem] font-semibold tracking-[0.08em] text-subtle uppercase">
+              <p className="text-xs font-semibold tracking-[0.08em] text-subtle uppercase">
                 Next payout
               </p>
               <p className="mt-1 text-sm text-foreground">
@@ -400,7 +400,7 @@ export function RevenueFeesChart({ points, currency, className }: RevenueFeesCha
             axisLine={false}
             tickMargin={10}
             minTickGap={22}
-            tick={{ fill: CHART_INK.tick, fontSize: 11 }}
+            tick={{ fill: CHART_INK.tick, fontSize: 12 }}
           />
           <YAxis
             width={58}
@@ -409,7 +409,7 @@ export function RevenueFeesChart({ points, currency, className }: RevenueFeesCha
             tickLine={false}
             axisLine={false}
             tickMargin={6}
-            tick={{ fill: CHART_INK.tick, fontSize: 11 }}
+            tick={{ fill: CHART_INK.tick, fontSize: 12 }}
           />
 
           {!isHidden('average') ? (

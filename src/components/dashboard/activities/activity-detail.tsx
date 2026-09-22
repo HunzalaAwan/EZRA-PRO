@@ -286,7 +286,7 @@ function MediaGallery({ detail }: { detail: ActivityDetailData }) {
                 className="object-cover transition-transform duration-700 ease-[var(--ease-out-expo)] group-hover/media:scale-105 motion-reduce:transform-none"
               />
               {item.isPrimary ? (
-                <span className="absolute top-2 left-2 rounded-full bg-ink-950/70 px-2 py-0.5 text-[0.625rem] font-semibold tracking-wide text-white uppercase backdrop-blur-sm">
+                <span className="absolute top-2 left-2 rounded-full bg-ink-950/70 px-2 py-0.5 text-xs font-semibold tracking-wide text-white uppercase backdrop-blur-sm">
                   Primary
                 </span>
               ) : null}
@@ -598,7 +598,7 @@ function PricingTab({ detail }: { detail: ActivityDetailData }) {
                     ) : null}
                   </p>
                   <p className="mt-0.5 text-xs leading-relaxed text-muted">{addOn.description}</p>
-                  <p className="mt-1.5 text-[0.6875rem] text-faint">
+                  <p className="mt-1.5 text-xs text-faint">
                     {addOn.maxPerBooking === null
                       ? 'No limit per booking'
                       : `Up to ${addOn.maxPerBooking} per booking`}
@@ -1144,7 +1144,7 @@ export function ActivityDetail({ detail, tenantSlug, nowIso }: ActivityDetailPro
                 <TabsTrigger key={item.value} value={item.value}>
                   {item.label}
                   {typeof item.count === 'number' && item.count > 0 ? (
-                    <span className="rounded-full bg-surface-sunken px-1.5 py-0.5 text-[0.625rem] font-semibold text-subtle tabular">
+                    <span className="rounded-full bg-surface-sunken px-1.5 py-0.5 text-xs font-semibold text-subtle tabular">
                       {formatNumber(item.count)}
                     </span>
                   ) : null}

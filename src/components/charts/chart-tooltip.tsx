@@ -59,10 +59,10 @@ export function ChartTooltipShell({ label, sublabel, badge, footer, className, c
           {badge}
         </div>
       ) : null}
-      {sublabel ? <div className="mt-0.5 text-[11px] text-subtle">{sublabel}</div> : null}
+      {sublabel ? <div className="mt-0.5 text-xs text-subtle">{sublabel}</div> : null}
       {children ? <div className={cn(label || sublabel ? 'mt-2' : '', 'space-y-1.5')}>{children}</div> : null}
       {footer ? (
-        <div className="mt-2 border-t border-line-subtle pt-1.5 text-[11px] text-subtle">{footer}</div>
+        <div className="mt-2 border-t border-line-subtle pt-1.5 text-xs text-subtle">{footer}</div>
       ) : null}
     </div>
   )

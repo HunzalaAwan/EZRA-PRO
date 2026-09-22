@@ -720,7 +720,7 @@ export function DiningServiceEditor({
                     const slots = serviceSittings(service)
                     if (slots.length === 0) return null
                     return (
-                      <span key={service.id} className="rounded-md bg-primary-soft px-1.5 py-0.5 text-[0.6875rem] font-medium text-primary tabular">
+                      <span key={service.id} className="rounded-md bg-primary-soft px-1.5 py-0.5 text-xs font-medium text-primary tabular">
                         {service.label || 'Service'} · {formatClock(slots[0])}–{formatClock(slots[slots.length - 1])}
                       </span>
                     )

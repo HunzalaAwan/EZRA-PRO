@@ -802,7 +802,7 @@ function StepProgress({
                   >
                     {step.label}
                   </span>
-                  <span className="hidden truncate text-[0.6875rem] text-faint xl:block">
+                  <span className="hidden truncate text-xs text-faint xl:block">
                     {step.hint}
                   </span>
                 </span>
@@ -848,7 +848,7 @@ function StorefrontPreview({
           <span className="size-2 rounded-full bg-line-strong" />
           <span className="size-2 rounded-full bg-line-strong" />
         </span>
-        <span className="min-w-0 flex-1 truncate rounded-md bg-surface px-2 py-1 font-mono text-[0.625rem] text-faint">
+        <span className="min-w-0 flex-1 truncate rounded-md bg-surface px-2 py-1 font-mono text-xs text-faint">
           {tenantSlug}.ezrapro.com/{slugify(draft.name) || 'new-activity'}
         </span>
       </div>
@@ -865,7 +865,7 @@ function StorefrontPreview({
           </div>
         )}
         {draft.featured ? (
-          <span className="absolute top-3 left-3 inline-flex items-center gap-1 rounded-full bg-sunset-400/90 px-2 py-0.5 text-[0.6875rem] font-semibold text-ink-950">
+          <span className="absolute top-3 left-3 inline-flex items-center gap-1 rounded-full bg-sunset-400/90 px-2 py-0.5 text-xs font-semibold text-ink-950">
             <Star className="size-3 fill-current" aria-hidden="true" />
             Featured
           </span>
@@ -918,14 +918,14 @@ function StorefrontPreview({
 
         {upcoming.length > 0 ? (
           <div className="rounded-lg bg-surface-sunken p-2.5">
-            <p className="text-[0.625rem] font-semibold tracking-wide text-faint uppercase">
+            <p className="text-xs font-semibold tracking-wide text-faint uppercase">
               {dining ? 'Next sittings' : 'Next available'}
             </p>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {upcoming.map((day) => (
                 <span
                   key={day.dateKey}
-                  className="rounded-md bg-surface px-1.5 py-1 text-[0.6875rem] font-medium text-muted tabular"
+                  className="rounded-md bg-surface px-1.5 py-1 text-xs font-medium text-muted tabular"
                 >
                   {new Intl.DateTimeFormat('en-US', { weekday: 'short', day: 'numeric' }).format(
                     new Date(`${day.dateKey}T00:00:00`),
@@ -939,7 +939,7 @@ function StorefrontPreview({
 
         <div className="flex items-end justify-between gap-3 border-t border-line-subtle pt-3">
           <div>
-            <p className="text-[0.625rem] tracking-wide text-faint uppercase">From</p>
+            <p className="text-xs tracking-wide text-faint uppercase">From</p>
             <p className="font-display text-lg leading-tight font-semibold">
               {formatCurrency(fromPrice, currency)}
             </p>
@@ -1684,7 +1684,7 @@ function CrewPicker({
               <Avatar name={member.name} src={member.avatarUrl} size="xs" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[0.8125rem] font-medium text-foreground">{member.name}</span>
-                <span className="block truncate text-[0.6875rem] text-subtle">{member.title}</span>
+                <span className="block truncate text-xs text-subtle">{member.title}</span>
               </span>
             </label>
           )

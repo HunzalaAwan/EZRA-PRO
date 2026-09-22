@@ -163,7 +163,7 @@ export function StorefrontHeader({ tenant, kind = 'experiences' }: StorefrontHea
             </span>
             <span
               className={cn(
-                'mt-1 hidden truncate text-[0.6875rem] font-medium tracking-[0.14em] uppercase transition-colors duration-300 sm:block',
+                'mt-1 hidden truncate text-xs font-medium tracking-[0.14em] uppercase transition-colors duration-300 sm:block',
                 overHero ? 'text-white/65' : 'text-faint',
               )}
             >
@@ -250,7 +250,7 @@ export function StorefrontHeader({ tenant, kind = 'experiences' }: StorefrontHea
                     {tenant.currency} — settlement currency
                     <Check className="size-4 text-primary" aria-hidden="true" />
                   </DropdownMenuItem>
-                  <p className="px-2.5 pb-1 pt-1.5 text-[0.6875rem] leading-relaxed text-faint">
+                  <p className="px-2.5 pb-1 pt-1.5 text-xs leading-relaxed text-faint">
                     Your card is charged in {tenant.currency}. Your bank converts at its own rate.
                   </p>
                 </DropdownMenuContent>

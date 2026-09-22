@@ -220,7 +220,7 @@ function FeatureTile({ block }: { block: FeatureBlock }) {
               <Icon aria-hidden="true" className="size-5" style={{ color: tint }} />
             </span>
             <span
-              className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em]"
+              className="text-xs font-semibold uppercase tracking-[0.16em]"
               style={{ color: tint }}
             >
               {block.eyebrow}
@@ -312,10 +312,10 @@ function CalendarMini({ tint }: { tint: string }) {
       className="mt-5 rounded-xl border border-line-subtle bg-surface-sunken/50 p-3"
     >
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-faint">
+        <span className="text-xs font-semibold uppercase tracking-[0.14em] text-faint">
           This week
         </span>
-        <span className="flex items-center gap-1.5 text-[10px] font-medium text-subtle">
+        <span className="flex items-center gap-1.5 text-xs font-medium text-subtle">
           <span className="size-1.5 rounded-full" style={{ background: tint }} />
           4 vessels · 6 crew
         </span>
@@ -326,7 +326,7 @@ function CalendarMini({ tint }: { tint: string }) {
         {MINI_DAYS.map((day, index) => (
           <span
             key={`head-${index}`}
-            className="text-center text-[9px] font-semibold uppercase text-faint"
+            className="text-center text-xs font-semibold uppercase text-faint"
           >
             {day}
           </span>
@@ -334,14 +334,14 @@ function CalendarMini({ tint }: { tint: string }) {
 
         {CALENDAR_CELLS.map((row, bandIndex) => (
           <Fragment key={MINI_BANDS[bandIndex]}>
-            <span className="pr-1 text-right text-[9px] leading-5 text-faint">
+            <span className="pr-1 text-right text-xs leading-5 text-faint">
               {MINI_BANDS[bandIndex]}
             </span>
             {row.map((cell, dayIndex) =>
               cell ? (
                 <span
                   key={cell.key}
-                  className="truncate rounded-[5px] px-1 text-center text-[9px] font-medium leading-5"
+                  className="truncate rounded-[5px] px-1 text-center text-xs font-medium leading-5"
                   style={
                     cell.full
                       ? {
@@ -409,15 +409,15 @@ function AnalyticsMini({ tint }: { tint: string }) {
     >
       <div className="flex items-baseline justify-between gap-3">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-faint">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-faint">
             Occupancy · 14 weeks
           </p>
           <p className="mt-1 font-display text-xl font-semibold leading-none text-foreground">
             {ANALYTICS_PEAK}%
-            <span className="ml-1.5 text-[11px] font-medium text-subtle">peak week</span>
+            <span className="ml-1.5 text-xs font-medium text-subtle">peak week</span>
           </p>
         </div>
-        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-success-soft px-2 py-0.5 text-[10px] font-semibold text-success">
+        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-success-soft px-2 py-0.5 text-xs font-semibold text-success">
           <TrendingUp className="size-3" />
           {formatDelta(ANALYTICS_DELTA)}
         </span>

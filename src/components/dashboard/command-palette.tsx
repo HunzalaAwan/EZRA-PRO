@@ -151,11 +151,11 @@ function PaletteItem({
 
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[0.8125rem] font-medium text-foreground">{label}</span>
-        <span className="block truncate text-[0.6875rem] text-subtle">{hint}</span>
+        <span className="block truncate text-xs text-subtle">{hint}</span>
       </span>
 
       {trailing ? (
-        <span className="shrink-0 text-[0.6875rem] font-medium text-subtle tabular-nums">
+        <span className="shrink-0 text-xs font-medium text-subtle tabular-nums">
           {trailing}
         </span>
       ) : null}
@@ -250,7 +250,7 @@ export function CommandPalette() {
         <Command
           loop
           label="Command palette"
-          className="flex min-h-0 flex-1 flex-col [&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:pt-3 [&_[cmdk-group-heading]]:pb-1.5 [&_[cmdk-group-heading]]:text-[0.6875rem] [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:tracking-[0.09em] [&_[cmdk-group-heading]]:text-faint [&_[cmdk-group-heading]]:uppercase"
+          className="flex min-h-0 flex-1 flex-col [&_[cmdk-group-heading]]:px-2.5 [&_[cmdk-group-heading]]:pt-3 [&_[cmdk-group-heading]]:pb-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:tracking-[0.09em] [&_[cmdk-group-heading]]:text-faint [&_[cmdk-group-heading]]:uppercase"
         >
           <div className="flex shrink-0 items-center gap-3 border-b border-line-subtle px-4">
             <Search aria-hidden="true" className="size-[1.125rem] shrink-0 text-faint" />
@@ -393,7 +393,7 @@ export function CommandPalette() {
           </Command.List>
 
           <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-line-subtle px-4 py-2.5">
-            <span className="flex items-center gap-3 text-[0.6875rem] text-faint">
+            <span className="flex items-center gap-3 text-xs text-faint">
               <span className="flex items-center gap-1.5">
                 <Kbd size="sm" variant="ghost">
                   ↑
@@ -410,7 +410,7 @@ export function CommandPalette() {
                 open
               </span>
             </span>
-            <span className="hidden items-center gap-1.5 text-[0.6875rem] text-faint sm:flex">
+            <span className="hidden items-center gap-1.5 text-xs text-faint sm:flex">
               Searching {tenant.name}
             </span>
           </footer>

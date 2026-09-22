@@ -239,7 +239,7 @@ function ResourceCard({
           <Badge variant={status.variant} size="sm" dot className="shadow-sm">
             {status.label}
           </Badge>
-          <span className="inline-flex items-center gap-1 rounded-full bg-surface/90 px-2 py-0.5 text-[0.6875rem] font-medium text-muted shadow-sm backdrop-blur-sm">
+          <span className="inline-flex items-center gap-1 rounded-full bg-surface/90 px-2 py-0.5 text-xs font-medium text-muted shadow-sm backdrop-blur-sm">
             <Icon aria-hidden="true" className="size-3" />
             {meta.label}
           </span>
@@ -334,9 +334,9 @@ function ResourceCard({
 function Figure({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
     <div className="min-w-0">
-      <dt className="text-[0.625rem] font-semibold tracking-[0.08em] text-faint uppercase">{label}</dt>
+      <dt className="text-xs font-semibold tracking-[0.08em] text-faint uppercase">{label}</dt>
       <dd className="text-sm font-semibold text-foreground tabular-nums">{value}</dd>
-      <p className="truncate text-[0.625rem] text-subtle">{hint}</p>
+      <p className="truncate text-xs text-subtle">{hint}</p>
     </div>
   )
 }

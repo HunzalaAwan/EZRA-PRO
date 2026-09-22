@@ -166,7 +166,7 @@ export function DashboardNavList({
             collapsed ? (
               <div aria-hidden="true" className="mx-auto mb-2 h-px w-6 rounded-full bg-line" />
             ) : (
-              <p className="mb-1.5 px-2.5 text-[0.6875rem] font-semibold tracking-[0.09em] text-faint uppercase">
+              <p className="mb-1.5 px-2.5 text-xs font-semibold tracking-[0.09em] text-faint uppercase">
                 {section.heading}
               </p>
             )
@@ -231,7 +231,7 @@ export function DashboardNavList({
                       {showCount ? (
                         <span
                           className={cn(
-                            'shrink-0 rounded-full px-1.5 py-0.5 text-[0.6875rem] font-semibold tabular-nums',
+                            'shrink-0 rounded-full px-1.5 py-0.5 text-xs font-semibold tabular-nums',
                             active
                               ? 'bg-primary/15 text-primary'
                               : 'bg-surface-sunken text-subtle group-hover/nav:bg-surface group-hover/nav:text-foreground',
@@ -255,7 +255,7 @@ export function DashboardNavList({
                         <span className="flex items-center gap-2">
                           {item.label}
                           {showCount ? (
-                            <span className="rounded-full bg-surface-sunken px-1.5 text-[0.625rem] font-semibold text-foreground tabular-nums">
+                            <span className="rounded-full bg-surface-sunken px-1.5 text-xs font-semibold text-foreground tabular-nums">
                               {count}
                             </span>
                           ) : null}
@@ -314,10 +314,10 @@ export function PlanUsageCard({ className }: { className?: string }) {
           <Sparkles aria-hidden="true" className="size-3.5 text-primary" />
           {tenant.plan} plan
         </span>
-        <span className="text-[0.6875rem] font-semibold text-subtle tabular-nums">{percent}%</span>
+        <span className="text-xs font-semibold text-subtle tabular-nums">{percent}%</span>
       </div>
 
-      <p className="relative mt-2 text-[0.6875rem] text-subtle">{unitLabel}</p>
+      <p className="relative mt-2 text-xs text-subtle">{unitLabel}</p>
       <p className="relative mt-0.5 text-sm font-semibold text-foreground tabular-nums">
         {formatNumber(used)}
         <span className="font-normal text-faint"> / {formatNumber(quota)}</span>

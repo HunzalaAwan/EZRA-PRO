@@ -156,7 +156,7 @@ export function ResourceBulkBar({
             )}
           >
             <span className="ml-1 inline-flex shrink-0 items-center gap-2 pr-1 text-sm font-semibold text-foreground">
-              <span className="grid size-6 place-items-center rounded-full bg-primary text-[0.6875rem] font-bold text-on-primary tabular-nums">
+              <span className="grid size-6 place-items-center rounded-full bg-primary text-xs font-bold text-on-primary tabular-nums">
                 {count > 99 ? '99+' : count}
               </span>
               <span className="hidden sm:inline">selected</span>

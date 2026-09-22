@@ -184,11 +184,11 @@ function ActivityPlate() {
             'linear-gradient(to bottom, transparent, color-mix(in oklab, var(--surface) 90%, transparent))',
         }}
       />
-      <span className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-[color-mix(in_oklab,var(--color-ink-950)_52%,transparent)] px-2.5 py-1 text-[0.6875rem] font-medium text-ink-50 backdrop-blur-sm">
+      <span className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-[color-mix(in_oklab,var(--color-ink-950)_52%,transparent)] px-2.5 py-1 text-xs font-medium text-ink-50 backdrop-blur-sm">
         <span className="size-1.5 rounded-full bg-sunset-300" />
         Bestseller
       </span>
-      <span className="absolute right-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-[color-mix(in_oklab,var(--color-ink-950)_52%,transparent)] px-2.5 py-1 text-[0.6875rem] font-medium text-ink-50 backdrop-blur-sm">
+      <span className="absolute right-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-[color-mix(in_oklab,var(--color-ink-950)_52%,transparent)] px-2.5 py-1 text-xs font-medium text-ink-50 backdrop-blur-sm">
         <Clock className="size-3" />
         {ACTIVITY_DURATION}
       </span>
@@ -272,7 +272,7 @@ export function BookingWidgetPreview({ className }: BookingWidgetPreviewProps) {
             <h3 className="font-display text-[1.0625rem] font-semibold leading-snug tracking-[-0.022em] text-foreground sm:text-lg">
               {ACTIVITY_TITLE}
             </h3>
-            <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[0.6875rem] text-muted sm:text-xs">
+            <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted sm:text-xs">
               <span className="flex items-center gap-1.5">
                 <StarRating />
                 <span className="tabular font-semibold text-foreground">{RATING}</span>
@@ -289,10 +289,10 @@ export function BookingWidgetPreview({ className }: BookingWidgetPreviewProps) {
           {/* ---------- Date strip ---------- */}
           <div>
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-subtle">
+              <span className="text-xs font-semibold uppercase tracking-[0.14em] text-subtle">
                 {ACTIVITY_MONTH}
               </span>
-              <span className="inline-flex items-center gap-1.5 text-[0.625rem] font-medium text-primary">
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-primary">
                 <LiveDot />
                 Live availability
               </span>
@@ -318,7 +318,7 @@ export function BookingWidgetPreview({ className }: BookingWidgetPreviewProps) {
                           : 'border-line bg-surface-raised text-muted hover:-translate-y-0.5 hover:border-[color-mix(in_oklab,var(--primary)_45%,transparent)] hover:text-foreground',
                     )}
                   >
-                    <span className="text-[0.5625rem] font-medium uppercase tracking-[0.06em] opacity-75">
+                    <span className="text-xs font-medium uppercase tracking-[0.06em] opacity-75">
                       {entry.weekday}
                     </span>
                     <span className="tabular text-[0.8125rem] font-semibold leading-none">
@@ -368,13 +368,13 @@ export function BookingWidgetPreview({ className }: BookingWidgetPreviewProps) {
                   </span>
 
                   {soldOut ? (
-                    <span className="text-[0.625rem] font-medium leading-none text-faint">
+                    <span className="text-xs font-medium leading-none text-faint">
                       Sold out
                     </span>
                   ) : (
                     <span
                       className={cn(
-                        'inline-flex items-center rounded-full px-1.5 py-0.5 text-[0.625rem] font-medium leading-none',
+                        'inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium leading-none',
                         scarce ? 'bg-warning-soft text-warning' : 'bg-success-soft text-success',
                       )}
                     >
@@ -438,7 +438,7 @@ export function BookingWidgetPreview({ className }: BookingWidgetPreviewProps) {
                       <p className="truncate text-[0.8125rem] font-medium text-foreground">
                         {row.label}
                       </p>
-                      <p className="tabular truncate text-[0.6875rem] text-subtle">
+                      <p className="tabular truncate text-xs text-subtle">
                         {formatCurrency(row.price)} · {row.caption}
                       </p>
                     </div>
@@ -479,11 +479,11 @@ export function BookingWidgetPreview({ className }: BookingWidgetPreviewProps) {
           {/* ---------- Price ---------- */}
           <div className="flex items-end justify-between gap-3 border-t border-line-subtle pt-3">
             <div className="min-w-0 leading-tight">
-              <p className="tabular truncate text-[0.6875rem] text-muted">
+              <p className="tabular truncate text-xs text-muted">
                 {adults} × {formatCurrency(ADULT_PRICE)}
                 {children > 0 ? ` · ${children} × ${formatCurrency(CHILD_PRICE)}` : ''}
               </p>
-              <p className="text-[0.6875rem] text-subtle">Taxes and fees included</p>
+              <p className="text-xs text-subtle">Taxes and fees included</p>
             </div>
             <p className="font-display text-xl font-semibold leading-none tracking-[-0.03em] text-foreground">
               {reducedMotion ? (
@@ -520,7 +520,7 @@ export function BookingWidgetPreview({ className }: BookingWidgetPreviewProps) {
             </button>
           </div>
 
-          <p className="flex items-center justify-center gap-1.5 text-[0.6875rem] text-subtle">
+          <p className="flex items-center justify-center gap-1.5 text-xs text-subtle">
             <ShieldCheck className="size-3.5 text-success" />
             Free cancellation up to 24 hours before
           </p>

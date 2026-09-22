@@ -19,8 +19,8 @@ const kbdVariants = cva(
   {
     variants: {
       size: {
-        sm: 'h-4.5 min-w-4.5 rounded-[0.25rem] px-1 text-[0.625rem]',
-        md: 'h-5.5 min-w-5.5 rounded-[0.3125rem] px-1.5 text-[0.6875rem]',
+        sm: 'h-4.5 min-w-4.5 rounded-[0.25rem] px-1 text-xs',
+        md: 'h-5.5 min-w-5.5 rounded-[0.3125rem] px-1.5 text-xs',
         lg: 'h-7 min-w-7 rounded-md px-2 text-xs',
       },
       variant: {
@@ -60,7 +60,7 @@ function KbdGroup({ className, keys, separator, size, variant, ...props }: KbdGr
       {keys.map((key, i) => (
         <React.Fragment key={`${key}-${i}`}>
           {i > 0 && separator ? (
-            <span aria-hidden="true" className="text-[0.625rem] text-faint">
+            <span aria-hidden="true" className="text-xs text-faint">
               {separator}
             </span>
           ) : null}

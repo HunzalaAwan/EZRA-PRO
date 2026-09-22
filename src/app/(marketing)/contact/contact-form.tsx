@@ -236,7 +236,7 @@ export function ContactForm({ topic, className }: ContactFormProps) {
                   ]
               ).map((line, index) => (
                 <li key={line} className="flex items-start gap-3 text-sm leading-relaxed text-muted">
-                  <span className="mt-px inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-primary-soft text-[0.6875rem] font-semibold text-primary tabular">
+                  <span className="mt-px inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-semibold text-primary tabular">
                     {index + 1}
                   </span>
                   {line}

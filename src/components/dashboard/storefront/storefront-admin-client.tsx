@@ -309,7 +309,7 @@ export function StorefrontAdminClient({
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={preset.url} alt={preset.label} loading="lazy" className="size-full object-cover transition-transform duration-500 ease-[var(--ease-out-expo)] group-hover:scale-105" />
-                        <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink-950/80 to-transparent px-2 pt-6 pb-1.5 text-[0.6875rem] font-medium text-ink-50">{preset.label}</span>
+                        <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink-950/80 to-transparent px-2 pt-6 pb-1.5 text-xs font-medium text-ink-50">{preset.label}</span>
                         {active ? (
                           <span aria-hidden="true" className="absolute top-1.5 right-1.5 grid size-5 place-items-center rounded-full bg-primary text-on-primary">
                             <Check className="size-3" strokeWidth={3} />
@@ -396,7 +396,7 @@ export function StorefrontAdminClient({
                         <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
                           {meta.label}
                           {meta.key === 'departures' && tenant.vertical !== 'tours' ? (
-                            <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-[0.6875rem] font-medium text-subtle">
+                            <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-medium text-subtle">
                               Off by default outside tours
                             </span>
                           ) : null}
@@ -556,7 +556,7 @@ export function StorefrontAdminClient({
                 </p>
                 <div className="rounded-xl border border-line bg-surface p-4">
                   <p className="flex items-center gap-1.5 text-xs text-muted">
-                    <span className="grid size-4 place-items-center rounded-full bg-primary text-[0.5rem] font-bold text-on-primary">
+                    <span className="grid size-5 place-items-center rounded-full bg-primary text-xs font-bold text-on-primary">
                       {tenant.branding.logoText.slice(0, 1)}
                     </span>
                     {domain}
@@ -584,7 +584,7 @@ export function StorefrontAdminClient({
                     />
                   </div>
                   <div className="p-3">
-                    <p className="text-[0.6875rem] tracking-wide text-faint uppercase">{domain}</p>
+                    <p className="text-xs tracking-wide text-faint uppercase">{domain}</p>
                     <p className="mt-0.5 truncate text-sm font-semibold text-foreground">
                       {seo.title}
                     </p>
@@ -724,7 +724,7 @@ export function StorefrontAdminClient({
                     <span className="size-2 rounded-full bg-warning/60" />
                     <span className="size-2 rounded-full bg-success/60" />
                   </span>
-                  <span className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md bg-surface-sunken px-2 py-1 text-[0.6875rem] text-muted">
+                  <span className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md bg-surface-sunken px-2 py-1 text-xs text-muted">
                     <Lock className="size-2.5 shrink-0 text-success" aria-hidden="true" />
                     <span className="truncate">{domain}</span>
                   </span>
@@ -788,7 +788,7 @@ function CopyRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center gap-2 rounded-xl border border-line bg-surface p-2.5">
       <div className="min-w-0 flex-1">
-        <p className="text-[0.6875rem] font-semibold tracking-[0.08em] text-faint uppercase">
+        <p className="text-xs font-semibold tracking-[0.08em] text-faint uppercase">
           {label}
         </p>
         <p className="truncate font-mono text-xs text-foreground">{value}</p>
@@ -831,7 +831,7 @@ function Th({ children, align = 'left' }: { children: React.ReactNode; align?: '
     <th
       scope="col"
       className={cn(
-        'px-3 py-2 text-[0.6875rem] font-semibold tracking-[0.08em] whitespace-nowrap text-subtle uppercase',
+        'px-3 py-2 text-xs font-semibold tracking-[0.08em] whitespace-nowrap text-subtle uppercase',
         align === 'right' ? 'text-right' : 'text-left',
       )}
     >
@@ -895,7 +895,7 @@ function StorefrontFrame({
           ) : (
             <span
               aria-hidden="true"
-              className="grid size-6 shrink-0 place-items-center rounded-md text-[0.625rem] font-bold"
+              className="grid size-6 shrink-0 place-items-center rounded-md text-xs font-bold"
               style={{ background: `linear-gradient(145deg, ${brand.primaryColor}, color-mix(in oklab, ${brand.accentColor} 72%, ${brand.primaryColor}))`, color: onPrimary }}
             >
               {initials(brand.logoText)}
@@ -905,7 +905,7 @@ function StorefrontFrame({
             {brand.logoText}
           </span>
         </div>
-        <span className="shrink-0 rounded-md px-2.5 py-1 text-[0.6875rem] font-semibold" style={{ background: brand.primaryColor, color: onPrimary }}>
+        <span className="shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold" style={{ background: brand.primaryColor, color: onPrimary }}>
           {brand.ctaLabel ?? 'Book now'}
         </span>
       </div>
@@ -919,25 +919,25 @@ function StorefrontFrame({
         <div className={cn('absolute inset-0', brand.heroOverlay === 'soft' ? 'bg-gradient-to-t from-ink-950/70 via-ink-950/15 to-transparent' : 'bg-gradient-to-t from-ink-950/85 via-ink-950/35 to-transparent')} />
         {brand.heroOverlay === 'brand' ? <div className="absolute inset-0 opacity-60" style={{ backgroundImage: `linear-gradient(160deg, ${brand.primaryColor} 0%, transparent 70%)` }} /> : null}
         <div className="absolute inset-x-0 bottom-0 p-3.5">
-          <p className="truncate text-[0.625rem] font-semibold tracking-[0.14em] text-ink-200 uppercase">
+          <p className="truncate text-xs font-semibold tracking-[0.14em] text-ink-200 uppercase">
             {brand.heroEyebrow ?? `${tenant.city} · ${SITE.name} storefront`}
           </p>
           <p className="font-display text-base leading-tight font-semibold tracking-tight text-ink-50">
             {brand.heroTitle ?? tenant.name}
           </p>
-          {brand.heroSubtitle && !compact ? <p className="mt-0.5 line-clamp-1 text-[0.6875rem] text-ink-200">{brand.heroSubtitle}</p> : null}
+          {brand.heroSubtitle && !compact ? <p className="mt-0.5 line-clamp-1 text-xs text-ink-200">{brand.heroSubtitle}</p> : null}
         </div>
       </div>
 
       {/* Next departures */}
       {settings.sections.departures ? (
         <div className="border-b border-line px-3.5 py-2.5">
-          <p className="text-[0.625rem] font-semibold uppercase tracking-[0.12em]" style={{ color: brand.primaryColor }}>Next departures</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em]" style={{ color: brand.primaryColor }}>Next departures</p>
           <div className="mt-1.5 flex gap-1.5 overflow-hidden">
             {activities.slice(0, compact ? 2 : 3).map((activity, i) => (
               <span key={activity.id} className="flex min-w-0 flex-1 flex-col rounded-lg border border-line bg-surface-raised px-2 py-1.5">
-                <span className="text-[0.625rem] font-semibold tabular" style={{ color: brand.primaryColor }}>{['9:00 AM', '1:00 PM', '4:30 PM'][i]}</span>
-                <span className="truncate text-[0.6875rem] font-medium text-foreground">{activity.name}</span>
+                <span className="text-xs font-semibold tabular" style={{ color: brand.primaryColor }}>{['9:00 AM', '1:00 PM', '4:30 PM'][i]}</span>
+                <span className="truncate text-xs font-medium text-foreground">{activity.name}</span>
               </span>
             ))}
           </div>
@@ -967,10 +967,10 @@ function StorefrontFrame({
                 <div className="flex min-w-0 flex-1 flex-col justify-between">
                   <div className="min-w-0">
                     <p className="truncate text-xs font-semibold text-foreground">{activity.name}</p>
-                    <p className="truncate text-[0.6875rem] text-muted">{activity.tagline}</p>
+                    <p className="truncate text-xs text-muted">{activity.tagline}</p>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <span className="flex items-center gap-1 text-[0.625rem] text-subtle">
+                    <span className="flex items-center gap-1 text-xs text-subtle">
                       <Star className="size-2.5 fill-warning text-warning" aria-hidden="true" />
                       {activity.rating.toFixed(2)} · {formatDuration(activity.durationMinutes)}
                     </span>
@@ -990,9 +990,9 @@ function StorefrontFrame({
               </span>
               <div className={cn('flex min-w-0 flex-col', layout === 'grid' ? 'gap-0.5 p-2' : 'gap-1 p-2.5')}>
                 <p className="truncate text-xs font-semibold text-foreground">{activity.name}</p>
-                {layout === 'cards' ? <p className="line-clamp-1 text-[0.6875rem] text-muted">{activity.tagline}</p> : null}
+                {layout === 'cards' ? <p className="line-clamp-1 text-xs text-muted">{activity.tagline}</p> : null}
                 <div className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-1 text-[0.625rem] text-subtle">
+                  <span className="flex items-center gap-1 text-xs text-subtle">
                     <Star className="size-2.5 fill-warning text-warning" aria-hidden="true" />
                     {activity.rating.toFixed(1)}
                   </span>
@@ -1003,7 +1003,7 @@ function StorefrontFrame({
           )
         })}
       </div>
-      <p className="px-3.5 pb-3 text-center text-[0.6875rem] text-subtle">
+      <p className="px-3.5 pb-3 text-center text-xs text-subtle">
         + {Math.max(activities.length - cards.length, 0)} more experiences
       </p>
 
@@ -1017,7 +1017,7 @@ function StorefrontFrame({
       )
         .filter(([key]) => settings.sections[key])
         .map(([key, label]) => (
-          <div key={key} className="border-t border-line px-3.5 py-2.5 text-[0.6875rem] font-medium text-muted">
+          <div key={key} className="border-t border-line px-3.5 py-2.5 text-xs font-medium text-muted">
             {label}
           </div>
         ))}

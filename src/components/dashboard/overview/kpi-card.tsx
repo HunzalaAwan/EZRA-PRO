@@ -137,7 +137,7 @@ export function KpiCard({ metric, currency, icon: Icon, trend = 'area', showDelt
           className="block font-display text-[1.625rem] leading-none font-semibold tracking-[-0.03em] text-foreground"
         />
         <div className="mt-2 flex items-end justify-between gap-3">
-          <p className="flex min-w-0 items-center gap-1 pb-0.5 text-[0.6875rem] text-subtle">
+          <p className="flex min-w-0 items-center gap-1 pb-0.5 text-xs text-subtle">
             {showDelta ? (
               <span
                 className={cn(

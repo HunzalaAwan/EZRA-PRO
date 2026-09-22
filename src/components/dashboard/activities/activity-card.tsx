@@ -215,7 +215,7 @@ export function ActivityCard({ summary, tenantSlug, className }: ActivityCardPro
               className="glass-strong border-white/20 shadow-sm"
             />
             {activity.featured ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-sunset-400/90 px-2 py-0.5 text-[0.6875rem] font-semibold text-ink-950 shadow-sm">
+              <span className="inline-flex items-center gap-1 rounded-full bg-sunset-400/90 px-2 py-0.5 text-xs font-semibold text-ink-950 shadow-sm">
                 <Star className="size-3 fill-current" aria-hidden="true" />
                 Featured
               </span>
@@ -290,7 +290,7 @@ export function ActivityCard({ summary, tenantSlug, className }: ActivityCardPro
         {/* price + rating sit on the photo, the way a storefront tile reads */}
         <div className="absolute inset-x-3 bottom-3 flex items-end justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[0.6875rem] font-medium tracking-wide text-white/70 uppercase">
+            <p className="text-xs font-medium tracking-wide text-white/70 uppercase">
               From
             </p>
             <p className="font-display text-lg leading-tight font-semibold text-white">
@@ -346,7 +346,7 @@ export function ActivityCard({ summary, tenantSlug, className }: ActivityCardPro
               </span>
               <span
                 className={cn(
-                  'inline-flex items-center gap-0.5 text-[0.6875rem] font-semibold',
+                  'inline-flex items-center gap-0.5 text-xs font-semibold',
                   trendUp ? 'text-success' : 'text-danger',
                 )}
               >
@@ -358,7 +358,7 @@ export function ActivityCard({ summary, tenantSlug, className }: ActivityCardPro
                 {formatDelta(summary.deltaBookingsPercent, 0)}
               </span>
             </p>
-            <p className="text-[0.6875rem] text-faint">bookings · last 30 days</p>
+            <p className="text-xs text-faint">bookings · last 30 days</p>
           </div>
 
           <div className="flex flex-col items-end gap-1">
@@ -371,7 +371,7 @@ export function ActivityCard({ summary, tenantSlug, className }: ActivityCardPro
               showLastDot
               ariaLabel={`${activity.name} booking trend over the last 30 days`}
             />
-            <span className="inline-flex items-center gap-1 text-[0.6875rem] text-faint">
+            <span className="inline-flex items-center gap-1 text-xs text-faint">
               <Gauge className="size-3" aria-hidden="true" />
               {summary.occupancy30d.toFixed(0)}% full
             </span>

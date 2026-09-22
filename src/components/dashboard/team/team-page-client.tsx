@@ -413,7 +413,7 @@ export function TeamPageClient({
                 <tr>
                   <th
                     scope="col"
-                    className="sticky left-0 z-10 border-b border-line bg-surface px-3 py-2.5 text-left text-[0.6875rem] font-semibold tracking-[0.08em] text-subtle uppercase"
+                    className="sticky left-0 z-10 border-b border-line bg-surface px-3 py-2.5 text-left text-xs font-semibold tracking-[0.08em] text-subtle uppercase"
                   >
                     Capability
                   </th>
@@ -562,7 +562,7 @@ function RoleChip({
       {label}
       <span
         className={cn(
-          'rounded-full px-1.5 text-[0.6875rem] tabular',
+          'rounded-full px-1.5 text-xs tabular',
           active ? 'bg-primary/15' : 'bg-surface-sunken text-faint',
         )}
       >

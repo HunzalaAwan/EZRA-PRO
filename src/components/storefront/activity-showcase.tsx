@@ -132,7 +132,7 @@ export function ActivityShowcase({
         {/* ---------- heading ---------- */}
         <Reveal className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
-            <p className="inline-flex items-center gap-2 text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-primary">
+            <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-primary">
               <Sparkles className="size-3.5" aria-hidden="true" />
               The catalogue
             </p>
@@ -238,11 +238,11 @@ function FeatureCard({
         <div className="absolute inset-0 bg-[linear-gradient(to_top,oklch(0.12_0.02_233/0.94)_0%,oklch(0.12_0.02_233/0.42)_42%,oklch(0.12_0.02_233/0.1)_72%)]" />
 
         <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/12 px-2.5 py-1 text-[0.6875rem] font-semibold text-white backdrop-blur-sm">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/12 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
             <Clock className="size-3" aria-hidden="true" />
             {formatDuration(activity.durationMinutes)}
           </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-accent px-2.5 py-1 text-[0.6875rem] font-bold uppercase tracking-wider text-on-accent shadow-sm">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-accent px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-on-accent shadow-sm">
             <Flame className="size-3" aria-hidden="true" />
             Most booked
           </span>
@@ -269,7 +269,7 @@ function FeatureCard({
 
       <div className="flex items-center justify-between gap-4 bg-surface px-5 py-4 sm:px-6">
         <div className="min-w-0">
-          <p className="text-[0.6875rem] font-medium uppercase tracking-[0.1em] text-faint">
+          <p className="text-xs font-medium uppercase tracking-[0.1em] text-faint">
             From
           </p>
           <p className="font-display text-lg font-semibold tabular text-foreground">
@@ -352,7 +352,7 @@ function ActivityCard({
 
         <span
           className={cn(
-            'absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/12 px-2.5 py-1 text-[0.6875rem] font-semibold text-white backdrop-blur-sm',
+            'absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/12 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm',
             mobileLayout === 'list' && 'hidden sm:inline-flex',
           )}
         >
@@ -363,7 +363,7 @@ function ActivityCard({
         {activity.featured ? (
           <span
             className={cn(
-              'absolute right-3 top-3 rounded-full bg-accent px-2.5 py-1 text-[0.6875rem] font-bold uppercase tracking-wider text-on-accent shadow-sm',
+              'absolute right-3 top-3 rounded-full bg-accent px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-on-accent shadow-sm',
               small && 'hidden sm:block',
             )}
           >
@@ -419,7 +419,7 @@ function ActivityCard({
           )}
         >
           <div className="min-w-0">
-            <p className="text-[0.6875rem] font-medium uppercase tracking-[0.1em] text-faint">
+            <p className="text-xs font-medium uppercase tracking-[0.1em] text-faint">
               From
             </p>
             <p className={cn('font-display font-semibold tabular text-foreground', small ? 'text-base sm:text-lg' : 'text-lg')}>

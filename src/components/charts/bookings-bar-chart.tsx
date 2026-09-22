@@ -53,7 +53,7 @@ function WeekendAwareTick({ x, y, payload }: XAxisTickContentProps) {
         dy={14}
         textAnchor="middle"
         fill={weekend ? 'var(--fg-muted)' : CHART_INK.tick}
-        fontSize={11}
+        fontSize={12}
         fontWeight={weekend ? 600 : 400}
       >
         {formatDateShort(fromDateKey(value))}
@@ -153,7 +153,7 @@ export function BookingsBarChart({
       legend={
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <ChartLegend items={legendItems} hidden={hidden} onToggle={(_key, next) => setHidden(next)} />
-          <span className="flex items-center gap-1.5 text-[11px] text-subtle">
+          <span className="flex items-center gap-1.5 text-xs text-subtle">
             <span className="size-1.5 rounded-full" style={{ background: BOOKINGS_COLOR }} aria-hidden="true" />
             Marked columns are weekends
           </span>
@@ -207,7 +207,7 @@ export function BookingsBarChart({
             tickLine={false}
             axisLine={false}
             tickMargin={6}
-            tick={{ fill: CHART_INK.tick, fontSize: 11 }}
+            tick={{ fill: CHART_INK.tick, fontSize: 12 }}
           />
 
           <Tooltip

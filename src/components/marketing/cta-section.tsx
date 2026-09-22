@@ -76,7 +76,7 @@ export function CtaSection({ id = 'get-started', className }: CtaSectionProps) {
             className={cn(
               'inline-flex items-center gap-2.5 rounded-full border border-white/20 px-3.5 py-1.5',
               'bg-[color-mix(in_oklab,var(--color-ink-975)_45%,transparent)] backdrop-blur-sm',
-              'text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-white',
+              'text-xs font-semibold uppercase tracking-[0.16em] text-white',
             )}
           >
             <span aria-hidden="true" className="relative flex size-1.5">

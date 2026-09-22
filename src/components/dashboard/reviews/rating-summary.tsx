@@ -153,7 +153,7 @@ export function RatingSummary({
       <Card variant="gradient" className="justify-between">
         <CardContent className="flex h-full flex-col justify-between">
           <div className="flex items-start justify-between gap-3">
-            <p className="text-[0.6875rem] font-semibold tracking-[0.08em] text-subtle uppercase">
+            <p className="text-xs font-semibold tracking-[0.08em] text-subtle uppercase">
               Average rating
             </p>
             <ChartDeltaChip value={deltaPercent} size="xs" />
@@ -172,14 +172,14 @@ export function RatingSummary({
             <span className="tabular font-medium text-foreground">{formatNumber(total)}</span>{' '}
             ratings on file
           </p>
-          <p className="mt-1 text-[0.6875rem] text-subtle">{comparisonLabel}</p>
+          <p className="mt-1 text-xs text-subtle">{comparisonLabel}</p>
 
           <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line-subtle pt-3">
-            <span className="tabular rounded-md bg-surface-sunken px-1.5 py-0.5 text-[0.6875rem] font-medium text-muted">
+            <span className="tabular rounded-md bg-surface-sunken px-1.5 py-0.5 text-xs font-medium text-muted">
               {formatPercent(reviewRate, 0)} of trips reviewed
             </span>
             {needsAttention > 0 ? (
-              <span className="tabular inline-flex items-center gap-1 rounded-md bg-warning-soft px-1.5 py-0.5 text-[0.6875rem] font-medium text-warning">
+              <span className="tabular inline-flex items-center gap-1 rounded-md bg-warning-soft px-1.5 py-0.5 text-xs font-medium text-warning">
                 <MessageSquareWarning className="size-3" aria-hidden="true" />
                 {needsAttention} need a reply
               </span>
@@ -284,7 +284,7 @@ export function RatingSummary({
               axisLine={false}
               tickMargin={10}
               minTickGap={24}
-              tick={{ fill: CHART_INK.tick, fontSize: 11 }}
+              tick={{ fill: CHART_INK.tick, fontSize: 12 }}
             />
             <YAxis
               width={34}
@@ -294,7 +294,7 @@ export function RatingSummary({
               tickLine={false}
               axisLine={false}
               tickMargin={6}
-              tick={{ fill: CHART_INK.tick, fontSize: 11 }}
+              tick={{ fill: CHART_INK.tick, fontSize: 12 }}
             />
 
             <ReferenceLine

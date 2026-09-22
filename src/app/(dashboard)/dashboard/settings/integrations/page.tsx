@@ -309,7 +309,7 @@ function FilterChip({
       {label}
       <span
         className={cn(
-          'rounded-full px-1.5 text-[0.6875rem] tabular',
+          'rounded-full px-1.5 text-xs tabular',
           active ? 'bg-primary/15' : 'bg-surface-sunken text-faint',
         )}
       >

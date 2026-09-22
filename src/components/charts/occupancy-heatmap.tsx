@@ -192,16 +192,16 @@ export function OccupancyHeatmap({
       footer={
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] text-subtle">{measureLabel}</span>
+            <span className="text-xs text-subtle">{measureLabel}</span>
             <span aria-hidden="true" className="flex gap-0.5">
               {[0, 25, 50, 75, 100].map((step) => (
                 <span key={step} className="h-2 w-5 rounded-[3px]" style={{ background: cellTint(step) }} />
               ))}
             </span>
-            <span className="tabular text-[11px] text-subtle">0–100%</span>
+            <span className="tabular text-xs text-subtle">0–100%</span>
           </div>
           {peak ? (
-            <span className="text-[11px] text-subtle">
+            <span className="text-xs text-subtle">
               Peak{' '}
               <span className="font-medium text-muted">
                 {WEEKDAYS[peak.weekday]} {hourLabelLong(peak.hour)}
@@ -251,7 +251,7 @@ export function OccupancyHeatmap({
             {hours.map((hour) => (
               <div
                 key={`head-${hour}`}
-                className="tabular flex items-start justify-center text-[10px] leading-none text-subtle"
+                className="tabular flex items-start justify-center text-xs leading-none text-subtle"
                 aria-hidden="true"
               >
                 {hourLabelShort(hour)}
@@ -261,7 +261,7 @@ export function OccupancyHeatmap({
             {WEEKDAYS.map((day, weekday) => (
               <div key={day} className="contents">
                 <div
-                  className="flex items-center pr-1 text-[11px] font-medium leading-none text-subtle"
+                  className="flex items-center pr-1 text-xs font-medium leading-none text-subtle"
                   aria-hidden="true"
                 >
                   {day}

@@ -91,12 +91,12 @@ export function InsightsPanel({
             <h2 className="font-display text-[0.9375rem] leading-tight font-semibold tracking-[-0.015em] text-foreground">
               What to do next
             </h2>
-            <p className="mt-0.5 truncate text-[0.6875rem] text-subtle">
+            <p className="mt-0.5 truncate text-xs text-subtle">
               Ranked by impact, from your own bookings
             </p>
           </div>
         </div>
-        <span className="shrink-0 rounded-full bg-surface-sunken px-2 py-0.5 text-[0.6875rem] font-semibold text-muted tabular-nums">
+        <span className="shrink-0 rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-semibold text-muted tabular-nums">
           {insights.length}
         </span>
       </div>
@@ -145,7 +145,7 @@ export function InsightsPanel({
                   <div className="flex items-start gap-3">
                     <span
                       className={cn(
-                        'mt-px grid size-6 shrink-0 place-items-center rounded-md text-[0.6875rem] font-bold tabular-nums',
+                        'mt-px grid size-6 shrink-0 place-items-center rounded-md text-xs font-bold tabular-nums',
                         look.chip,
                       )}
                     >
@@ -153,7 +153,7 @@ export function InsightsPanel({
                     </span>
 
                     <div className="min-w-0 flex-1">
-                      <p className="flex items-center gap-1 text-[0.625rem] font-semibold tracking-wide text-subtle uppercase">
+                      <p className="flex items-center gap-1 text-xs font-semibold tracking-wide text-subtle uppercase">
                         <Icon aria-hidden="true" className="size-3" strokeWidth={2.25} />
                         {look.label}
                       </p>
@@ -176,7 +176,7 @@ export function InsightsPanel({
                               </span>
                             ) : null}
                           </span>
-                          <span className="text-[0.6875rem] text-subtle">{insight.impact.caption}</span>
+                          <span className="text-xs text-subtle">{insight.impact.caption}</span>
                         </p>
                       ) : null}
 
@@ -190,7 +190,7 @@ export function InsightsPanel({
                         <p className="mt-2.5 text-xs leading-relaxed text-muted">{insight.body}</p>
                       ) : null}
 
-                      <span className="mt-2 inline-flex items-center gap-1 text-[0.6875rem] font-semibold text-primary">
+                      <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary">
                         {insight.actionLabel ?? 'Open in analytics'}
                         <ArrowRight
                           aria-hidden="true"

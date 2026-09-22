@@ -60,14 +60,14 @@ export function RoomsGrid({ roomTypes, roomCounts, availability, settings, curre
           <li key={t.id} className={cn('group flex flex-col overflow-hidden rounded-2xl border border-line bg-surface transition-colors', available ? 'hover:border-line-strong' : 'opacity-75')}>
             <Link href={href} className="relative block aspect-[4/3] bg-surface-sunken">
               <Image src={t.imageUrls[0]} alt={t.name} fill sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 25vw" className="object-cover transition-transform duration-500 ease-[var(--ease-out-expo)] group-hover:scale-[1.03]" />
-              {badge ? <span className={cn('absolute top-2.5 left-2.5 rounded-full px-2.5 py-1 text-[0.6875rem] font-semibold', available ? 'bg-primary text-on-primary' : 'bg-surface/95 text-foreground')}>{badge}</span> : null}
+              {badge ? <span className={cn('absolute top-2.5 left-2.5 rounded-full px-2.5 py-1 text-xs font-semibold', available ? 'bg-primary text-on-primary' : 'bg-surface/95 text-foreground')}>{badge}</span> : null}
             </Link>
             <div className="flex flex-1 flex-col p-4">
               <h3 className="text-[0.9375rem] font-semibold leading-snug text-foreground">{t.name}</h3>
               <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-muted">{t.description}</p>
               <div className="mt-2.5 flex flex-wrap gap-1.5">
                 {t.highlights.slice(0, 3).map((h) => (
-                  <span key={h} className="rounded-full bg-surface-sunken px-2 py-0.5 text-[0.6875rem] font-medium text-muted">
+                  <span key={h} className="rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-medium text-muted">
                     {h}
                   </span>
                 ))}

@@ -597,13 +597,13 @@ export function NewBookingDialog({ open, onOpenChange }: NewBookingDialogProps) 
                                 : 'border-line bg-surface text-foreground hover:bg-surface-sunken',
                             )}
                           >
-                            <span className="text-[0.625rem] font-medium tracking-wider uppercase opacity-70">
+                            <span className="text-xs font-medium tracking-wider uppercase opacity-70">
                               {new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(date)}
                             </span>
                             <span className="font-display text-base font-semibold tabular-nums">
                               {date.getDate()}
                             </span>
-                            <span className="text-[0.625rem] tabular-nums opacity-70">
+                            <span className="text-xs tabular-nums opacity-70">
                               {seats} left
                             </span>
                           </button>

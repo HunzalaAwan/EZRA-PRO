@@ -207,7 +207,7 @@ function TagInput({
                 transition={chipTransition}
                 className={cn(
                   'inline-flex max-w-full items-center gap-1 rounded-lg bg-primary-soft/70 pl-2 pr-1 font-medium text-primary',
-                  size === 'sm' ? 'h-5 text-[0.6875rem]' : 'h-6 text-xs',
+                  size === 'sm' ? 'h-5 text-xs' : 'h-6 text-xs',
                 )}
               >
                 <span className="truncate">{tag}</span>

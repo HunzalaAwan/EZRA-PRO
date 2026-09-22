@@ -140,7 +140,7 @@ export function TenantSwitcher({ collapsed = false, className }: TenantSwitcherP
         <span className="block truncate text-[0.8125rem] font-semibold tracking-[-0.01em] text-foreground">
           {active.name}
         </span>
-        <span className="block truncate text-[0.6875rem] text-subtle capitalize">
+        <span className="block truncate text-xs text-subtle capitalize">
           {active.plan} · {active.city}
         </span>
       </span>
@@ -192,7 +192,7 @@ export function TenantSwitcher({ collapsed = false, className }: TenantSwitcherP
                     </Badge>
                   ) : null}
                 </span>
-                <span className="block truncate text-[0.6875rem] text-subtle">
+                <span className="block truncate text-xs text-subtle">
                   {VERTICAL_LABEL[tenant.vertical]}
                 </span>
               </span>

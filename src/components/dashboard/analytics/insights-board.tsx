@@ -116,7 +116,7 @@ function InsightCard({ insight }: { insight: Insight }) {
         <div className="flex min-w-0 flex-1 flex-col items-end gap-1.5 text-right">
           <span
             className={cn(
-              'rounded-md px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase tracking-[0.06em]',
+              'rounded-md px-1.5 py-0.5 text-xs font-semibold uppercase tracking-[0.06em]',
               style.chip,
             )}
           >
@@ -206,7 +206,7 @@ export function InsightsBoard({
         </div>
 
         {counts.actionable > 0 ? (
-          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-warning-soft px-2.5 py-1.5 text-[0.6875rem] font-semibold text-warning">
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-warning-soft px-2.5 py-1.5 text-xs font-semibold text-warning">
             <TriangleAlert aria-hidden="true" className="size-3.5" />
             {counts.actionable} {counts.actionable === 1 ? 'needs' : 'need'} attention
           </span>

@@ -405,7 +405,7 @@ export function CalendarShell({
             </div>
           </dl>
 
-          <div className="ml-auto hidden items-center gap-1.5 text-[0.6875rem] text-faint lg:flex">
+          <div className="ml-auto hidden items-center gap-1.5 text-xs text-faint lg:flex">
             <SimpleTooltip label="Jump to today">
               <span className="inline-flex items-center gap-1">
                 <Kbd size="sm">T</Kbd>

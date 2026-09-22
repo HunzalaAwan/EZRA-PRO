@@ -123,7 +123,7 @@ function StageCard({ tab, className }: { tab: Tab; className?: string }) {
             <Icon className="size-3.5" aria-hidden="true" />
           </span>
           <span className="text-[0.9375rem] font-medium text-foreground">{tab.label}</span>
-          {tab.badge ? <span className="rounded-md bg-surface-sunken px-1.5 py-0.5 text-[0.6875rem] font-medium text-muted">{tab.badge}</span> : null}
+          {tab.badge ? <span className="rounded-md bg-surface-sunken px-1.5 py-0.5 text-xs font-medium text-muted">{tab.badge}</span> : null}
         </p>
         <h3 className="mt-5 font-display text-[1.75rem] leading-[1.12] font-medium tracking-[-0.025em] text-balance text-foreground sm:text-[2.125rem] lg:text-[2.5rem]">
           {tab.title}

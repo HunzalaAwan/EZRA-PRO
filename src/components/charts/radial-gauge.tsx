@@ -155,10 +155,10 @@ export function RadialGauge({
           {Math.round(pct)}
           <span className="text-base font-medium text-subtle">{unit}</span>
         </span>
-        <span className="mt-1.5 max-w-[70%] truncate text-[11px] font-medium" style={{ color }}>
+        <span className="mt-1.5 max-w-[70%] truncate text-xs font-medium" style={{ color }}>
           {statusLabel}
         </span>
-        {sublabel ? <span className="mt-0.5 max-w-[80%] truncate text-[11px] text-subtle">{sublabel}</span> : null}
+        {sublabel ? <span className="mt-0.5 max-w-[80%] truncate text-xs text-subtle">{sublabel}</span> : null}
       </div>
     </div>
   )

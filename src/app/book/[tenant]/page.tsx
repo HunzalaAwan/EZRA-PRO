@@ -262,7 +262,7 @@ export default async function StorefrontHomePage({
           <div className="mx-auto w-full max-w-[88rem] px-4 sm:px-6 lg:px-10">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
-                <p className="inline-flex items-center gap-2 text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-primary">
+                <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-primary">
                   <span className="relative flex size-2">
                     <span className="absolute inline-flex size-full animate-pulse-ring rounded-full bg-primary opacity-70" />
                     <span className="relative inline-flex size-2 rounded-full bg-primary" />
@@ -337,7 +337,7 @@ export default async function StorefrontHomePage({
         <div className="mx-auto w-full max-w-[88rem] px-4 sm:px-6 lg:px-10">
           <div className="grid grid-cols-1 gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:gap-16">
             <Reveal>
-              <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-primary">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
                 About us
               </p>
               <h2 className="mt-3 max-w-[20ch] font-display text-display-sm font-semibold tracking-tight text-foreground">
@@ -394,7 +394,7 @@ export default async function StorefrontHomePage({
                             {member.certifications.slice(0, 2).map((certification) => (
                               <li
                                 key={certification}
-                                className="rounded-full bg-primary-soft px-2 py-0.5 text-[0.625rem] font-medium text-primary"
+                                className="rounded-full bg-primary-soft px-2 py-0.5 text-xs font-medium text-primary"
                               >
                                 {certification}
                               </li>
@@ -427,7 +427,7 @@ export default async function StorefrontHomePage({
           <div className="mx-auto w-full max-w-[88rem] px-4 sm:px-6 lg:px-10">
             <Reveal className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-primary">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
                   Guest reviews
                 </p>
                 <h2 className="mt-3 font-display text-display-sm font-semibold tracking-tight text-foreground">
@@ -465,7 +465,7 @@ export default async function StorefrontHomePage({
                         </span>
                       </span>
                     </figcaption>
-                    <p className="mt-3 truncate text-[0.6875rem] font-medium uppercase tracking-[0.1em] text-faint">
+                    <p className="mt-3 truncate text-xs font-medium uppercase tracking-[0.1em] text-faint">
                       {review.activityName}
                     </p>
                   </figure>
@@ -501,7 +501,7 @@ function ContactBand({ tenant, base }: { tenant: Tenant; base: string }) {
       <div className="relative mx-auto w-full max-w-[88rem] px-4 sm:px-6 lg:px-10">
         <div className="grid grid-cols-1 gap-10 lg:grid-cols-2 lg:gap-16">
           <Reveal>
-            <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-primary">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
               Contact
             </p>
             <h2 className="mt-3 max-w-[16ch] font-display text-display-sm font-semibold tracking-tight text-foreground">
@@ -535,7 +535,7 @@ function ContactBand({ tenant, base }: { tenant: Tenant; base: string }) {
                 <div className="flex items-start gap-3">
                   <MapPin className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
                   <div>
-                    <dt className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-faint">
+                    <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">
                       Where to find us
                     </dt>
                     <dd className="mt-1 text-sm leading-relaxed text-foreground">
@@ -546,7 +546,7 @@ function ContactBand({ tenant, base }: { tenant: Tenant; base: string }) {
                 <div className="flex items-start gap-3">
                   <Clock className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
                   <div>
-                    <dt className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-faint">
+                    <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">
                       Office hours
                     </dt>
                     <dd className="mt-1 text-sm tabular text-foreground">
@@ -560,7 +560,7 @@ function ContactBand({ tenant, base }: { tenant: Tenant; base: string }) {
                 <div className="flex items-start gap-3">
                   <Users className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
                   <div>
-                    <dt className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-faint">
+                    <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">
                       Groups of 10 or more
                     </dt>
                     <dd className="mt-1 text-sm leading-relaxed text-foreground">
@@ -571,7 +571,7 @@ function ContactBand({ tenant, base }: { tenant: Tenant; base: string }) {
                 <div className="flex items-start gap-3">
                   <Ship className="mt-0.5 size-5 shrink-0 text-primary" aria-hidden="true" />
                   <div>
-                    <dt className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-faint">
+                    <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">
                       On the day
                     </dt>
                     <dd className="mt-1 text-sm leading-relaxed text-foreground">

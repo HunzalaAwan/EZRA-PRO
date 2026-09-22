@@ -241,7 +241,7 @@ export function Hero({ className }: HeroProps) {
                 </span>
                 <div className="leading-tight">
                   <p className="tabular font-display text-sm font-semibold text-foreground">+31%</p>
-                  <p className="text-[0.6875rem] text-subtle">direct bookings</p>
+                  <p className="text-xs text-subtle">direct bookings</p>
                 </div>
               </div>
             </div>
@@ -260,7 +260,7 @@ export function Hero({ className }: HeroProps) {
           animate={{ opacity: 1 }}
           transition={{ duration: DURATION.slow, delay: 1.2, ease: EASE_OUT_EXPO }}
         >
-          <span className="text-[0.625rem] font-medium uppercase tracking-[0.22em] text-faint">
+          <span className="text-xs font-medium uppercase tracking-[0.22em] text-faint">
             Scroll
           </span>
           <motion.span

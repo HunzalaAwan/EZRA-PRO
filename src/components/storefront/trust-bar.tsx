@@ -127,7 +127,7 @@ export function TrustSeal({ freeCancellationHours = 24, className, ...props }: T
   return (
     <p
       className={cn(
-        'flex items-center justify-center gap-1.5 text-center text-[0.6875rem] leading-relaxed text-subtle',
+        'flex items-center justify-center gap-1.5 text-center text-xs leading-relaxed text-subtle',
         className,
       )}
       {...props}

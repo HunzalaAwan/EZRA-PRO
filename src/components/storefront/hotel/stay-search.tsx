@@ -35,15 +35,15 @@ export function StaySearch({ slug, todayKey, onDark = false, cta = true, classNa
   return (
     <div className={cn('flex flex-col gap-3 rounded-2xl p-3 sm:flex-row sm:items-end sm:gap-2', onDark ? 'bg-white/10 backdrop-blur-md ring-1 ring-white/15' : 'border border-line bg-surface shadow-sm', className)}>
       <label className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className={cn('px-1 text-[0.6875rem] font-medium uppercase tracking-[0.1em]', onDark ? 'text-white/60' : 'text-subtle')}>Check-in</span>
+        <span className={cn('px-1 text-xs font-medium uppercase tracking-[0.1em]', onDark ? 'text-white/60' : 'text-subtle')}>Check-in</span>
         <Input type="date" min={todayKey} value={search.checkIn} onChange={(e) => e.target.value && update({ checkIn: e.target.value, checkOut: e.target.value >= search.checkOut ? nightKeys(e.target.value, search.checkOut).length === 0 ? shiftKey(e.target.value, 2) : search.checkOut : search.checkOut })} leftIcon={<CalendarDays />} aria-label="Check-in" className={onDark ? 'border-white/20 bg-white/10 text-white [&_input]:text-white' : undefined} />
       </label>
       <label className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className={cn('px-1 text-[0.6875rem] font-medium uppercase tracking-[0.1em]', onDark ? 'text-white/60' : 'text-subtle')}>Check-out · {nights} {nights === 1 ? 'night' : 'nights'}</span>
+        <span className={cn('px-1 text-xs font-medium uppercase tracking-[0.1em]', onDark ? 'text-white/60' : 'text-subtle')}>Check-out · {nights} {nights === 1 ? 'night' : 'nights'}</span>
         <Input type="date" min={shiftKey(search.checkIn, 1)} value={search.checkOut} onChange={(e) => e.target.value && e.target.value > search.checkIn && update({ checkOut: e.target.value })} leftIcon={<CalendarDays />} aria-label="Check-out" className={onDark ? 'border-white/20 bg-white/10 text-white [&_input]:text-white' : undefined} />
       </label>
       <div className="flex flex-col gap-1">
-        <span className={cn('px-1 text-[0.6875rem] font-medium uppercase tracking-[0.1em]', onDark ? 'text-white/60' : 'text-subtle')}>
+        <span className={cn('px-1 text-xs font-medium uppercase tracking-[0.1em]', onDark ? 'text-white/60' : 'text-subtle')}>
           <Users className="mr-1 inline size-3" aria-hidden="true" />
           Guests
         </span>

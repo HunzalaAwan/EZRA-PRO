@@ -135,7 +135,7 @@ function PhotoField({
           </span>
         )}
         {!value && fallback ? (
-          <span className="absolute inset-x-0 bottom-0 bg-ink-950/60 px-2 py-1 text-[0.625rem] font-medium text-white">
+          <span className="absolute inset-x-0 bottom-0 bg-ink-950/60 px-2 py-1 text-xs font-medium text-white">
             Using the activity photo
           </span>
         ) : null}
@@ -742,9 +742,9 @@ function Stat({
         {icon}
       </span>
       <div className="min-w-0">
-        <p className="text-[0.6875rem] font-medium text-subtle">{label}</p>
+        <p className="text-xs font-medium text-subtle">{label}</p>
         <p className="mt-0.5 font-display text-xl leading-none font-semibold tracking-[-0.02em] text-foreground tabular-nums">{value}</p>
-        <p className="mt-1.5 truncate text-[0.6875rem] text-subtle">{hint}</p>
+        <p className="mt-1.5 truncate text-xs text-subtle">{hint}</p>
       </div>
     </div>
   )

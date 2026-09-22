@@ -231,7 +231,7 @@ export function PasswordStrength({
             <li
               key={check.key}
               className={cn(
-                'flex items-center gap-1.5 text-[0.6875rem] font-medium transition-colors duration-200',
+                'flex items-center gap-1.5 text-xs font-medium transition-colors duration-200',
                 check.met ? 'text-success' : 'text-faint',
               )}
             >

@@ -130,7 +130,7 @@ function RatesStrip({
         const { shown, suppressed } = present(metric, currency, comparison)
         return (
           <div key={metric.key} className="min-w-0 bg-surface px-4 py-3.5">
-            <dt className="flex items-center gap-1.5 text-[0.6875rem] font-medium text-subtle">
+            <dt className="flex items-center gap-1.5 text-xs font-medium text-subtle">
               <span
                 aria-hidden="true"
                 className="size-1.5 shrink-0 rounded-full"
@@ -146,7 +146,7 @@ function RatesStrip({
                 })}
               </span>
               {suppressed ? (
-                <span className="text-[0.6875rem] text-faint">no prior period</span>
+                <span className="text-xs text-faint">no prior period</span>
               ) : (
                 <ChartDeltaChip
                   value={metric.deltaPercent}

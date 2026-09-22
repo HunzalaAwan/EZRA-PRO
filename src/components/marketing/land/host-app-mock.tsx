@@ -51,7 +51,7 @@ export function HostAppMock({ className }: { className?: string }) {
       <div aria-hidden="true" className="rounded-[2.25rem] bg-foreground p-2 shadow-[var(--shadow-2xl)]">
         <div className="overflow-hidden rounded-[1.85rem] bg-surface">
           {/* status bar */}
-          <div className="flex items-center justify-between px-5 pt-3 text-[0.625rem] font-semibold text-foreground">
+          <div className="flex items-center justify-between px-5 pt-3 text-xs font-semibold text-foreground">
             <span className="tabular-nums">06:31</span>
             <span className="h-4 w-16 rounded-full bg-foreground" />
             <AnimatePresence mode="wait" initial={false}>
@@ -69,14 +69,14 @@ export function HostAppMock({ className }: { className?: string }) {
 
           {/* header */}
           <div className="px-4 pt-4 pb-3">
-            <p className="text-[0.625rem] font-semibold tracking-[0.12em] text-subtle uppercase">Today · 06:40</p>
+            <p className="text-xs font-semibold tracking-[0.12em] text-subtle uppercase">Today · 06:40</p>
             <p className="mt-1 text-[1rem] leading-tight font-semibold text-foreground">Sunrise paddle</p>
-            <p className="mt-1 flex items-center gap-1 text-[0.6875rem] text-muted">
+            <p className="mt-1 flex items-center gap-1 text-xs text-muted">
               <MapPin className="size-3" />
               Pier 4 · Guide: Mara
             </p>
             <div className="mt-3 flex items-center justify-between rounded-xl bg-surface-sunken px-3 py-2">
-              <span className="text-[0.6875rem] text-muted">Checked in</span>
+              <span className="text-xs text-muted">Checked in</span>
               <span className="text-[0.8125rem] font-semibold text-foreground tabular-nums">
                 {seated} / {total} seats
               </span>
@@ -94,7 +94,7 @@ export function HostAppMock({ className }: { className?: string }) {
                 transition={{ duration: 0.35, ease: EASE_OUT_EXPO }}
                 className="overflow-hidden"
               >
-                <p className="mx-4 mb-2 rounded-lg bg-warning-soft px-3 py-1.5 text-[0.6875rem] font-medium text-warning">
+                <p className="mx-4 mb-2 rounded-lg bg-warning-soft px-3 py-1.5 text-xs font-medium text-warning">
                   No signal. Check-ins are saved and will sync.
                 </p>
               </motion.div>
@@ -127,9 +127,9 @@ export function HostAppMock({ className }: { className?: string }) {
                   </motion.span>
                   <span className="min-w-0 flex-1">
                     <span className={cn('block truncate text-[0.75rem] font-semibold', done ? 'text-foreground' : 'text-muted')}>{guest.name}</span>
-                    <span className="block truncate text-[0.625rem] text-subtle">{guest.note}</span>
+                    <span className="block truncate text-xs text-subtle">{guest.note}</span>
                   </span>
-                  <span className="shrink-0 text-[0.6875rem] font-semibold text-subtle tabular-nums">×{guest.seats}</span>
+                  <span className="shrink-0 text-xs font-semibold text-subtle tabular-nums">×{guest.seats}</span>
                 </li>
               )
             })}

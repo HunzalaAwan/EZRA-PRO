@@ -101,7 +101,7 @@ export function BookingsFlowChart({
       legend={
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-[0.6875rem] font-medium text-subtle">Net bookings</p>
+            <p className="text-xs font-medium text-subtle">Net bookings</p>
             <p className="mt-0.5 font-display text-2xl leading-none font-semibold tracking-[-0.03em] text-foreground tabular-nums">
               {formatNumber(totals.net)}
             </p>
@@ -125,7 +125,7 @@ export function BookingsFlowChart({
             tickLine={false}
             interval="preserveStartEnd"
             minTickGap={28}
-            tick={{ fill: CHART_INK.tick, fontSize: 11 }}
+            tick={{ fill: CHART_INK.tick, fontSize: 12 }}
             tickFormatter={(value: string) => formatDateShort(fromDateKey(value))}
           />
           <YAxis
@@ -133,7 +133,7 @@ export function BookingsFlowChart({
             tickLine={false}
             width={36}
             tickCount={5}
-            tick={{ fill: CHART_INK.tick, fontSize: 11 }}
+            tick={{ fill: CHART_INK.tick, fontSize: 12 }}
             tickFormatter={(value: number) => formatNumber(Math.abs(value), { compact: true })}
           />
           <ReferenceLine y={0} stroke={CHART_INK.reference} strokeWidth={1} />
@@ -149,7 +149,7 @@ export function BookingsFlowChart({
                   const inbound = Number(datum.bookings ?? 0)
                   const outbound = Math.abs(Number(datum.cancellations ?? 0))
                   return (
-                    <span className="text-[0.6875rem] font-semibold text-foreground tabular-nums">
+                    <span className="text-xs font-semibold text-foreground tabular-nums">
                       Net {formatNumber(inbound - outbound)}
                     </span>
                   )

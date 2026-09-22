@@ -145,7 +145,7 @@ export function QuickActions({ className }: QuickActionsProps) {
                 </span>
               </span>
 
-              <span className="mt-auto inline-flex items-center gap-1 pt-1 text-[0.6875rem] font-semibold text-primary">
+              <span className="mt-auto inline-flex items-center gap-1 pt-1 text-xs font-semibold text-primary">
                 {tile.cta}
                 <ArrowRight
                   aria-hidden="true"
@@ -227,7 +227,7 @@ export function OverviewHeaderActions({ nowIso, className }: OverviewHeaderActio
                 <Icon aria-hidden="true" className="mt-0.5" />
                 <span className="min-w-0 flex-1">
                   <span className="block font-medium">{option.label}</span>
-                  <span className="mt-0.5 block text-[0.6875rem] leading-relaxed text-subtle">
+                  <span className="mt-0.5 block text-xs leading-relaxed text-subtle">
                     {option.detail}
                   </span>
                 </span>
@@ -235,7 +235,7 @@ export function OverviewHeaderActions({ nowIso, className }: OverviewHeaderActio
             )
           })}
           <DropdownMenuSeparator />
-          <p className="px-2.5 pt-1 pb-2 text-[0.6875rem] leading-relaxed text-faint">
+          <p className="px-2.5 pt-1 pb-2 text-xs leading-relaxed text-faint">
             Exports respect the date range above and every filter applied to this page.
           </p>
         </DropdownMenuContent>

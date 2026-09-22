@@ -251,7 +251,7 @@ export function StorefrontFooter({ tenant, className }: StorefrontFooterProps) {
             rel="noreferrer"
             className={cn(
               'group inline-flex items-center gap-2 self-start rounded-full border border-line-subtle bg-surface px-3 py-1.5',
-              'text-[0.6875rem] font-medium text-faint transition-all duration-200 ease-[var(--ease-out-expo)]',
+              'text-xs font-medium text-faint transition-all duration-200 ease-[var(--ease-out-expo)]',
               'hover:border-line hover:text-muted hover:shadow-xs sm:self-auto',
             )}
           >

@@ -427,7 +427,7 @@ export function TestimonialMarquee({
             <Avatar name={testimonial.author} src={testimonial.avatarUrl} size="sm" />
             <div className="min-w-0">
               <p className="truncate text-xs font-semibold text-foreground">{testimonial.author}</p>
-              <p className="truncate text-[0.6875rem] text-subtle">{testimonial.company}</p>
+              <p className="truncate text-xs text-subtle">{testimonial.company}</p>
             </div>
           </figcaption>
         </figure>

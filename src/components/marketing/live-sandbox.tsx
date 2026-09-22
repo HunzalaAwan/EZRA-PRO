@@ -223,7 +223,7 @@ export function LiveSandbox({ className }: { className?: string }) {
                   </div>
                   <div>
                     <p className="text-xs font-semibold text-foreground">Offline Dockside Mode</p>
-                    <p className="text-[0.6875rem] text-muted">
+                    <p className="text-xs text-muted">
                       {offlineMode
                         ? 'Manifest cached on captain device. Check-ins queue offline.'
                         : 'Simulate captain device with no cellular signal at the slip.'}
@@ -296,17 +296,17 @@ export function LiveSandbox({ className }: { className?: string }) {
                               ({evt.seats} {evt.seats === 1 ? 'seat' : 'seats'})
                             </span>
                           </p>
-                          <p className="text-[0.6875rem] text-subtle">
+                          <p className="text-xs text-subtle">
                             Ref: {evt.reference} · Channel: {evt.channel}
                           </p>
                         </div>
                       </div>
 
                       <div className="text-right">
-                        <span className="inline-flex items-center gap-1 text-[0.6875rem] font-semibold text-success bg-success-soft px-2 py-0.5 rounded-full">
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold text-success bg-success-soft px-2 py-0.5 rounded-full">
                           <CheckCircle2 className="size-3" /> Lock Synced
                         </span>
-                        <p className="text-[0.625rem] text-subtle mt-0.5">{evt.timestamp}</p>
+                        <p className="text-xs text-subtle mt-0.5">{evt.timestamp}</p>
                       </div>
                     </motion.div>
                   ))}

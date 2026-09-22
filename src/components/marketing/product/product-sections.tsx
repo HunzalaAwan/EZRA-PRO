@@ -146,7 +146,7 @@ export function ProductHero({ content, children }: { content: ProductContent; ch
                 <Icon className="size-4" aria-hidden="true" />
               </span>
               <span className="text-[0.9375rem] font-medium text-foreground">{content.label}</span>
-              {content.badge ? <span className="rounded-md bg-surface px-1.5 py-0.5 text-[0.6875rem] font-medium text-muted ring-1 ring-black/[0.05]">{content.badge}</span> : null}
+              {content.badge ? <span className="rounded-md bg-surface px-1.5 py-0.5 text-xs font-medium text-muted ring-1 ring-black/[0.05]">{content.badge}</span> : null}
             </motion.p>
 
             <motion.h1

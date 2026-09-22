@@ -124,7 +124,7 @@ function PlanCard({ plan, billing }: { plan: PricingPlan; billing: BillingPeriod
           <span
             className={cn(
               'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 shadow-lg',
-              'text-[0.6875rem] font-semibold uppercase tracking-[0.09em] text-white',
+              'text-xs font-semibold uppercase tracking-[0.09em] text-white',
               'bg-lagoon-800',
             )}
           >

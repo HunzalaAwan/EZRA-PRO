@@ -71,7 +71,7 @@ export function HotelHome({ tenant, menu, dining, experiences, reviews, story, c
           {tenant.branding.coverImage ? <Image src={tenant.branding.coverImage} alt="" fill priority sizes="100vw" className="object-cover opacity-70" /> : null}
           <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(180deg,rgba(11,20,23,0.5)_0%,rgba(11,20,23,0.2)_40%,rgba(11,20,23,0.88)_100%)]" />
           <div className="relative mx-auto flex w-full max-w-[88rem] flex-col justify-end px-4 pt-32 pb-10 sm:px-6 sm:pt-40 sm:pb-14 lg:px-10">
-            <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-white/70">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/70">
               {tenant.city} · {lodging.rooms.length} rooms · check-in from {lodging.settings.checkInFrom}
             </p>
             <h1 className="mt-3 max-w-[16ch] font-display text-[length:clamp(2.5rem,1.4rem_+_3.6vw,4.5rem)] leading-[1.02] font-semibold tracking-tight">{tenant.name}</h1>
@@ -101,7 +101,7 @@ export function HotelHome({ tenant, menu, dining, experiences, reviews, story, c
           <div className="mx-auto w-full max-w-[88rem] px-4 sm:px-6 lg:px-10">
             <Reveal className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-primary">Rooms</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Rooms</p>
                 <h2 className="mt-2 max-w-[20ch] font-display text-display-sm font-semibold tracking-tight text-foreground">Four kinds of room, all of them quiet</h2>
               </div>
               <p className="max-w-[44ch] text-sm text-muted">Booking direct gets you the lowest rate we publish anywhere, free cancellation on flexible plans, and breakfast on the roof if you pick it.</p>
@@ -125,7 +125,7 @@ export function HotelHome({ tenant, menu, dining, experiences, reviews, story, c
             <div className="mx-auto w-full max-w-[88rem] px-4 sm:px-6 lg:px-10">
               <Reveal className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-primary">Experiences</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Experiences</p>
                   <h2 className="mt-2 max-w-[22ch] font-display text-display-sm font-semibold tracking-tight text-foreground">What the house puts on</h2>
                 </div>
                 <p className="max-w-[40ch] text-sm text-muted">Open to guests and visitors. Book with your stay or on the day.</p>
@@ -159,7 +159,7 @@ export function HotelHome({ tenant, menu, dining, experiences, reviews, story, c
         <section id="about" className="scroll-mt-20 bg-background py-14 sm:py-20">
           <div className="mx-auto grid w-full max-w-[88rem] gap-10 px-4 sm:px-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:gap-16 lg:px-10">
             <Reveal>
-              <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-primary">The house</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">The house</p>
               <h2 className="mt-3 max-w-[20ch] font-display text-display-sm font-semibold tracking-tight text-foreground">{story.heading}</h2>
               <div className="mt-5 space-y-4">
                 {story.body.map((paragraph) => (
@@ -208,7 +208,7 @@ export function HotelHome({ tenant, menu, dining, experiences, reviews, story, c
             <div className="mx-auto w-full max-w-[88rem] px-4 sm:px-6 lg:px-10">
               <Reveal className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-primary">Guest reviews</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Guest reviews</p>
                   <h2 className="mt-3 font-display text-display-sm font-semibold tracking-tight text-foreground">{rating.toFixed(2)} out of 5</h2>
                 </div>
                 <p className="text-sm text-muted">
@@ -244,7 +244,7 @@ export function HotelHome({ tenant, menu, dining, experiences, reviews, story, c
         <section id="contact" className="scroll-mt-20 border-t border-line-subtle bg-background py-14 sm:py-20">
           <div className="mx-auto grid w-full max-w-[88rem] gap-10 px-4 sm:px-6 lg:grid-cols-2 lg:gap-16 lg:px-10">
             <Reveal>
-              <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-primary">Getting here</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Getting here</p>
               <h2 className="mt-3 max-w-[16ch] font-display text-display-sm font-semibold tracking-tight text-foreground">A corner house above the river</h2>
               <p className="mt-4 max-w-[46ch] text-base leading-relaxed text-muted">Ten minutes on foot from Santa Apolónia station, twenty-five by taxi from the airport. The lane is too narrow for cars, so we meet you at the bottom with a trolley. A table in the kitchen room is a phone call away.</p>
               <div className="mt-8 flex flex-wrap gap-3">
@@ -261,23 +261,23 @@ export function HotelHome({ tenant, menu, dining, experiences, reviews, story, c
             <Reveal delay={0.1}>
               <dl className="grid gap-5 rounded-2xl border border-line bg-surface p-6 shadow-sm sm:grid-cols-2">
                 <div>
-                  <dt className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-faint">Address</dt>
+                  <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">Address</dt>
                   <dd className="mt-1 text-sm leading-relaxed text-foreground">{tenant.contact.addressLine}</dd>
                 </div>
                 <div>
-                  <dt className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-faint">Check-in and out</dt>
+                  <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">Check-in and out</dt>
                   <dd className="mt-1 text-sm text-foreground tabular-nums">
                     From {lodging.settings.checkInFrom} · by {lodging.settings.checkOutBy}
                   </dd>
                   <dd className="text-xs text-subtle">Early or late on request, subject to the room.</dd>
                 </div>
                 <div>
-                  <dt className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-faint">Kitchen</dt>
+                  <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">Kitchen</dt>
                   <dd className="mt-1 text-sm text-foreground tabular-nums">{dining.periods.map((p) => `${p.name} ${p.startTime}–${p.endTime}`).join(' · ')}</dd>
                   <dd className="text-xs text-subtle">Room service {dining.ordering.roomService.startTime}–{dining.ordering.roomService.endTime}.</dd>
                 </div>
                 <div>
-                  <dt className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-faint">Good to know</dt>
+                  <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">Good to know</dt>
                   <dd className="mt-1 text-sm text-foreground">{lodging.settings.cityTaxLabel} of {formatCurrency(lodging.settings.cityTaxPerNight, tenant.currency)} per adult per night is added at booking.</dd>
                 </div>
               </dl>

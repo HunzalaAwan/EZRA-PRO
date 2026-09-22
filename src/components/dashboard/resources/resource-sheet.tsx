@@ -98,7 +98,7 @@ export function ResourceSheet({
                     <Icon className="size-8" aria-hidden="true" />
                   </span>
                 )}
-                <span className="absolute right-3 bottom-3 inline-flex items-center gap-1.5 rounded-full bg-surface/90 px-2.5 py-1 text-[0.6875rem] font-medium text-foreground shadow-sm backdrop-blur-sm">
+                <span className="absolute right-3 bottom-3 inline-flex items-center gap-1.5 rounded-full bg-surface/90 px-2.5 py-1 text-xs font-medium text-foreground shadow-sm backdrop-blur-sm">
                   <Camera className="size-3.5" aria-hidden="true" />
                   {image ? 'Change photo' : 'Add a photo'}
                 </span>
@@ -146,7 +146,7 @@ export function ResourceSheet({
                         <li key={run.departureId} className="flex items-center gap-3 px-3 py-2">
                           <div className="w-[4.5rem] shrink-0">
                             <p className="text-[0.75rem] font-semibold text-foreground">{formatDateShort(run.startsAt)}</p>
-                            <p className="text-[0.6875rem] text-subtle tabular-nums">{formatTime(run.startsAt)}</p>
+                            <p className="text-xs text-subtle tabular-nums">{formatTime(run.startsAt)}</p>
                           </div>
                           <p className="min-w-0 flex-1 truncate text-[0.8125rem] text-foreground">{run.activityName}</p>
                           <span className={cn('shrink-0 text-[0.75rem] tabular-nums', fill >= 90 ? 'font-semibold text-accent' : 'text-muted')}>
@@ -220,9 +220,9 @@ export function ResourceSheet({
 function Figure({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
     <div className="min-w-0">
-      <dt className="text-[0.625rem] font-semibold tracking-[0.08em] text-faint uppercase">{label}</dt>
+      <dt className="text-xs font-semibold tracking-[0.08em] text-faint uppercase">{label}</dt>
       <dd className="mt-0.5 font-display text-lg leading-none font-semibold text-foreground tabular-nums">{value}</dd>
-      <p className="mt-1 truncate text-[0.6875rem] text-subtle">{hint}</p>
+      <p className="mt-1 truncate text-xs text-subtle">{hint}</p>
     </div>
   )
 }

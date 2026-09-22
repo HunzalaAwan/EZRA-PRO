@@ -63,31 +63,31 @@ export function LossesCard({ losses, currency, loading = false, className }: Los
       {/* ---------- headline rates ---------- */}
       <dl className="mt-4 grid grid-cols-3 gap-3">
         <div className="min-w-0">
-          <dt className="text-[0.6875rem] text-subtle">Cancelled</dt>
+          <dt className="text-xs text-subtle">Cancelled</dt>
           <dd className="mt-1 font-display text-xl font-semibold tracking-[-0.02em] text-foreground tabular-nums">
             {formatPercent(losses.cancellationRate, 1)}
           </dd>
-          <dd className="mt-1 flex flex-wrap items-center gap-1.5 text-[0.6875rem] text-subtle tabular-nums">
+          <dd className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-subtle tabular-nums">
             {formatNumber(losses.cancelled)} bookings
             <DeltaPill value={losses.cancellationRateDelta} goodWhenUp={false} label={points(losses.cancellationRateDelta)} />
           </dd>
         </div>
         <div className="min-w-0">
-          <dt className="text-[0.6875rem] text-subtle">No-shows</dt>
+          <dt className="text-xs text-subtle">No-shows</dt>
           <dd className="mt-1 font-display text-xl font-semibold tracking-[-0.02em] text-foreground tabular-nums">
             {formatPercent(losses.noShowRate, 1)}
           </dd>
-          <dd className="mt-1 flex flex-wrap items-center gap-1.5 text-[0.6875rem] text-subtle tabular-nums">
+          <dd className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-subtle tabular-nums">
             {formatNumber(losses.noShows)} parties
             <DeltaPill value={losses.noShowRateDelta} goodWhenUp={false} label={points(losses.noShowRateDelta)} />
           </dd>
         </div>
         <div className="min-w-0">
-          <dt className="text-[0.6875rem] text-subtle">Refunded</dt>
+          <dt className="text-xs text-subtle">Refunded</dt>
           <dd className="mt-1 font-display text-xl font-semibold tracking-[-0.02em] text-foreground tabular-nums">
             {formatCurrency(losses.refundAmount, currency, { compact: true })}
           </dd>
-          <dd className="mt-1 text-[0.6875rem] text-subtle tabular-nums">
+          <dd className="mt-1 text-xs text-subtle tabular-nums">
             {formatNumber(losses.refunded)} {losses.refunded === 1 ? 'refund' : 'refunds'}
           </dd>
         </div>
@@ -99,7 +99,7 @@ export function LossesCard({ losses, currency, loading = false, className }: Los
         <span className="h-full rounded-full" style={{ width: `${Math.max(share(losses.cancelled), losses.cancelled > 0 ? 1 : 0)}%`, background: TONE.cancelled }} title={`Cancelled · ${formatNumber(losses.cancelled)}`} />
         <span className="h-full rounded-full" style={{ width: `${Math.max(share(losses.noShows), losses.noShows > 0 ? 1 : 0)}%`, background: TONE.noShow }} title={`No-show · ${formatNumber(losses.noShows)}`} />
       </div>
-      <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[0.6875rem] text-subtle">
+      <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-subtle">
         <li className="inline-flex items-center gap-1.5">
           <span aria-hidden="true" className="size-2 rounded-full" style={{ background: TONE.kept }} />
           Travelled <span className="font-semibold text-foreground tabular-nums">{formatNumber(kept)}</span>
@@ -117,7 +117,7 @@ export function LossesCard({ losses, currency, loading = false, className }: Los
       {/* ---------- why ---------- */}
       {losses.reasons.length > 0 ? (
         <div className="mt-4 border-t border-line-subtle pt-3">
-          <p className="text-[0.6875rem] font-medium text-subtle">Top reasons</p>
+          <p className="text-xs font-medium text-subtle">Top reasons</p>
           <ul className="mt-2 flex flex-col gap-2">
             {losses.reasons.map((r) => (
               <li key={r.reason}>
@@ -137,18 +137,18 @@ export function LossesCard({ losses, currency, loading = false, className }: Los
       {/* ---------- the cost ---------- */}
       <dl className="mt-4 grid grid-cols-3 gap-3 border-t border-line-subtle pt-3">
         <div>
-          <dt className="text-[0.6875rem] text-subtle">Lost revenue</dt>
+          <dt className="text-xs text-subtle">Lost revenue</dt>
           <dd className="mt-0.5 text-sm font-semibold text-foreground tabular-nums">{formatCurrency(losses.lostRevenue, currency, { compact: true })}</dd>
         </div>
         <div>
-          <dt className="text-[0.6875rem] text-subtle">Fees kept</dt>
+          <dt className="text-xs text-subtle">Fees kept</dt>
           <dd className="mt-0.5 text-sm font-semibold text-foreground tabular-nums">{formatCurrency(losses.feesKept, currency, { compact: true })}</dd>
         </div>
         <div>
-          <dt className="text-[0.6875rem] text-subtle">Inside 24h</dt>
+          <dt className="text-xs text-subtle">Inside 24h</dt>
           <dd className="mt-0.5 text-sm font-semibold text-foreground tabular-nums">
             {formatNumber(losses.lateCancellations)}
-            <span className="ml-1 text-[0.6875rem] font-normal text-subtle">of {formatNumber(losses.cancelled)}</span>
+            <span className="ml-1 text-xs font-normal text-subtle">of {formatNumber(losses.cancelled)}</span>
           </dd>
         </div>
       </dl>

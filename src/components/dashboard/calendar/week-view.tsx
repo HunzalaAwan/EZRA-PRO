@@ -152,7 +152,7 @@ export function TimeAxis({
       {hours.map((hour) => (
         <div
           key={hour}
-          className="absolute right-2 -translate-y-1/2 text-[0.625rem] font-medium tracking-wide text-faint tabular"
+          className="absolute right-2 -translate-y-1/2 text-xs font-medium tracking-wide text-faint tabular"
           style={{ top: (hour - startHour) * HOUR_HEIGHT }}
         >
           {hourLabel(hour)}
@@ -161,7 +161,7 @@ export function TimeAxis({
 
       {showNow ? (
         <div
-          className="absolute right-1 -translate-y-1/2 rounded-md bg-danger px-1 py-px text-[0.5625rem] font-bold text-on-accent tabular"
+          className="absolute right-1 -translate-y-1/2 rounded-md bg-danger px-1 py-px text-xs font-bold text-on-accent tabular"
           style={{ top: nowOffsetPx(startHour) }}
         >
           {NOW.getHours() % 12 === 0 ? 12 : NOW.getHours() % 12}:
@@ -372,7 +372,7 @@ function DepartureCard({
       <div className="flex items-baseline justify-between gap-1.5">
         <span
           className={cn(
-            'text-[0.6875rem] leading-none font-bold tabular-nums',
+            'text-xs leading-none font-bold tabular-nums',
             cancelled ? 'text-faint line-through' : 'text-foreground',
           )}
         >
@@ -380,7 +380,7 @@ function DepartureCard({
         </span>
         <span
           className={cn(
-            'shrink-0 text-[0.625rem] leading-none font-semibold tabular-nums',
+            'shrink-0 text-xs leading-none font-semibold tabular-nums',
             cancelled ? 'text-faint' : soldOut ? 'text-accent' : 'text-muted',
           )}
         >
@@ -391,7 +391,7 @@ function DepartureCard({
       {/* what */}
       <p
         className={cn(
-          'mt-1 line-clamp-2 text-[0.6875rem] leading-tight font-medium',
+          'mt-1 line-clamp-2 text-xs leading-tight font-medium',
           cancelled ? 'text-faint line-through' : 'text-foreground',
         )}
       >
@@ -413,15 +413,15 @@ function DepartureCard({
 
       {/* Only the states that change what you'd do get a word. */}
       {soldOut && !cancelled ? (
-        <span className="mt-1 block text-[0.5625rem] leading-none font-bold tracking-wide text-accent uppercase">
+        <span className="mt-1 block text-xs leading-none font-bold tracking-wide text-accent uppercase">
           Sold out
         </span>
       ) : weather ? (
-        <span className="mt-1 block text-[0.5625rem] leading-none font-bold tracking-wide text-warning uppercase">
+        <span className="mt-1 block text-xs leading-none font-bold tracking-wide text-warning uppercase">
           Weather hold
         </span>
       ) : seatsLeft <= 3 ? (
-        <span className="mt-1 block text-[0.5625rem] leading-none font-semibold text-subtle tabular-nums">
+        <span className="mt-1 block text-xs leading-none font-semibold text-subtle tabular-nums">
           {seatsLeft} left
         </span>
       ) : null}
@@ -508,7 +508,7 @@ export function WeekView({
                     isToday && 'bg-info-soft/45',
                   )}
                 >
-                  <span className="text-[0.625rem] font-semibold tracking-wider text-faint uppercase">
+                  <span className="text-xs font-semibold tracking-wider text-faint uppercase">
                     {new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(day)}
                   </span>
                   <span
@@ -521,10 +521,10 @@ export function WeekView({
                   </span>
 
                   {dayEvents.length === 0 ? (
-                    <span className="text-[0.625rem] text-faint">—</span>
+                    <span className="text-xs text-faint">—</span>
                   ) : (
                     <>
-                      <span className="text-[0.625rem] text-subtle tabular-nums">
+                      <span className="text-xs text-subtle tabular-nums">
                         {live.length} runs · {guests}g
                       </span>
                       {/* One bar per day makes the week's shape readable at a glance. */}
@@ -550,7 +550,7 @@ export function WeekView({
           {/* ---- banded, stacked departures -------------------------------- */}
           {activeBands.map((band) => (
             <section key={band.key} className="border-b border-line last:border-b-0">
-              <h3 className="sticky top-[5.25rem] z-30 flex items-center gap-2 bg-surface-sunken/85 px-3 py-1 text-[0.625rem] font-bold tracking-[0.12em] text-subtle uppercase backdrop-blur-sm">
+              <h3 className="sticky top-[5.25rem] z-30 flex items-center gap-2 bg-surface-sunken/85 px-3 py-1 text-xs font-bold tracking-[0.12em] text-subtle uppercase backdrop-blur-sm">
                 {band.label}
                 <span className="font-medium tracking-normal text-faint normal-case">
                   {hourLabel(band.from)} – {hourLabel(band.to === 24 ? 23 : band.to)}

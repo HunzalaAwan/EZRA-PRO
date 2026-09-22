@@ -204,7 +204,7 @@ export function RevenueAreaChart({
             axisLine={false}
             tickMargin={10}
             minTickGap={28}
-            tick={{ fill: CHART_INK.tick, fontSize: 11 }}
+            tick={{ fill: CHART_INK.tick, fontSize: 12 }}
           />
           <YAxis
             width={58}
@@ -214,7 +214,7 @@ export function RevenueAreaChart({
             tickLine={false}
             axisLine={false}
             tickMargin={6}
-            tick={{ fill: CHART_INK.tick, fontSize: 11 }}
+            tick={{ fill: CHART_INK.tick, fontSize: 12 }}
           />
 
           <Tooltip
@@ -249,7 +249,7 @@ export function RevenueAreaChart({
                 value: `Avg ${config.tick(periodAverage, currency)}`,
                 position: 'insideTopRight',
                 fill: CHART_INK.tick,
-                fontSize: 10,
+                fontSize: 12,
               }}
             />
           ) : null}

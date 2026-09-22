@@ -102,7 +102,7 @@ function Fact({
         <Icon aria-hidden="true" className="size-3.5" />
       </span>
       <div className="min-w-0">
-        <p className="text-[0.6875rem] font-medium tracking-wide text-faint uppercase">{label}</p>
+        <p className="text-xs font-medium tracking-wide text-faint uppercase">{label}</p>
         <p className="text-[0.8125rem] font-medium text-foreground">{value}</p>
       </div>
     </div>
@@ -120,7 +120,7 @@ function MoneyTile({
 }) {
   return (
     <div className="rounded-xl border border-line-subtle bg-surface-sunken/50 px-3 py-2.5">
-      <p className="text-[0.6875rem] font-medium tracking-wide text-faint uppercase">{label}</p>
+      <p className="text-xs font-medium tracking-wide text-faint uppercase">{label}</p>
       <p
         className={cn(
           'tabular font-display text-[1.0625rem] leading-tight font-semibold',
@@ -258,7 +258,7 @@ export function DepartureDetailSheet({
                 />
                 <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-4">
                   <div className="min-w-0">
-                    <p className="flex items-center gap-1.5 text-[0.6875rem] font-medium text-muted">
+                    <p className="flex items-center gap-1.5 text-xs font-medium text-muted">
                       <span
                         aria-hidden="true"
                         className={cn(
@@ -272,7 +272,7 @@ export function DepartureDetailSheet({
                   </div>
                   <p className="tabular shrink-0 text-right font-display text-lg font-semibold text-foreground">
                     {formatCurrency(departure.priceOverride ?? activity.basePrice, currency)}
-                    <span className="block text-[0.625rem] font-normal text-subtle">
+                    <span className="block text-xs font-normal text-subtle">
                       {departure.priceOverride ? 'override / guest' : 'from / guest'}
                     </span>
                   </p>
@@ -310,7 +310,7 @@ export function DepartureDetailSheet({
                   size="md"
                 />
                 {departure.held > 0 ? (
-                  <p className="mt-2 text-[0.6875rem] text-subtle">
+                  <p className="mt-2 text-xs text-subtle">
                     {departure.held} {departure.held === 1 ? 'seat is' : 'seats are'} held by carts
                     in progress.
                   </p>
@@ -406,7 +406,7 @@ export function DepartureDetailSheet({
                           <p className="truncate text-[0.8125rem] font-medium text-foreground">
                             {user.name}
                           </p>
-                          <p className="truncate text-[0.6875rem] text-subtle">{user.title}</p>
+                          <p className="truncate text-xs text-subtle">{user.title}</p>
                         </div>
                       </li>
                     ))}
@@ -429,7 +429,7 @@ export function DepartureDetailSheet({
                           <p className="truncate text-[0.8125rem] font-medium text-foreground">
                             {resource.name}
                           </p>
-                          <p className="truncate text-[0.6875rem] text-subtle">
+                          <p className="truncate text-xs text-subtle">
                             {resource.kind} · seats {resource.capacity}
                           </p>
                         </div>
@@ -470,7 +470,7 @@ export function DepartureDetailSheet({
                         <p className="truncate text-[0.8125rem] font-medium text-foreground">
                           {customer.firstName} {customer.lastName}
                         </p>
-                        <p className="truncate font-mono text-[0.6875rem] text-subtle">
+                        <p className="truncate font-mono text-xs text-subtle">
                           {booking.reference} · {booking.channel.replace(/_/g, ' ')}
                         </p>
                       </div>

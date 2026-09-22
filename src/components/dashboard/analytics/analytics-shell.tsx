@@ -86,7 +86,7 @@ function TabPane({ children }: { children: React.ReactNode }) {
 function SectionLabel({ eyebrow, title, hint }: { eyebrow: string; title: string; hint: string }) {
   return (
     <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 pt-2">
-      <span className="text-[0.625rem] font-semibold uppercase tracking-[0.14em] text-primary">
+      <span className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
         {eyebrow}
       </span>
       <h2 className="font-display text-base font-semibold tracking-[-0.02em] text-foreground">
@@ -301,7 +301,7 @@ export function AnalyticsShell({ initialSnapshot }: AnalyticsShellProps) {
               ))}
             </TabsList>
 
-            <p className="hidden shrink-0 pb-2 text-[0.6875rem] tabular-nums text-faint lg:block">
+            <p className="hidden shrink-0 pb-2 text-xs tabular-nums text-faint lg:block">
               {formatNumber(snapshot.timeseries.length)} days ·{' '}
               {formatNumber(totalBookings)} bookings analysed
             </p>

@@ -52,7 +52,7 @@ function BarRow({
     <div className="flex items-center gap-2.5">
       <span
         className={cn(
-          'w-[6.5rem] shrink-0 truncate text-[0.6875rem] leading-tight',
+          'w-[6.5rem] shrink-0 truncate text-xs leading-tight',
           emphasis ? 'font-semibold text-foreground' : 'text-muted',
         )}
       >
@@ -71,7 +71,7 @@ function BarRow({
 
       <span
         className={cn(
-          'w-11 shrink-0 text-right text-[0.6875rem] font-semibold tabular-nums',
+          'w-11 shrink-0 text-right text-xs font-semibold tabular-nums',
           emphasis ? TONE_TEXT[tone] : 'text-muted',
         )}
       >
@@ -102,7 +102,7 @@ export function InsightVisualBlock({ visual }: { visual: InsightVisual }) {
           display={fmt(visual.b.value, visual.unit)}
           tone="neutral"
         />
-        <p className="pl-[7.25rem] text-[0.625rem] font-medium text-subtle tabular-nums">
+        <p className="pl-[7.25rem] text-xs font-medium text-subtle tabular-nums">
           {fmt(gap, visual.unit)} gap
         </p>
       </div>
@@ -116,8 +116,8 @@ export function InsightVisualBlock({ visual }: { visual: InsightVisual }) {
     return (
       <div className="flex flex-col gap-1.5">
         <div className="flex items-baseline justify-between gap-2">
-          <span className="text-[0.6875rem] text-muted">{visual.label}</span>
-          <span className={cn('text-[0.6875rem] font-semibold tabular-nums', TONE_TEXT[tone])}>
+          <span className="text-xs text-muted">{visual.label}</span>
+          <span className={cn('text-xs font-semibold tabular-nums', TONE_TEXT[tone])}>
             {fmt(visual.value, visual.unit)}
           </span>
         </div>
@@ -139,7 +139,7 @@ export function InsightVisualBlock({ visual }: { visual: InsightVisual }) {
         </span>
 
         {visual.target !== undefined ? (
-          <p className="text-[0.625rem] text-subtle tabular-nums">
+          <p className="text-xs text-subtle tabular-nums">
             Healthy target {fmt(visual.target, visual.unit)}
           </p>
         ) : null}
@@ -167,7 +167,7 @@ export function InsightVisualBlock({ visual }: { visual: InsightVisual }) {
           ) : null}
         </span>
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.625rem]">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
           <span className="inline-flex items-center gap-1.5">
             <span aria-hidden="true" className="size-1.5 rounded-full bg-primary" />
             <span className="max-w-[9rem] truncate font-medium text-foreground">{visual.label}</span>
@@ -199,8 +199,8 @@ export function InsightVisualBlock({ visual }: { visual: InsightVisual }) {
 
   return (
     <div className="flex items-center gap-2.5">
-      <span className="shrink-0 text-[0.6875rem] text-muted">{visual.label}</span>
-      <span className="flex min-w-0 items-center gap-1.5 text-[0.6875rem] tabular-nums">
+      <span className="shrink-0 text-xs text-muted">{visual.label}</span>
+      <span className="flex min-w-0 items-center gap-1.5 text-xs tabular-nums">
         <span className="text-subtle line-through decoration-line-strong">
           {fmt(visual.from, visual.unit)}
         </span>

@@ -52,7 +52,7 @@ export function ChannelMixCard({ channels, currency, loading = false, onSeeAll, 
       <dl className="mt-4 grid grid-cols-3 gap-3">
         {lead.map((channel) => (
           <div key={channel.channel} className="min-w-0">
-            <dt className="flex items-center gap-1.5 text-[0.6875rem] text-subtle">
+            <dt className="flex items-center gap-1.5 text-xs text-subtle">
               <span aria-hidden="true" className="size-2 shrink-0 rounded-full" style={{ background: CHANNEL_TONE[channel.channel] }} />
               <span className="truncate">{channel.label}</span>
             </dt>
@@ -83,7 +83,7 @@ export function ChannelMixCard({ channels, currency, loading = false, onSeeAll, 
           <col className="w-[7.5rem]" />
         </colgroup>
         <thead>
-          <tr className="text-[0.6875rem] tracking-[0.08em] text-subtle uppercase">
+          <tr className="text-xs tracking-[0.08em] text-subtle uppercase">
             <th scope="col" className="pb-2 text-left font-semibold">
               Channel
             </th>

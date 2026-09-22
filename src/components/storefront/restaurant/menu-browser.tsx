@@ -164,7 +164,7 @@ export function MenuBrowser({ menu, ordering, periods, currency, slug, taxRate, 
         {/* ---------- head ---------- */}
         <div className="flex flex-col gap-4 pt-10 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-primary">{eyebrow}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">{eyebrow}</p>
             <h2 className="mt-2 font-display text-display-sm font-semibold tracking-tight text-foreground">{title ?? (service ? `${service.name}, served until ${service.endTime}` : nextService ? `${nextService.name} from ${nextService.startTime}` : 'Closed for today')}</h2>
             <p className="mt-2 max-w-[60ch] text-sm text-muted">{periods.map((p) => `${p.name} ${p.startTime}–${p.endTime}`).join(' · ')}. Tables are booked by phone on {phone}.</p>
           </div>
@@ -316,11 +316,11 @@ function DishCard({ item, currency, channel, inCart, showPopular = true, onAdd, 
       <button type="button" disabled={!sellable} onClick={onAdd} className="group relative block aspect-[4/3] w-full bg-surface-sunken text-left disabled:cursor-default print:hidden">
         {item.imageUrl ? <Image src={item.imageUrl} alt={item.name} fill sizes="256px" className="object-cover transition-transform duration-500 group-hover:scale-[1.03]" /> : <UtensilsCrossed className="absolute inset-0 m-auto size-8 text-faint" aria-hidden="true" />}
         {soldOut ? (
-          <span className="absolute top-2.5 left-2.5 rounded-full bg-surface/95 px-2.5 py-1 text-[0.6875rem] font-semibold text-foreground">Sold out today</span>
+          <span className="absolute top-2.5 left-2.5 rounded-full bg-surface/95 px-2.5 py-1 text-xs font-semibold text-foreground">Sold out today</span>
         ) : item.popular && showPopular ? (
-          <span className="absolute top-2.5 left-2.5 rounded-full bg-primary px-2.5 py-1 text-[0.6875rem] font-semibold text-on-primary">Most ordered</span>
+          <span className="absolute top-2.5 left-2.5 rounded-full bg-primary px-2.5 py-1 text-xs font-semibold text-on-primary">Most ordered</span>
         ) : offChannel ? (
-          <span className="absolute top-2.5 left-2.5 rounded-full bg-surface/95 px-2.5 py-1 text-[0.6875rem] font-semibold text-muted">{channel === 'delivery' ? 'Not on delivery' : 'In the restaurant'}</span>
+          <span className="absolute top-2.5 left-2.5 rounded-full bg-surface/95 px-2.5 py-1 text-xs font-semibold text-muted">{channel === 'delivery' ? 'Not on delivery' : 'In the restaurant'}</span>
         ) : null}
       </button>
       <div className="flex flex-1 flex-col p-4">
@@ -329,7 +329,7 @@ function DishCard({ item, currency, channel, inCart, showPopular = true, onAdd, 
         {pill || item.tags.length > 1 ? (
           <div className="mt-2.5 flex flex-wrap gap-1.5">
             {item.tags.slice(0, 2).map((t) => (
-              <span key={t} className="rounded-full bg-surface-sunken px-2 py-0.5 text-[0.6875rem] font-medium text-muted">
+              <span key={t} className="rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-medium text-muted">
                 {DIETARY_META[t].label}
               </span>
             ))}

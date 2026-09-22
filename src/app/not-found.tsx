@@ -66,7 +66,7 @@ export default function NotFound() {
       {/* ---------- The apology ---------- */}
       <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col items-center justify-center px-4 py-16 text-center sm:px-6 lg:px-8">
         <Reveal direction="up" distance={8} blur={false}>
-          <span className="glass inline-flex items-center gap-2.5 rounded-full px-3.5 py-1.5 text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-primary">
+          <span className="glass inline-flex items-center gap-2.5 rounded-full px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
             <Compass className="size-3.5" aria-hidden="true" />
             Error 404
           </span>
@@ -124,7 +124,7 @@ export default function NotFound() {
 
         {/* ---------- Signposts ---------- */}
         <nav aria-label="Popular pages" className="mt-14 w-full">
-          <h2 className="text-[0.6875rem] font-semibold uppercase tracking-[0.2em] text-subtle">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-subtle">
             Popular destinations
           </h2>
 

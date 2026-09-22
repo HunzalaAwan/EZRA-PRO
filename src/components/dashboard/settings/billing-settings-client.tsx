@@ -368,7 +368,7 @@ export function BillingSettingsClient({
           <div className="flex flex-wrap items-center gap-4 rounded-xl border border-line bg-surface p-4">
             <span
               aria-hidden="true"
-              className="grid h-9 w-13 shrink-0 place-items-center rounded-md bg-ink-900 text-[0.625rem] font-bold tracking-wider text-ink-50"
+              className="grid h-9 w-13 shrink-0 place-items-center rounded-md bg-ink-900 text-xs font-bold tracking-wider text-ink-50"
             >
               VISA
             </span>

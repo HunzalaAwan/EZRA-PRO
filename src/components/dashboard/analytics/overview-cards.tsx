@@ -65,7 +65,7 @@ export function DeltaPill({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[0.6875rem] font-semibold tabular-nums',
+        'inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-xs font-semibold tabular-nums',
         good === null ? 'bg-surface-sunken text-subtle' : good ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger',
         className,
       )}
@@ -142,8 +142,8 @@ function WeekdayBars({
   return (
     <div className="border-t border-line-subtle pt-3">
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-[0.6875rem] font-medium text-subtle">{title}</span>
-        <span className="truncate text-[0.6875rem] text-subtle">
+        <span className="text-xs font-medium text-subtle">{title}</span>
+        <span className="truncate text-xs text-subtle">
           <span className="font-semibold text-foreground">{WEEKDAY_NAMES[peak]}</span> peak at{' '}
           <span className="font-semibold text-foreground tabular-nums">{format(max)}</span>
         </span>
@@ -162,7 +162,7 @@ function WeekdayBars({
                 }}
               />
             </div>
-            <span className={cn('text-[0.625rem] tabular-nums', i === peak ? 'font-semibold text-foreground' : 'text-faint')}>
+            <span className={cn('text-xs tabular-nums', i === peak ? 'font-semibold text-foreground' : 'text-faint')}>
               {WEEKDAY_LETTERS[i]}
             </span>
           </div>
@@ -229,26 +229,26 @@ export function RevenueSummaryCard({
 
       <dl className="mt-5 grid grid-cols-2 gap-3 border-t border-line-subtle pt-4">
         <div>
-          <dt className="text-[0.6875rem] text-subtle">Previous period</dt>
+          <dt className="text-xs text-subtle">Previous period</dt>
           <dd className="mt-0.5 text-sm font-semibold text-foreground tabular-nums">{formatCurrency(previous, currency)}</dd>
         </div>
         <div>
-          <dt className="text-[0.6875rem] text-subtle">Daily average</dt>
+          <dt className="text-xs text-subtle">Daily average</dt>
           <dd className="mt-0.5 text-sm font-semibold text-foreground tabular-nums">
             {formatCurrency(Math.round(daily), currency)}
-            <span className="ml-1 text-[0.6875rem] font-normal text-subtle">· {formatNumber(bookings)} bookings</span>
+            <span className="ml-1 text-xs font-normal text-subtle">· {formatNumber(bookings)} bookings</span>
           </dd>
         </div>
         <div>
-          <dt className="text-[0.6875rem] text-subtle">Average order</dt>
+          <dt className="text-xs text-subtle">Average order</dt>
           <dd className="mt-0.5 text-sm font-semibold text-foreground tabular-nums">{formatCurrency(Math.round(aov), currency)}</dd>
         </div>
         {best ? (
           <div>
-            <dt className="text-[0.6875rem] text-subtle">Best day</dt>
+            <dt className="text-xs text-subtle">Best day</dt>
             <dd className="mt-0.5 text-sm font-semibold text-foreground tabular-nums">
               {formatCurrency(best.revenue, currency, { compact: true })}
-              <span className="ml-1 text-[0.6875rem] font-normal text-subtle">{formatDateShort(fromDateKey(best.date))}</span>
+              <span className="ml-1 text-xs font-normal text-subtle">{formatDateShort(fromDateKey(best.date))}</span>
             </dd>
           </div>
         ) : null}
@@ -264,7 +264,7 @@ export function RevenueSummaryCard({
       </div>
 
       {best && soft ? (
-        <p className="mt-auto border-t border-line-subtle pt-3 text-[0.6875rem] leading-relaxed text-subtle">
+        <p className="mt-auto border-t border-line-subtle pt-3 text-xs leading-relaxed text-subtle">
           The softest day, {formatDateShort(fromDateKey(soft.date))}, took{' '}
           <span className="font-medium text-foreground tabular-nums">{formatCurrency(soft.revenue, currency, { compact: true })}</span>;
           the best took {best.revenue > 0 && soft.revenue > 0 ? (best.revenue / soft.revenue).toFixed(1) : '—'}× that.
@@ -338,7 +338,7 @@ export function OccupancyGaugeCard({
               />
             ))}
           </div>
-          <div className="mt-1 flex justify-between text-[0.625rem] text-faint tabular-nums">
+          <div className="mt-1 flex justify-between text-xs text-faint tabular-nums">
             <span>{formatDateShort(fromDateKey(points[0].date))}</span>
             <span>{formatDateShort(fromDateKey(points[points.length - 1].date))}</span>
           </div>
@@ -347,24 +347,24 @@ export function OccupancyGaugeCard({
 
       <dl className="mt-3 grid grid-cols-3 gap-3 border-t border-line-subtle pt-3">
         <div>
-          <dt className="text-[0.6875rem] text-subtle">Fullest day</dt>
+          <dt className="text-xs text-subtle">Fullest day</dt>
           <dd className="mt-0.5 text-sm font-semibold text-foreground tabular-nums">
             {bestDay ? formatPercent(bestDay.occupancy, 0) : '—'}
-            {bestDay ? <span className="ml-1 text-[0.6875rem] font-normal text-subtle">{formatDateShort(fromDateKey(bestDay.date))}</span> : null}
+            {bestDay ? <span className="ml-1 text-xs font-normal text-subtle">{formatDateShort(fromDateKey(bestDay.date))}</span> : null}
           </dd>
         </div>
         <div>
-          <dt className="text-[0.6875rem] text-subtle">Softest day</dt>
+          <dt className="text-xs text-subtle">Softest day</dt>
           <dd className="mt-0.5 text-sm font-semibold text-foreground tabular-nums">
             {softDay ? formatPercent(softDay.occupancy, 0) : '—'}
-            {softDay ? <span className="ml-1 text-[0.6875rem] font-normal text-subtle">{formatDateShort(fromDateKey(softDay.date))}</span> : null}
+            {softDay ? <span className="ml-1 text-xs font-normal text-subtle">{formatDateShort(fromDateKey(softDay.date))}</span> : null}
           </dd>
         </div>
         <div>
-          <dt className="text-[0.6875rem] text-subtle">Sold-out days</dt>
+          <dt className="text-xs text-subtle">Sold-out days</dt>
           <dd className="mt-0.5 text-sm font-semibold text-foreground tabular-nums">
             {formatNumber(fullDays)}
-            <span className="ml-1 text-[0.6875rem] font-normal text-subtle">of {formatNumber(points.length)}</span>
+            <span className="ml-1 text-xs font-normal text-subtle">of {formatNumber(points.length)}</span>
           </dd>
         </div>
       </dl>
@@ -425,7 +425,7 @@ export function TopChannelsCard({
           <h3 className="font-display text-[0.9375rem] font-semibold tracking-[-0.015em] text-foreground">Top channels</h3>
           <p className="mt-0.5 text-xs text-subtle">Share of net revenue</p>
         </div>
-        <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-[0.6875rem] font-semibold text-muted tabular-nums">
+        <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-semibold text-muted tabular-nums">
           Top 3 of {channels.length}
         </span>
       </div>
@@ -446,7 +446,7 @@ export function TopChannelsCard({
                 style={{ width: `${Math.max(2, Math.min(100, channel.share))}%`, background: CHANNEL_TONE[channel.channel] }}
               />
             </div>
-            <p className="mt-1.5 flex items-center gap-1.5 text-[0.6875rem] text-subtle tabular-nums">
+            <p className="mt-1.5 flex items-center gap-1.5 text-xs text-subtle tabular-nums">
               <span>{formatCurrency(channel.revenue, currency, { compact: true })}</span>
               <span aria-hidden="true">·</span>
               <span>{formatNumber(channel.bookings)} bookings</span>
@@ -463,22 +463,22 @@ export function TopChannelsCard({
       {/* ---------- the economics behind the mix ---------- */}
       <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line-subtle pt-4">
         <div>
-          <dt className="text-[0.6875rem] text-subtle">Direct share</dt>
+          <dt className="text-xs text-subtle">Direct share</dt>
           <dd className="mt-0.5 text-sm font-semibold text-foreground tabular-nums">
             {formatPercent(directShare, 0)}
-            <span className="ml-1 text-[0.6875rem] font-normal text-subtle">no commission</span>
+            <span className="ml-1 text-xs font-normal text-subtle">no commission</span>
           </dd>
         </div>
         <div>
-          <dt className="text-[0.6875rem] text-subtle">Commission paid</dt>
+          <dt className="text-xs text-subtle">Commission paid</dt>
           <dd className="mt-0.5 text-sm font-semibold text-foreground tabular-nums">
             {formatCurrency(Math.round(commission), currency, { compact: true })}
-            <span className="ml-1 text-[0.6875rem] font-normal text-subtle">to OTAs and partners</span>
+            <span className="ml-1 text-xs font-normal text-subtle">to OTAs and partners</span>
           </dd>
         </div>
         {fastest ? (
           <div className="min-w-0">
-            <dt className="text-[0.6875rem] text-subtle">Fastest growing</dt>
+            <dt className="text-xs text-subtle">Fastest growing</dt>
             <dd className="mt-0.5 flex items-center gap-1.5 text-sm font-semibold text-foreground">
               <span className="truncate">{fastest.label}</span>
               <DeltaPill value={fastest.deltaPercent} />
@@ -487,7 +487,7 @@ export function TopChannelsCard({
         ) : null}
         {richest ? (
           <div className="min-w-0">
-            <dt className="text-[0.6875rem] text-subtle">Highest avg order</dt>
+            <dt className="text-xs text-subtle">Highest avg order</dt>
             <dd className="mt-0.5 flex items-center gap-1.5 text-sm font-semibold text-foreground tabular-nums">
               <span className="truncate">{richest.channel.label}</span>
               <span className="text-muted">{formatCurrency(Math.round(richest.aov), currency)}</span>

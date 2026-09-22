@@ -142,7 +142,7 @@ export function ActivityFeed({ items, nowIso, className }: ActivityFeedProps) {
                   <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                     <time
                       dateTime={item.createdAt}
-                      className="text-[0.6875rem] text-faint tabular-nums"
+                      className="text-xs text-faint tabular-nums"
                     >
                       {formatRelative(item.createdAt, now)}
                     </time>
@@ -150,7 +150,7 @@ export function ActivityFeed({ items, nowIso, className }: ActivityFeedProps) {
                     {typeof item.amount === 'number' && item.amount !== 0 ? (
                       <span
                         className={cn(
-                          'rounded-md px-1.5 py-0.5 text-[0.6875rem] font-semibold tabular-nums',
+                          'rounded-md px-1.5 py-0.5 text-xs font-semibold tabular-nums',
                           item.kind === 'cancellation'
                             ? 'bg-danger-soft text-danger'
                             : 'bg-success-soft text-success',

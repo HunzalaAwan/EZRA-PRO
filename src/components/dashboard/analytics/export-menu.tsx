@@ -133,7 +133,7 @@ export function ExportMenu({
           </span>
         </DropdownMenuItem>
 
-        <p className="mt-1.5 border-t border-line-subtle px-2.5 pb-1 pt-2 text-[0.6875rem] leading-relaxed text-faint">
+        <p className="mt-1.5 border-t border-line-subtle px-2.5 pb-1 pt-2 text-xs leading-relaxed text-faint">
           Exports respect the range and comparison you have selected.
         </p>
       </DropdownMenuContent>

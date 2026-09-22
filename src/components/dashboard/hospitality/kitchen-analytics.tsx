@@ -172,7 +172,7 @@ export function KitchenAnalytics({ initialSnapshot }: KitchenAnalyticsProps) {
                 </TabsTrigger>
               ))}
             </TabsList>
-            <p className="hidden shrink-0 pb-2 text-[0.6875rem] text-faint tabular-nums lg:block">
+            <p className="hidden shrink-0 pb-2 text-xs text-faint tabular-nums lg:block">
               {formatNumber(snapshot.days)} days · {formatNumber(t.orders)} orders analysed
             </p>
           </div>
@@ -623,7 +623,7 @@ function PeakFooter({ snapshot }: { snapshot: KitchenSnapshot }) {
   const quietest = [...snapshot.hours].filter((h) => h.orders > 0).sort((a, b) => a.orders - b.orders)[0]
   if (!busiest) return null
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-subtle">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-subtle">
       <span className="inline-flex items-center gap-1.5">
         <span className="size-2 rounded-full" style={{ background: 'var(--chart-1)' }} aria-hidden="true" />
         Orders an hour
@@ -789,7 +789,7 @@ function StackedColumns({ groups, series, format }: { groups: { label: string; v
       <div className="flex flex-1 items-end gap-1.5 sm:gap-2">
         {groups.map((g, i) => (
           <div key={g.label} className="flex min-w-0 flex-1 flex-col items-stretch justify-end gap-1" style={{ height: '100%' }}>
-            {showValues ? <span className="text-center text-[0.625rem] text-subtle tabular-nums">{totals[i] ? format(totals[i]) : ''}</span> : null}
+            {showValues ? <span className="text-center text-xs text-subtle tabular-nums">{totals[i] ? format(totals[i]) : ''}</span> : null}
             <div className="flex flex-col-reverse gap-px" style={{ height: `${(totals[i] / max) * 100}%`, minHeight: totals[i] ? 4 : 0 }} title={`${g.label}: ${series.map((k) => `${k.label} ${format(g.values[k.key] ?? 0)}`).join(', ')}`}>
               {series.map((k, j) => {
                 const v = g.values[k.key] ?? 0
@@ -802,7 +802,7 @@ function StackedColumns({ groups, series, format }: { groups: { label: string; v
       </div>
       <div className="mt-2 flex gap-1.5 border-t border-line-subtle pt-1.5 sm:gap-2">
         {groups.map((g) => (
-          <span key={g.label} className="min-w-0 flex-1 truncate text-center text-[0.625rem] text-subtle">
+          <span key={g.label} className="min-w-0 flex-1 truncate text-center text-xs text-subtle">
             {g.label}
           </span>
         ))}
@@ -901,7 +901,7 @@ function HourBars({ rows, format, color, fromZero = false }: { rows: { hour: num
       </div>
       <div className="mt-2 flex gap-1 border-t border-line-subtle pt-1.5">
         {rows.map((r) => (
-          <span key={r.hour} className="min-w-0 flex-1 truncate text-center text-[0.625rem] text-subtle tabular-nums">
+          <span key={r.hour} className="min-w-0 flex-1 truncate text-center text-xs text-subtle tabular-nums">
             {r.hour % 3 === 0 ? `${String(r.hour).padStart(2, '0')}` : ''}
           </span>
         ))}

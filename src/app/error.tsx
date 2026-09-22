@@ -131,7 +131,7 @@ export default function RouteError({
         {/* ---------- What to quote when reporting it ---------- */}
         <Reveal delay={0.24} className="mt-12 w-full">
           <div className="rounded-2xl border border-line bg-surface p-5 text-left shadow-sm sm:p-6">
-            <h2 className="text-[0.6875rem] font-semibold uppercase tracking-[0.18em] text-subtle">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-subtle">
               If it happens again
             </h2>
 

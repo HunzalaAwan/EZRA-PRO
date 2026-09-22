@@ -53,11 +53,11 @@ function RailStat({
         <Icon aria-hidden="true" className="size-3.5" />
       </span>
       <div className="min-w-0">
-        <p className="text-[0.6875rem] font-medium tracking-wide text-faint uppercase">{label}</p>
+        <p className="text-xs font-medium tracking-wide text-faint uppercase">{label}</p>
         <p className="tabular font-display text-lg leading-tight font-semibold text-foreground">
           {value}
         </p>
-        {hint ? <p className="truncate text-[0.6875rem] text-subtle">{hint}</p> : null}
+        {hint ? <p className="truncate text-xs text-subtle">{hint}</p> : null}
       </div>
     </div>
   )
@@ -241,7 +241,7 @@ export function DayView({
                     <p className="truncate text-[0.8125rem] font-medium text-foreground">
                       {user.name}
                     </p>
-                    <p className="truncate text-[0.6875rem] text-subtle">{user.title}</p>
+                    <p className="truncate text-xs text-subtle">{user.title}</p>
                   </div>
                   {user.certifications && user.certifications.length > 0 ? (
                     <Badge size="sm" variant="outline" className="shrink-0">
@@ -284,7 +284,7 @@ export function DayView({
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="flex items-baseline gap-1.5">
-                        <span className="tabular text-[0.6875rem] font-semibold text-muted">
+                        <span className="tabular text-xs font-semibold text-muted">
                           {formatTime(departure.startsAt)}
                         </span>
                         <span className="truncate text-[0.8125rem] font-medium text-foreground">
@@ -294,7 +294,7 @@ export function DayView({
                       <span className="mt-1 flex items-center gap-1.5">
                         <StatusBadge kind="departure" status={departure.status} size="sm" />
                         {departure.booked === 0 && departure.status !== 'cancelled' ? (
-                          <span className="text-[0.6875rem] text-subtle">no bookings</span>
+                          <span className="text-xs text-subtle">no bookings</span>
                         ) : null}
                       </span>
                     </span>

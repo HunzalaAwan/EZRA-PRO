@@ -435,7 +435,7 @@ function DishCard({ item: i, currency, onOpen, onToggle, actions }: { item: Menu
     <article className={cn('flex flex-col overflow-hidden rounded-xl border border-line bg-surface transition-colors hover:border-line-strong', i.status !== 'available' && 'opacity-70')}>
       <button type="button" onClick={onOpen} className="relative block aspect-[4/3] w-full bg-surface-sunken text-left">
         {i.imageUrl ? <Image src={i.imageUrl} alt="" fill sizes="(max-width: 640px) 100vw, (max-width: 1280px) 33vw, 20vw" className="object-cover" /> : <ImageOff aria-hidden="true" className="absolute inset-0 m-auto size-6 text-faint" />}
-        {i.status !== 'available' ? <span className="absolute top-2 left-2 rounded-full bg-surface/95 px-2 py-0.5 text-[0.6875rem] font-medium text-foreground">{STATUS_META[i.status].label}</span> : null}
+        {i.status !== 'available' ? <span className="absolute top-2 left-2 rounded-full bg-surface/95 px-2 py-0.5 text-xs font-medium text-foreground">{STATUS_META[i.status].label}</span> : null}
         {i.popular ? (
           <span className="absolute top-2 right-2 grid size-6 place-items-center rounded-full bg-surface/95" aria-label="Popular">
             <Star aria-hidden="true" className="size-3 fill-warning text-warning" />

@@ -166,11 +166,11 @@ function MethodCell({ row }: { row: PaymentRow }) {
           {row.brand ?? METHOD_LABEL[row.method]}
         </span>
         {row.last4 ? (
-          <span className="block truncate font-mono text-[0.625rem] text-subtle">
+          <span className="block truncate font-mono text-xs text-subtle">
             ···· {row.last4}
           </span>
         ) : (
-          <span className="block truncate text-[0.625rem] text-subtle">
+          <span className="block truncate text-xs text-subtle">
             {row.brand ? METHOD_LABEL[row.method] : 'No card'}
           </span>
         )}
@@ -274,7 +274,7 @@ export function PaymentsTable({
             <span className="block text-xs font-medium text-foreground">
               {formatDateShort(row.settledAt)}
             </span>
-            <span className="block text-[0.625rem] text-subtle">
+            <span className="block text-xs text-subtle">
               {formatTime(row.settledAt)} · charged {formatDateShort(row.createdAt)}
             </span>
           </span>
@@ -289,12 +289,12 @@ export function PaymentsTable({
           <span className="block min-w-0">
             <Link
               href={`/dashboard/bookings/${row.bookingId}`}
-              className="block truncate font-mono text-[0.6875rem] font-medium text-foreground transition-colors hover:text-primary"
+              className="block truncate font-mono text-xs font-medium text-foreground transition-colors hover:text-primary"
               onClick={(event) => event.stopPropagation()}
             >
               {row.reference}
             </Link>
-            <span className="block truncate text-[0.625rem] text-subtle">{row.activityName}</span>
+            <span className="block truncate text-xs text-subtle">{row.activityName}</span>
           </span>
         ),
       },
@@ -390,14 +390,14 @@ export function PaymentsTable({
             <TabsTrigger value="transactions">
               <ReceiptText className="size-4" aria-hidden="true" />
               Transactions
-              <span className="tabular rounded-md bg-surface-sunken px-1.5 py-0.5 text-[0.625rem] font-semibold text-subtle">
+              <span className="tabular rounded-md bg-surface-sunken px-1.5 py-0.5 text-xs font-semibold text-subtle">
                 {formatNumber(payments.length)}
               </span>
             </TabsTrigger>
             <TabsTrigger value="payouts">
               <ArrowDownToLine className="size-4" aria-hidden="true" />
               Payouts
-              <span className="tabular rounded-md bg-surface-sunken px-1.5 py-0.5 text-[0.625rem] font-semibold text-subtle">
+              <span className="tabular rounded-md bg-surface-sunken px-1.5 py-0.5 text-xs font-semibold text-subtle">
                 {payouts.length}
               </span>
             </TabsTrigger>
@@ -547,11 +547,11 @@ export function PaymentsTable({
                           {row.guestName}
                         </span>
                       </div>
-                      <p className="truncate font-mono text-[0.625rem] text-subtle">
+                      <p className="truncate font-mono text-xs text-subtle">
                         {row.reference} · {row.brand ?? METHOD_LABEL[row.method]}
                         {row.last4 ? ` ···· ${row.last4}` : ''}
                       </p>
-                      <p className="mt-1 text-[0.6875rem] text-subtle">
+                      <p className="mt-1 text-xs text-subtle">
                         Settled {formatDateShort(row.settledAt)} · fee{' '}
                         {formatCurrency(row.processorFee, currency, { decimals: true })}
                       </p>
@@ -585,7 +585,7 @@ export function PaymentsTable({
               itemNoun="transaction"
               size="sm"
             />
-            <p className="text-[0.6875rem] text-faint">
+            <p className="text-xs text-faint">
               Card volume settles against delivery, so a charge clears on the day its trip runs.
               Showing the {formatNumber(payments.length)} most recently settled of{' '}
               {formatNumber(totalPayments)} charges.
@@ -632,7 +632,7 @@ export function PaymentsTable({
                               {meta.label}
                             </Badge>
                           </span>
-                          <span className="mt-0.5 block truncate text-[0.6875rem] text-subtle">
+                          <span className="mt-0.5 block truncate text-xs text-subtle">
                             {formatDateShort(payout.periodStart)} –{' '}
                             {formatDateShort(payout.periodEnd)} · {payout.destination}
                           </span>
@@ -641,25 +641,25 @@ export function PaymentsTable({
 
                       <span className="tabular flex shrink-0 items-center gap-4 text-xs sm:gap-6">
                         <span className="hidden text-right sm:block">
-                          <span className="block text-[0.625rem] text-faint uppercase">Charges</span>
+                          <span className="block text-xs text-faint uppercase">Charges</span>
                           <span className="block font-medium text-muted">
                             {formatNumber(payout.transactions)}
                           </span>
                         </span>
                         <span className="hidden text-right lg:block">
-                          <span className="block text-[0.625rem] text-faint uppercase">Gross</span>
+                          <span className="block text-xs text-faint uppercase">Gross</span>
                           <span className="block font-medium text-muted">
                             {formatCurrency(payout.gross, currency, { compact: true })}
                           </span>
                         </span>
                         <span className="hidden text-right lg:block">
-                          <span className="block text-[0.625rem] text-faint uppercase">Fees</span>
+                          <span className="block text-xs text-faint uppercase">Fees</span>
                           <span className="block font-medium text-muted">
                             -{formatCurrency(payout.fees, currency, { compact: true })}
                           </span>
                         </span>
                         <span className="text-right">
-                          <span className="block text-[0.625rem] text-faint uppercase">
+                          <span className="block text-xs text-faint uppercase">
                             {payout.status === 'paid' ? 'Paid' : 'Expected'}
                           </span>
                           <span className="block font-medium text-muted">
@@ -667,7 +667,7 @@ export function PaymentsTable({
                           </span>
                         </span>
                         <span className="w-24 text-right">
-                          <span className="block text-[0.625rem] text-faint uppercase">Net</span>
+                          <span className="block text-xs text-faint uppercase">Net</span>
                           <span className="block text-sm font-semibold text-foreground">
                             {formatCurrency(payout.net, currency)}
                           </span>

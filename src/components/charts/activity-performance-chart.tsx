@@ -112,11 +112,11 @@ export function ActivityPerformanceChart({
                         style={{ width: `${clamp(item.occupancy, 0, 100)}%`, background: tint }}
                       />
                     </span>
-                    <span className="tabular text-[10px] text-subtle">{formatPercent(item.occupancy)} full</span>
-                    <span className="text-[10px] text-faint" aria-hidden="true">
+                    <span className="tabular text-xs text-subtle">{formatPercent(item.occupancy)} full</span>
+                    <span className="text-xs text-faint" aria-hidden="true">
                       ·
                     </span>
-                    <span className="tabular text-[10px] text-subtle">{formatNumber(item.bookings)} bookings</span>
+                    <span className="tabular text-xs text-subtle">{formatNumber(item.bookings)} bookings</span>
                   </span>
                 </span>
 

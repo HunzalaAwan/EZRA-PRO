@@ -423,7 +423,7 @@ const DAY_PICKER_CLASS_NAMES = {
   month_grid: 'w-full border-collapse',
   weekdays: '',
   weekday:
-    'size-9 pb-1 text-center text-[0.625rem] font-semibold uppercase tracking-[0.08em] text-faint',
+    'size-9 pb-1 text-center text-xs font-semibold uppercase tracking-[0.08em] text-faint',
   weeks: '',
   week: '',
   week_number_header: 'size-9',

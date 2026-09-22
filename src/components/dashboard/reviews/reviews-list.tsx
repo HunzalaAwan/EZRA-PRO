@@ -413,13 +413,13 @@ export function ReviewsList({
                           <span className={cn('tabular text-xs font-semibold', ratingTone(review.rating))}>
                             {review.rating}.0
                           </span>
-                          <span className="text-[0.6875rem] text-faint" aria-hidden="true">
+                          <span className="text-xs text-faint" aria-hidden="true">
                             ·
                           </span>
                           <span className="text-xs text-subtle">
                             {formatRelative(review.departureAt, NOW)}
                           </span>
-                          <span className="text-[0.6875rem] text-faint" aria-hidden="true">
+                          <span className="text-xs text-faint" aria-hidden="true">
                             ·
                           </span>
                           <span className="text-xs text-subtle">{review.channelLabel}</span>
@@ -430,7 +430,7 @@ export function ReviewsList({
                         <span className="tabular text-sm font-semibold text-foreground">
                           {formatCurrency(review.total, currency)}
                         </span>
-                        <span className="inline-flex items-center gap-1 text-[0.6875rem] text-subtle">
+                        <span className="inline-flex items-center gap-1 text-xs text-subtle">
                           <Users className="size-3" aria-hidden="true" />
                           {review.partySize}
                         </span>
@@ -462,13 +462,13 @@ export function ReviewsList({
                           />
                           <span className="truncate">{review.activityName}</span>
                         </Link>
-                        <span className="text-[0.6875rem] text-faint" aria-hidden="true">
+                        <span className="text-xs text-faint" aria-hidden="true">
                           ·
                         </span>
                         <span className="text-xs text-subtle">
                           {formatDateLong(review.departureAt)}
                         </span>
-                        <span className="font-mono text-[0.625rem] text-faint">
+                        <span className="font-mono text-xs text-faint">
                           {review.reference}
                         </span>
                       </div>
@@ -498,7 +498,7 @@ export function ReviewsList({
                           className="mt-0.5 shrink-0"
                         />
                         <div className="min-w-0">
-                          <p className="text-[0.6875rem] text-subtle">
+                          <p className="text-xs text-subtle">
                             <span className="font-medium text-foreground">{operator.name}</span> ·{' '}
                             {operator.title} · {formatRelative(reply.at, NOW)}
                           </p>
@@ -525,7 +525,7 @@ export function ReviewsList({
                               key={index}
                               type="button"
                               onClick={() => setDraft(template)}
-                              className="rounded-lg border border-line bg-surface px-2 py-1 text-[0.6875rem] text-muted transition-colors duration-200 hover:border-primary/50 hover:text-primary"
+                              className="rounded-lg border border-line bg-surface px-2 py-1 text-xs text-muted transition-colors duration-200 hover:border-primary/50 hover:text-primary"
                             >
                               Suggested {index + 1}
                             </button>

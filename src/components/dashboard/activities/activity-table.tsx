@@ -246,7 +246,7 @@ export function ActivityTable({
               <span className="font-medium">{formatNumber(row.bookings30d)}</span>
               <span
                 className={cn(
-                  'inline-flex items-center gap-0.5 text-[0.6875rem] font-semibold',
+                  'inline-flex items-center gap-0.5 text-xs font-semibold',
                   up ? 'text-success' : 'text-danger',
                 )}
               >

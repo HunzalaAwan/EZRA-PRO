@@ -52,7 +52,7 @@ export const badgeVariants = cva(
         outline: 'border-line-strong bg-transparent text-muted',
       },
       size: {
-        sm: 'h-5 gap-1 px-2 text-[0.6875rem] [&_svg]:size-3',
+        sm: 'h-5 gap-1 px-2 text-xs [&_svg]:size-3',
         md: 'h-6 gap-1.5 px-2.5 text-xs [&_svg]:size-3.5',
       },
     },

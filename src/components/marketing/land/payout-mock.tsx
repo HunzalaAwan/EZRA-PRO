@@ -41,7 +41,7 @@ export function PayoutMock({ className }: { className?: string }) {
         <div className="bg-foreground p-5 text-background">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-[0.625rem] font-semibold tracking-[0.12em] uppercase opacity-70">Next payout</p>
+              <p className="text-xs font-semibold tracking-[0.12em] uppercase opacity-70">Next payout</p>
               <p className="mt-1 text-[0.8125rem] opacity-80">Arrives tomorrow, Thu 10 Sep</p>
             </div>
             <span className="grid size-9 place-items-center rounded-xl bg-background/10">

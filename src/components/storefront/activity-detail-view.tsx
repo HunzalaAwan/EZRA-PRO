@@ -226,11 +226,11 @@ export function ActivityDetailView({
           <div className="mt-4 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0 max-w-3xl">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-soft px-2.5 py-1 text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-primary">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-soft px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.1em] text-primary">
                   {DIFFICULTY_LABEL[activity.difficulty]}
                 </span>
                 {activity.featured ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-accent">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.1em] text-accent">
                     <Sparkles className="size-3" aria-hidden="true" />
                     Guest favourite
                   </span>
@@ -252,7 +252,7 @@ export function ActivityDetailView({
 
             <div className="flex shrink-0 items-center gap-4 lg:pb-1">
               <div className="text-right">
-                <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-faint">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">
                   From
                 </p>
                 <p className="font-display text-2xl font-semibold tabular text-foreground">
@@ -856,7 +856,7 @@ function MeetingPointMap({ label }: { label: string }) {
         <MapPin className="size-3.5 text-primary" aria-hidden="true" />
         Meet here · {label}
       </div>
-      <span className="absolute bottom-3 right-4 text-[0.625rem] font-medium uppercase tracking-[0.12em] text-faint">
+      <span className="absolute bottom-3 right-4 text-xs font-medium uppercase tracking-[0.12em] text-faint">
         Illustrative map
       </span>
     </div>

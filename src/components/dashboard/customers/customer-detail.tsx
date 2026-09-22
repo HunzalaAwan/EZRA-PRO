@@ -210,14 +210,14 @@ function FactTile({
           className={cn('size-3.5 shrink-0', tone === 'brand' ? 'text-primary' : 'text-faint')}
           aria-hidden="true"
         />
-        <p className="truncate text-[0.6875rem] font-semibold tracking-[0.06em] text-subtle uppercase">
+        <p className="truncate text-xs font-semibold tracking-[0.06em] text-subtle uppercase">
           {label}
         </p>
       </div>
       <p className="tabular mt-2 truncate font-display text-xl leading-none font-semibold tracking-tight text-foreground">
         {value}
       </p>
-      {hint ? <p className="mt-1.5 truncate text-[0.6875rem] text-subtle">{hint}</p> : null}
+      {hint ? <p className="mt-1.5 truncate text-xs text-subtle">{hint}</p> : null}
     </div>
   )
 }
@@ -429,7 +429,7 @@ export function CustomerDetail({
 
                 <p className="mt-2 text-xs text-subtle">
                   Guest since {formatDateLong(customer.createdAt)} · ID{' '}
-                  <span className="font-mono text-[0.6875rem]">{customer.id}</span>
+                  <span className="font-mono text-xs">{customer.id}</span>
                 </p>
               </div>
             </div>
@@ -667,7 +667,7 @@ export function CustomerDetail({
                             >
                               {booking.activityName}
                             </Link>
-                            <span className="font-mono text-[0.625rem] text-faint">
+                            <span className="font-mono text-xs text-faint">
                               {booking.reference}
                             </span>
                           </div>
@@ -675,19 +675,19 @@ export function CustomerDetail({
                             {formatDateLong(booking.departureAt)} · {formatTime(booking.departureAt)}
                           </p>
                           <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                            <span className="inline-flex items-center gap-1 text-[0.6875rem] text-subtle">
+                            <span className="inline-flex items-center gap-1 text-xs text-subtle">
                               <Users className="size-3" aria-hidden="true" />
                               {booking.partySize} {booking.partySize === 1 ? 'guest' : 'guests'}
                             </span>
-                            <span className="text-[0.6875rem] text-faint" aria-hidden="true">
+                            <span className="text-xs text-faint" aria-hidden="true">
                               ·
                             </span>
-                            <span className="text-[0.6875rem] text-subtle">
+                            <span className="text-xs text-subtle">
                               {booking.channelLabel}
                             </span>
                             {typeof booking.rating === 'number' ? (
                               <>
-                                <span className="text-[0.6875rem] text-faint" aria-hidden="true">
+                                <span className="text-xs text-faint" aria-hidden="true">
                                   ·
                                 </span>
                                 <StarRating value={booking.rating} size="xs" />
@@ -702,7 +702,7 @@ export function CustomerDetail({
                           </span>
                           <span className="flex items-center gap-1.5">
                             {booking.refunded > 0 ? (
-                              <span className="text-[0.6875rem] font-medium text-subtle tabular-nums">
+                              <span className="text-xs font-medium text-subtle tabular-nums">
                                 {formatCurrency(booking.refunded, currency)} refunded
                               </span>
                             ) : null}
@@ -789,7 +789,7 @@ export function CustomerDetail({
                     >
                       <div className="flex items-center justify-between gap-2">
                         <StarRating value={review.rating ?? 0} size="xs" />
-                        <span className="text-[0.6875rem] text-faint">
+                        <span className="text-xs text-faint">
                           {formatDateShort(review.departureAt)}
                         </span>
                       </div>
@@ -800,7 +800,7 @@ export function CustomerDetail({
                       ) : (
                         <p className="mt-2 text-xs text-faint italic">Rating only, no comment.</p>
                       )}
-                      <p className="mt-2 truncate text-[0.6875rem] text-subtle">
+                      <p className="mt-2 truncate text-xs text-subtle">
                         {review.activityName}
                       </p>
                     </li>
@@ -847,7 +847,7 @@ export function CustomerDetail({
                               <span className="font-mono text-subtle"> ···· {method.last4}</span>
                             ) : null}
                           </p>
-                          <p className="truncate text-[0.6875rem] text-subtle">
+                          <p className="truncate text-xs text-subtle">
                             {method.charges} {method.charges === 1 ? 'charge' : 'charges'} ·{' '}
                             {formatRelative(method.lastUsedAt, NOW)}
                           </p>
@@ -881,7 +881,7 @@ export function CustomerDetail({
                 aria-label="New internal note"
               />
               <div className="mt-2 flex items-center justify-between gap-2">
-                <p className="text-[0.6875rem] text-faint">
+                <p className="text-xs text-faint">
                   Posting as {operator.name} · {operator.title}
                 </p>
                 <Button size="xs" onClick={addNote} leftIcon={<Send className="size-3.5" />}>
@@ -895,7 +895,7 @@ export function CustomerDetail({
                     <li key={note.id} className="flex gap-2.5">
                       <Avatar name={note.author} src={operator.avatarUrl} size="xs" className="mt-0.5" />
                       <div className="min-w-0">
-                        <p className="text-[0.6875rem] text-subtle">
+                        <p className="text-xs text-subtle">
                           <span className="font-medium text-foreground">{note.author}</span> ·{' '}
                           {formatRelative(note.at, NOW)}
                         </p>
@@ -952,7 +952,7 @@ export function CustomerDetail({
                   key={index}
                   type="button"
                   onClick={() => setMessageBody(template)}
-                  className="rounded-lg border border-line bg-surface px-2 py-1 text-[0.6875rem] text-muted transition-colors duration-200 hover:border-primary/50 hover:text-primary"
+                  className="rounded-lg border border-line bg-surface px-2 py-1 text-xs text-muted transition-colors duration-200 hover:border-primary/50 hover:text-primary"
                 >
                   Template {index + 1}
                 </button>

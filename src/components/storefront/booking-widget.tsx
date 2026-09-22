@@ -339,7 +339,7 @@ export function BookingWidget({
         )}
       >
         <div className="min-w-0">
-          <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-faint">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">
             From
           </p>
           <p className="mt-0.5 font-display text-2xl font-semibold tabular tracking-tight text-foreground">
@@ -349,13 +349,13 @@ export function BookingWidget({
         </div>
         {slot && slot.priceMultiplier > 1 ? (
           <SimpleTooltip label="This departure is in high demand, so pricing has stepped up.">
-            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-warning-soft px-2.5 py-1 text-[0.6875rem] font-semibold text-warning">
+            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-warning-soft px-2.5 py-1 text-xs font-semibold text-warning">
               <Sparkles className="size-3" aria-hidden="true" />
               Peak time
             </span>
           </SimpleTooltip>
         ) : (
-          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-success-soft px-2.5 py-1 text-[0.6875rem] font-semibold text-success">
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-success-soft px-2.5 py-1 text-xs font-semibold text-success">
             <ShieldCheck className="size-3" aria-hidden="true" />
             Free cancellation
           </span>
@@ -659,7 +659,7 @@ export function BookingWidget({
 
           <div className="mt-3 flex items-end justify-between gap-3 border-t border-line pt-3">
             <div>
-              <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-faint">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">
                 Total
               </p>
               <p className="text-xs text-subtle">
@@ -682,7 +682,7 @@ export function BookingWidget({
             {slot ? 'Reserve now' : 'Choose a departure'}
           </Button>
           <TrustSeal freeCancellationHours={activity.cancellationPolicy.freeCancellationHours} />
-          <p className="text-center text-[0.6875rem] text-faint">
+          <p className="text-center text-xs text-faint">
             You will not be charged until the final step.
           </p>
         </div>
@@ -731,7 +731,7 @@ function DateChip({
     >
       <span
         className={cn(
-          'text-[0.625rem] font-semibold uppercase tracking-[0.1em]',
+          'text-xs font-semibold uppercase tracking-[0.1em]',
           selected ? 'text-on-primary/75' : unavailable ? 'text-faint' : 'text-subtle',
         )}
       >
@@ -742,7 +742,7 @@ function DateChip({
       </span>
       <span
         className={cn(
-          'text-[0.625rem] font-medium',
+          'text-xs font-medium',
           selected ? 'text-on-primary/70' : 'text-faint',
         )}
       >
@@ -750,7 +750,7 @@ function DateChip({
       </span>
       <span
         className={cn(
-          'mt-1 w-full truncate rounded-md px-1 py-0.5 text-center text-[0.625rem] font-semibold tabular',
+          'mt-1 w-full truncate rounded-md px-1 py-0.5 text-center text-xs font-semibold tabular',
           selected
             ? 'bg-white/18 text-on-primary'
             : unavailable
@@ -806,7 +806,7 @@ function TimeChip({
       </span>
       <span
         className={cn(
-          'text-[0.6875rem] font-medium',
+          'text-xs font-medium',
           selected
             ? 'text-on-primary/75'
             : slot.soldOut

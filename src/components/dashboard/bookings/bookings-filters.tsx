@@ -317,7 +317,7 @@ export function BookingsFilters({
           Saved views
           --------------------------------------------------------------- */}
       <div className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 pb-0.5 no-scrollbar">
-        <span className="hidden shrink-0 items-center gap-1.5 pr-1 text-[0.6875rem] font-semibold tracking-wider text-faint uppercase sm:inline-flex">
+        <span className="hidden shrink-0 items-center gap-1.5 pr-1 text-xs font-semibold tracking-wider text-faint uppercase sm:inline-flex">
           <Bookmark aria-hidden="true" className="size-3.5" />
           Views
         </span>

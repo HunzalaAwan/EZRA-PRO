@@ -71,7 +71,7 @@ export function RestaurantHome({ tenant, menu, settings, tastings, reviews, stor
           {tenant.branding.coverImage ? <Image src={tenant.branding.coverImage} alt="" fill priority sizes="100vw" className="object-cover opacity-70" /> : null}
           <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(180deg,rgba(11,20,23,0.55)_0%,rgba(11,20,23,0.3)_40%,rgba(11,20,23,0.88)_100%)]" />
           <div className="relative mx-auto flex w-full max-w-[88rem] flex-col justify-end px-4 pt-28 pb-10 sm:px-6 sm:pt-36 sm:pb-14 lg:px-10">
-            <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-white/70">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/70">
               {tenant.city} · {status}
             </p>
             <h1 className="mt-3 max-w-[16ch] font-display text-[length:clamp(2.5rem,1.4rem_+_3.6vw,4.5rem)] leading-[1.02] font-semibold tracking-tight">{tenant.name}</h1>
@@ -101,14 +101,14 @@ export function RestaurantHome({ tenant, menu, settings, tastings, reviews, stor
             <dl className="mt-9 grid max-w-3xl grid-cols-2 gap-4 border-t border-white/15 pt-6 text-white/80 sm:grid-cols-4">
               {settings.periods.map((p) => (
                 <div key={p.id}>
-                  <dt className="text-[0.6875rem] uppercase tracking-[0.12em] text-white/50">{p.name}</dt>
+                  <dt className="text-xs uppercase tracking-[0.12em] text-white/50">{p.name}</dt>
                   <dd className="mt-1 text-sm tabular-nums">
                     {p.startTime}–{p.endTime}
                   </dd>
                 </div>
               ))}
               <div>
-                <dt className="text-[0.6875rem] uppercase tracking-[0.12em] text-white/50">Pickup</dt>
+                <dt className="text-xs uppercase tracking-[0.12em] text-white/50">Pickup</dt>
                 <dd className="mt-1 text-sm">{pickupOpen ? `Ready in ${settings.ordering.pickup.leadMinutes} min` : `From ${settings.ordering.pickup.startTime}`}</dd>
               </div>
             </dl>
@@ -126,7 +126,7 @@ export function RestaurantHome({ tenant, menu, settings, tastings, reviews, stor
             <div className="mx-auto w-full max-w-[88rem] px-4 sm:px-6 lg:px-10">
               <Reveal className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-primary">Tasting menus and events</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Tasting menus and events</p>
                   <h2 className="mt-2 max-w-[22ch] font-display text-display-sm font-semibold tracking-tight text-foreground">Set menus with a seat, booked ahead</h2>
                 </div>
                 <p className="max-w-[40ch] text-sm text-muted">Paid at booking, held for the whole evening. Dietary requirements are taken when you book.</p>
@@ -162,7 +162,7 @@ export function RestaurantHome({ tenant, menu, settings, tastings, reviews, stor
         <section id="about" className="scroll-mt-20 bg-background py-14 sm:py-20">
           <div className="mx-auto grid w-full max-w-[88rem] gap-10 px-4 sm:px-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:gap-16 lg:px-10">
             <Reveal>
-              <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-primary">The kitchen</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">The kitchen</p>
               <h2 className="mt-3 max-w-[20ch] font-display text-display-sm font-semibold tracking-tight text-foreground">{story.heading}</h2>
               <div className="mt-5 space-y-4">
                 {story.body.map((paragraph) => (
@@ -211,7 +211,7 @@ export function RestaurantHome({ tenant, menu, settings, tastings, reviews, stor
             <div className="mx-auto w-full max-w-[88rem] px-4 sm:px-6 lg:px-10">
               <Reveal className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-primary">Guest reviews</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Guest reviews</p>
                   <h2 className="mt-3 font-display text-display-sm font-semibold tracking-tight text-foreground">{rating.toFixed(2)} out of 5</h2>
                 </div>
                 <p className="text-sm text-muted">
@@ -247,7 +247,7 @@ export function RestaurantHome({ tenant, menu, settings, tastings, reviews, stor
         <section id="contact" className="scroll-mt-20 border-t border-line-subtle bg-background py-14 sm:py-20">
           <div className="mx-auto w-full max-w-[88rem] px-4 sm:px-6 lg:px-10">
             <Reveal>
-              <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-primary">Hours, tables and directions</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">Hours, tables and directions</p>
               <h2 className="mt-3 max-w-[18ch] font-display text-display-sm font-semibold tracking-tight text-foreground">Come in, call ahead, or let us come to you</h2>
             </Reveal>
             <div className="mt-8 grid gap-5 md:grid-cols-3">

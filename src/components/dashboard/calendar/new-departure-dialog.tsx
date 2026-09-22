@@ -424,7 +424,7 @@ export function NewDepartureDialog({
                         <span className="block truncate text-[0.8125rem] font-medium text-foreground">
                           {user.name}
                         </span>
-                        <span className="block truncate text-[0.6875rem] text-subtle">
+                        <span className="block truncate text-xs text-subtle">
                           {user.title}
                         </span>
                       </span>
@@ -472,7 +472,7 @@ export function NewDepartureDialog({
                     <span className="block text-[0.8125rem] font-semibold text-foreground">
                       Repeat this schedule
                     </span>
-                    <span className="block text-[0.6875rem] text-subtle">
+                    <span className="block text-xs text-subtle">
                       Generate the same times across a weekly pattern
                     </span>
                   </span>

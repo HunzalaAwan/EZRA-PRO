@@ -612,7 +612,7 @@ function PaymentStep({
 
       <div className="flex items-center gap-3">
         <Separator className="flex-1" />
-        <span className="text-[0.6875rem] font-medium uppercase tracking-[0.1em] text-faint">
+        <span className="text-xs font-medium uppercase tracking-[0.1em] text-faint">
           or pay by card
         </span>
         <Separator className="flex-1" />
@@ -637,7 +637,7 @@ function PaymentStep({
             <button
               type="button"
               onClick={() => set('cardNumber')(DEMO_CARD)}
-              className="text-[0.6875rem] font-semibold text-primary transition-colors hover:text-primary-hover"
+              className="text-xs font-semibold text-primary transition-colors hover:text-primary-hover"
             >
               Use demo card
             </button>
@@ -654,7 +654,7 @@ function PaymentStep({
               brand === 'unknown' ? null : (
                 <span
                   className={cn(
-                    'rounded-md bg-surface-sunken px-1.5 py-0.5 text-[0.625rem] font-bold tracking-wider',
+                    'rounded-md bg-surface-sunken px-1.5 py-0.5 text-xs font-bold tracking-wider',
                     BRAND_META[brand].className,
                   )}
                 >
@@ -930,7 +930,7 @@ function MobileSummary({
           <span className="block font-display text-base font-semibold tabular text-foreground">
             {formatCurrency(quote.total, tenant.currency)}
           </span>
-          <span className="inline-flex items-center gap-1 text-[0.6875rem] font-medium text-primary">
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">
             {open ? 'Hide' : 'Details'}
             <ChevronDown
               className={cn('size-3 transition-transform duration-300', open && 'rotate-180')}
@@ -1154,7 +1154,7 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
       >
         <div className="flex flex-col items-center gap-3 border-b border-dashed border-line pb-5 sm:flex-row sm:justify-between">
           <div className="text-center sm:text-left">
-            <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-faint">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-faint">
               Confirmation code
             </p>
             <p className="mt-1 font-mono text-2xl font-bold tracking-[0.14em] text-foreground">
@@ -1173,13 +1173,13 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
 
         <dl className="grid grid-cols-1 gap-4 py-5 sm:grid-cols-2">
           <div>
-            <dt className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-faint">
+            <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">
               Experience
             </dt>
             <dd className="mt-1 text-sm font-medium text-foreground">{activity.name}</dd>
           </div>
           <div>
-            <dt className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-faint">
+            <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">
               When
             </dt>
             <dd className="mt-1 text-sm font-medium tabular text-foreground">
@@ -1187,7 +1187,7 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
             </dd>
           </div>
           <div>
-            <dt className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-faint">
+            <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">
               Guests
             </dt>
             <dd className="mt-1 text-sm font-medium text-foreground">
@@ -1195,7 +1195,7 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
             </dd>
           </div>
           <div>
-            <dt className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-faint">
+            <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">
               Paid
             </dt>
             <dd className="mt-1 text-sm font-medium tabular text-foreground">
@@ -1203,7 +1203,7 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
             </dd>
           </div>
           <div className="sm:col-span-2">
-            <dt className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-faint">
+            <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">
               Meeting point
             </dt>
             <dd className="mt-1 text-sm leading-relaxed text-muted">{activity.meetingPoint}</dd>

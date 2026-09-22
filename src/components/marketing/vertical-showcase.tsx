@@ -427,7 +427,7 @@ export function VerticalShowcase({ defaultVertical, className }: VerticalShowcas
                         <ActiveIcon aria-hidden="true" className="size-[1.125rem]" style={{ color: accent }} />
                       </span>
                       <span
-                        className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em]"
+                        className="text-xs font-semibold uppercase tracking-[0.16em]"
                         style={{ color: accent }}
                       >
                         {active.label}
@@ -627,10 +627,10 @@ export function VerticalVisual({ vertical, className }: VerticalVisualProps) {
               style={{ background: 'var(--v-accent)' }}
             />
           </span>
-          <span className="truncate text-[11px] font-medium tracking-wide text-muted">
+          <span className="truncate text-xs font-medium tracking-wide text-muted">
             {vertical.label} · this week
           </span>
-          <span className="ml-auto rounded-full bg-surface px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-subtle ring-1 ring-inset ring-line">
+          <span className="ml-auto rounded-full bg-surface px-2 py-0.5 text-xs font-medium uppercase tracking-[0.12em] text-subtle ring-1 ring-inset ring-line">
             Live
           </span>
         </div>
@@ -659,7 +659,7 @@ export function VerticalVisual({ vertical, className }: VerticalVisualProps) {
                 >
                   <span
                     className={cn(
-                      'text-center text-[9px] font-semibold uppercase tracking-[0.08em] sm:text-[10px]',
+                      'text-center text-xs font-semibold uppercase tracking-[0.08em] sm:text-xs',
                       isToday ? 'text-foreground' : 'text-faint',
                     )}
                   >
@@ -670,7 +670,7 @@ export function VerticalVisual({ vertical, className }: VerticalVisualProps) {
                   {day.chips.map((chip, chipIndex) => (
                     <motion.span
                       key={chip.key}
-                      className="truncate rounded-[5px] px-1 py-[3px] text-center text-[8px] font-medium leading-none sm:text-[9px]"
+                      className="truncate rounded-[5px] px-1 py-[3px] text-center text-xs font-medium leading-none sm:text-xs"
                       style={
                         chip.full
                           ? {
@@ -703,10 +703,10 @@ export function VerticalVisual({ vertical, className }: VerticalVisualProps) {
         <div className="mt-4 space-y-2.5 border-t border-line-subtle px-4 pt-4">
           {rows.map((row, rowIndex) => (
             <div key={row.key} className="flex items-center gap-3">
-              <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-foreground/80 sm:text-xs">
+              <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground/80 sm:text-xs">
                 {row.name}
               </span>
-              <span className="shrink-0 font-mono text-[10px] tabular-nums text-subtle sm:text-[11px]">
+              <span className="shrink-0 font-mono text-xs tabular-nums text-subtle sm:text-xs">
                 {row.booked}/{row.capacity}
               </span>
               <span className="h-1.5 w-16 shrink-0 overflow-hidden rounded-full bg-surface-sunken sm:w-24">
@@ -733,10 +733,10 @@ export function VerticalVisual({ vertical, className }: VerticalVisualProps) {
         {/* revenue */}
         <div className="mt-4 border-t border-line-subtle px-4 pb-4 pt-3">
           <div className="flex items-baseline justify-between gap-3">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-faint">
+            <span className="text-xs font-semibold uppercase tracking-[0.14em] text-faint">
               Revenue · 16 weeks
             </span>
-            <span className="inline-flex items-center gap-1 rounded-full bg-success-soft px-2 py-0.5 text-[10px] font-semibold text-success">
+            <span className="inline-flex items-center gap-1 rounded-full bg-success-soft px-2 py-0.5 text-xs font-semibold text-success">
               <TrendingUp className="size-3" />
               {formatDelta(delta)}
             </span>

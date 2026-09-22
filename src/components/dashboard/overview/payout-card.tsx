@@ -80,7 +80,7 @@ export function PayoutCard({ balance, currency, className }: PayoutCardProps) {
       {/* ---------- what lands next ---------- */}
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-[0.6875rem] font-semibold tracking-[0.12em] text-white/70 uppercase">Next payout</p>
+          <p className="text-xs font-semibold tracking-[0.12em] text-white/70 uppercase">Next payout</p>
           <p className="mt-1 text-[0.8125rem] text-white/85">Arrives {arrives(balance.nextPayoutAt)}</p>
         </div>
         <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-white/16 text-white ring-1 ring-white/20 ring-inset backdrop-blur-sm">
@@ -101,7 +101,7 @@ export function PayoutCard({ balance, currency, className }: PayoutCardProps) {
       <dl className="mt-auto grid grid-cols-3 gap-4 border-t border-white/18 pt-4">
         {figures.map((figure) => (
           <div key={figure.label} className="min-w-0">
-            <dt className="truncate text-[0.6875rem] font-medium text-white/65">{figure.label}</dt>
+            <dt className="truncate text-xs font-medium text-white/65">{figure.label}</dt>
             <dd className="mt-1 font-display text-lg leading-none font-semibold whitespace-nowrap text-white tabular-nums">{figure.value}</dd>
           </div>
         ))}

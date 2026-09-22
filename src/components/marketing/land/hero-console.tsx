@@ -144,7 +144,7 @@ export function HeroConsole({ className }: { className?: string }) {
     >
       {/* ---------- nav rail ---------- */}
       <div aria-hidden="true" className="hidden w-12 shrink-0 flex-col items-center gap-1 border-r border-line-subtle bg-surface py-3 sm:flex">
-        <span className="grid size-6 place-items-center rounded-md bg-primary font-display text-[0.625rem] font-bold text-on-primary">
+        <span className="grid size-6 place-items-center rounded-md bg-primary font-display text-xs font-bold text-on-primary">
           E
         </span>
         <span className="my-1.5 h-px w-5 bg-line-subtle" />
@@ -171,14 +171,14 @@ export function HeroConsole({ className }: { className?: string }) {
             <p className="truncate font-display text-[0.8125rem] leading-tight font-semibold text-foreground">
               7 – 13 September
             </p>
-            <p className="mt-0.5 flex items-center gap-1.5 text-[0.625rem] text-subtle">
+            <p className="mt-0.5 flex items-center gap-1.5 text-xs text-subtle">
               <span className="tabular">18 slots</span>
               <span className="text-faint">·</span>
               <span className="tabular">559 seats sold</span>
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            <span className="hidden h-6 items-center gap-1.5 rounded-md border border-line bg-surface px-2 text-[0.625rem] text-faint sm:flex">
+            <span className="hidden h-6 items-center gap-1.5 rounded-md border border-line bg-surface px-2 text-xs text-faint sm:flex">
               <Search className="size-3" />
               Search
             </span>
@@ -186,7 +186,7 @@ export function HeroConsole({ className }: { className?: string }) {
               <ChevronLeft className="size-3.5" />
               <ChevronRight className="size-3.5" />
             </span>
-            <span className="inline-flex h-6 items-center gap-1 rounded-md bg-primary px-2 text-[0.625rem] font-semibold text-on-primary">
+            <span className="inline-flex h-6 items-center gap-1 rounded-md bg-primary px-2 text-xs font-semibold text-on-primary">
               <Plus className="size-3" strokeWidth={2.5} />
               New slot
             </span>
@@ -203,10 +203,10 @@ export function HeroConsole({ className }: { className?: string }) {
                     day.today ? 'bg-primary text-on-primary' : 'bg-surface-sunken',
                   )}
                 >
-                  <span className={cn('text-[0.5625rem] font-semibold tracking-[0.08em] uppercase', day.today ? 'text-on-primary/80' : 'text-subtle')}>
+                  <span className={cn('text-xs font-semibold tracking-[0.08em] uppercase', day.today ? 'text-on-primary/80' : 'text-subtle')}>
                     {day.weekday}
                   </span>
-                  <span className={cn('tabular text-[0.6875rem] font-semibold', day.today ? 'text-on-primary' : 'text-foreground')}>
+                  <span className={cn('tabular text-xs font-semibold', day.today ? 'text-on-primary' : 'text-foreground')}>
                     {day.date}
                   </span>
                 </div>
@@ -214,17 +214,17 @@ export function HeroConsole({ className }: { className?: string }) {
                 {day.slots.map((slot) => (
                   <div key={slot.id} className={cn('flex flex-col gap-1 rounded-md border p-1.5 shadow-xs', TINT[slot.tint].chip)}>
                     <div className="flex items-center gap-1">
-                      <span className={cn('tabular text-[0.625rem] leading-none font-bold', TINT[slot.tint].text)}>{slot.time}</span>
+                      <span className={cn('tabular text-xs leading-none font-bold', TINT[slot.tint].text)}>{slot.time}</span>
                       {slot.flag === 'weather' ? <CloudRain className="size-2.5 shrink-0 text-warning" /> : null}
                       {slot.flag === 'full' ? (
-                        <span className="ml-auto rounded-sm bg-foreground px-1 text-[0.5rem] leading-[0.875rem] font-bold text-background">
+                        <span className="ml-auto rounded-sm bg-foreground px-1 text-xs leading-[0.875rem] font-bold text-background">
                           FULL
                         </span>
                       ) : null}
                     </div>
-                    <p className="truncate text-[0.625rem] leading-tight font-medium text-foreground">{slot.name}</p>
+                    <p className="truncate text-xs leading-tight font-medium text-foreground">{slot.name}</p>
                     <CapacityBar booked={slot.booked} capacity={slot.capacity} held={slot.held} size="xs" showLabel={false} />
-                    <p className="tabular text-[0.5625rem] leading-none text-subtle">
+                    <p className="tabular text-xs leading-none text-subtle">
                       {slot.booked}/{slot.capacity}
                     </p>
                   </div>
@@ -236,10 +236,10 @@ export function HeroConsole({ className }: { className?: string }) {
 
         <footer className="flex shrink-0 items-center gap-2 border-t border-line-subtle bg-surface px-3 py-2">
           <CloudRain className="size-3.5 shrink-0 text-warning" />
-          <p className="min-w-0 truncate text-[0.6875rem] text-muted">
+          <p className="min-w-0 truncate text-xs text-muted">
             Thursday 16:30 is on a weather hold. 31 guests have been told and are waiting on a decision.
           </p>
-          <span className="ml-auto hidden h-6 shrink-0 items-center rounded-md border border-line bg-surface px-2 text-[0.625rem] font-semibold text-foreground sm:inline-flex">
+          <span className="ml-auto hidden h-6 shrink-0 items-center rounded-md border border-line bg-surface px-2 text-xs font-semibold text-foreground sm:inline-flex">
             Review
           </span>
         </footer>

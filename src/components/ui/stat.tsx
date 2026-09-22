@@ -372,7 +372,7 @@ function Stat({
               {showDelta ? (
                 <span
                   className={cn(
-                    'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[0.6875rem] font-semibold tabular-nums',
+                    'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-semibold tabular-nums',
                     TONE_CHIP[tone],
                   )}
                 >
@@ -381,7 +381,7 @@ function Stat({
                 </span>
               ) : null}
               {comparisonLabel ? (
-                <span className="truncate text-[0.6875rem] text-subtle">{comparisonLabel}</span>
+                <span className="truncate text-xs text-subtle">{comparisonLabel}</span>
               ) : null}
             </div>
           )}

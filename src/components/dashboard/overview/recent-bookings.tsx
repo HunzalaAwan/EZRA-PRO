@@ -155,7 +155,7 @@ export function RecentBookings({ rows, nowIso, channelLabels, className }: Recen
                         <Badge variant={CHANNEL_VARIANT[booking.channel] ?? 'neutral'} size="sm">
                           {channelLabels[booking.channel]}
                         </Badge>
-                        <span className="text-[0.6875rem] text-faint">
+                        <span className="text-xs text-faint">
                           {booking.partySize} {pluralize(booking.partySize, 'guest')} ·{' '}
                           {formatRelative(booking.createdAt, now)}
                         </span>
@@ -209,7 +209,7 @@ export function RecentBookings({ rows, nowIso, channelLabels, className }: Recen
                             >
                               {guest}
                             </Link>
-                            <p className="truncate font-mono text-[0.6875rem] text-faint">
+                            <p className="truncate font-mono text-xs text-faint">
                               {booking.reference}
                             </p>
                           </div>
@@ -220,7 +220,7 @@ export function RecentBookings({ rows, nowIso, channelLabels, className }: Recen
                         <p className="max-w-[15rem] truncate text-[0.8125rem] text-foreground">
                           {activity.name}
                         </p>
-                        <p className="truncate text-[0.6875rem] text-faint tabular-nums">
+                        <p className="truncate text-xs text-faint tabular-nums">
                           {formatDateTime(departure.startsAt)}
                         </p>
                       </TableCell>
@@ -244,7 +244,7 @@ export function RecentBookings({ rows, nowIso, channelLabels, className }: Recen
                       </TableCell>
 
                       <TableCell align="right" className="pr-5 whitespace-nowrap sm:pr-6">
-                        <span className="text-[0.6875rem] text-subtle">
+                        <span className="text-xs text-subtle">
                           {formatRelative(booking.createdAt, now)}
                         </span>
                       </TableCell>

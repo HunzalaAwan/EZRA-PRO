@@ -123,7 +123,7 @@ export function RatesClient({ roomTypes: initialTypes, roomCounts, settings: ini
                     return (
                       <td key={n} className={cn('px-2 py-2 text-center', weekend && 'bg-surface-sunken/60')}>
                         <span className="block text-foreground tabular-nums">{plan ? formatCurrency(nightlyRate(t, plan, n, settings), currency) : '—'}</span>
-                        <span className={cn('block text-[0.6875rem] tabular-nums', left === 0 ? 'text-danger' : left <= 2 ? 'text-warning' : 'text-subtle')}>{left === 0 ? 'full' : `${left} left`}</span>
+                        <span className={cn('block text-xs tabular-nums', left === 0 ? 'text-danger' : left <= 2 ? 'text-warning' : 'text-subtle')}>{left === 0 ? 'full' : `${left} left`}</span>
                       </td>
                     )
                   })}

@@ -81,7 +81,7 @@ export function CohortGrid({
       bodyClassName="px-5 pb-4"
       footer={
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-subtle">Retention</span>
+          <span className="text-xs text-subtle">Retention</span>
           <span
             aria-hidden="true"
             className="h-2 w-28 rounded-full"
@@ -89,7 +89,7 @@ export function CohortGrid({
               background: `linear-gradient(to right, ${retentionTint(0)}, ${retentionTint(50)}, ${retentionTint(100)})`,
             }}
           />
-          <span className="tabular text-[11px] text-subtle">0–100%</span>
+          <span className="tabular text-xs text-subtle">0–100%</span>
         </div>
       }
     >
@@ -100,7 +100,7 @@ export function CohortGrid({
             <tr>
               <th
                 scope="col"
-                className="sticky left-0 top-0 z-20 bg-surface px-2 pb-1 text-left text-[11px] font-medium text-subtle"
+                className="sticky left-0 top-0 z-20 bg-surface px-2 pb-1 text-left text-xs font-medium text-subtle"
               >
                 Cohort
               </th>
@@ -109,7 +109,7 @@ export function CohortGrid({
                   key={month}
                   scope="col"
                   className={cn(
-                    'sticky top-0 z-10 min-w-[44px] bg-surface pb-1 text-center text-[11px] font-medium transition-colors',
+                    'sticky top-0 z-10 min-w-[44px] bg-surface pb-1 text-center text-xs font-medium transition-colors',
                     hover?.col === month ? 'text-foreground' : 'text-subtle',
                   )}
                 >
@@ -130,7 +130,7 @@ export function CohortGrid({
                 >
                   <span className="flex items-baseline gap-1.5">
                     {row.cohort}
-                    <span className="tabular text-[10px] font-normal text-faint">{formatNumber(row.size)}</span>
+                    <span className="tabular text-xs font-normal text-faint">{formatNumber(row.size)}</span>
                   </span>
                 </th>
 
@@ -148,7 +148,7 @@ export function CohortGrid({
                       key={month}
                       onMouseEnter={() => setHover({ row: rowIndex, col: month })}
                       className={cn(
-                        'tabular h-7 rounded-[5px] text-center text-[11px] font-medium tracking-tight',
+                        'tabular h-7 rounded-[5px] text-center text-xs font-medium tracking-tight',
                         'outline outline-1 outline-offset-0 transition-[outline-color,opacity] duration-150',
                         exact ? 'outline-foreground' : crossHair ? 'outline-line-strong' : 'outline-transparent',
                         hover && !crossHair && 'opacity-55',

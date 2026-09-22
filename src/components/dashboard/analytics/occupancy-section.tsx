@@ -236,7 +236,7 @@ export function OccupancySection({
 
             {analysis && analysis.slots.length > 0 ? (
               <div className="shrink-0 text-right">
-                <p className="text-[0.625rem] font-semibold uppercase tracking-[0.07em] text-faint">
+                <p className="text-xs font-semibold uppercase tracking-[0.07em] text-faint">
                   Recoverable
                 </p>
                 <p className="font-display text-2xl font-semibold tracking-[-0.03em] text-primary">
@@ -247,7 +247,7 @@ export function OccupancySection({
                     duration={1.1}
                   />
                 </p>
-                <p className="text-[0.6875rem] text-subtle">
+                <p className="text-xs text-subtle">
                   per month · these {analysis.slots.length} slots
                 </p>
               </div>
@@ -297,7 +297,7 @@ export function OccupancySection({
                         style={{ left: `${clamp(analysis.benchmark, 0, 100)}%` }}
                       />
                     </div>
-                    <p className="mt-1.5 text-[0.6875rem] text-subtle">
+                    <p className="mt-1.5 text-xs text-subtle">
                       {formatNumber(slot.cell.bookings)} bookings in the window ·{' '}
                       {slot.gap.toFixed(0)} points below target
                     </p>
@@ -307,7 +307,7 @@ export function OccupancySection({
                     <p className="font-display text-base font-semibold tabular-nums text-success">
                       +{formatCurrency(slot.monthly, currency)}
                     </p>
-                    <p className="text-[0.6875rem] text-subtle">per month</p>
+                    <p className="text-xs text-subtle">per month</p>
                   </div>
 
                   <Button
@@ -337,7 +337,7 @@ export function OccupancySection({
           )}
 
           {analysis && analysis.slots.length > 0 ? (
-            <footer className="border-t border-line-subtle px-5 py-3 text-[0.6875rem] leading-relaxed text-faint">
+            <footer className="border-t border-line-subtle px-5 py-3 text-xs leading-relaxed text-faint">
               Scored across {formatNumber(analysis.analysed)} active slots. Each one is measured
               on the trailing 90 days of departures and scaled up to your
               selected range&rsquo;s average occupancy at unchanged capacity, then normalised

@@ -582,7 +582,7 @@ function StepRail({ current, furthest, onSelect }: StepRailProps) {
                   <span
                     aria-hidden="true"
                     className={cn(
-                      'flex size-5 shrink-0 items-center justify-center rounded-full text-[0.625rem] font-semibold transition-all duration-300 ease-[var(--ease-out-expo)]',
+                      'flex size-5 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-all duration-300 ease-[var(--ease-out-expo)]',
                       complete
                         ? 'bg-primary text-on-primary'
                         : active
@@ -840,7 +840,7 @@ function StorefrontPreview({ data }: { data: OnboardingData }) {
           <span className="size-2 rounded-full bg-line-strong" />
           <span className="size-2 rounded-full bg-line-strong" />
         </span>
-        <span className="min-w-0 flex-1 truncate rounded-md bg-surface px-2.5 py-1 text-[0.625rem] text-faint">
+        <span className="min-w-0 flex-1 truncate rounded-md bg-surface px-2.5 py-1 text-xs text-faint">
           book.ezra.pro/{slug}
         </span>
       </div>
@@ -850,7 +850,7 @@ function StorefrontPreview({ data }: { data: OnboardingData }) {
         <div className="flex min-w-0 items-center gap-2.5">
           <span
             aria-hidden="true"
-            className="flex size-8 shrink-0 items-center justify-center rounded-lg text-[0.6875rem] font-bold"
+            className="flex size-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold"
             style={{ background: 'var(--brand)', color: 'var(--brand-ink)' }}
           >
             {initials(name)}
@@ -860,7 +860,7 @@ function StorefrontPreview({ data }: { data: OnboardingData }) {
           </span>
         </div>
 
-        <nav aria-hidden="true" className="hidden items-center gap-4 text-[0.6875rem] text-muted sm:flex">
+        <nav aria-hidden="true" className="hidden items-center gap-4 text-xs text-muted sm:flex">
           <span>Experiences</span>
           <span>Gift cards</span>
           <span>Contact</span>
@@ -868,7 +868,7 @@ function StorefrontPreview({ data }: { data: OnboardingData }) {
 
         <span
           aria-hidden="true"
-          className="shrink-0 rounded-lg px-3 py-1.5 text-[0.6875rem] font-semibold"
+          className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold"
           style={{ background: 'var(--brand)', color: 'var(--brand-ink)' }}
         >
           Book now
@@ -889,7 +889,7 @@ function StorefrontPreview({ data }: { data: OnboardingData }) {
           style={{ background: 'var(--brand)', opacity: 0.22 }}
         />
         <p
-          className="relative text-[0.625rem] font-semibold tracking-[0.14em] uppercase"
+          className="relative text-xs font-semibold tracking-[0.14em] uppercase"
           style={{ color: 'var(--brand)' }}
         >
           Book direct
@@ -900,14 +900,14 @@ function StorefrontPreview({ data }: { data: OnboardingData }) {
         <div className="relative mt-4 flex items-center gap-2">
           <span
             aria-hidden="true"
-            className="rounded-lg px-3 py-1.5 text-[0.6875rem] font-semibold"
+            className="rounded-lg px-3 py-1.5 text-xs font-semibold"
             style={{ background: 'var(--brand)', color: 'var(--brand-ink)' }}
           >
             See availability
           </span>
           <span
             aria-hidden="true"
-            className="rounded-lg border px-3 py-1.5 text-[0.6875rem] font-medium text-muted"
+            className="rounded-lg border px-3 py-1.5 text-xs font-medium text-muted"
             style={{ borderColor: 'var(--brand-line)' }}
           >
             Gift a trip
@@ -1063,7 +1063,7 @@ function BrandingStep({ data, errors, onChange, touch }: StepProps) {
       </div>
 
       <div className="min-w-0">
-        <p className="mb-3 flex items-center gap-2 text-[0.6875rem] font-semibold tracking-[0.1em] text-faint uppercase">
+        <p className="mb-3 flex items-center gap-2 text-xs font-semibold tracking-[0.1em] text-faint uppercase">
           <span aria-hidden="true" className="size-1.5 rounded-full bg-success" />
           Live preview
         </p>
@@ -1103,7 +1103,7 @@ function ActivityPreview({ data }: { data: OnboardingData }) {
         }}
       >
         <Icon aria-hidden="true" className="size-9 text-ink-50/70" strokeWidth={1.5} />
-        <span className="absolute bottom-2.5 left-3 rounded-md bg-ink-950/45 px-2 py-1 text-[0.5625rem] font-medium tracking-wide text-ink-50/80 uppercase backdrop-blur-sm">
+        <span className="absolute bottom-2.5 left-3 rounded-md bg-ink-950/45 px-2 py-1 text-xs font-medium tracking-wide text-ink-50/80 uppercase backdrop-blur-sm">
           Add photos before you go live
         </span>
       </div>
@@ -1115,11 +1115,11 @@ function ActivityPreview({ data }: { data: OnboardingData }) {
         <p className="mt-1.5 line-clamp-3 text-xs leading-relaxed text-muted">{description}</p>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-sunken px-2.5 py-1 text-[0.6875rem] font-medium text-muted">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-sunken px-2.5 py-1 text-xs font-medium text-muted">
             <Clock aria-hidden="true" className="size-3" />
             {Number.isFinite(minutes) && minutes > 0 ? formatDuration(minutes) : '—'}
           </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-sunken px-2.5 py-1 text-[0.6875rem] font-medium text-muted">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-sunken px-2.5 py-1 text-xs font-medium text-muted">
             <Users aria-hidden="true" className="size-3" />
             {Number.isFinite(capacity) && capacity > 0 ? `Up to ${capacity}` : '—'}
           </span>
@@ -1132,7 +1132,7 @@ function ActivityPreview({ data }: { data: OnboardingData }) {
                 ? formatCurrency(Math.round(price * 100), currency)
                 : '—'}
             </p>
-            <p className="mt-1 text-[0.625rem] text-faint">per guest</p>
+            <p className="mt-1 text-xs text-faint">per guest</p>
           </div>
           <span
             aria-hidden="true"
@@ -1178,7 +1178,7 @@ function ActivityStep({ data, errors, onChange, touch }: StepProps) {
 
         {suggestions && suggestions.length > 0 ? (
           <div className="-mt-2 flex flex-wrap items-center gap-1.5">
-            <span className="text-[0.6875rem] text-faint">Common for you:</span>
+            <span className="text-xs text-faint">Common for you:</span>
             {suggestions.slice(0, 3).map((suggestion) => (
               <button
                 key={suggestion}
@@ -1187,7 +1187,7 @@ function ActivityStep({ data, errors, onChange, touch }: StepProps) {
                   set('name', suggestion)
                   touch('name')
                 }}
-                className="rounded-full border border-line bg-surface px-2.5 py-1 text-[0.6875rem] font-medium text-muted transition-all duration-200 hover:border-primary/50 hover:bg-primary-soft/50 hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
+                className="rounded-full border border-line bg-surface px-2.5 py-1 text-xs font-medium text-muted transition-all duration-200 hover:border-primary/50 hover:bg-primary-soft/50 hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
               >
                 {suggestion}
               </button>
@@ -1235,7 +1235,7 @@ function ActivityStep({ data, errors, onChange, touch }: StepProps) {
         </div>
 
         <div className="-mt-2 flex flex-wrap items-center gap-1.5">
-          <span className="text-[0.6875rem] text-faint">Duration presets:</span>
+          <span className="text-xs text-faint">Duration presets:</span>
           {DURATION_PRESETS.map((minutes) => (
             <button
               key={minutes}
@@ -1246,7 +1246,7 @@ function ActivityStep({ data, errors, onChange, touch }: StepProps) {
                 touch('duration')
               }}
               className={cn(
-                'rounded-full border px-2.5 py-1 text-[0.6875rem] font-medium transition-all duration-200',
+                'rounded-full border px-2.5 py-1 text-xs font-medium transition-all duration-200',
                 'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary',
                 value.duration === String(minutes)
                   ? 'border-primary bg-primary-soft text-primary'
@@ -1301,7 +1301,7 @@ function ActivityStep({ data, errors, onChange, touch }: StepProps) {
       </div>
 
       <div className="min-w-0">
-        <p className="mb-3 flex items-center gap-2 text-[0.6875rem] font-semibold tracking-[0.1em] text-faint uppercase">
+        <p className="mb-3 flex items-center gap-2 text-xs font-semibold tracking-[0.1em] text-faint uppercase">
           <span aria-hidden="true" className="size-1.5 rounded-full bg-success" />
           How guests will see it
         </p>
@@ -1496,7 +1496,7 @@ function AvailabilityStep({ data, errors, onChange, touch }: StepProps) {
       <div className="rounded-2xl border border-line bg-surface-sunken/50 p-4 sm:p-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="flex items-center gap-2 text-[0.6875rem] font-semibold tracking-[0.1em] text-faint uppercase">
+            <p className="flex items-center gap-2 text-xs font-semibold tracking-[0.1em] text-faint uppercase">
               <span aria-hidden="true" className="size-1.5 rounded-full bg-success" />
               Week of {formatDateShort(weekStart)}
             </p>
@@ -1527,13 +1527,13 @@ function AvailabilityStep({ data, errors, onChange, touch }: StepProps) {
               >
                 <p
                   className={cn(
-                    'text-[0.6875rem] font-semibold',
+                    'text-xs font-semibold',
                     on ? 'text-foreground' : 'text-faint',
                   )}
                 >
                   {day.short}
                 </p>
-                <p className="mt-0.5 text-[0.625rem] text-faint tabular">
+                <p className="mt-0.5 text-xs text-faint tabular">
                   {formatDateShort(date)}
                 </p>
 
@@ -1542,13 +1542,13 @@ function AvailabilityStep({ data, errors, onChange, touch }: StepProps) {
                     validTimes.map((time) => (
                       <span
                         key={time}
-                        className="rounded-md bg-primary-soft px-1.5 py-1 text-center text-[0.625rem] font-medium text-primary tabular"
+                        className="rounded-md bg-primary-soft px-1.5 py-1 text-center text-xs font-medium text-primary tabular"
                       >
                         {time}
                       </span>
                     ))
                   ) : (
-                    <span className="rounded-md border border-dashed border-line px-1.5 py-1 text-center text-[0.625rem] text-faint">
+                    <span className="rounded-md border border-dashed border-line px-1.5 py-1 text-center text-xs text-faint">
                       Closed
                     </span>
                   )}
@@ -1707,14 +1707,14 @@ function TeamStep({ data, errors, onChange, touch }: StepProps) {
 
       {/* ---------- Recap ---------- */}
       <div className="rounded-2xl border border-line bg-surface-sunken/50 p-4 sm:p-5">
-        <p className="flex items-center gap-2 text-[0.6875rem] font-semibold tracking-[0.1em] text-faint uppercase">
+        <p className="flex items-center gap-2 text-xs font-semibold tracking-[0.1em] text-faint uppercase">
           <Rocket aria-hidden="true" className="size-3.5" />
           About to go live
         </p>
         <dl className="mt-3 grid gap-x-6 gap-y-3 sm:grid-cols-2">
           {summary.map((item) => (
             <div key={item.label} className="min-w-0">
-              <dt className="text-[0.6875rem] text-faint">{item.label}</dt>
+              <dt className="text-xs text-faint">{item.label}</dt>
               <dd className="mt-0.5 truncate text-[0.8125rem] font-medium text-foreground">
                 {item.value}
               </dd>

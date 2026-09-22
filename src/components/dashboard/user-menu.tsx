@@ -82,7 +82,7 @@ function ShortcutsDialog({
         <DialogBody className="grid gap-6 sm:grid-cols-3">
           {SHORTCUTS.map((section) => (
             <section key={section.group}>
-              <h3 className="mb-2.5 text-[0.6875rem] font-semibold tracking-[0.09em] text-faint uppercase">
+              <h3 className="mb-2.5 text-xs font-semibold tracking-[0.09em] text-faint uppercase">
                 {section.group}
               </h3>
               <ul className="flex flex-col gap-2.5">
@@ -148,7 +148,7 @@ export function UserMenu({ className }: { className?: string }) {
               <p className="truncate text-[0.8125rem] font-semibold tracking-[-0.01em]">
                 {CURRENT_USER.name}
               </p>
-              <p className="truncate text-[0.6875rem] text-subtle">{CURRENT_USER.email}</p>
+              <p className="truncate text-xs text-subtle">{CURRENT_USER.email}</p>
             </div>
           </div>
 

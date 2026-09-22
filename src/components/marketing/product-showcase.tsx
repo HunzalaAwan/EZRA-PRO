@@ -381,7 +381,7 @@ function FauxButton({
     <span
       className={cn(
         buttonVariants({ variant, size: 'xs' }),
-        'pointer-events-none h-6 gap-1 px-2 text-[0.6875rem] [&_svg]:size-3',
+        'pointer-events-none h-6 gap-1 px-2 text-xs [&_svg]:size-3',
         className,
       )}
     >
@@ -402,8 +402,8 @@ function FauxField({
 }) {
   return (
     <div className={cn('min-w-0', className)}>
-      <p className="text-[0.625rem] font-medium tracking-[0.06em] text-subtle uppercase">{label}</p>
-      <p className="mt-1 truncate rounded-lg border border-line bg-surface px-2 py-1.5 text-[0.6875rem] font-medium text-foreground shadow-xs">
+      <p className="text-xs font-medium tracking-[0.06em] text-subtle uppercase">{label}</p>
+      <p className="mt-1 truncate rounded-lg border border-line bg-surface px-2 py-1.5 text-xs font-medium text-foreground shadow-xs">
         {value}
       </p>
     </div>
@@ -425,7 +425,7 @@ function PreviewHeader({
         <p className="truncate font-display text-[0.8125rem] leading-tight font-semibold text-foreground">
           {title}
         </p>
-        {meta ? <div className="mt-0.5 flex items-center gap-1.5 text-[0.625rem] text-subtle">{meta}</div> : null}
+        {meta ? <div className="mt-0.5 flex items-center gap-1.5 text-xs text-subtle">{meta}</div> : null}
       </div>
       {actions ? <div className="flex shrink-0 items-center gap-1.5">{actions}</div> : null}
     </header>
@@ -438,7 +438,7 @@ function NavRail({ activeIndex, layoutId }: { activeIndex: number; layoutId: str
 
   return (
     <div className="flex w-11 shrink-0 flex-col items-center gap-1 border-r border-line-subtle bg-surface py-2.5">
-      <span className="grid size-6 place-items-center rounded-md bg-[linear-gradient(140deg,var(--color-lagoon-500),var(--color-lagoon-700))] font-display text-[0.625rem] font-bold text-on-primary shadow-xs">
+      <span className="grid size-6 place-items-center rounded-md bg-[linear-gradient(140deg,var(--color-lagoon-500),var(--color-lagoon-700))] font-display text-xs font-bold text-on-primary shadow-xs">
         E
       </span>
       <span className="my-1 h-px w-5 bg-line-subtle" />
@@ -513,7 +513,7 @@ function CalendarPreview() {
               >
                 <span
                   className={cn(
-                    'text-[0.5625rem] font-semibold tracking-[0.08em] uppercase',
+                    'text-xs font-semibold tracking-[0.08em] uppercase',
                     day.today ? 'text-on-primary/80' : 'text-subtle',
                   )}
                 >
@@ -521,7 +521,7 @@ function CalendarPreview() {
                 </span>
                 <span
                   className={cn(
-                    'tabular text-[0.6875rem] font-semibold',
+                    'tabular text-xs font-semibold',
                     day.today ? 'text-on-primary' : 'text-foreground',
                   )}
                 >
@@ -538,19 +538,19 @@ function CalendarPreview() {
                   )}
                 >
                   <div className="flex items-center gap-1">
-                    <span className={cn('tabular text-[0.625rem] leading-none font-bold', TINT[departure.tint].text)}>
+                    <span className={cn('tabular text-xs leading-none font-bold', TINT[departure.tint].text)}>
                       {departure.time}
                     </span>
                     {departure.flag === 'weather' ? (
                       <CloudRain aria-hidden="true" className="size-2.5 shrink-0 text-warning" />
                     ) : null}
                     {departure.flag === 'sold-out' ? (
-                      <span className="ml-auto rounded-sm bg-accent px-1 text-[0.5rem] leading-[0.875rem] font-bold text-on-accent">
+                      <span className="ml-auto rounded-sm bg-accent px-1 text-xs leading-[0.875rem] font-bold text-on-accent">
                         FULL
                       </span>
                     ) : null}
                   </div>
-                  <p className="truncate text-[0.625rem] leading-tight font-medium text-foreground">
+                  <p className="truncate text-xs leading-tight font-medium text-foreground">
                     {departure.name}
                   </p>
                   <CapacityBar
@@ -560,7 +560,7 @@ function CalendarPreview() {
                     size="xs"
                     showLabel={false}
                   />
-                  <p className="tabular text-[0.5625rem] leading-none text-subtle">
+                  <p className="tabular text-xs leading-none text-subtle">
                     {departure.booked}/{departure.capacity}
                   </p>
                 </div>
@@ -572,7 +572,7 @@ function CalendarPreview() {
 
       <footer className="flex shrink-0 items-center gap-2 border-t border-line-subtle bg-surface px-3 py-2">
         <TriangleAlert aria-hidden="true" className="size-3.5 shrink-0 text-warning" />
-        <p className="min-w-0 truncate text-[0.6875rem] text-muted">
+        <p className="min-w-0 truncate text-xs text-muted">
           Thursday 16:30 is on a weather hold — 31 guests await a decision.
         </p>
         <FauxButton className="ml-auto">Review</FauxButton>
@@ -599,7 +599,7 @@ function BookingsPreview() {
         }
         actions={
           <>
-            <span className="hidden h-6 items-center gap-1.5 rounded-lg border border-line bg-surface px-2 text-[0.6875rem] text-faint sm:flex">
+            <span className="hidden h-6 items-center gap-1.5 rounded-lg border border-line bg-surface px-2 text-xs text-faint sm:flex">
               <Search aria-hidden="true" className="size-3" />
               Search
             </span>
@@ -615,11 +615,11 @@ function BookingsPreview() {
         <Table density="compact" className="text-xs">
           <TableHeader>
             <TableRow>
-              <TableHead className="h-8 px-3 text-[0.5625rem]">Guest</TableHead>
-              <TableHead className="hidden h-8 px-3 text-[0.5625rem] md:table-cell">Departure</TableHead>
-              <TableHead className="h-8 px-3 text-center text-[0.5625rem]">Party</TableHead>
-              <TableHead className="hidden h-8 px-3 text-[0.5625rem] sm:table-cell">Status</TableHead>
-              <TableHead className="h-8 px-3 text-right text-[0.5625rem]">Total</TableHead>
+              <TableHead className="h-8 px-3 text-xs">Guest</TableHead>
+              <TableHead className="hidden h-8 px-3 text-xs md:table-cell">Departure</TableHead>
+              <TableHead className="h-8 px-3 text-center text-xs">Party</TableHead>
+              <TableHead className="hidden h-8 px-3 text-xs sm:table-cell">Status</TableHead>
+              <TableHead className="h-8 px-3 text-right text-xs">Total</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -629,30 +629,30 @@ function BookingsPreview() {
                   <div className="flex min-w-0 items-center gap-2">
                     <Avatar name={booking.guest} size="xs" alt="" />
                     <div className="min-w-0">
-                      <p className="truncate text-[0.6875rem] leading-tight font-medium text-foreground">
+                      <p className="truncate text-xs leading-tight font-medium text-foreground">
                         {booking.guest}
                       </p>
-                      <p className="tabular truncate text-[0.5625rem] leading-tight text-subtle">
+                      <p className="tabular truncate text-xs leading-tight text-subtle">
                         {booking.reference} · {booking.channel}
                       </p>
                     </div>
                   </div>
                 </TableCell>
                 <TableCell className="hidden px-3 py-2 md:table-cell">
-                  <p className="truncate text-[0.6875rem] leading-tight text-foreground">
+                  <p className="truncate text-xs leading-tight text-foreground">
                     {booking.activity}
                   </p>
-                  <p className="tabular truncate text-[0.5625rem] leading-tight text-subtle">
+                  <p className="tabular truncate text-xs leading-tight text-subtle">
                     {booking.departs}
                   </p>
                 </TableCell>
-                <TableCell className="tabular px-3 py-2 text-center text-[0.6875rem] text-muted">
+                <TableCell className="tabular px-3 py-2 text-center text-xs text-muted">
                   {booking.party}
                 </TableCell>
                 <TableCell className="hidden px-3 py-2 sm:table-cell">
                   <StatusBadge kind="booking" status={booking.status} size="sm" showIcon={false} dot />
                 </TableCell>
-                <TableCell className="tabular px-3 py-2 text-right text-[0.6875rem] font-semibold text-foreground">
+                <TableCell className="tabular px-3 py-2 text-right text-xs font-semibold text-foreground">
                   {formatCurrency(booking.total)}
                 </TableCell>
               </TableRow>
@@ -662,7 +662,7 @@ function BookingsPreview() {
       </div>
 
       <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-line-subtle bg-surface px-3 py-2">
-        <p className="tabular text-[0.6875rem] text-subtle">Showing 1–5 of 1,284</p>
+        <p className="tabular text-xs text-subtle">Showing 1–5 of 1,284</p>
         <div className="flex items-center gap-1">
           <FauxButton variant="ghost">Export CSV</FauxButton>
           <FauxButton variant="primary">Bulk actions</FauxButton>
@@ -741,23 +741,23 @@ function ManifestPreview() {
             <Avatar name={guest.name} size="xs" alt="" />
 
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[0.6875rem] leading-tight font-medium text-foreground">
+              <p className="truncate text-xs leading-tight font-medium text-foreground">
                 {guest.name}
               </p>
-              <p className="truncate text-[0.5625rem] leading-tight text-subtle">{guest.tier}</p>
+              <p className="truncate text-xs leading-tight text-subtle">{guest.tier}</p>
             </div>
 
             {guest.note ? (
               <Badge
                 size="sm"
                 variant={guest.note === 'Waiver unsigned' ? 'warning' : 'info'}
-                className="hidden h-4 px-1.5 text-[0.5625rem] sm:inline-flex"
+                className="hidden h-4 px-1.5 text-xs sm:inline-flex"
               >
                 {guest.note}
               </Badge>
             ) : null}
 
-            <span className="tabular w-6 shrink-0 text-right text-[0.6875rem] font-semibold text-muted">
+            <span className="tabular w-6 shrink-0 text-right text-xs font-semibold text-muted">
               ×{guest.party}
             </span>
           </li>
@@ -765,7 +765,7 @@ function ManifestPreview() {
       </ul>
 
       <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-line-subtle bg-surface px-3 py-2">
-        <p className="text-[0.6875rem] text-subtle">
+        <p className="text-xs text-subtle">
           <span className="tabular font-semibold text-foreground">8</span> more parties on this
           manifest
         </p>
@@ -813,7 +813,7 @@ function ActivityEditorPreview() {
           <span
             key={tab}
             className={cn(
-              'relative py-1.5 text-[0.6875rem] font-medium',
+              'relative py-1.5 text-xs font-medium',
               tab === 'Pricing' ? 'text-foreground' : 'text-subtle',
             )}
           >
@@ -834,7 +834,7 @@ function ActivityEditorPreview() {
 
         <div className="overflow-hidden rounded-lg border border-line bg-surface">
           <div className="flex items-center justify-between gap-2 border-b border-line-subtle px-2.5 py-1.5">
-            <p className="text-[0.625rem] font-semibold tracking-[0.06em] text-subtle uppercase">
+            <p className="text-xs font-semibold tracking-[0.06em] text-subtle uppercase">
               Price tiers
             </p>
             <FauxButton variant="ghost">
@@ -847,18 +847,18 @@ function ActivityEditorPreview() {
             {TIERS.map((tier) => (
               <li key={tier.label} className="flex items-center gap-2 px-2.5 py-1.5">
                 <span className="size-1.5 shrink-0 rounded-full bg-primary/60" aria-hidden="true" />
-                <span className="min-w-0 flex-1 truncate text-[0.6875rem] font-medium text-foreground">
+                <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
                   {tier.label}
                 </span>
-                <span className="tabular hidden shrink-0 text-[0.625rem] text-subtle sm:inline">
+                <span className="tabular hidden shrink-0 text-xs text-subtle sm:inline">
                   {tier.min}–{tier.max} pax
                 </span>
                 {tier.countsTowardCapacity ? (
-                  <Badge size="sm" variant="neutral" className="hidden h-4 px-1.5 text-[0.5625rem] md:inline-flex">
+                  <Badge size="sm" variant="neutral" className="hidden h-4 px-1.5 text-xs md:inline-flex">
                     Counts to capacity
                   </Badge>
                 ) : null}
-                <span className="tabular w-16 shrink-0 rounded-md border border-line bg-background-subtle px-1.5 py-0.5 text-right text-[0.6875rem] font-semibold text-foreground">
+                <span className="tabular w-16 shrink-0 rounded-md border border-line bg-background-subtle px-1.5 py-0.5 text-right text-xs font-semibold text-foreground">
                   {formatCurrency(tier.price)}
                 </span>
               </li>
@@ -867,14 +867,14 @@ function ActivityEditorPreview() {
         </div>
 
         <div>
-          <p className="mb-1.5 text-[0.625rem] font-semibold tracking-[0.06em] text-subtle uppercase">
+          <p className="mb-1.5 text-xs font-semibold tracking-[0.06em] text-subtle uppercase">
             Add-ons
           </p>
           <div className="flex flex-wrap gap-1.5">
             {ADD_ONS.map((addOn) => (
               <span
                 key={addOn.label}
-                className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2 py-1 text-[0.625rem] text-muted"
+                className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2 py-1 text-xs text-muted"
               >
                 {addOn.label}
                 <span className="tabular font-semibold text-foreground">
@@ -888,7 +888,7 @@ function ActivityEditorPreview() {
 
       <footer className="flex shrink-0 items-center gap-2 border-t border-line-subtle bg-surface px-3 py-2">
         <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-success" aria-hidden="true" />
-        <p className="min-w-0 truncate text-[0.6875rem] text-muted">
+        <p className="min-w-0 truncate text-xs text-muted">
           Published to your site, widget, Viator and GetYourGuide.
         </p>
       </footer>
@@ -993,7 +993,7 @@ export function ProductShowcase({ className }: { className?: string }) {
 
       <div className="mx-auto w-full max-w-7xl px-5 sm:px-8">
         <Reveal as="header" direction="up" blur className="max-w-2xl">
-          <p className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-[0.6875rem] font-semibold tracking-[0.1em] text-primary uppercase shadow-xs">
+          <p className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-xs font-semibold tracking-[0.1em] text-primary uppercase shadow-xs">
             <span className="size-1.5 rounded-full bg-primary" aria-hidden="true" />
             {OPERATIONS_BLOCK?.eyebrow ?? 'Operations'}
           </p>
@@ -1068,7 +1068,7 @@ export function ProductShowcase({ className }: { className?: string }) {
                       </span>
                       <span
                         className={cn(
-                          'text-[0.6875rem] font-semibold tracking-[0.1em] uppercase transition-colors duration-500',
+                          'text-xs font-semibold tracking-[0.1em] uppercase transition-colors duration-500',
                           active ? 'text-primary' : 'text-subtle',
                         )}
                       >

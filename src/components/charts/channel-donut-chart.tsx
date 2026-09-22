@@ -166,7 +166,7 @@ export function ChannelDonutChart({
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
-            className="mt-1.5 inline-flex min-h-8 items-center rounded-md px-2 text-[0.6875rem] font-semibold text-primary transition-colors hover:text-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            className="mt-1.5 inline-flex min-h-8 items-center rounded-md px-2 text-xs font-semibold text-primary transition-colors hover:text-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           >
             {expanded ? 'Show fewer' : `Show ${ranked.length - FOLD} more`}
           </button>
@@ -234,14 +234,14 @@ export function ChannelDonutChart({
                 {formatPercent(activeShare, 1)}
               </span>
               <span className="mt-1.5 max-w-[10rem] truncate text-xs font-medium text-muted">{active.label}</span>
-              <span className="tabular mt-0.5 text-[11px] text-subtle">{formatMetric(active[metric])}</span>
+              <span className="tabular mt-0.5 text-xs text-subtle">{formatMetric(active[metric])}</span>
             </>
           ) : (
             <>
               <span className="tabular text-[1.375rem] font-semibold leading-none text-foreground">
                 {metric === 'revenue' ? formatCurrency(total, currency, { compact: true }) : formatNumber(total)}
               </span>
-              <span className="mt-1.5 text-[11px] uppercase tracking-wide text-subtle">
+              <span className="mt-1.5 text-xs uppercase tracking-wide text-subtle">
                 {metric === 'revenue' ? 'Total revenue' : 'Total bookings'}
               </span>
             </>

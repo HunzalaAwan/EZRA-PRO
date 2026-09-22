@@ -197,7 +197,7 @@ function Segmented<V extends string = string>({
             {typeof option.count === 'number' ? (
               <span
                 className={cn(
-                  'ml-0.5 rounded-full px-1.5 py-px text-[0.625rem] font-semibold tabular-nums',
+                  'ml-0.5 rounded-full px-1.5 py-px text-xs font-semibold tabular-nums',
                   isActive ? 'bg-primary-soft text-primary' : 'bg-surface text-subtle',
                 )}
               >

@@ -361,7 +361,7 @@ export function AnalyticsShowcase({ className }: { className?: string }) {
           {/* ---------- Copy ---------- */}
           <div className="lg:col-span-5">
             <Reveal direction="up" blur className="lg:sticky lg:top-28">
-              <p className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-[0.6875rem] font-semibold tracking-[0.1em] text-accent uppercase shadow-xs">
+              <p className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1 text-xs font-semibold tracking-[0.1em] text-accent uppercase shadow-xs">
                 <Sparkles aria-hidden="true" className="size-3" />
                 {ANALYTICS_BLOCK?.eyebrow ?? 'Revenue'}
               </p>
@@ -418,7 +418,7 @@ export function AnalyticsShowcase({ className }: { className?: string }) {
                 actions={
                   <span
                     aria-hidden="true"
-                    className="hidden size-6 place-items-center rounded-full bg-surface-sunken text-[0.5625rem] font-bold text-subtle sm:grid"
+                    className="hidden size-6 place-items-center rounded-full bg-surface-sunken text-xs font-bold text-subtle sm:grid"
                   >
                     KR
                   </span>
@@ -430,7 +430,7 @@ export function AnalyticsShowcase({ className }: { className?: string }) {
                       <p className="truncate font-display text-sm leading-tight font-semibold text-foreground">
                         Performance
                       </p>
-                      <p className="truncate text-[0.6875rem] text-subtle">
+                      <p className="truncate text-xs text-subtle">
                         Last 90 days · compared with the prior 90
                       </p>
                     </div>
@@ -442,7 +442,7 @@ export function AnalyticsShowcase({ className }: { className?: string }) {
                         <span
                           key={pill}
                           className={cn(
-                            'tabular rounded-md px-1.5 py-0.5 text-[0.625rem] font-medium',
+                            'tabular rounded-md px-1.5 py-0.5 text-xs font-medium',
                             pill === '90d' ? 'bg-surface text-foreground shadow-xs' : 'text-subtle',
                           )}
                         >
@@ -500,7 +500,7 @@ export function AnalyticsShowcase({ className }: { className?: string }) {
         <div className="mt-14 sm:mt-16 lg:mt-20">
           <Reveal direction="up" className="flex flex-wrap items-end justify-between gap-4">
             <div className="max-w-2xl">
-              <p className="inline-flex items-center gap-2 rounded-full bg-accent-soft px-3 py-1 text-[0.6875rem] font-semibold tracking-[0.1em] text-accent uppercase">
+              <p className="inline-flex items-center gap-2 rounded-full bg-accent-soft px-3 py-1 text-xs font-semibold tracking-[0.1em] text-accent uppercase">
                 <Lightbulb aria-hidden="true" className="size-3" />
                 The part no one else ships
               </p>
@@ -546,7 +546,7 @@ export function AnalyticsShowcase({ className }: { className?: string }) {
                       </span>
                       <span
                         className={cn(
-                          'rounded-full px-2 py-0.5 text-[0.625rem] font-semibold tracking-[0.08em] uppercase ring-1 ring-inset',
+                          'rounded-full px-2 py-0.5 text-xs font-semibold tracking-[0.08em] uppercase ring-1 ring-inset',
                           tone.chip,
                         )}
                       >

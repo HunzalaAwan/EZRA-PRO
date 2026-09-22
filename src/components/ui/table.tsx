@@ -153,7 +153,7 @@ function TableHead({ className, align, numeric, scope = 'col', ...props }: Table
       data-slot="table-head"
       scope={scope}
       className={cn(
-        'h-11 px-4 align-middle text-[0.6875rem] font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-subtle',
+        'h-11 px-4 align-middle text-xs font-semibold uppercase tracking-[0.08em] whitespace-nowrap text-subtle',
         cellAlignVariants({ align, numeric }),
         className,
       )}

@@ -76,7 +76,7 @@ function Cell({
 }) {
   return (
     <div className={cn('min-w-0 lg:text-right', className)}>
-      <span className="block text-[0.625rem] font-semibold uppercase tracking-[0.07em] text-faint lg:hidden">
+      <span className="block text-xs font-semibold uppercase tracking-[0.07em] text-faint lg:hidden">
         {label}
       </span>
       <span className="mt-0.5 block text-[0.8125rem] tabular-nums lg:mt-0">{children}</span>
@@ -192,7 +192,7 @@ export function ChannelSection({
               >
                 <span
                   tabIndex={0}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2 py-1 text-[0.6875rem] font-medium text-subtle transition-colors hover:text-foreground"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-line px-2 py-1 text-xs font-medium text-subtle transition-colors hover:text-foreground"
                 >
                   <Scale aria-hidden="true" className="size-3.5" />
                   Blended take {formatPercent(totals.blendedTake, 1)}
@@ -213,7 +213,7 @@ export function ChannelSection({
                 {/* header — desktop only; the mobile rows carry their own labels */}
                 <div
                   className={cn(
-                    'hidden gap-x-4 border-b border-line-subtle pb-2 text-[0.625rem] font-semibold uppercase tracking-[0.07em] text-faint lg:grid',
+                    'hidden gap-x-4 border-b border-line-subtle pb-2 text-xs font-semibold uppercase tracking-[0.07em] text-faint lg:grid',
                     ROW_GRID,
                   )}
                 >
@@ -245,7 +245,7 @@ export function ChannelSection({
                           <span className="truncate text-[0.8125rem] font-medium text-foreground">
                             {row.label}
                           </span>
-                          <span className="shrink-0 text-[0.6875rem] tabular-nums text-faint">
+                          <span className="shrink-0 text-xs tabular-nums text-faint">
                             {formatPercent(row.share, 1)}
                           </span>
                         </div>
@@ -265,7 +265,7 @@ export function ChannelSection({
                         {formatCurrency(row.revenue, currency, { compact: true })}
                       </Cell>
                       <div className="min-w-0 lg:text-right">
-                        <span className="block text-[0.625rem] font-semibold uppercase tracking-[0.07em] text-faint lg:hidden">
+                        <span className="block text-xs font-semibold uppercase tracking-[0.07em] text-faint lg:hidden">
                           Δ vs prev
                         </span>
                         <ChartDeltaChip value={row.deltaPercent} className="mt-0.5 lg:mt-0" />
@@ -323,11 +323,11 @@ export function ChannelSection({
             className="pointer-events-none absolute inset-y-0 left-0 w-1 bg-primary"
           />
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-md bg-primary-soft px-2 py-0.5 text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-primary">
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-primary-soft px-2 py-0.5 text-xs font-semibold uppercase tracking-[0.06em] text-primary">
               <Info aria-hidden="true" className="size-3" />
               What this says
             </span>
-            <span className="text-[0.6875rem] text-faint">{rangeLabel}</span>
+            <span className="text-xs text-faint">{rangeLabel}</span>
           </div>
 
           <p className="mt-3 max-w-4xl text-sm leading-relaxed text-muted">

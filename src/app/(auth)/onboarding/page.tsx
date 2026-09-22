@@ -47,7 +47,7 @@ export default function OnboardingPage() {
 
         <main className="flex flex-1 flex-col justify-center py-10 sm:py-14">
           <div className="mb-8 max-w-2xl">
-            <p className="text-[0.6875rem] font-semibold tracking-[0.12em] text-primary uppercase">
+            <p className="text-xs font-semibold tracking-[0.12em] text-primary uppercase">
               Workspace setup
             </p>
             <h1 className="mt-3 font-display text-display-sm text-balance text-foreground">

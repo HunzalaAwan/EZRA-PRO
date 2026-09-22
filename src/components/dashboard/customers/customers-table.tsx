@@ -559,7 +559,7 @@ export function CustomersTable({
             itemNoun="guest"
             size="sm"
           />
-          <p className="flex items-center gap-1.5 text-[0.6875rem] text-faint">
+          <p className="flex items-center gap-1.5 text-xs text-faint">
             <Users className="size-3" aria-hidden="true" />
             Working set: the {formatNumber(rows.length)} highest-value and most recently active guests of{' '}
             {formatNumber(totalCount)} on file.

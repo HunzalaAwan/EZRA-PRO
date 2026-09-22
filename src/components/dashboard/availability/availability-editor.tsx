@@ -428,7 +428,7 @@ export function AvailabilityEditor({ observedHours }: AvailabilityEditorProps) {
               {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
                 <span
                   key={`${d}-${i}`}
-                  className="text-center text-[0.6875rem] font-semibold text-faint"
+                  className="text-center text-xs font-semibold text-faint"
                 >
                   {d}
                 </span>

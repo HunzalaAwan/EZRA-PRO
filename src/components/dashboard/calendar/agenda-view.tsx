@@ -150,7 +150,7 @@ export function AgendaView({
                   ) : null}
                 </div>
 
-                <span className="tabular ml-auto flex items-center gap-3 text-[0.6875rem] text-subtle">
+                <span className="tabular ml-auto flex items-center gap-3 text-xs text-subtle">
                   <span>
                     {group.events.length} {group.events.length === 1 ? 'run' : 'runs'}
                   </span>
@@ -199,7 +199,7 @@ export function AgendaView({
                           >
                             {formatTime(departure.startsAt)}
                           </p>
-                          <p className="tabular text-[0.6875rem] text-faint">
+                          <p className="tabular text-xs text-faint">
                             {formatDuration(activity.durationMinutes)}
                           </p>
                         </div>
@@ -223,7 +223,7 @@ export function AgendaView({
                             >
                               {activity.name}
                             </p>
-                            <p className="mt-0.5 flex items-center gap-1 text-[0.6875rem] text-subtle">
+                            <p className="mt-0.5 flex items-center gap-1 text-xs text-subtle">
                               <MapPin aria-hidden="true" className="size-3 shrink-0" />
                               <span className="truncate">{activity.meetingPoint}</span>
                             </p>
@@ -239,7 +239,7 @@ export function AgendaView({
                             size="sm"
                             showLabel={false}
                           />
-                          <p className="tabular mt-1 text-[0.6875rem] text-subtle">
+                          <p className="tabular mt-1 text-xs text-subtle">
                             <span className="font-semibold text-muted">
                               {departure.booked}/{departure.capacity}
                             </span>{' '}

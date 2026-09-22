@@ -206,7 +206,7 @@ export function MobileNav({ open, onOpenChange }: MobileNavProps) {
               variants={reducedMotion ? undefined : itemVariants}
               className="mt-6 px-4 pb-2"
             >
-              <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-faint">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-faint">
                 Already a customer
               </p>
               <div className="mt-3 flex flex-col gap-2">
@@ -233,7 +233,7 @@ export function MobileNav({ open, onOpenChange }: MobileNavProps) {
               Sign in
             </Link>
           </Button>
-          <p className="text-center text-[0.6875rem] leading-relaxed text-faint">
+          <p className="text-center text-xs leading-relaxed text-faint">
             {HERO.microProof}
           </p>
         </SheetFooter>

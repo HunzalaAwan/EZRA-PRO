@@ -164,13 +164,13 @@ function DepartureList({
                     {formatTime(departure.startsAt)}
                   </span>
                   {departure.id === currentId ? (
-                    <span className="rounded-full bg-primary px-1.5 py-px text-[0.5625rem] font-bold tracking-wide text-on-primary uppercase">
+                    <span className="rounded-full bg-primary px-1.5 py-px text-xs font-bold tracking-wide text-on-primary uppercase">
                       Now
                     </span>
                   ) : null}
                 </span>
                 <span className="block truncate text-[0.8125rem] text-muted">{activity.name}</span>
-                <span className="block text-[0.6875rem] text-subtle tabular-nums">
+                <span className="block text-xs text-subtle tabular-nums">
                   {cancelled
                     ? 'Cancelled'
                     : `${formatNumber(c.aboard)}/${formatNumber(c.expected)} aboard · ${departure.booked}/${departure.capacity} seats`}
@@ -267,7 +267,7 @@ function DepartureDetail({
           <div className="flex shrink-0 items-center gap-3">
             {staff.length > 0 ? (
               <div className="text-right">
-                <p className="text-[0.625rem] font-semibold tracking-wide text-subtle uppercase">Crew</p>
+                <p className="text-xs font-semibold tracking-wide text-subtle uppercase">Crew</p>
                 <AvatarGroup
                   avatars={staff.map((u) => ({ id: u.id, name: u.name, src: u.avatarUrl }))}
                   size="sm"
@@ -515,7 +515,7 @@ export function ManifestView({ initialManifest, className }: ManifestViewProps) 
                 <dd className="font-display text-lg leading-tight font-semibold tracking-tight text-foreground tabular-nums">
                   {cell.value}
                 </dd>
-                <dt className="truncate text-[0.6875rem] text-subtle">{cell.label}</dt>
+                <dt className="truncate text-xs text-subtle">{cell.label}</dt>
               </span>
             </div>
           )
@@ -541,7 +541,7 @@ export function ManifestView({ initialManifest, className }: ManifestViewProps) 
           <div className="grid gap-5 print:hidden lg:grid-cols-12">
             <aside className="min-w-0 lg:col-span-4 xl:col-span-3">
               <div className="rounded-2xl border border-line bg-surface p-2 lg:sticky lg:top-20">
-                <p className="px-2 pt-1 pb-2 text-[0.6875rem] font-semibold tracking-wide text-subtle uppercase">
+                <p className="px-2 pt-1 pb-2 text-xs font-semibold tracking-wide text-subtle uppercase">
                   {manifest.length} {manifest.length === 1 ? 'departure' : 'departures'}
                 </p>
                 <div className="lg:max-h-[calc(100vh-14rem)] lg:overflow-y-auto">

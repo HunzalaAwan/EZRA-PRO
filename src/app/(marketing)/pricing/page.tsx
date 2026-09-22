@@ -136,7 +136,7 @@ export default function PricingPage() {
         <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-3xl text-center">
             <Reveal direction="up" distance={8} blur={false}>
-              <span className="glass inline-flex items-center gap-2.5 rounded-full px-3.5 py-1.5 text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-primary">
+              <span className="glass inline-flex items-center gap-2.5 rounded-full px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
                 <span aria-hidden="true" className="relative flex size-1.5">
                   <span className="absolute inline-flex size-full animate-pulse-ring rounded-full bg-primary/70" />
                   <span className="relative inline-flex size-1.5 rounded-full bg-primary" />
@@ -210,7 +210,7 @@ export default function PricingPage() {
                   'motion-reduce:transition-none motion-reduce:hover:translate-y-0',
                 )}
               >
-                <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-subtle">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-subtle">
                   {rung.name}
                 </p>
                 <p className="mt-3 flex items-baseline gap-1.5 font-display text-display-sm font-semibold tracking-[-0.03em] text-foreground tabular">

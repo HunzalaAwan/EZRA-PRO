@@ -127,7 +127,7 @@ export function MonthView({
           <div
             key={label}
             className={cn(
-              'px-2 py-2 text-center text-[0.6875rem] font-semibold tracking-wider uppercase',
+              'px-2 py-2 text-center text-xs font-semibold tracking-wider uppercase',
               index >= 5 ? 'text-subtle' : 'text-faint',
             )}
           >
@@ -187,7 +187,7 @@ export function MonthView({
                     )}
                   >
                     {summary.fill}
-                    <span className="text-[0.625rem] font-semibold opacity-70">%</span>
+                    <span className="text-xs font-semibold opacity-70">%</span>
                   </span>
                 ) : (
                   <button
@@ -225,7 +225,7 @@ export function MonthView({
                       <button
                         type="button"
                         className={cn(
-                          '-mx-1 rounded-md px-1 py-0.5 text-left text-[0.6875rem] leading-tight font-medium tabular-nums',
+                          '-mx-1 rounded-md px-1 py-0.5 text-left text-xs leading-tight font-medium tabular-nums',
                           'transition-colors duration-150 hover:bg-surface-sunken',
                           outside ? 'text-faint' : 'text-muted',
                         )}
@@ -240,7 +240,7 @@ export function MonthView({
                           <p className="text-sm font-semibold text-foreground">
                             {formatDateLong(day)}
                           </p>
-                          <p className="text-[0.6875rem] text-subtle tabular-nums">
+                          <p className="text-xs text-subtle tabular-nums">
                             {events.length} departures · {formatNumber(summary.booked)} of{' '}
                             {formatNumber(summary.capacity)} seats
                           </p>
@@ -277,7 +277,7 @@ export function MonthView({
                       />
                     ))}
                     {summary.colours.length > MAX_DOTS ? (
-                      <span className="text-[0.5625rem] font-medium text-faint tabular-nums">
+                      <span className="text-xs font-medium text-faint tabular-nums">
                         +{summary.colours.length - MAX_DOTS}
                       </span>
                     ) : null}
@@ -285,7 +285,7 @@ export function MonthView({
 
                   {/* ---- only what needs attention ---------------------- */}
                   {hasExceptions ? (
-                    <div className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[0.5625rem] font-semibold tabular-nums">
+                    <div className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs font-semibold tabular-nums">
                       {summary.soldOut > 0 ? (
                         <span className="inline-flex items-center gap-0.5 text-accent">
                           <Lock aria-hidden="true" className="size-2.5" />

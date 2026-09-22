@@ -693,7 +693,7 @@ export function BookingDetailContent({
                     <span
                       aria-hidden="true"
                       className={cn(
-                        'grid size-9 shrink-0 place-items-center rounded-full border text-[0.6875rem] font-semibold',
+                        'grid size-9 shrink-0 place-items-center rounded-full border text-xs font-semibold',
                         'transition-colors duration-300 ease-[var(--ease-out-expo)]',
                         isIn
                           ? 'border-[color-mix(in_oklab,var(--success)_35%,transparent)] bg-success-soft text-success'

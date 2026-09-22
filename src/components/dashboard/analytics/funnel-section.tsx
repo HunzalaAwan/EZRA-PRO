@@ -90,7 +90,7 @@ function Cell({
 }) {
   return (
     <div className={cn('min-w-0 lg:text-right', className)}>
-      <span className="block text-[0.625rem] font-semibold uppercase tracking-[0.07em] text-faint lg:hidden">
+      <span className="block text-xs font-semibold uppercase tracking-[0.07em] text-faint lg:hidden">
         {label}
       </span>
       <span className="mt-0.5 block text-[0.8125rem] tabular-nums lg:mt-0">{children}</span>
@@ -265,7 +265,7 @@ export function FunnelSection({
             </CardDescription>
           </div>
           <CardToolbar>
-            <span className="hidden items-center gap-1.5 rounded-lg border border-line px-2.5 py-1 text-[0.6875rem] font-medium text-subtle sm:inline-flex">
+            <span className="hidden items-center gap-1.5 rounded-lg border border-line px-2.5 py-1 text-xs font-medium text-subtle sm:inline-flex">
               <Gauge aria-hidden="true" className="size-3.5" />
               Category median context
             </span>
@@ -283,7 +283,7 @@ export function FunnelSection({
             <>
               <div
                 className={cn(
-                  'hidden gap-x-4 border-b border-line-subtle pb-2 text-[0.625rem] font-semibold uppercase tracking-[0.07em] text-faint lg:grid',
+                  'hidden gap-x-4 border-b border-line-subtle pb-2 text-xs font-semibold uppercase tracking-[0.07em] text-faint lg:grid',
                   ROW_GRID,
                 )}
               >
@@ -313,7 +313,7 @@ export function FunnelSection({
                             {t.fromLabel} → {t.label}
                           </span>
                           {isLeak ? (
-                            <span className="shrink-0 rounded-md bg-accent-soft px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase tracking-[0.05em] text-accent">
+                            <span className="shrink-0 rounded-md bg-accent-soft px-1.5 py-0.5 text-xs font-semibold uppercase tracking-[0.05em] text-accent">
                               Leak
                             </span>
                           ) : null}
@@ -345,7 +345,7 @@ export function FunnelSection({
                         {t.benchmark === undefined ? '—' : formatPercent(t.benchmark, 0)}
                       </Cell>
                       <div className="min-w-0 lg:text-right">
-                        <span className="block text-[0.625rem] font-semibold uppercase tracking-[0.07em] text-faint lg:hidden">
+                        <span className="block text-xs font-semibold uppercase tracking-[0.07em] text-faint lg:hidden">
                           Δ
                         </span>
                         {t.delta === undefined ? (
@@ -353,7 +353,7 @@ export function FunnelSection({
                         ) : (
                           <span
                             className={cn(
-                              'mt-0.5 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[0.6875rem] font-semibold tabular-nums lg:mt-0',
+                              'mt-0.5 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-semibold tabular-nums lg:mt-0',
                               t.delta >= 0 ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger',
                             )}
                           >
@@ -376,7 +376,7 @@ export function FunnelSection({
         </CardContent>
 
         <CardFooter separated>
-          <p className="text-[0.6875rem] leading-relaxed text-faint">
+          <p className="text-xs leading-relaxed text-faint">
             Category medians are the EZRA network median for watersports and tour operators over the
             trailing twelve months. They are context for judging a number, not a target to hit.
           </p>

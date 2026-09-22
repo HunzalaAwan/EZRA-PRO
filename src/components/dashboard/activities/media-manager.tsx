@@ -319,7 +319,7 @@ export function MediaManager({ media, onChange, errors, className }: MediaManage
                         Set as primary
                       </button>
                     )}
-                    <span className="ml-auto text-[0.6875rem] text-faint tabular">
+                    <span className="ml-auto text-xs text-faint tabular">
                       {index + 1} / {media.length}
                     </span>
                   </div>

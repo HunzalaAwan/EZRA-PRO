@@ -148,7 +148,7 @@ export function DepartureChip({
         style={style}
         className={cn(
           'group/chip relative flex w-full items-center gap-1.5 overflow-hidden rounded-md border',
-          'px-1.5 py-[3px] text-left text-[0.6875rem] leading-tight',
+          'px-1.5 py-[3px] text-left text-xs leading-tight',
           'transition-all duration-200 ease-[var(--ease-out-expo)]',
           'hover:-translate-y-px hover:shadow-sm focus-visible:outline-2 focus-visible:outline-offset-1',
           'motion-reduce:transition-none motion-reduce:hover:translate-y-0',
@@ -175,7 +175,7 @@ export function DepartureChip({
         ) : cancelled ? (
           <Ban aria-hidden="true" className="size-3 shrink-0" />
         ) : !hideSeats ? (
-          <span className="tabular shrink-0 text-[0.625rem] font-semibold opacity-75">
+          <span className="tabular shrink-0 text-xs font-semibold opacity-75">
             {soldOut ? 'Full' : `${departure.booked}/${departure.capacity}`}
           </span>
         ) : null}
@@ -218,7 +218,7 @@ export function DepartureChip({
       />
 
       <span className={cn('flex items-center gap-1.5', tight && 'min-w-0')}>
-        <span className="tabular shrink-0 text-[0.6875rem] font-semibold opacity-90">{time}</span>
+        <span className="tabular shrink-0 text-xs font-semibold opacity-90">{time}</span>
         {treatment === 'weather' ? (
           <CloudRain aria-hidden="true" className="size-3 shrink-0" />
         ) : null}
@@ -226,7 +226,7 @@ export function DepartureChip({
           <Lock aria-hidden="true" className="size-3 shrink-0" />
         ) : null}
         {tight ? (
-          <span className={cn('min-w-0 flex-1 truncate text-[0.6875rem] font-medium', cancelled && 'line-through')}>
+          <span className={cn('min-w-0 flex-1 truncate text-xs font-medium', cancelled && 'line-through')}>
             {activity.name}
           </span>
         ) : null}
@@ -244,7 +244,7 @@ export function DepartureChip({
       ) : null}
 
       {roomy ? (
-        <span className="tabular flex items-center gap-1.5 text-[0.625rem] font-medium opacity-80">
+        <span className="tabular flex items-center gap-1.5 text-xs font-medium opacity-80">
           <span>
             {departure.booked}/{departure.capacity} seats
           </span>

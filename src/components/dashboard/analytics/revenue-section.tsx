@@ -222,7 +222,7 @@ export function RevenueSection({
         title="Bookings and cancellations per day"
         description="Cancellations are stacked against the bookings they came from, so a bad weather window is visible as a shape rather than a footnote."
         toolbar={
-          <span className="hidden items-center gap-1.5 rounded-lg border border-line px-2.5 py-1 text-[0.6875rem] font-medium text-subtle sm:inline-flex">
+          <span className="hidden items-center gap-1.5 rounded-lg border border-line px-2.5 py-1 text-xs font-medium text-subtle sm:inline-flex">
             <CalendarRange aria-hidden="true" className="size-3.5" />
             {rangeLabel}
           </span>

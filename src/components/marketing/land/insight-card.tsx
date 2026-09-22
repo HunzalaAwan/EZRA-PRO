@@ -52,9 +52,9 @@ export function InsightCard({ className }: { className?: string }) {
         <header className="flex items-center justify-between gap-3 border-b border-line-subtle px-5 py-3.5">
           <div>
             <p className="text-[0.8125rem] font-semibold text-foreground">Occupancy by hour</p>
-            <p className="mt-0.5 text-[0.6875rem] text-subtle">Last 30 days · all products</p>
+            <p className="mt-0.5 text-xs text-subtle">Last 30 days · all products</p>
           </div>
-          <span className="inline-flex items-center gap-1.5 rounded-md bg-success-soft px-2 py-1 text-[0.6875rem] font-semibold text-success">
+          <span className="inline-flex items-center gap-1.5 rounded-md bg-success-soft px-2 py-1 text-xs font-semibold text-success">
             <TrendingUp className="size-3" strokeWidth={2.5} />
             +6.2 pts
           </span>
@@ -64,7 +64,7 @@ export function InsightCard({ className }: { className?: string }) {
           <div className="grid grid-cols-[2rem_1fr] gap-x-2">
             <div className="flex flex-col gap-1">
               {DAYS.map((day) => (
-                <span key={day} className="flex h-6 items-center text-[0.625rem] font-medium text-subtle">
+                <span key={day} className="flex h-6 items-center text-xs font-medium text-subtle">
                   {day}
                 </span>
               ))}
@@ -91,7 +91,7 @@ export function InsightCard({ className }: { className?: string }) {
             <span />
             <div className="mt-1.5 grid grid-cols-8 gap-1">
               {HOURS.map((hour) => (
-                <span key={hour} className="text-center text-[0.625rem] text-faint tabular-nums">
+                <span key={hour} className="text-center text-xs text-faint tabular-nums">
                   {hour}
                 </span>
               ))}
@@ -100,7 +100,7 @@ export function InsightCard({ className }: { className?: string }) {
         </div>
 
         <div className="mx-5 mb-5 rounded-xl bg-surface-sunken p-4">
-          <p className="text-[0.625rem] font-semibold tracking-[0.12em] text-accent uppercase">Worth doing this week</p>
+          <p className="text-xs font-semibold tracking-[0.12em] text-accent uppercase">Worth doing this week</p>
           <p className="mt-1.5 text-[0.875rem] leading-snug text-foreground">
             Tuesday 12:00 runs at <span className="font-semibold tabular-nums">31%</span>. Move it to 17:45 and it fills like
             Thursday&rsquo;s.
@@ -109,7 +109,7 @@ export function InsightCard({ className }: { className?: string }) {
             <p className="text-[0.75rem] text-muted">
               About <span className="font-semibold text-foreground tabular-nums">+$1,900</span> a month
             </p>
-            <span className="inline-flex h-7 items-center gap-1 rounded-md bg-primary px-2.5 text-[0.6875rem] font-semibold text-on-primary">
+            <span className="inline-flex h-7 items-center gap-1 rounded-md bg-primary px-2.5 text-xs font-semibold text-on-primary">
               Move the slot
               <ArrowRight className="size-3" strokeWidth={2.5} />
             </span>

@@ -96,7 +96,7 @@ export function AppFrame({
             {url ? (
               <p className="flex h-6 w-full max-w-sm min-w-0 items-center gap-1.5 rounded-md border border-line-subtle bg-surface px-2.5">
                 <Lock aria-hidden="true" className="size-3 shrink-0 text-faint" strokeWidth={2.2} />
-                <span className="truncate font-mono text-[0.6875rem] leading-none text-subtle">
+                <span className="truncate font-mono text-xs leading-none text-subtle">
                   {url}
                 </span>
               </p>

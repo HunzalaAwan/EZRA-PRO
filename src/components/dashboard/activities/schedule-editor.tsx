@@ -390,15 +390,15 @@ export function ScheduleEditor({ schedule, onChange, nowIso, errors, className }
                 </span>
                 {day.open ? (
                   <span className="flex flex-wrap items-center gap-1.5">
-                    <span className="rounded-md bg-primary-soft px-1.5 py-0.5 text-[0.6875rem] font-medium text-primary tabular">
+                    <span className="rounded-md bg-primary-soft px-1.5 py-0.5 text-xs font-medium text-primary tabular">
                       Open {formatClock(day.open.from)} – {formatClock(day.open.to)}
                     </span>
                     {schedule.entryInterval > 0 ? (
-                      <span className="text-[0.6875rem] text-faint">
+                      <span className="text-xs text-faint">
                         {day.times.length} arrival {day.times.length === 1 ? 'slot' : 'slots'}
                       </span>
                     ) : (
-                      <span className="text-[0.6875rem] text-faint">arrive any time</span>
+                      <span className="text-xs text-faint">arrive any time</span>
                     )}
                   </span>
                 ) : (
@@ -406,7 +406,7 @@ export function ScheduleEditor({ schedule, onChange, nowIso, errors, className }
                     {day.times.map((time) => (
                       <span
                         key={time}
-                        className="rounded-md bg-primary-soft px-1.5 py-0.5 text-[0.6875rem] font-medium text-primary tabular"
+                        className="rounded-md bg-primary-soft px-1.5 py-0.5 text-xs font-medium text-primary tabular"
                       >
                         {formatClock(time)}
                       </span>

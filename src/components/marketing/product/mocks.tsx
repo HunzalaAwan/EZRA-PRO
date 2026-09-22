@@ -46,7 +46,7 @@ export function GuestProfileMock({ className }: { className?: string }) {
               </span>
             </p>
           </div>
-          <span className="inline-flex items-center gap-1 rounded-md bg-success-soft px-2 py-1 text-[0.6875rem] font-medium text-success">
+          <span className="inline-flex items-center gap-1 rounded-md bg-success-soft px-2 py-1 text-xs font-medium text-success">
             <Tag className="size-3" /> Repeat
           </span>
         </div>
@@ -59,7 +59,7 @@ export function GuestProfileMock({ className }: { className?: string }) {
           ].map(([value, label]) => (
             <div key={label} className="py-3">
               <p className="text-[1rem] font-semibold text-foreground tabular-nums">{value}</p>
-              <p className="text-[0.6875rem] text-subtle">{label}</p>
+              <p className="text-xs text-subtle">{label}</p>
             </div>
           ))}
         </div>
@@ -69,9 +69,9 @@ export function GuestProfileMock({ className }: { className?: string }) {
             <li key={trip.when} className="flex items-center justify-between gap-3 py-2.5 text-[0.8125rem]">
               <span className="min-w-0">
                 <span className="block truncate text-foreground">{trip.what}</span>
-                <span className="block text-[0.6875rem] text-subtle">{trip.when}</span>
+                <span className="block text-xs text-subtle">{trip.when}</span>
               </span>
-              <span className={cn('shrink-0 rounded-md px-1.5 py-0.5 text-[0.6875rem] font-medium', trip.status === 'Booked' ? 'bg-primary/10 text-primary' : 'bg-surface-sunken text-muted')}>
+              <span className={cn('shrink-0 rounded-md px-1.5 py-0.5 text-xs font-medium', trip.status === 'Booked' ? 'bg-primary/10 text-primary' : 'bg-surface-sunken text-muted')}>
                 {trip.status}
               </span>
             </li>
@@ -123,7 +123,7 @@ export function SegmentsMock({ className }: { className?: string }) {
       <div aria-hidden="true">
         <div className="border-b border-line-subtle px-4 py-3">
           <p className="text-[0.8125rem] font-medium text-foreground">Segments</p>
-          <p className="text-[0.6875rem] text-subtle">Built from trips, reviews and waivers</p>
+          <p className="text-xs text-subtle">Built from trips, reviews and waivers</p>
         </div>
         <ul className="flex flex-col divide-y divide-line-subtle">
           {SEGMENTS.map((segment) => (
@@ -192,14 +192,14 @@ export function ChannelSyncMock({ className }: { className?: string }) {
         <div className="flex items-center justify-between border-b border-line-subtle px-4 py-3">
           <div>
             <p className="text-[0.8125rem] font-medium text-foreground">Sunset sail · tonight 17:45</p>
-            <p className="text-[0.6875rem] text-subtle">One basket of seats, five channels</p>
+            <p className="text-xs text-subtle">One basket of seats, five channels</p>
           </div>
           <p className="text-right">
             <span className="block text-[1.125rem] font-semibold leading-none text-foreground tabular-nums">
               {booked}
               <span className="text-[0.75rem] font-normal text-subtle"> / {CAPACITY}</span>
             </span>
-            <span className="text-[0.625rem] text-subtle">seats sold</span>
+            <span className="text-xs text-subtle">seats sold</span>
           </p>
         </div>
 
@@ -263,11 +263,11 @@ export function ChannelMarginMock({ className }: { className?: string }) {
       <div aria-hidden="true">
         <div className="border-b border-line-subtle px-4 py-3">
           <p className="text-[0.8125rem] font-medium text-foreground">Net of commission · September</p>
-          <p className="text-[0.6875rem] text-subtle">What each channel keeps for you</p>
+          <p className="text-xs text-subtle">What each channel keeps for you</p>
         </div>
         <table className="w-full text-[0.8125rem]">
           <thead>
-            <tr className="text-[0.625rem] tracking-[0.06em] text-subtle uppercase">
+            <tr className="text-xs tracking-[0.06em] text-subtle uppercase">
               <th className="px-4 py-2 text-left font-medium">Channel</th>
               <th className="py-2 text-right font-medium">Bookings</th>
               <th className="py-2 text-right font-medium">Fee</th>

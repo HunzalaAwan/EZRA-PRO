@@ -161,7 +161,7 @@ export function PricingTable({ id = 'compare-plans', className }: PricingTablePr
                       <span className="mt-1 block font-display text-2xl font-semibold tracking-[-0.025em] tabular text-foreground">
                         {plan.id === 'enterprise' ? 'Custom' : percentLabel(plan.commissionPercent)}
                       </span>
-                      <span className="mt-0.5 block text-[0.6875rem] leading-snug text-subtle">
+                      <span className="mt-0.5 block text-xs leading-snug text-subtle">
                         {feeLine(planIndex)}
                       </span>
                     </th>

@@ -174,7 +174,7 @@ function BrandPanel() {
           <span className="sr-only">{`${SITE.name} home`}</span>
         </Link>
 
-        <span className="inline-flex items-center gap-2 rounded-full bg-white/12 px-3 py-1.5 text-[0.6875rem] font-semibold tracking-[0.06em] text-white uppercase ring-1 ring-white/15 backdrop-blur-sm">
+        <span className="inline-flex items-center gap-2 rounded-full bg-white/12 px-3 py-1.5 text-xs font-semibold tracking-[0.06em] text-white uppercase ring-1 ring-white/15 backdrop-blur-sm">
           <span aria-hidden="true" className="relative flex size-1.5">
             <span className="absolute inset-0 rounded-full bg-accent" />
             {!reducedMotion ? (
@@ -197,7 +197,7 @@ function BrandPanel() {
               transition={transition}
               className="gpu"
             >
-              <span className="inline-flex items-center rounded-full bg-white/12 px-2.5 py-1 text-[0.625rem] font-semibold tracking-[0.1em] text-white/90 uppercase ring-1 ring-white/15">
+              <span className="inline-flex items-center rounded-full bg-white/12 px-2.5 py-1 text-xs font-semibold tracking-[0.1em] text-white/90 uppercase ring-1 ring-white/15">
                 {active.trade}
               </span>
 
@@ -219,7 +219,7 @@ function BrandPanel() {
                     <p className="font-display text-lg leading-none font-semibold tracking-[-0.02em] tabular-nums">
                       {quote.metric.value}
                     </p>
-                    <p className="mt-1 text-[0.625rem] leading-tight opacity-85">{quote.metric.label}</p>
+                    <p className="mt-1 text-xs leading-tight opacity-85">{quote.metric.label}</p>
                   </div>
                 ) : null}
               </figcaption>
@@ -325,7 +325,7 @@ export function AuthShell({ title, subtitle, eyebrow, children, footer, side, cl
         <main className="flex flex-1 items-center justify-center py-12 sm:py-16">
           <div className="w-full max-w-md">
             {eyebrow ? (
-              <p className="mb-3 text-[0.6875rem] font-semibold tracking-[0.12em] text-primary uppercase">{eyebrow}</p>
+              <p className="mb-3 text-xs font-semibold tracking-[0.12em] text-primary uppercase">{eyebrow}</p>
             ) : null}
 
             <h1 className="font-display text-[1.75rem] leading-[1.15] font-semibold tracking-[-0.03em] text-balance text-foreground sm:text-[2rem]">

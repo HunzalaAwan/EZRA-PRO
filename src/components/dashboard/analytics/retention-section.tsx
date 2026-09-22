@@ -204,7 +204,7 @@ export function RetentionSection({
 
               <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1">
                 {suppressed ? (
-                  <span className="text-[0.6875rem] text-subtle">
+                  <span className="text-xs text-subtle">
                     — no comparable prior {comparison === 'year' ? 'year' : 'period'}
                   </span>
                 ) : (
@@ -214,7 +214,7 @@ export function RetentionSection({
                       higherIsBetter={repeatRate.higherIsBetter}
                       size="sm"
                     />
-                    <span className="text-[0.6875rem] text-subtle">
+                    <span className="text-xs text-subtle">
                       {repeatRate.comparisonLabel}
                     </span>
                   </>
@@ -237,7 +237,7 @@ export function RetentionSection({
                       1,
                     )}.`}
                   />
-                  <div className="mt-2 flex items-center justify-between text-[0.625rem] uppercase tracking-[0.06em] text-faint">
+                  <div className="mt-2 flex items-center justify-between text-xs uppercase tracking-[0.06em] text-faint">
                     <span>Start of range</span>
                     <span>Today</span>
                   </div>
@@ -322,7 +322,7 @@ export function RetentionSection({
                         {row.value}
                       </dd>
                     </div>
-                    <p className="mt-1 text-[0.6875rem] leading-relaxed text-subtle">
+                    <p className="mt-1 text-xs leading-relaxed text-subtle">
                       {row.detail}
                     </p>
                   </div>

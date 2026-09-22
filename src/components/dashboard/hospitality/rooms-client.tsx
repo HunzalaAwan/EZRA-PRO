@@ -158,12 +158,12 @@ export function RoomsClient({ roomTypes: initialTypes, rooms: initialRooms, stay
                         <button key={r.id} type="button" onClick={() => setSelectedId(r.id)} className={cn('flex min-h-[5.5rem] flex-col rounded-xl border bg-surface p-2.5 text-left transition-colors hover:border-line-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary', r.housekeeping === 'out_of_order' ? 'border-dashed border-line opacity-60' : 'border-line')}>
                           <span className="flex items-center justify-between gap-1">
                             <span className="text-[0.8125rem] text-foreground tabular-nums">{r.number}</span>
-                            <span className="truncate text-[0.6875rem] text-faint">{typeById.get(r.typeId)?.name.split(' ')[0]}</span>
+                            <span className="truncate text-xs text-faint">{typeById.get(r.typeId)?.name.split(' ')[0]}</span>
                           </span>
                           <span className="mt-1 truncate text-xs text-muted">{stay ? guestName(stay.customer) : OCCUPANCY_META[r.occupancy].label}</span>
-                          {stay ? <span className="truncate text-[0.6875rem] text-subtle">{r.occupancy === 'arriving' ? `arrives${stay.eta ? ` ${stay.eta}` : ' today'}` : r.occupancy === 'departing' ? 'leaves today' : r.occupancy === 'turnover' ? 'out and in today' : `until ${stay.checkOut.slice(5).replace('-', '/')}`}</span> : null}
+                          {stay ? <span className="truncate text-xs text-subtle">{r.occupancy === 'arriving' ? `arrives${stay.eta ? ` ${stay.eta}` : ' today'}` : r.occupancy === 'departing' ? 'leaves today' : r.occupancy === 'turnover' ? 'out and in today' : `until ${stay.checkOut.slice(5).replace('-', '/')}`}</span> : null}
                           <span className="mt-auto pt-1.5">
-                            <StatusWord label={HOUSEKEEPING_META[r.housekeeping].label} tone={HOUSEKEEPING_META[r.housekeeping].tone} className="text-[0.6875rem]" />
+                            <StatusWord label={HOUSEKEEPING_META[r.housekeeping].label} tone={HOUSEKEEPING_META[r.housekeeping].tone} className="text-xs" />
                           </span>
                         </button>
                       )

@@ -59,7 +59,7 @@ export function MiniCalendar({ className }: { className?: string }) {
 
         <div className="mt-4 grid grid-cols-7 gap-1 text-center">
           {DAYS.map((d) => (
-            <span key={d} className="text-[0.5625rem] font-medium tracking-[0.06em] text-subtle uppercase">
+            <span key={d} className="text-xs font-medium tracking-[0.06em] text-subtle uppercase">
               {d}
             </span>
           ))}
@@ -94,11 +94,11 @@ export function MiniCalendar({ className }: { className?: string }) {
         transition={{ duration: 0.5, delay: 1.4, ease: [0.16, 1, 0.3, 1] }}
         className="absolute -right-6 bottom-8 w-[12.5rem] rounded-xl bg-surface p-3 shadow-[var(--shadow-xl)] ring-1 ring-black/[0.06] sm:-right-10"
       >
-        <p className="text-[0.625rem] font-medium tracking-[0.1em] text-subtle uppercase">Sat 12 Sep</p>
+        <p className="text-xs font-medium tracking-[0.1em] text-subtle uppercase">Sat 12 Sep</p>
         <ul className="mt-1.5 flex flex-col gap-1">
           <li className="flex items-center justify-between text-[0.75rem]">
             <span className="text-foreground">07:00 Balloon flight</span>
-            <span className="rounded-sm bg-foreground px-1 text-[0.5625rem] font-semibold text-background">FULL</span>
+            <span className="rounded-sm bg-foreground px-1 text-xs font-semibold text-background">FULL</span>
           </li>
           <li className="flex items-center justify-between text-[0.75rem]">
             <span className="text-foreground">10:00 Reef snorkel</span>

@@ -95,7 +95,7 @@ function NotificationRow({
         <span className="mt-1 block text-xs leading-relaxed text-subtle line-clamp-2">
           {item.body}
         </span>
-        <span className="mt-1.5 block text-[0.6875rem] text-faint">
+        <span className="mt-1.5 block text-xs text-faint">
           {formatRelative(item.createdAt, now)}
         </span>
       </span>
@@ -160,7 +160,7 @@ export function NotificationsMenu({ items, now: NOW, className }: NotificationsM
           {unreadCount > 0 ? (
             <span
               aria-hidden="true"
-              className="absolute top-1 right-1 grid min-w-4 place-items-center rounded-full bg-accent px-1 text-[0.5625rem] leading-4 font-bold text-on-accent ring-2 ring-surface tabular-nums"
+              className="absolute top-1 right-1 grid min-w-[1.125rem] place-items-center rounded-full bg-accent px-1 text-xs leading-[1.125rem] font-bold text-on-accent ring-2 ring-surface tabular-nums"
             >
               {unreadCount > 9 ? '9+' : unreadCount}
             </span>

@@ -261,7 +261,7 @@ function BulkActionBar({ count, onClear, onAction }: BulkActionBarProps) {
             )}
           >
             <span className="ml-1 inline-flex shrink-0 items-center gap-2 pr-1 text-sm font-semibold text-foreground">
-              <span className="grid size-6 place-items-center rounded-full bg-primary text-[0.6875rem] font-bold text-on-primary tabular-nums">
+              <span className="grid size-6 place-items-center rounded-full bg-primary text-xs font-bold text-on-primary tabular-nums">
                 {count > 99 ? '99+' : count}
               </span>
               <span className="hidden sm:inline">selected</span>
@@ -542,7 +542,7 @@ export function BookingsTable({
               <span className="flex min-w-0 items-center gap-1.5">
                 <span className="truncate text-[0.8125rem] text-foreground">{name}</span>
                 {customer.segment === 'vip' ? (
-                  <span className="shrink-0 text-[0.625rem] tracking-[0.08em] text-subtle uppercase">VIP</span>
+                  <span className="shrink-0 text-xs tracking-[0.08em] text-subtle uppercase">VIP</span>
                 ) : null}
               </span>
             </span>

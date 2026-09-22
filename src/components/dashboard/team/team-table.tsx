@@ -160,7 +160,7 @@ export function TeamTable({
                     {ROLE_META[member.role].label}
                   </Badge>
                   {member.isBookable ? (
-                    <p className="mt-1 text-[0.6875rem] text-subtle">Assignable to departures</p>
+                    <p className="mt-1 text-xs text-subtle">Assignable to departures</p>
                   ) : null}
                 </Td>
 
@@ -258,7 +258,7 @@ function Th({
     <th
       scope="col"
       className={cn(
-        'h-10 px-4 align-middle text-[0.6875rem] font-semibold tracking-[0.08em] whitespace-nowrap text-subtle uppercase',
+        'h-10 px-4 align-middle text-xs font-semibold tracking-[0.08em] whitespace-nowrap text-subtle uppercase',
         align === 'right' ? 'text-right' : 'text-left',
       )}
     >

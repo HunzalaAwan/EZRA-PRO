@@ -78,7 +78,7 @@ export function CheckInRing({ checkedIn, total, size = 56, className }: CheckInR
           <span
             className={cn(
               'font-display font-semibold text-foreground tabular-nums',
-              size >= 48 ? 'text-sm' : 'text-[0.6875rem]',
+              size >= 48 ? 'text-sm' : 'text-xs',
             )}
           >
             {checkedIn}
@@ -136,7 +136,7 @@ function CheckInToggle({
       <span
         aria-hidden="true"
         className={cn(
-          'absolute inset-y-0 grid place-items-center text-[0.6875rem] font-bold tracking-wide uppercase',
+          'absolute inset-y-0 grid place-items-center text-xs font-bold tracking-wide uppercase',
           checked ? 'left-3 text-success' : 'right-2.5 text-subtle',
         )}
       >

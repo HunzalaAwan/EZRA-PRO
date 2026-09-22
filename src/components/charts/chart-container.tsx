@@ -177,7 +177,7 @@ export function ChartDeltaChip({
     <span
       className={cn(
         'inline-flex items-center gap-1 rounded-md font-medium tabular',
-        size === 'xs' ? 'px-1.5 py-0.5 text-[11px]' : 'px-2 py-1 text-xs',
+        size === 'xs' ? 'px-1.5 py-0.5 text-xs' : 'px-2 py-1 text-xs',
         good === null && (bare ? 'text-subtle' : 'bg-surface-sunken text-subtle'),
         good === true && (bare ? 'text-success' : 'bg-success-soft text-success'),
         good === false && (bare ? 'text-danger' : 'bg-danger-soft text-danger'),

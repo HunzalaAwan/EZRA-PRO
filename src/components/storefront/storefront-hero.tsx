@@ -187,7 +187,7 @@ export function StorefrontHero({
           transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
           className="flex flex-wrap items-center gap-x-3 gap-y-2"
         >
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-white backdrop-blur-sm">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-white backdrop-blur-sm">
             {brand.heroEyebrow ?? copy.eyebrow}
           </span>
           <span className="inline-flex items-center gap-1.5 text-xs font-medium text-white/75">
@@ -252,7 +252,7 @@ export function StorefrontHero({
             <label className="group relative flex min-w-0 cursor-pointer items-center gap-3 rounded-xl border border-transparent px-3.5 py-3 transition-colors duration-200 hover:bg-surface-sunken focus-within:border-primary focus-within:bg-surface-sunken">
               <Search className="size-4 shrink-0 text-primary" aria-hidden="true" />
               <span className="flex min-w-0 flex-1 flex-col">
-                <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-faint">
+                <span className="text-xs font-semibold uppercase tracking-[0.1em] text-faint">
                   Experience
                 </span>
                 <select
@@ -279,7 +279,7 @@ export function StorefrontHero({
             <label className="group flex min-w-0 cursor-pointer items-center gap-3 rounded-xl border border-transparent px-3.5 py-3 transition-colors duration-200 hover:bg-surface-sunken focus-within:border-primary focus-within:bg-surface-sunken">
               <CalendarDays className="size-4 shrink-0 text-primary" aria-hidden="true" />
               <span className="flex min-w-0 flex-1 flex-col">
-                <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-faint">
+                <span className="text-xs font-semibold uppercase tracking-[0.1em] text-faint">
                   Date
                 </span>
                 <input
@@ -297,7 +297,7 @@ export function StorefrontHero({
             <div className="flex min-w-0 items-center gap-3 rounded-xl px-3.5 py-2.5">
               <Users className="size-4 shrink-0 text-primary" aria-hidden="true" />
               <span className="flex min-w-0 flex-1 flex-col">
-                <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-faint">
+                <span className="text-xs font-semibold uppercase tracking-[0.1em] text-faint">
                   Guests
                 </span>
                 <span className="mt-0.5 flex items-center justify-between gap-2">

@@ -67,7 +67,7 @@ function PeakLabel({ x = 0, y = 0, width = 0, value = 0, index, peakIndex, curre
   return (
     <g transform={`translate(${cx - w / 2}, ${y - 28})`} aria-hidden="true">
       <rect width={w} height={20} rx={10} fill="var(--fg)" />
-      <text x={w / 2} y={13.5} textAnchor="middle" fontSize={11} fontWeight={600} fill="var(--bg)">
+      <text x={w / 2} y={13.5} textAnchor="middle" fontSize={12} fontWeight={600} fill="var(--bg)">
         {label}
       </text>
       <path d={`M${w / 2 - 4},20 L${w / 2},24 L${w / 2 + 4},20 Z`} fill="var(--fg)" />
@@ -155,7 +155,7 @@ export function RevenueBars({ points, currency, className }: RevenueBarsProps) {
               tickMargin={10}
               interval="preserveStartEnd"
               minTickGap={22}
-              tick={{ fill: CHART_INK.tick, fontSize: 11 }}
+              tick={{ fill: CHART_INK.tick, fontSize: 12 }}
               tickFormatter={(value: string) => formatDateShort(fromDateKey(value))}
             />
             <YAxis
@@ -163,7 +163,7 @@ export function RevenueBars({ points, currency, className }: RevenueBarsProps) {
               axisLine={false}
               tickLine={false}
               tickCount={5}
-              tick={{ fill: CHART_INK.tick, fontSize: 11 }}
+              tick={{ fill: CHART_INK.tick, fontSize: 12 }}
               tickFormatter={(value: number) => formatCompactCurrency(value, currency)}
             />
             <Tooltip

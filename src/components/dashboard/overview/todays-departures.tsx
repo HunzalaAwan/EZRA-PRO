@@ -153,7 +153,7 @@ export function TodaysDepartures({ events, staff, nowIso, className }: TodaysDep
                     <p className="font-display text-[0.8125rem] leading-tight font-semibold text-foreground tabular-nums">
                       {formatTime(departure.startsAt)}
                     </p>
-                    <p className="mt-0.5 text-[0.6875rem] text-faint tabular-nums">
+                    <p className="mt-0.5 text-xs text-faint tabular-nums">
                       {formatDuration(activity.durationMinutes)}
                     </p>
                   </div>
@@ -192,7 +192,7 @@ export function TodaysDepartures({ events, staff, nowIso, className }: TodaysDep
                       />
                     </div>
 
-                    <p className="mt-1 flex items-center gap-1.5 text-[0.6875rem] text-subtle">
+                    <p className="mt-1 flex items-center gap-1.5 text-xs text-subtle">
                       <MapPin aria-hidden="true" className="size-3 shrink-0" />
                       <span className="truncate">{activity.meetingPoint}</span>
                     </p>
@@ -206,7 +206,7 @@ export function TodaysDepartures({ events, staff, nowIso, className }: TodaysDep
                         showLabel={false}
                         className="min-w-0 flex-1"
                       />
-                      <span className="shrink-0 text-[0.6875rem] font-semibold text-muted tabular-nums">
+                      <span className="shrink-0 text-xs font-semibold text-muted tabular-nums">
                         {departure.booked}/{departure.capacity} booked
                       </span>
                     </div>
@@ -222,9 +222,9 @@ export function TodaysDepartures({ events, staff, nowIso, className }: TodaysDep
                             label={`Crew on ${activity.name}`}
                           />
                         ) : (
-                          <span className="text-[0.6875rem] text-faint">Unassigned</span>
+                          <span className="text-xs text-faint">Unassigned</span>
                         )}
-                        <span className="truncate text-[0.6875rem] text-faint">
+                        <span className="truncate text-xs text-faint">
                           {seatsLeft === 0
                             ? 'Sold out'
                             : `${seatsLeft} ${pluralize(seatsLeft, 'seat')} left`}
@@ -234,7 +234,7 @@ export function TodaysDepartures({ events, staff, nowIso, className }: TodaysDep
                       <Link
                         href={`/dashboard/manifest?departure=${departure.id}`}
                         className={cn(
-                          'group inline-flex shrink-0 items-center gap-1 rounded-md text-[0.6875rem] font-semibold text-primary',
+                          'group inline-flex shrink-0 items-center gap-1 rounded-md text-xs font-semibold text-primary',
                           'transition-colors duration-200 hover:text-primary-hover',
                           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
                         )}
@@ -268,7 +268,7 @@ function NowMarker({ label, trailing = false }: { label: string; trailing?: bool
   return (
     <li className="flex items-center gap-3 px-5 sm:gap-4" aria-label={`Current time ${label}`}>
       <div className="w-14 shrink-0 py-1.5 text-right">
-        <span className="font-display text-[0.6875rem] font-bold tracking-[0.06em] text-accent uppercase tabular-nums">
+        <span className="font-display text-xs font-bold tracking-[0.06em] text-accent uppercase tabular-nums">
           {label}
         </span>
       </div>
@@ -286,7 +286,7 @@ function NowMarker({ label, trailing = false }: { label: string; trailing?: bool
 
       <div className="flex min-w-0 flex-1 items-center gap-2 py-1.5">
         <span className="h-px flex-1 bg-[linear-gradient(to_right,var(--accent),transparent)] opacity-60" />
-        <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-[0.625rem] font-bold tracking-[0.08em] text-accent uppercase">
+        <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-xs font-bold tracking-[0.08em] text-accent uppercase">
           Now
         </span>
       </div>

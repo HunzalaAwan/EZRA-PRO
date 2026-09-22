@@ -731,7 +731,7 @@ function SliderRow({
         thumbLabels={[label]}
         onValueChange={(next) => onChange(next[0])}
       />
-      <div className="flex items-center justify-between text-[0.6875rem] text-faint tabular">
+      <div className="flex items-center justify-between text-xs text-faint tabular">
         {ticks.map((tick) => (
           <span key={tick}>{tick}</span>
         ))}
@@ -811,7 +811,7 @@ function ConfirmationPreview({
 
       <div className="mx-auto max-w-lg space-y-4 p-5">
         <div className="rounded-xl border border-line bg-surface p-5 shadow-sm">
-          <p className="text-[0.6875rem] font-semibold tracking-[0.14em] text-primary uppercase">
+          <p className="text-xs font-semibold tracking-[0.14em] text-primary uppercase">
             {tenant.branding.logoText}
           </p>
           <h3 className="mt-2 font-display text-lg font-semibold tracking-tight text-foreground">
@@ -862,7 +862,7 @@ function ConfirmationPreview({
             ) : null}
           </div>
 
-          <p className="mt-4 border-t border-line-subtle pt-3 text-[0.6875rem] leading-relaxed text-subtle">
+          <p className="mt-4 border-t border-line-subtle pt-3 text-xs leading-relaxed text-subtle">
             {rules.freeCancellationHours > 0
               ? `Free cancellation up to ${rules.freeCancellationHours} hours before departure.`
               : 'This booking is non-refundable.'}{' '}
@@ -880,7 +880,7 @@ function ConfirmationPreview({
 function PreviewRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <p className="text-[0.6875rem] font-semibold tracking-[0.08em] text-faint uppercase">
+      <p className="text-xs font-semibold tracking-[0.08em] text-faint uppercase">
         {label}
       </p>
       <p className="truncate text-sm font-medium text-foreground">{value}</p>
