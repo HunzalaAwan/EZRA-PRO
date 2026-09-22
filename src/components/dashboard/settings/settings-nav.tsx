@@ -8,7 +8,6 @@ import {
   Building2,
   ChevronRight,
   CreditCard,
-  Palette,
   Plug,
   ReceiptText,
   TicketCheck,
@@ -39,12 +38,6 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     label: 'General',
     description: 'Business profile, contact and locale',
     icon: Building2,
-  },
-  {
-    href: '/dashboard/settings/branding',
-    label: 'Branding',
-    description: 'Logo, cover art and storefront colours',
-    icon: Palette,
   },
   {
     href: '/dashboard/settings/booking',

@@ -11,6 +11,7 @@ import type { Tenant } from '@/types'
 import type { StorefrontKind } from '@/lib/workspace-profile'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
+import { useStorefrontBrand } from '@/components/storefront/storefront-brand'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -87,6 +88,8 @@ export function StorefrontHeader({ tenant, kind = 'experiences' }: StorefrontHea
     setScrolled(value > SCROLL_THRESHOLD)
   })
 
+  const brand = useStorefrontBrand(tenant)
+
   /** Transparent chrome is only safe where a dark hero image sits behind it. */
   const overHero = isHome && !scrolled && !menuOpen
 
@@ -114,7 +117,7 @@ export function StorefrontHeader({ tenant, kind = 'experiences' }: StorefrontHea
       ? { label: 'Order online', href: `${base}#menu`, browse: 'See the menu', browseHref: `${base}#menu` }
       : kind === 'hotel'
         ? { label: 'Book a stay', href: `${base}#rooms`, browse: 'See the rooms', browseHref: `${base}#rooms` }
-        : { label: 'Book now', href: `${base}#experiences`, browse: 'Browse experiences', browseHref: `${base}#experiences` }
+        : { label: brand.ctaLabel ?? 'Book now', href: `${base}#experiences`, browse: 'Browse experiences', browseHref: `${base}#experiences` }
 
   const activeLanguage = LANGUAGES.find((l) => l.code === language) ?? LANGUAGES[0]
 
@@ -132,18 +135,23 @@ export function StorefrontHeader({ tenant, kind = 'experiences' }: StorefrontHea
           href={base}
           className="group/brand -ml-1 flex shrink-0 items-center gap-2.5 rounded-xl px-1 py-1 outline-hidden focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
-          <span
-            aria-hidden="true"
-            className={cn(
-              'relative grid size-9 place-items-center overflow-hidden rounded-[0.7rem] font-display text-[0.8125rem] font-bold tracking-tight',
-              'bg-[linear-gradient(145deg,var(--primary),color-mix(in_oklab,var(--accent)_72%,var(--primary)))] text-on-primary',
-              'shadow-[0_6px_18px_-8px_color-mix(in_oklab,var(--primary)_75%,transparent)]',
-              'transition-transform duration-400 ease-[var(--ease-out-expo)] group-hover/brand:scale-105',
-            )}
-          >
-            <span className="absolute inset-x-0 top-0 h-1/2 bg-white/18" />
-            <span className="relative">{initials(tenant.branding.logoText)}</span>
-          </span>
+          {brand.logoImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={brand.logoImage} alt="" className="h-9 w-auto max-w-[9rem] shrink-0 object-contain" />
+          ) : (
+            <span
+              aria-hidden="true"
+              className={cn(
+                'relative grid size-9 place-items-center overflow-hidden rounded-[0.7rem] font-display text-[0.8125rem] font-bold tracking-tight',
+                'bg-[linear-gradient(145deg,var(--primary),color-mix(in_oklab,var(--accent)_72%,var(--primary)))] text-on-primary',
+                'shadow-[0_6px_18px_-8px_color-mix(in_oklab,var(--primary)_75%,transparent)]',
+                'transition-transform duration-400 ease-[var(--ease-out-expo)] group-hover/brand:scale-105',
+              )}
+            >
+              <span className="absolute inset-x-0 top-0 h-1/2 bg-white/18" />
+              <span className="relative">{initials(brand.logoText)}</span>
+            </span>
+          )}
           <span className="flex min-w-0 flex-col leading-none">
             <span
               className={cn(
@@ -151,7 +159,7 @@ export function StorefrontHeader({ tenant, kind = 'experiences' }: StorefrontHea
                 overHero ? 'text-white' : 'text-foreground',
               )}
             >
-              {tenant.branding.logoText}
+              {brand.logoText}
             </span>
             <span
               className={cn(
@@ -285,7 +293,7 @@ export function StorefrontHeader({ tenant, kind = 'experiences' }: StorefrontHea
                 <SheetContent side="right" size="sm" className="p-0">
                   <SheetHeader className="px-6 pb-4 pt-6">
                     <SheetTitle className="font-display text-lg">
-                      {tenant.branding.logoText}
+                      {brand.logoText}
                     </SheetTitle>
                     <SheetDescription>{tenant.city}</SheetDescription>
                   </SheetHeader>

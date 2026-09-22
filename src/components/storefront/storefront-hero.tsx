@@ -21,6 +21,7 @@ import type { Activity, Tenant, VerticalKey } from '@/types'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
+import { imageIsOptimisable, useStorefrontBrand } from '@/components/storefront/storefront-brand'
 
 /* ==========================================================================
    COPY
@@ -89,9 +90,10 @@ export function StorefrontHero({
   const reducedMotion = useReducedMotionSafe()
   const base = `/book/${tenant.slug}`
 
+  const brand = useStorefrontBrand(tenant)
   const copy = HERO_COPY[tenant.vertical]
   const cover =
-    tenant.branding.coverImage ??
+    brand.coverImage ??
     featured[0]?.media.find((m) => m.isPrimary)?.url ??
     featured[0]?.media[0]?.url
 
@@ -139,6 +141,7 @@ export function StorefrontHero({
               fill
               priority
               sizes="100vw"
+              unoptimized={!imageIsOptimisable(cover)}
               className="object-cover"
             />
           </motion.div>
@@ -148,9 +151,22 @@ export function StorefrontHero({
 
         {/* Layered scrim: a top band for header legibility, a heavy foot for the
             headline, and a brand wash so the photo belongs to this operator. */}
-        <div className="absolute inset-0 bg-[linear-gradient(to_bottom,oklch(0.12_0.02_233/0.72)_0%,oklch(0.12_0.02_233/0.28)_28%,oklch(0.12_0.02_233/0.55)_62%,oklch(0.12_0.02_233/0.92)_100%)]" />
         <div
-          className="absolute inset-0 mix-blend-soft-light opacity-70"
+          className={cn(
+            'absolute inset-0',
+            brand.heroOverlay === 'soft'
+              ? 'bg-[linear-gradient(to_bottom,oklch(0.12_0.02_233/0.5)_0%,oklch(0.12_0.02_233/0.14)_30%,oklch(0.12_0.02_233/0.38)_64%,oklch(0.12_0.02_233/0.84)_100%)]'
+              : 'bg-[linear-gradient(to_bottom,oklch(0.12_0.02_233/0.72)_0%,oklch(0.12_0.02_233/0.28)_28%,oklch(0.12_0.02_233/0.55)_62%,oklch(0.12_0.02_233/0.92)_100%)]',
+          )}
+        />
+        {brand.heroOverlay === 'brand' ? (
+          <div
+            className="absolute inset-0 opacity-60"
+            style={{ backgroundImage: 'linear-gradient(160deg, var(--brand-primary, var(--primary)) 0%, transparent 70%)' }}
+          />
+        ) : null}
+        <div
+          className={cn('absolute inset-0 mix-blend-soft-light', brand.heroOverlay === 'brand' ? 'opacity-100' : brand.heroOverlay === 'soft' ? 'opacity-40' : 'opacity-70')}
           style={{
             backgroundImage:
               'linear-gradient(120deg, color-mix(in oklab, var(--brand-primary, var(--primary)) 85%, transparent), transparent 55%, color-mix(in oklab, var(--brand-accent, var(--accent)) 70%, transparent))',
@@ -158,7 +174,12 @@ export function StorefrontHero({
         />
       </div>
 
-      <div className="mx-auto w-full max-w-[88rem] px-4 pb-14 pt-28 sm:px-6 sm:pb-16 sm:pt-36 lg:px-10 lg:pb-20 lg:pt-44">
+      <div
+        className={cn(
+          'mx-auto w-full max-w-[88rem] px-4 sm:px-6 lg:px-10',
+          brand.heroHeight === 'compact' ? 'pb-10 pt-24 sm:pb-12 sm:pt-28 lg:pb-14 lg:pt-32' : brand.heroHeight === 'tall' ? 'pb-20 pt-36 sm:pb-24 sm:pt-44 lg:pb-28 lg:pt-56' : 'pb-14 pt-28 sm:pb-16 sm:pt-36 lg:pb-20 lg:pt-44',
+        )}
+      >
         {/* ---------- eyebrow ---------- */}
         <motion.div
           initial={reducedMotion ? false : { opacity: 0, y: 16 }}
@@ -167,7 +188,7 @@ export function StorefrontHero({
           className="flex flex-wrap items-center gap-x-3 gap-y-2"
         >
           <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-white backdrop-blur-sm">
-            {copy.eyebrow}
+            {brand.heroEyebrow ?? copy.eyebrow}
           </span>
           <span className="inline-flex items-center gap-1.5 text-xs font-medium text-white/75">
             <MapPin className="size-3.5" aria-hidden="true" />
@@ -182,7 +203,7 @@ export function StorefrontHero({
           transition={{ duration: 0.7, delay: 0.06, ease: [0.16, 1, 0.3, 1] }}
           className="mt-5 max-w-[18ch] font-display text-display-md font-semibold text-white drop-shadow-[0_2px_24px_oklch(0.12_0.02_233/0.5)] lg:text-display-lg"
         >
-          {tenant.name}
+          {brand.heroTitle ?? tenant.name}
         </motion.h1>
 
         <motion.p
@@ -191,7 +212,7 @@ export function StorefrontHero({
           transition={{ duration: 0.7, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
           className="mt-5 max-w-[52ch] text-base leading-relaxed text-white/85 sm:text-lg"
         >
-          {copy.sub}
+          {brand.heroSubtitle ?? copy.sub}
         </motion.p>
 
         {/* ---------- rating ---------- */}

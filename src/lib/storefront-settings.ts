@@ -1,4 +1,4 @@
-import type { VerticalKey } from '@/types'
+import type { Tenant, VerticalKey } from '@/types'
 
 /* ==========================================================================
    Storefront settings — what an operator's public booking site shows, and
@@ -24,6 +24,31 @@ export type StorefrontSectionKey =
   | 'rooms'
   | 'dining'
   | 'experiences'
+/** How the hero photograph is toned down for the headline. */
+export type HeroOverlay = 'deep' | 'brand' | 'soft'
+export type HeroHeight = 'compact' | 'standard' | 'tall'
+
+/**
+ * The operator's look, chosen on the Storefront page. Every field is optional:
+ * anything unset falls back to the tenant record, so an old save never loses
+ * the published branding.
+ */
+export interface StorefrontBrand {
+  primaryColor?: string
+  accentColor?: string
+  /** The wordmark in the header, the footer and every receipt. */
+  logoText?: string
+  /** A data URL from the uploader, or a hosted image. */
+  logoImage?: string | null
+  coverImage?: string
+  heroEyebrow?: string
+  heroTitle?: string
+  heroSubtitle?: string
+  heroOverlay: HeroOverlay
+  heroHeight: HeroHeight
+  ctaLabel?: string
+}
+
 export type MobileLayout = 'cards' | 'grid' | 'list'
 export type DesktopLayout = 'grid' | 'list'
 
@@ -35,6 +60,7 @@ export interface StorefrontSettings {
   trustOnPhones: boolean
   mobileLayout: MobileLayout
   desktopLayout: DesktopLayout
+  brand: StorefrontBrand
 }
 
 export const SECTION_META: { key: StorefrontSectionKey; label: string; hint: string }[] = [
@@ -98,6 +124,49 @@ export function defaultStorefrontSettings(vertical: VerticalKey): StorefrontSett
     trustOnPhones: false,
     mobileLayout: 'cards',
     desktopLayout: 'grid',
+    brand: defaultBrand(),
+  }
+}
+
+export function defaultBrand(): StorefrontBrand {
+  return { heroOverlay: 'deep', heroHeight: 'standard' }
+}
+
+/** The look the storefront actually shows: the operator's choices over the tenant record. */
+export interface ResolvedBrand {
+  primaryColor: string
+  accentColor: string
+  logoText: string
+  logoImage: string | null
+  coverImage: string | undefined
+  heroEyebrow: string | undefined
+  heroTitle: string | undefined
+  heroSubtitle: string | undefined
+  heroOverlay: HeroOverlay
+  heroHeight: HeroHeight
+  ctaLabel: string | undefined
+  /** True when a colour differs from the published tenant record. */
+  recoloured: boolean
+}
+
+const text = (value: string | undefined) => (value && value.trim() ? value.trim() : undefined)
+
+export function resolveBrand(tenant: Pick<Tenant, 'branding'>, brand: StorefrontBrand): ResolvedBrand {
+  const primaryColor = text(brand.primaryColor) ?? tenant.branding.primaryColor
+  const accentColor = text(brand.accentColor) ?? tenant.branding.accentColor
+  return {
+    primaryColor,
+    accentColor,
+    logoText: text(brand.logoText) ?? tenant.branding.logoText,
+    logoImage: brand.logoImage ?? null,
+    coverImage: text(brand.coverImage) ?? tenant.branding.coverImage,
+    heroEyebrow: text(brand.heroEyebrow),
+    heroTitle: text(brand.heroTitle),
+    heroSubtitle: text(brand.heroSubtitle),
+    heroOverlay: brand.heroOverlay ?? 'deep',
+    heroHeight: brand.heroHeight ?? 'standard',
+    ctaLabel: text(brand.ctaLabel),
+    recoloured: primaryColor.toLowerCase() !== tenant.branding.primaryColor.toLowerCase() || accentColor.toLowerCase() !== tenant.branding.accentColor.toLowerCase(),
   }
 }
 
@@ -117,6 +186,7 @@ export function mergeStorefrontSettings(defaults: StorefrontSettings, raw: strin
       ...parsed,
       version: 1,
       sections: { ...defaults.sections, ...(parsed.sections ?? {}) },
+      brand: { ...defaults.brand, ...(parsed.brand ?? {}) },
     }
   } catch {
     return defaults

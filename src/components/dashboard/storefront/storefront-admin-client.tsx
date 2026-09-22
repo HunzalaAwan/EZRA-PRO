@@ -12,7 +12,9 @@ import {
   Image as ImageIcon,
   Lock,
   Monitor,
+  Palette,
   RefreshCw,
+  RotateCcw,
   Search,
   Share2,
   Smartphone,
@@ -40,24 +42,34 @@ import {
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Segmented } from '@/components/ui/segmented'
+import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { useStorefrontSettings } from '@/hooks/use-storefront-settings'
+import { readableOn } from '@/lib/brand-colors'
 import type { Storefront } from '@/lib/demo'
 import { SITE } from '@/lib/site-config'
 import {
   DESKTOP_LAYOUTS,
   MOBILE_LAYOUTS,
+  defaultBrand,
+  resolveBrand,
   sectionMetaFor,
   type DesktopLayout,
+  type HeroHeight,
+  type HeroOverlay,
   type MobileLayout,
+  type ResolvedBrand,
+  type StorefrontBrand,
   type StorefrontSettings,
 } from '@/lib/storefront-settings'
-import { cn, formatCurrency, formatDuration, formatNumber, truncate } from '@/lib/utils'
+import { cn, formatCurrency, formatDuration, formatNumber, initials, truncate } from '@/lib/utils'
 import type { Tenant } from '@/types'
+
+import { ACCENT_SWATCHES, COVER_PRESETS, ColorControl, HERO_HEIGHTS, HERO_OVERLAYS, ImageDrop, PRIMARY_SWATCHES } from './brand-controls'
 
 /* ==========================================================================
    DATA — derived from the tenant, fetched server-side
@@ -141,6 +153,18 @@ export function StorefrontAdminClient({
   const [embed, setEmbed] = React.useState<EmbedKey>('inline')
   const [domain, setDomain] = React.useState(CUSTOM_DOMAIN)
 
+  /* ---------- brand: the operator's look over the tenant record ---------- */
+  const brand = React.useMemo(() => resolveBrand(tenant, settings.brand), [tenant, settings.brand])
+  const brandDirty = JSON.stringify(settings.brand) !== JSON.stringify(defaultBrand())
+  const setBrand = React.useCallback((patch: Partial<StorefrontBrand>) => update((current) => ({ ...current, brand: { ...current.brand, ...patch } })), [update])
+  const coverUpload = settings.brand.coverImage?.startsWith('data:') ? settings.brand.coverImage : null
+  const coverPresets = React.useMemo(() => {
+    const published = tenant.branding.coverImage
+    const list = [...COVER_PRESETS]
+    if (published && !list.some((c) => c.url === published)) list.unshift({ url: published, label: 'Published cover' })
+    return list.slice(0, 8)
+  }, [tenant.branding.coverImage])
+
   const [seo, setSeo] = React.useState({
     title:
       tenant.vertical === 'restaurants'
@@ -210,6 +234,142 @@ export function StorefrontAdminClient({
 
       <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,28rem)]">
         <div className="flex min-w-0 flex-col gap-6">
+          {/* ---------------- Brand and hero ---------------- */}
+          <Card id="brand" className="scroll-mt-20">
+            <CardHeader>
+              <div className="min-w-0">
+                <CardTitle className="flex items-center gap-2">
+                  <Palette className="size-4 text-primary" aria-hidden="true" />
+                  Brand and hero
+                </CardTitle>
+                <CardDescription>
+                  Your colours, your wordmark and the photograph guests land on. The preview and the live site follow as you go.
+                </CardDescription>
+              </div>
+              <CardToolbar>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  leftIcon={<RotateCcw />}
+                  disabled={!brandDirty}
+                  onClick={() => {
+                    update((current) => ({ ...current, brand: defaultBrand() }))
+                    toast('Brand reset', { description: 'Back to the published branding.' })
+                  }}
+                >
+                  Reset brand
+                </Button>
+              </CardToolbar>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-6">
+              <ColorControl label="Primary colour" description="The header mark, links, prices and the book button." swatches={PRIMARY_SWATCHES} value={brand.primaryColor.toLowerCase()} onChange={(hex) => setBrand({ primaryColor: hex })} />
+              <ColorControl label="Accent colour" description="Badges, highlights and the checkout button." swatches={ACCENT_SWATCHES} value={brand.accentColor.toLowerCase()} onChange={(hex) => setBrand({ accentColor: hex })} />
+
+              <Separator />
+
+              <div className="grid gap-5 sm:grid-cols-2 [&>*]:min-w-0">
+                <Field label="Wordmark" description="The name in the header, the footer and on receipts." hint={`${brand.logoText.length}/28`}>
+                  <Input value={settings.brand.logoText ?? ''} placeholder={tenant.branding.logoText} maxLength={28} onChange={(e) => setBrand({ logoText: e.target.value })} />
+                </Field>
+                <div>
+                  <p className="text-sm font-medium text-foreground">Logo</p>
+                  <p className="mt-0.5 mb-2 text-xs text-muted">SVG or transparent PNG, under 1 MB. Replaces the initials mark.</p>
+                  <ImageDrop
+                    shape="logo"
+                    value={brand.logoImage}
+                    onChange={(value) => setBrand({ logoImage: value })}
+                    maxBytes={1_000_000}
+                    hint={brand.logoImage ? 'Shown in the header and the footer.' : 'Or keep the initials in your colours.'}
+                    placeholder={
+                      <span className="font-display text-sm font-bold" style={{ color: brand.primaryColor }}>
+                        {initials(brand.logoText)}
+                      </span>
+                    }
+                  />
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="flex flex-col gap-4">
+                <div>
+                  <p className="text-sm font-medium text-foreground">Hero photograph</p>
+                  <p className="mt-0.5 text-xs text-muted">Landscape, at least 2000px wide. Pick one, paste a link, or upload your own.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {coverPresets.map((preset) => {
+                    const active = brand.coverImage === preset.url
+                    return (
+                      <button
+                        key={preset.url}
+                        type="button"
+                        onClick={() => setBrand({ coverImage: preset.url })}
+                        aria-pressed={active}
+                        className={cn(
+                          'group relative aspect-[4/3] overflow-hidden rounded-xl border text-left transition-all duration-300 ease-[var(--ease-out-expo)]',
+                          active ? 'border-primary ring-2 ring-primary/30' : 'border-line hover:-translate-y-0.5 hover:border-line-strong hover:shadow-md',
+                        )}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={preset.url} alt={preset.label} loading="lazy" className="size-full object-cover transition-transform duration-500 ease-[var(--ease-out-expo)] group-hover:scale-105" />
+                        <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink-950/80 to-transparent px-2 pt-6 pb-1.5 text-[0.6875rem] font-medium text-ink-50">{preset.label}</span>
+                        {active ? (
+                          <span aria-hidden="true" className="absolute top-1.5 right-1.5 grid size-5 place-items-center rounded-full bg-primary text-on-primary">
+                            <Check className="size-3" strokeWidth={3} />
+                          </span>
+                        ) : null}
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="grid gap-3 lg:grid-cols-2 [&>*]:min-w-0">
+                  <Field label="Or paste an image link" description="Hosted anywhere you like.">
+                    <Input
+                      value={coverUpload ? '' : (settings.brand.coverImage ?? '')}
+                      placeholder="https://…"
+                      onChange={(e) => setBrand({ coverImage: e.target.value || undefined })}
+                      leftIcon={<ImageIcon className="size-4" />}
+                      inputClassName="font-mono text-xs"
+                    />
+                  </Field>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Or upload</p>
+                    <p className="mt-0.5 mb-2 text-xs text-muted">JPG or WebP under 1.8 MB.</p>
+                    <ImageDrop value={coverUpload} onChange={(value) => setBrand({ coverImage: value ?? undefined })} maxBytes={1_800_000} hint={coverUpload ? 'This is the hero right now.' : undefined} />
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Eyebrow" optional description="The small line above the headline.">
+                    <Input value={settings.brand.heroEyebrow ?? ''} placeholder="Reef, swell & open water" maxLength={40} onChange={(e) => setBrand({ heroEyebrow: e.target.value })} />
+                  </Field>
+                  <Field label="Headline" optional description="Defaults to your business name.">
+                    <Input value={settings.brand.heroTitle ?? ''} placeholder={tenant.name} maxLength={60} onChange={(e) => setBrand({ heroTitle: e.target.value })} />
+                  </Field>
+                  <Field label="Subheadline" optional className="sm:col-span-2" hint={`${(settings.brand.heroSubtitle ?? '').length}/160`}>
+                    <Textarea rows={2} value={settings.brand.heroSubtitle ?? ''} maxLength={160} placeholder="One sentence on who you are and why guests come back." onChange={(e) => setBrand({ heroSubtitle: e.target.value })} />
+                  </Field>
+                  <Field label="Button label" optional description="The header button and the hero call to action.">
+                    <Input value={settings.brand.ctaLabel ?? ''} placeholder="Book now" maxLength={24} onChange={(e) => setBrand({ ctaLabel: e.target.value })} />
+                  </Field>
+                </div>
+
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Photo treatment</p>
+                    <p className="mt-0.5 min-h-8 text-xs text-muted">{HERO_OVERLAYS.find((o) => o.value === brand.heroOverlay)?.hint}</p>
+                    <Segmented size="sm" label="Photo treatment" value={brand.heroOverlay} onValueChange={(value: HeroOverlay) => setBrand({ heroOverlay: value })} options={HERO_OVERLAYS.map((o) => ({ value: o.value, label: o.label }))} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Hero height</p>
+                    <p className="mt-0.5 min-h-8 text-xs text-muted">{HERO_HEIGHTS.find((o) => o.value === brand.heroHeight)?.hint}</p>
+                    <Segmented size="sm" label="Hero height" value={brand.heroHeight} onValueChange={(value: HeroHeight) => setBrand({ heroHeight: value })} options={HERO_HEIGHTS.map((o) => ({ value: o.value, label: o.label }))} />
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* ---------------- Layout and sections ---------------- */}
           <Card>
             <CardHeader>
@@ -584,7 +744,7 @@ export function StorefrontAdminClient({
                   </span>
                 </div>
 
-                <StorefrontFrame compact={device === 'mobile'} storefront={STOREFRONT} settings={settings} />
+                <StorefrontFrame compact={device === 'mobile'} storefront={STOREFRONT} settings={settings} brand={brand} />
               </motion.div>
 
               <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
@@ -720,10 +880,12 @@ function StorefrontFrame({
   compact,
   storefront,
   settings,
+  brand,
 }: {
   compact: boolean
   storefront: Storefront
   settings: StorefrontSettings
+  brand: ResolvedBrand
 }) {
   if (!storefront) return null
   const { tenant, activities } = storefront
@@ -734,41 +896,51 @@ function StorefrontFrame({
   const rating = activities.length
     ? activities.reduce((sum, a) => sum + a.rating, 0) / activities.length
     : 5
+  const onPrimary = readableOn(brand.primaryColor)
+  const heroHeight = brand.heroHeight === 'compact' ? 'h-24' : brand.heroHeight === 'tall' ? 'h-40' : 'h-28'
 
   return (
     <div className="bg-surface">
       {/* Header */}
       <div className="flex items-center justify-between gap-3 border-b border-line px-3.5 py-2.5">
         <div className="flex min-w-0 items-center gap-2">
-          <span
-            aria-hidden="true"
-            className="grid size-6 shrink-0 place-items-center rounded-md bg-primary text-[0.625rem] font-bold text-on-primary"
-          >
-            {tenant.branding.logoText.slice(0, 2).toUpperCase()}
-          </span>
+          {brand.logoImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={brand.logoImage} alt="" className="h-6 w-auto max-w-20 object-contain" />
+          ) : (
+            <span
+              aria-hidden="true"
+              className="grid size-6 shrink-0 place-items-center rounded-md text-[0.625rem] font-bold"
+              style={{ background: `linear-gradient(145deg, ${brand.primaryColor}, color-mix(in oklab, ${brand.accentColor} 72%, ${brand.primaryColor}))`, color: onPrimary }}
+            >
+              {initials(brand.logoText)}
+            </span>
+          )}
           <span className="truncate font-display text-[0.8125rem] font-semibold tracking-tight text-foreground">
-            {tenant.branding.logoText}
+            {brand.logoText}
           </span>
         </div>
-        <span className="shrink-0 rounded-md bg-accent px-2.5 py-1 text-[0.6875rem] font-semibold text-on-accent">
-          Book now
+        <span className="shrink-0 rounded-md px-2.5 py-1 text-[0.6875rem] font-semibold" style={{ background: brand.primaryColor, color: onPrimary }}>
+          {brand.ctaLabel ?? 'Book now'}
         </span>
       </div>
 
       {/* Hero */}
-      <div className="relative h-28 overflow-hidden">
-        {tenant.branding.coverImage ? (
+      <div className={cn('relative overflow-hidden bg-ink-950', heroHeight)}>
+        {brand.coverImage ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={tenant.branding.coverImage} alt="" className="size-full object-cover" />
+          <img src={brand.coverImage} alt="" className="size-full object-cover" />
         ) : null}
-        <div className="absolute inset-0 bg-gradient-to-t from-ink-950/85 via-ink-950/35 to-transparent" />
+        <div className={cn('absolute inset-0', brand.heroOverlay === 'soft' ? 'bg-gradient-to-t from-ink-950/70 via-ink-950/15 to-transparent' : 'bg-gradient-to-t from-ink-950/85 via-ink-950/35 to-transparent')} />
+        {brand.heroOverlay === 'brand' ? <div className="absolute inset-0 opacity-60" style={{ backgroundImage: `linear-gradient(160deg, ${brand.primaryColor} 0%, transparent 70%)` }} /> : null}
         <div className="absolute inset-x-0 bottom-0 p-3.5">
-          <p className="text-[0.625rem] font-semibold tracking-[0.14em] text-ink-200 uppercase">
-            {tenant.city} · {SITE.name} storefront
+          <p className="truncate text-[0.625rem] font-semibold tracking-[0.14em] text-ink-200 uppercase">
+            {brand.heroEyebrow ?? `${tenant.city} · ${SITE.name} storefront`}
           </p>
           <p className="font-display text-base leading-tight font-semibold tracking-tight text-ink-50">
-            {tenant.name}
+            {brand.heroTitle ?? tenant.name}
           </p>
+          {brand.heroSubtitle && !compact ? <p className="mt-0.5 line-clamp-1 text-[0.6875rem] text-ink-200">{brand.heroSubtitle}</p> : null}
         </div>
       </div>
 
@@ -782,7 +954,7 @@ function StorefrontFrame({
             { icon: Star, label: `${rating.toFixed(1)} rated` },
           ].map((item) => (
             <span key={item.label} className="flex items-center gap-1.5 text-[0.625rem] font-medium text-muted">
-              <item.icon className="size-3 shrink-0 text-primary" aria-hidden="true" />
+              <item.icon className="size-3 shrink-0" aria-hidden="true" style={{ color: brand.primaryColor }} />
               <span className="truncate">{item.label}</span>
             </span>
           ))}
@@ -792,11 +964,11 @@ function StorefrontFrame({
       {/* Next departures */}
       {settings.sections.departures ? (
         <div className="border-b border-line px-3.5 py-2.5">
-          <p className="text-[0.625rem] font-semibold uppercase tracking-[0.12em] text-primary">Next departures</p>
+          <p className="text-[0.625rem] font-semibold uppercase tracking-[0.12em]" style={{ color: brand.primaryColor }}>Next departures</p>
           <div className="mt-1.5 flex gap-1.5 overflow-hidden">
             {activities.slice(0, compact ? 2 : 3).map((activity, i) => (
               <span key={activity.id} className="flex min-w-0 flex-1 flex-col rounded-lg border border-line bg-surface-raised px-2 py-1.5">
-                <span className="text-[0.625rem] font-semibold text-primary tabular">{['9:00 AM', '1:00 PM', '4:30 PM'][i]}</span>
+                <span className="text-[0.625rem] font-semibold tabular" style={{ color: brand.primaryColor }}>{['9:00 AM', '1:00 PM', '4:30 PM'][i]}</span>
                 <span className="truncate text-[0.6875rem] font-medium text-foreground">{activity.name}</span>
               </span>
             ))}
@@ -834,7 +1006,7 @@ function StorefrontFrame({
                       <Star className="size-2.5 fill-warning text-warning" aria-hidden="true" />
                       {activity.rating.toFixed(2)} · {formatDuration(activity.durationMinutes)}
                     </span>
-                    <span className="text-xs font-bold text-primary tabular">{price}</span>
+                    <span className="text-xs font-bold tabular" style={{ color: brand.primaryColor }}>{price}</span>
                   </div>
                 </div>
               </article>
@@ -856,7 +1028,7 @@ function StorefrontFrame({
                     <Star className="size-2.5 fill-warning text-warning" aria-hidden="true" />
                     {activity.rating.toFixed(1)}
                   </span>
-                  <span className="text-xs font-bold text-primary tabular">{price}</span>
+                  <span className="text-xs font-bold tabular" style={{ color: brand.primaryColor }}>{price}</span>
                 </div>
               </div>
             </article>
