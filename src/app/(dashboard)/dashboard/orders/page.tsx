@@ -12,11 +12,11 @@ export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'Orders',
-  description: 'Pickup and delivery orders on one pass, with the last two weeks underneath.',
+  description: 'Pickup, delivery and room-service orders on one pass, with the last two weeks underneath.',
 }
 
 export default async function OrdersPage({ searchParams }: { searchParams: Promise<{ new?: string }> }) {
-  const { tenant, profile } = await requireWorkspaceRoute('/dashboard/orders')
+  const { tenant } = await requireWorkspaceRoute('/dashboard/orders')
   const params = await searchParams
   const dining = getDining(tenant)
   const live = getLiveOrders(tenant)
@@ -27,16 +27,16 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
     .filter((c) => c.totalBookings > 0)
     .sort((a, b) => (b.lastBookingAt ?? '').localeCompare(a.lastBookingAt ?? ''))
     .slice(0, 300)
+  const { pickup, delivery, roomService } = dining.settings.ordering
 
   return (
     <>
       <PageHeader
         title="Orders"
-        description={`${formatNumber(live.length)} live${scheduled ? `, ${scheduled} scheduled for later` : ''}${late ? `, ${late} running late` : ''}. Pickup ${dining.settings.ordering.pickup.startTime} to ${dining.settings.ordering.pickup.endTime}, delivery ${dining.settings.ordering.delivery.startTime} to ${dining.settings.ordering.delivery.endTime}. Phone orders go on the pass from the New order button.`}
+        description={`${formatNumber(live.length)} live${scheduled ? `, ${scheduled} scheduled for later` : ''}${late ? `, ${late} running late` : ''}. ${roomService.enabled ? `Room service ${roomService.startTime} to ${roomService.endTime}, ` : ''}pickup ${pickup.startTime} to ${pickup.endTime}, delivery ${delivery.startTime} to ${delivery.endTime}. Phone orders go on the pass from the New order button.`}
       />
       <OrdersBoard
         orders={dining.orders}
-        tables={dining.tables}
         menu={dining.menu}
         ordering={dining.settings.ordering}
         taxRate={TAX_RATE[tenant.id] ?? 0}
@@ -45,7 +45,6 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
         currency={tenant.currency}
         todayKey={TODAY_KEY}
         nowIso={NOW_ISO}
-        dineIn={profile.modules.reservations}
         openNew={params.new === '1'}
       />
     </>

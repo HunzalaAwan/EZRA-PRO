@@ -1,24 +1,27 @@
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowRight, Clock, MapPin, Phone, Quote, UtensilsCrossed } from 'lucide-react'
+import { ArrowRight, Clock, MapPin, Phone, Quote } from 'lucide-react'
 
 import { Reveal } from '@/components/motion/reveal'
 import { StaggerGroup, StaggerItem } from '@/components/motion/stagger'
 import { RoomsGrid } from '@/components/storefront/hotel/rooms-grid'
 import { StaySearch } from '@/components/storefront/hotel/stay-search'
+import { MenuBrowser } from '@/components/storefront/restaurant/menu-browser'
 import type { HomeReview } from '@/components/storefront/restaurant/restaurant-home'
 import { StarRow } from '@/components/storefront/storefront-hero'
 import { StorefrontSection, StorefrontSections } from '@/components/storefront/storefront-sections'
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
+import { NOW, TAX_RATE } from '@/lib/demo'
 import { getLodging, nightKeys } from '@/lib/hospitality'
 import type { DiningSettings, Menu } from '@/lib/hospitality/types'
 import { addDays, formatCurrency, formatDuration, formatNumber, pluralize, toDateKey } from '@/lib/utils'
 import type { Activity, Tenant, User } from '@/types'
 
 /* ==========================================================================
-   The hotel storefront — rooms first, then the restaurant downstairs, the
-   experiences the house sells, the story, reviews and where to find us.
+   The hotel storefront — rooms first, then the kitchen's menu (room service,
+   pickup, delivery), the experiences the house sells, the story, reviews
+   and where to find us. Tables are booked by phone.
    ========================================================================== */
 
 export interface HotelHomeProps {
@@ -41,6 +44,8 @@ export function HotelHome({ tenant, menu, dining, experiences, reviews, story, c
   const base = `/book/${tenant.slug}`
   const lodging = getLodging(tenant)
   const foundedYear = new Date(tenant.createdAt).getFullYear()
+  const nowTime = `${String(NOW.getHours()).padStart(2, '0')}:${String(NOW.getMinutes()).padStart(2, '0')}`
+  const weekday = new Date(`${todayKey}T12:00:00`).getDay()
 
   /* ---------- availability for the next ninety nights, compact ---------- */
   const end = toDateKey(addDays(new Date(`${todayKey}T12:00:00`), WINDOW_DAYS))
@@ -58,8 +63,6 @@ export function HotelHome({ tenant, menu, dining, experiences, reviews, story, c
     }
   }
   const lowest = Math.min(...lodging.roomTypes.map((t) => t.baseRate))
-  const popular = menu.items.filter((i) => i.popular && i.status === 'available').slice(0, 4)
-  const dinner = dining.periods[dining.periods.length - 1]
 
   return (
     <StorefrontSections slug={tenant.slug} vertical={tenant.vertical}>
@@ -111,51 +114,14 @@ export function HotelHome({ tenant, menu, dining, experiences, reviews, story, c
       </StorefrontSection>
 
       <StorefrontSection key="dining" id="dining">
-        <section id="dining" className="scroll-mt-20 border-y border-line-subtle bg-background-subtle py-14 sm:py-20">
-          <div className="mx-auto grid w-full max-w-[88rem] gap-10 px-4 sm:px-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-16 lg:px-10">
-            <Reveal>
-              <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-primary">The kitchen</p>
-              <h2 className="mt-3 max-w-[20ch] font-display text-display-sm font-semibold tracking-tight text-foreground">Breakfast on the roof, dinner in the kitchen room</h2>
-              <p className="mt-4 max-w-[46ch] text-base leading-relaxed text-muted">
-                {dining.periods.map((p) => `${p.name} ${p.startTime}–${p.endTime}`).join(' · ')}. Open to guests and the neighbourhood alike; guests can charge everything to the room, or order to it.
-              </p>
-              <div className="mt-6 flex flex-wrap gap-3">
-                <Button asChild size="lg" leftIcon={<UtensilsCrossed aria-hidden="true" />}>
-                  <Link href={`${base}/reserve`}>Reserve a table</Link>
-                </Button>
-                <Button asChild size="lg" variant="outline">
-                  <Link href={`${base}/order`}>Order to your room</Link>
-                </Button>
-              </div>
-              <p className="mt-4 text-xs text-subtle">
-                Last seating {dinner.lastSeating}. Room service until {dining.ordering.delivery.endTime}.
-              </p>
-            </Reveal>
-            <Reveal delay={0.1}>
-              <ul className="grid gap-3 sm:grid-cols-2">
-                {popular.map((item) => (
-                  <li key={item.id} className="flex gap-3 rounded-2xl border border-line bg-surface p-3">
-                    {item.imageUrl ? (
-                      <div className="relative size-20 shrink-0 overflow-hidden rounded-xl bg-surface-sunken">
-                        <Image src={item.imageUrl} alt={item.name} fill sizes="80px" className="object-cover" />
-                      </div>
-                    ) : null}
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-foreground">{item.name}</p>
-                      <p className="mt-0.5 line-clamp-2 text-xs text-muted">{item.description}</p>
-                      <p className="mt-1.5 text-xs text-foreground tabular-nums">{formatCurrency(item.price, tenant.currency)}</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </Reveal>
-          </div>
-        </section>
+        <div className="border-t border-line-subtle">
+          <MenuBrowser menu={menu} ordering={dining.ordering} periods={dining.periods} currency={tenant.currency} slug={tenant.slug} taxRate={TAX_RATE[tenant.id] ?? 0} nowTime={nowTime} weekday={weekday} phone={tenant.contact.phone} eyebrow="The kitchen" title="Breakfast on the roof, dinner in the kitchen room, anything to your room" defaultMode="room" />
+        </div>
       </StorefrontSection>
 
       {experiences.length > 0 ? (
         <StorefrontSection key="experiences" id="experiences">
-          <section id="experiences" className="scroll-mt-20 bg-background py-14 sm:py-20">
+          <section id="experiences" className="scroll-mt-20 border-t border-line-subtle bg-background-subtle py-14 sm:py-20">
             <div className="mx-auto w-full max-w-[88rem] px-4 sm:px-6 lg:px-10">
               <Reveal className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div>
@@ -164,20 +130,20 @@ export function HotelHome({ tenant, menu, dining, experiences, reviews, story, c
                 </div>
                 <p className="max-w-[40ch] text-sm text-muted">Open to guests and visitors. Book with your stay or on the day.</p>
               </Reveal>
-              <StaggerGroup stagger={0.06} className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              <StaggerGroup stagger={0.06} className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 {experiences.slice(0, 4).map((a) => (
                   <StaggerItem key={a.id} direction="up" className="h-full">
-                    <Link href={`${base}/${a.slug}`} className="group flex h-full flex-col overflow-hidden rounded-2xl border border-line bg-surface transition-all duration-400 ease-[var(--ease-out-expo)] hover:-translate-y-0.5 hover:border-primary/45 hover:shadow-lg focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary">
-                      <div className="relative aspect-[4/3] bg-surface-sunken">{a.media[0] ? <Image src={a.media[0].url} alt={a.media[0].alt ?? a.name} fill sizes="(max-width: 640px) 100vw, 25vw" className="object-cover" /> : null}</div>
+                    <Link href={`${base}/${a.slug}`} className="group flex h-full flex-col overflow-hidden rounded-2xl border border-line bg-surface transition-colors hover:border-line-strong focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary">
+                      <div className="relative aspect-[4/3] bg-surface-sunken">{a.media[0] ? <Image src={a.media[0].url} alt={a.media[0].alt ?? a.name} fill sizes="(max-width: 640px) 100vw, 25vw" className="object-cover transition-transform duration-500 group-hover:scale-[1.03]" /> : null}</div>
                       <div className="flex flex-1 flex-col p-4">
-                        <p className="text-[0.9375rem] font-semibold tracking-tight text-foreground group-hover:text-primary">{a.name}</p>
+                        <p className="text-[0.9375rem] font-semibold leading-snug text-foreground">{a.name}</p>
                         <p className="mt-1 line-clamp-2 text-sm text-muted">{a.tagline}</p>
-                        <div className="mt-3 flex items-center justify-between text-sm">
+                        <div className="mt-auto flex items-center justify-between pt-3 text-sm">
                           <span className="inline-flex items-center gap-1.5 text-subtle">
                             <Clock className="size-3.5" aria-hidden="true" />
                             {formatDuration(a.durationMinutes)}
                           </span>
-                          <span className="text-foreground tabular-nums">from {formatCurrency(a.basePrice, tenant.currency)}</span>
+                          <span className="font-semibold text-foreground tabular-nums">from {formatCurrency(a.basePrice, tenant.currency)}</span>
                         </div>
                       </div>
                     </Link>
@@ -190,7 +156,7 @@ export function HotelHome({ tenant, menu, dining, experiences, reviews, story, c
       ) : null}
 
       <StorefrontSection key="about" id="about">
-        <section id="about" className="scroll-mt-20 border-t border-line-subtle bg-background-subtle py-14 sm:py-20">
+        <section id="about" className="scroll-mt-20 bg-background py-14 sm:py-20">
           <div className="mx-auto grid w-full max-w-[88rem] gap-10 px-4 sm:px-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:gap-16 lg:px-10">
             <Reveal>
               <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-primary">The house</p>
@@ -238,7 +204,7 @@ export function HotelHome({ tenant, menu, dining, experiences, reviews, story, c
 
       {reviews.length > 0 ? (
         <StorefrontSection key="reviews" id="reviews">
-          <section id="reviews" className="scroll-mt-20 bg-background py-14 sm:py-20">
+          <section id="reviews" className="scroll-mt-20 border-t border-line-subtle bg-background-subtle py-14 sm:py-20">
             <div className="mx-auto w-full max-w-[88rem] px-4 sm:px-6 lg:px-10">
               <Reveal className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div>
@@ -275,12 +241,12 @@ export function HotelHome({ tenant, menu, dining, experiences, reviews, story, c
       ) : null}
 
       <StorefrontSection key="contact" id="contact">
-        <section id="contact" className="scroll-mt-20 border-t border-line-subtle bg-background-subtle py-14 sm:py-20">
+        <section id="contact" className="scroll-mt-20 border-t border-line-subtle bg-background py-14 sm:py-20">
           <div className="mx-auto grid w-full max-w-[88rem] gap-10 px-4 sm:px-6 lg:grid-cols-2 lg:gap-16 lg:px-10">
             <Reveal>
               <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-primary">Getting here</p>
               <h2 className="mt-3 max-w-[16ch] font-display text-display-sm font-semibold tracking-tight text-foreground">A corner house above the river</h2>
-              <p className="mt-4 max-w-[46ch] text-base leading-relaxed text-muted">Ten minutes on foot from Santa Apolónia station, twenty-five by taxi from the airport. The lane is too narrow for cars, so we meet you at the bottom with a trolley.</p>
+              <p className="mt-4 max-w-[46ch] text-base leading-relaxed text-muted">Ten minutes on foot from Santa Apolónia station, twenty-five by taxi from the airport. The lane is too narrow for cars, so we meet you at the bottom with a trolley. A table in the kitchen room is a phone call away.</p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Button asChild size="lg" leftIcon={<Phone aria-hidden="true" />}>
                   <a href={`tel:${tenant.contact.phone.replace(/[^+\d]/g, '')}`}>{tenant.contact.phone}</a>
@@ -306,8 +272,9 @@ export function HotelHome({ tenant, menu, dining, experiences, reviews, story, c
                   <dd className="text-xs text-subtle">Early or late on request, subject to the room.</dd>
                 </div>
                 <div>
-                  <dt className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-faint">Email</dt>
-                  <dd className="mt-1 text-sm text-foreground">{tenant.contact.email}</dd>
+                  <dt className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-faint">Kitchen</dt>
+                  <dd className="mt-1 text-sm text-foreground tabular-nums">{dining.periods.map((p) => `${p.name} ${p.startTime}–${p.endTime}`).join(' · ')}</dd>
+                  <dd className="text-xs text-subtle">Room service {dining.ordering.roomService.startTime}–{dining.ordering.roomService.endTime}.</dd>
                 </div>
                 <div>
                   <dt className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-faint">Good to know</dt>

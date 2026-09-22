@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Bike, Check, Minus, Plus, ShoppingBag, X } from 'lucide-react'
+import { BedDouble, Bike, Check, Minus, Plus, ShoppingBag, X } from 'lucide-react'
 
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -12,8 +12,8 @@ import { SearchInput } from '@/components/ui/search-input'
 import { Segmented } from '@/components/ui/segmented'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { cartTotals, type CartLine, type CartMode } from '@/lib/cart'
-import { hm, mh } from '@/lib/hospitality/floor'
+import { cartTotals, channelFor, type CartLine, type CartMode } from '@/lib/cart'
+import { hm, mh } from '@/lib/hospitality/hours'
 import type { Menu, MenuItem, Order, OrderingHours } from '@/lib/hospitality/types'
 import { cn, formatCurrency } from '@/lib/utils'
 import type { CurrencyCode, Customer } from '@/types'
@@ -21,11 +21,11 @@ import type { CurrencyCode, Customer } from '@/types'
 import { guestName } from './format'
 
 /* ==========================================================================
-   <NewOrderDialog> — an order taken over the phone.
+   <NewOrderDialog> — an order taken over the phone, or from a room.
 
-   Who, pickup or delivery, when, what. Prices, fees and tax come from the
-   same maths as the storefront cart, so a phone order costs the guest
-   exactly what the website would have charged.
+   Who, how (pickup, delivery, or up to a room), when, what. Prices, fees
+   and tax come from the same maths as the storefront cart, so a phone
+   order costs the guest exactly what the website would have charged.
    ========================================================================== */
 
 export interface NewOrderDialogProps {
@@ -44,29 +44,32 @@ export interface NewOrderDialogProps {
 }
 
 export function NewOrderDialog({ open, onOpenChange, menu, ordering, currency, taxRate, nextNumber, guests, todayKey, nowIso, tenantId, onCreate }: NewOrderDialogProps) {
-  const [type, setType] = React.useState<CartMode>('pickup')
+  const roomService = ordering.roomService.enabled
+  const [mode, setMode] = React.useState<CartMode>(roomService ? 'room' : 'pickup')
   const [name, setName] = React.useState('')
   const [phone, setPhone] = React.useState('')
   const [pick, setPick] = React.useState<Customer | null>(null)
   const [address, setAddress] = React.useState('')
+  const [roomNumber, setRoomNumber] = React.useState('')
   const [zoneId, setZoneId] = React.useState(ordering.delivery.zones[0]?.id ?? '')
   const [when, setWhen] = React.useState('asap')
   const [lines, setLines] = React.useState<CartLine[]>([])
   const [query, setQuery] = React.useState('')
   const [note, setNote] = React.useState('')
-  const [payment, setPayment] = React.useState<'card' | 'cash'>('card')
+  const [payment, setPayment] = React.useState<'card' | 'cash' | 'room'>(roomService ? 'room' : 'card')
 
   const nowMin = hm(nowIso.slice(11, 16))
-  const hours = ordering[type]
+  const window = mode === 'room' ? ordering.roomService : ordering[mode]
   const zone = ordering.delivery.zones.find((z) => z.id === zoneId) ?? ordering.delivery.zones[0]
-  const lead = hours.leadMinutes + (type === 'delivery' ? zone?.minutes ?? 0 : 0)
+  const lead = window.leadMinutes + (mode === 'delivery' ? zone?.minutes ?? 0 : 0)
   const slots: string[] = []
-  for (let t = Math.ceil(Math.max(nowMin + lead, hm(hours.startTime)) / 15) * 15; t <= hm(hours.endTime); t += 15) slots.push(mh(t))
+  for (let t = Math.ceil(Math.max(nowMin + lead, hm(window.startTime)) / 15) * 15; t <= hm(window.endTime); t += 15) slots.push(mh(t))
 
-  const totals = cartTotals({ version: 1, mode: type, lines, zoneId: zone?.id ?? null, when, tipPercent: 0 }, ordering.delivery.zones, taxRate)
+  const totals = cartTotals({ version: 1, mode, lines, zoneId: zone?.id ?? null, when, tipPercent: 0 }, ordering, taxRate)
+  const channel = channelFor(mode)
   const categoryById = new Map(menu.categories.map((c) => [c.id, c]))
   const needle = query.trim().toLowerCase()
-  const sellable = menu.items.filter((i) => i.status === 'available' && i.channels.includes(type)).filter((i) => (needle ? i.name.toLowerCase().includes(needle) : true))
+  const sellable = menu.items.filter((i) => i.status === 'available' && i.channels.includes(channel)).filter((i) => (needle ? i.name.toLowerCase().includes(needle) : true))
   const suggestions = name.trim().length >= 2 && !pick ? guests.filter((g) => guestName(g).toLowerCase().includes(name.trim().toLowerCase())).slice(0, 4) : []
 
   const addItem = (item: MenuItem) => {
@@ -81,13 +84,14 @@ export function NewOrderDialog({ open, onOpenChange, menu, ordering, currency, t
   }
   const setQty = (key: string, qty: number) => setLines((current) => (qty <= 0 ? current.filter((l) => l.key !== key) : current.map((l) => (l.key === key ? { ...l, qty } : l))))
 
-  const canSubmit = name.trim().length >= 2 && phone.replace(/\D/g, '').length >= 6 && lines.length > 0 && (type === 'pickup' || address.trim().length >= 4) && !totals.belowMinimum
+  const canSubmit = name.trim().length >= 2 && (mode === 'room' ? roomNumber.trim().length >= 2 : phone.replace(/\D/g, '').length >= 6) && lines.length > 0 && (mode !== 'delivery' || address.trim().length >= 4) && !totals.belowMinimum
 
   const reset = () => {
     setName('')
     setPhone('')
     setPick(null)
     setAddress('')
+    setRoomNumber('')
     setLines([])
     setQuery('')
     setNote('')
@@ -114,32 +118,32 @@ export function NewOrderDialog({ open, onOpenChange, menu, ordering, currency, t
       segment: 'new',
     }
     const promisedMin = when === 'asap' ? nowMin + lead : hm(when)
+    const total = totals.subtotal + totals.deliveryFee + totals.serviceFee + totals.tax
     onCreate({
       id: `ord_phone_${Date.now().toString(36)}`,
       tenantId,
       number: `#${nextNumber}`,
-      type,
+      type: channel,
       status: 'accepted',
       customer,
       lines: lines.map((l, i) => ({ id: `ol_phone_${i}`, itemId: l.itemId, name: l.name, qty: l.qty, unitPrice: l.unitPrice, modifiers: l.modifiers, note: null, total: l.unitPrice * l.qty })),
       subtotal: totals.subtotal,
       deliveryFee: totals.deliveryFee,
-      serviceFee: 0,
+      serviceFee: totals.serviceFee,
       tip: 0,
       discount: 0,
       tax: totals.tax,
-      total: totals.subtotal + totals.deliveryFee + totals.tax,
-      paymentStatus: payment === 'card' ? 'paid' : 'pay_at_counter',
-      paymentMethod: payment === 'card' ? 'card' : 'cash',
-      source: 'phone',
+      total,
+      paymentStatus: mode === 'room' ? 'room_charge' : payment === 'card' ? 'paid' : 'pay_at_counter',
+      paymentMethod: mode === 'room' ? 'room_charge' : payment === 'card' ? 'card' : 'cash',
+      source: mode === 'room' ? 'room_service' : 'phone',
       placedAt: nowIso,
       scheduledFor: when === 'asap' ? null : `${todayKey}T${when}:00`,
       promisedAt: `${todayKey}T${mh(promisedMin)}:00`,
       readyAt: null,
       completedAt: null,
-      tableId: null,
-      roomNumber: null,
-      address: type === 'delivery' ? { line: address.trim(), area: zone?.name ?? '', instructions: null } : null,
+      roomNumber: mode === 'room' ? roomNumber.trim() : null,
+      address: mode === 'delivery' ? { line: address.trim(), area: zone?.name ?? '', instructions: null } : null,
       courier: null,
       notes: note.trim() || null,
       late: false,
@@ -147,28 +151,23 @@ export function NewOrderDialog({ open, onOpenChange, menu, ordering, currency, t
     reset()
   }
 
+  const modeOptions = [
+    ...(roomService ? [{ value: 'room' as CartMode, label: 'Room service', icon: BedDouble }] : []),
+    { value: 'pickup' as CartMode, label: 'Pickup', icon: ShoppingBag },
+    { value: 'delivery' as CartMode, label: 'Delivery', icon: Bike },
+  ]
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="xl" className="max-h-[min(46rem,calc(100dvh-2rem))]">
         <DialogHeader divider>
           <DialogTitle>New order</DialogTitle>
-          <DialogDescription>Taken over the phone. Same prices and fees as the storefront; the ticket goes straight to the pass.</DialogDescription>
+          <DialogDescription>Taken over the phone or from a room. Same prices and fees as the storefront; the ticket goes straight to the pass.</DialogDescription>
         </DialogHeader>
         <DialogBody className="grid gap-6 py-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
           <div className="flex flex-col gap-4">
             <div className="flex flex-wrap items-end gap-4">
-              <Segmented
-                label="Order type"
-                options={[
-                  { value: 'pickup', label: 'Pickup', icon: ShoppingBag },
-                  { value: 'delivery', label: 'Delivery', icon: Bike },
-                ]}
-                value={type}
-                onValueChange={(v) => {
-                  setType(v)
-                  setWhen('asap')
-                }}
-              />
+              <Segmented label="Order type" options={modeOptions} value={mode} onValueChange={(v) => { setMode(v); setWhen('asap'); setPayment(v === 'room' ? 'room' : 'card') }} />
               <Field label="When" className="min-w-[12rem]">
                 <Select value={when} onValueChange={setWhen}>
                   <SelectTrigger aria-label="When">
@@ -205,8 +204,12 @@ export function NewOrderDialog({ open, onOpenChange, menu, ordering, currency, t
                   </ul>
                 ) : null}
               </div>
-              <Field label="Phone" required>{(c) => <Input {...c} value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" placeholder="+30 …" />}</Field>
-              {type === 'delivery' ? (
+              {mode === 'room' ? (
+                <Field label="Room" required>{(c) => <Input {...c} value={roomNumber} onChange={(e) => setRoomNumber(e.target.value)} inputMode="numeric" placeholder="305" />}</Field>
+              ) : (
+                <Field label="Phone" required>{(c) => <Input {...c} value={phone} onChange={(e) => setPhone(e.target.value)} inputMode="tel" placeholder="+30 …" />}</Field>
+              )}
+              {mode === 'delivery' ? (
                 <>
                   <Field label="Address" required>{(c) => <Input {...c} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Street and number" />}</Field>
                   <Field label="Zone">
@@ -227,7 +230,7 @@ export function NewOrderDialog({ open, onOpenChange, menu, ordering, currency, t
               ) : null}
             </div>
 
-            <Field label="Dishes" description={`${sellable.length} available for ${type}`}>
+            <Field label="Dishes" description={`${sellable.length} available for ${mode === 'room' ? 'room service' : mode}`}>
               <div className="flex flex-col gap-2">
                 <SearchInput value={query} onValueChange={setQuery} placeholder="Search the menu…" size="sm" aria-label="Search dishes" />
                 <ul className="max-h-64 divide-y divide-line-subtle overflow-y-auto rounded-lg border border-line">
@@ -235,7 +238,10 @@ export function NewOrderDialog({ open, onOpenChange, menu, ordering, currency, t
                     <li key={item.id} className="flex items-center gap-3 px-3 py-2 text-[0.8125rem]">
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-foreground">{item.name}</span>
-                        <span className="block truncate text-xs text-subtle">{categoryById.get(item.categoryId)?.name}{item.modifiers.some((m) => m.required) ? ` · ${item.modifiers.filter((m) => m.required).map((m) => m.options[0].label).join(', ')} unless noted` : ''}</span>
+                        <span className="block truncate text-xs text-subtle">
+                          {categoryById.get(item.categoryId)?.name}
+                          {item.modifiers.some((m) => m.required) ? ` · ${item.modifiers.filter((m) => m.required).map((m) => m.options[0].label).join(', ')} unless noted` : ''}
+                        </span>
                       </span>
                       <span className="shrink-0 text-muted tabular-nums">{formatCurrency(item.price, currency)}</span>
                       <Button size="xs" variant="secondary" leftIcon={<Plus />} onClick={() => addItem(item)}>
@@ -248,7 +254,7 @@ export function NewOrderDialog({ open, onOpenChange, menu, ordering, currency, t
               </div>
             </Field>
 
-            <Field label="Note for the kitchen" optional>{(c) => <Textarea {...c} rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Allergy, no onion, ring the bell twice…" />}</Field>
+            <Field label="Note for the kitchen" optional>{(c) => <Textarea {...c} rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Allergy, no onion, leave the tray outside…" />}</Field>
           </div>
 
           <aside className="flex flex-col gap-3 rounded-xl bg-surface-sunken p-4 text-[0.8125rem]">
@@ -288,23 +294,33 @@ export function NewOrderDialog({ open, onOpenChange, menu, ordering, currency, t
                   <dd className="tabular-nums">{formatCurrency(totals.deliveryFee, currency)}</dd>
                 </div>
               ) : null}
+              {mode === 'room' && totals.serviceFee ? (
+                <div className="flex justify-between">
+                  <dt>Tray charge</dt>
+                  <dd className="tabular-nums">{formatCurrency(totals.serviceFee, currency)}</dd>
+                </div>
+              ) : null}
               <div className="flex justify-between">
                 <dt>Tax</dt>
                 <dd className="tabular-nums">{formatCurrency(totals.tax, currency)}</dd>
               </div>
               <div className="flex justify-between pt-1 text-foreground">
                 <dt>Total</dt>
-                <dd className="tabular-nums">{formatCurrency(totals.subtotal + totals.deliveryFee + totals.tax, currency)}</dd>
+                <dd className="tabular-nums">{formatCurrency(totals.subtotal + totals.deliveryFee + (mode === 'room' ? totals.serviceFee : 0) + totals.tax, currency)}</dd>
               </div>
             </dl>
             {totals.belowMinimum ? <p className="text-xs text-warning">Minimum for {zone?.name} is {formatCurrency(totals.minOrder, currency)}.</p> : null}
             <Field label="Payment">
               <div className="flex gap-1.5">
-                {(['card', 'cash'] as const).map((p) => (
-                  <button key={p} type="button" aria-pressed={payment === p} onClick={() => setPayment(p)} className={cn('flex-1 rounded-md border px-2 py-1.5 text-xs transition-colors', payment === p ? 'border-foreground bg-foreground text-background' : 'border-line text-muted hover:border-line-strong')}>
-                    {p === 'card' ? 'Card over the phone' : type === 'pickup' ? 'Cash at pickup' : 'Cash at the door'}
-                  </button>
-                ))}
+                {mode === 'room' ? (
+                  <span className="flex-1 rounded-md border border-foreground bg-foreground px-2 py-1.5 text-center text-xs text-background">Charged to the room</span>
+                ) : (
+                  (['card', 'cash'] as const).map((p) => (
+                    <button key={p} type="button" aria-pressed={payment === p} onClick={() => setPayment(p)} className={cn('flex-1 rounded-md border px-2 py-1.5 text-xs transition-colors', payment === p ? 'border-foreground bg-foreground text-background' : 'border-line text-muted hover:border-line-strong')}>
+                      {p === 'card' ? 'Card over the phone' : mode === 'pickup' ? 'Cash at pickup' : 'Cash at the door'}
+                    </button>
+                  ))
+                )}
               </div>
             </Field>
           </aside>

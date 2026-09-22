@@ -165,7 +165,7 @@ export function StayCheckout({ slug, tenantName, tenantPhone, addressLine, roomT
               </a>
             </Button>
             <Button asChild size="lg" variant="outline">
-              <Link href={`/book/${slug}#dining`}>Book a table for the first night</Link>
+              <Link href={`/book/${slug}#menu`}>See the menu for the first night</Link>
             </Button>
           </div>
         </div>

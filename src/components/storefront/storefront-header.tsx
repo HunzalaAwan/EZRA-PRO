@@ -100,7 +100,7 @@ export function StorefrontHeader({ tenant, kind = 'experiences' }: StorefrontHea
       : kind === 'hotel'
         ? [
             { label: 'Rooms', href: `${base}#rooms` },
-            { label: 'Dining', href: `${base}#dining` },
+            { label: 'Menu', href: `${base}#menu` },
             { label: 'Experiences', href: `${base}#experiences` },
             { label: 'Contact', href: `${base}#contact` },
           ]

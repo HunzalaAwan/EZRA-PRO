@@ -3,19 +3,7 @@
 import * as React from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import {
-  ArrowUpRight,
-  Bike,
-  ChefHat,
-  Columns3,
-  List,
-  MapPin,
-  Phone,
-  Plus,
-  Printer,
-  ShoppingBag,
-  UtensilsCrossed,
-} from 'lucide-react'
+import { ArrowUpRight, BedDouble, Bike, ChefHat, Columns3, List, MapPin, Phone, Plus, Printer, ShoppingBag } from 'lucide-react'
 
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -26,19 +14,8 @@ import { SearchInput } from '@/components/ui/search-input'
 import { Segmented } from '@/components/ui/segmented'
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { toast } from '@/components/ui/toaster'
-import { hm } from '@/lib/hospitality/floor'
-import {
-  LIVE_ORDER_STATUSES,
-  ORDER_SOURCE_LABEL,
-  ORDER_STATUS_META,
-  ORDER_TYPE_LABEL,
-  type DiningTable,
-  type Menu,
-  type Order,
-  type OrderStatus,
-  type OrderType,
-  type OrderingHours,
-} from '@/lib/hospitality/types'
+import { hm } from '@/lib/hospitality/hours'
+import { LIVE_ORDER_STATUSES, ORDER_SOURCE_LABEL, ORDER_STATUS_META, ORDER_TYPE_LABEL, type Menu, type Order, type OrderStatus, type OrderType, type OrderingHours } from '@/lib/hospitality/types'
 import { cn, formatCurrency, formatDateShort, formatNumber } from '@/lib/utils'
 import type { CurrencyCode, Customer } from '@/types'
 
@@ -49,16 +26,17 @@ import { StatTile, StatusWord, clock, guestName, minutesBetween, shortDuration }
    <OrdersBoard> — the pass.
 
    Live orders move left to right: New → In the kitchen → Ready → On the way
-   → Done. A card is one order: number, where it is going, what is on it,
-   when it was promised. Tap it for the ticket. Everything from the last
-   two weeks sits in the list underneath.
+   → Done. A card is one order: number, where it is going (a pickup, a
+   delivery area, a room), what is on it, when it was promised. Tap it for
+   the ticket. Everything from the last two weeks sits in the list
+   underneath. Tables are booked by phone and never appear here.
    ========================================================================== */
 
 type TypeFilter = 'all' | OrderType
 type View = 'board' | 'list'
 
 const TYPE_ICON: Record<OrderType, React.ComponentType<{ className?: string; 'aria-hidden'?: boolean | 'true' }>> = {
-  dine_in: UtensilsCrossed,
+  dine_in: BedDouble,
   pickup: ShoppingBag,
   delivery: Bike,
 }
@@ -73,7 +51,7 @@ interface Column {
 const COLUMNS: Column[] = [
   { key: 'new', title: 'New', statuses: ['new'], hint: 'Accept or turn down' },
   { key: 'kitchen', title: 'In the kitchen', statuses: ['accepted', 'preparing'], hint: 'On the pass' },
-  { key: 'ready', title: 'Ready', statuses: ['ready'], hint: 'Waiting for the guest or the courier' },
+  { key: 'ready', title: 'Ready', statuses: ['ready'], hint: 'Waiting for the guest, the courier or the runner' },
   { key: 'road', title: 'On the way', statuses: ['out_for_delivery'], hint: 'With a courier' },
 ]
 
@@ -87,7 +65,7 @@ function nextStep(order: Order): { label: string; status: OrderStatus } | null {
     case 'preparing':
       return { label: 'Ready', status: 'ready' }
     case 'ready':
-      return order.type === 'delivery' ? { label: 'Dispatch', status: 'out_for_delivery' } : order.type === 'pickup' ? { label: 'Handed over', status: 'completed' } : { label: 'Served', status: 'completed' }
+      return order.type === 'delivery' ? { label: 'Dispatch', status: 'out_for_delivery' } : order.type === 'pickup' ? { label: 'Handed over', status: 'completed' } : { label: 'Sent up', status: 'completed' }
     case 'out_for_delivery':
       return { label: 'Delivered', status: 'completed' }
     default:
@@ -95,9 +73,12 @@ function nextStep(order: Order): { label: string; status: OrderStatus } | null {
   }
 }
 
+function whereTo(o: Order) {
+  return o.type === 'dine_in' ? `Room ${o.roomNumber ?? '—'}` : o.type === 'delivery' ? o.address?.area ?? 'Delivery' : 'Pickup'
+}
+
 export interface OrdersBoardProps {
   orders: Order[]
-  tables: DiningTable[]
   menu: Menu
   ordering: OrderingHours
   taxRate: number
@@ -107,18 +88,17 @@ export interface OrdersBoardProps {
   currency: CurrencyCode
   todayKey: string
   nowIso: string
-  /** Whether dine-in orders exist here (hotels with a book); restaurants are pickup and delivery only. */
-  dineIn?: boolean
   openNew?: boolean
 }
 
-export function OrdersBoard({ orders: initial, tables, menu, ordering, taxRate, nextNumber, recentGuests, currency, todayKey, nowIso, dineIn = false, openNew = false }: OrdersBoardProps) {
+export function OrdersBoard({ orders: initial, menu, ordering, taxRate, nextNumber, recentGuests, currency, todayKey, nowIso, openNew = false }: OrdersBoardProps) {
   const router = useRouter()
   const [orders, setOrders] = React.useState(initial)
   const [newOpen, setNewOpen] = React.useState(openNew)
+  const roomService = ordering.roomService.enabled
   const typeOptions: { value: TypeFilter; label: string; icon?: typeof ShoppingBag }[] = [
     { value: 'all', label: 'All' },
-    ...(dineIn ? [{ value: 'dine_in' as TypeFilter, label: 'Dine-in', icon: UtensilsCrossed }] : []),
+    ...(roomService ? [{ value: 'dine_in' as TypeFilter, label: 'Room service', icon: BedDouble }] : []),
     { value: 'pickup', label: 'Pickup', icon: ShoppingBag },
     { value: 'delivery', label: 'Delivery', icon: Bike },
   ]
@@ -129,7 +109,6 @@ export function OrdersBoard({ orders: initial, tables, menu, ordering, taxRate, 
   const [sort, setSort] = React.useState<DataTableSort>({ id: 'placed', dir: 'desc' })
   const [limit, setLimit] = React.useState(60)
 
-  const tableById = React.useMemo(() => new Map(tables.map((t) => [t.id, t])), [tables])
   const nowMin = hm(nowIso.slice(11, 16))
 
   const byType = React.useMemo(() => orders.filter((o) => (type === 'all' ? true : o.type === type)), [orders, type])
@@ -144,7 +123,7 @@ export function OrdersBoard({ orders: initial, tables, menu, ordering, taxRate, 
     const avgPrep = prep.length ? Math.round(prep.reduce((a, b) => a + b, 0) / prep.length) : 0
     const late = liveAll.filter((o) => o.late).length
     const scheduled = liveAll.filter((o) => o.scheduledFor).length
-    const mix = (['dine_in', 'pickup', 'delivery'] as OrderType[]).map((t) => ({ t, n: today.filter((o) => o.type === t && o.status !== 'cancelled').length }))
+    const mix = (['dine_in', 'pickup', 'delivery'] as OrderType[]).map((t) => ({ t, n: today.filter((o) => o.type === t && o.status !== 'cancelled').length })).filter((m) => m.n > 0)
     return { live: liveAll.length, late, scheduled, revenueToday, doneToday: doneToday.length, avgPrep, mix }
   }, [orders, today])
 
@@ -152,7 +131,7 @@ export function OrdersBoard({ orders: initial, tables, menu, ordering, taxRate, 
     const needle = query.trim().toLowerCase()
     const rows = byType.filter((o) => {
       if (!needle) return true
-      return o.number.includes(needle) || guestName(o.customer).toLowerCase().includes(needle) || o.lines.some((l) => l.name.toLowerCase().includes(needle))
+      return o.number.includes(needle) || guestName(o.customer).toLowerCase().includes(needle) || o.lines.some((l) => l.name.toLowerCase().includes(needle)) || (o.roomNumber ?? '').includes(needle)
     })
     const dir = sort.dir === 'asc' ? 1 : -1
     return [...rows].sort((a, b) => {
@@ -191,7 +170,7 @@ export function OrdersBoard({ orders: initial, tables, menu, ordering, taxRate, 
     const messages: Partial<Record<OrderStatus, string>> = {
       accepted: `${order.number} accepted`,
       preparing: `${order.number} is on the pass`,
-      ready: `${order.number} ready · ${order.type === 'pickup' ? 'guest texted' : order.type === 'delivery' ? 'courier called' : `runner to ${order.tableId ? tableById.get(order.tableId)?.name : 'the table'}`}`,
+      ready: `${order.number} ready · ${order.type === 'pickup' ? 'guest texted' : order.type === 'delivery' ? 'courier called' : `runner to room ${order.roomNumber ?? ''}`}`,
       out_for_delivery: `${order.number} out for delivery`,
       completed: `${order.number} done`,
       cancelled: `${order.number} cancelled`,
@@ -205,7 +184,7 @@ export function OrdersBoard({ orders: initial, tables, menu, ordering, taxRate, 
     setNewOpen(false)
     if (openNew) router.replace('/dashboard/orders')
     toast.success(`${order.number} taken over the phone`, {
-      description: `${ORDER_TYPE_LABEL[order.type]} · ${order.scheduledFor ? `for ${clock(order.scheduledFor)}` : `ready around ${clock(order.promisedAt)}`} · ${formatCurrency(order.total, currency)}`,
+      description: `${order.type === 'dine_in' ? `Room ${order.roomNumber}` : ORDER_TYPE_LABEL[order.type]} · ${order.scheduledFor ? `for ${clock(order.scheduledFor)}` : `ready around ${clock(order.promisedAt)}`} · ${formatCurrency(order.total, currency)}`,
     })
   }
 
@@ -232,13 +211,13 @@ export function OrdersBoard({ orders: initial, tables, menu, ordering, taxRate, 
       {
         id: 'type',
         header: 'Type',
-        width: '6.5rem',
+        width: '7.5rem',
         cell: (o) => {
           const Icon = TYPE_ICON[o.type]
           return (
             <span className="inline-flex items-center gap-1.5 text-[0.8125rem] text-muted">
               <Icon className="size-3.5 text-faint" aria-hidden="true" />
-              {ORDER_TYPE_LABEL[o.type]}
+              {whereTo(o)}
             </span>
           )
         },
@@ -281,23 +260,16 @@ export function OrdersBoard({ orders: initial, tables, menu, ordering, taxRate, 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <StatTile label="Live" hint="on the board" value={stats.live} line={stats.scheduled ? `${stats.scheduled} scheduled for later` : 'All for now'} tone="bg-primary" />
         <StatTile label="Running late" hint="past the promise" value={stats.late} line={stats.late ? 'Call the guest before they call you' : 'Everything on time'} tone={stats.late ? 'bg-danger' : 'bg-success'} />
-        <StatTile label="Today so far" hint={`${stats.doneToday} done`} value={formatCurrency(stats.revenueToday, currency, { compact: true })} line={stats.mix.map((m) => `${ORDER_TYPE_LABEL[m.t]} ${m.n}`).join(' · ')} />
-        <StatTile label="Kitchen time" hint="order to ready, today" value={stats.avgPrep ? shortDuration(stats.avgPrep) : '—'} line="Promise is prep plus five minutes" />
+        <StatTile label="Today so far" hint={`${stats.doneToday} done`} value={formatCurrency(stats.revenueToday, currency, { compact: true })} line={stats.mix.map((m) => `${ORDER_TYPE_LABEL[m.t]} ${m.n}`).join(' · ') || 'Nothing yet today'} />
+        <StatTile label="Kitchen time" hint="order to ready, today" value={stats.avgPrep ? shortDuration(stats.avgPrep) : '—'} line={roomService ? `Room service promise ${ordering.roomService.leadMinutes} min` : 'Promise is prep plus five minutes'} />
       </div>
 
       <Card className="min-w-0">
         {/* ---------- toolbar ---------- */}
         <div className="flex flex-col gap-3 border-b border-line-subtle px-3 py-3 sm:px-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <Segmented
-              size="sm"
-              label="Order type"
-              options={typeOptions}
-              value={type}
-              onValueChange={setType}
-              hideLabelsOnMobile
-            />
-            {view === 'list' ? <SearchInput value={query} onValueChange={setQuery} placeholder="Order, guest or dish…" size="sm" aria-label="Search orders" fieldClassName="w-full sm:w-56" /> : null}
+            <Segmented size="sm" label="Order type" options={typeOptions} value={type} onValueChange={setType} hideLabelsOnMobile />
+            {view === 'list' ? <SearchInput value={query} onValueChange={setQuery} placeholder={roomService ? 'Order, guest, room or dish…' : 'Order, guest or dish…'} size="sm" aria-label="Search orders" fieldClassName="w-full sm:w-56" /> : null}
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <Segmented
@@ -320,7 +292,7 @@ export function OrdersBoard({ orders: initial, tables, menu, ordering, taxRate, 
         {view === 'board' ? (
           <CardContent className="p-3 sm:p-4">
             {live.length === 0 ? (
-              <EmptyState variant="no-data" size="sm" icon={ChefHat} title="Nothing on the pass" description="New orders land here the moment a guest pays." />
+              <EmptyState variant="no-data" size="sm" icon={ChefHat} title="Nothing on the pass" description="New orders land here the moment a guest pays, or when you take one on the phone." />
             ) : (
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 {COLUMNS.map((column) => {
@@ -335,7 +307,7 @@ export function OrdersBoard({ orders: initial, tables, menu, ordering, taxRate, 
                       <div className="flex flex-col gap-2">
                         {cards.length === 0 ? <p className="px-1.5 py-6 text-center text-xs text-faint">{column.hint}</p> : null}
                         {cards.map((o) => (
-                          <OrderCard key={o.id} order={o} currency={currency} nowMin={nowMin} tableName={o.tableId ? tableById.get(o.tableId)?.name : undefined} onOpen={() => setSelectedId(o.id)} onAdvance={advance} />
+                          <OrderCard key={o.id} order={o} currency={currency} nowMin={nowMin} onOpen={() => setSelectedId(o.id)} onAdvance={advance} />
                         ))}
                       </div>
                     </section>
@@ -358,7 +330,7 @@ export function OrdersBoard({ orders: initial, tables, menu, ordering, taxRate, 
         )}
       </Card>
 
-      <OrderSheet order={selected} currency={currency} tableName={selected?.tableId ? tableById.get(selected.tableId)?.name : undefined} onClose={() => setSelectedId(null)} onAdvance={advance} />
+      <OrderSheet order={selected} currency={currency} onClose={() => setSelectedId(null)} onAdvance={advance} />
       <NewOrderDialog
         open={newOpen}
         onOpenChange={(open) => {
@@ -384,13 +356,12 @@ export function OrdersBoard({ orders: initial, tables, menu, ordering, taxRate, 
    Card
    -------------------------------------------------------------------------- */
 
-function OrderCard({ order: o, currency, nowMin, tableName, onOpen, onAdvance }: { order: Order; currency: CurrencyCode; nowMin: number; tableName?: string; onOpen: () => void; onAdvance: (order: Order, status: OrderStatus) => void }) {
+function OrderCard({ order: o, currency, nowMin, onOpen, onAdvance }: { order: Order; currency: CurrencyCode; nowMin: number; onOpen: () => void; onAdvance: (order: Order, status: OrderStatus) => void }) {
   const Icon = TYPE_ICON[o.type]
   const step = nextStep(o)
   const promised = hm(o.promisedAt.slice(11, 16))
   const sameDay = o.promisedAt.slice(0, 10) === o.placedAt.slice(0, 10)
   const minutesLeft = promised - nowMin
-  const where = o.type === 'dine_in' ? (o.roomNumber ? `Room ${o.roomNumber}` : tableName ?? 'Table') : o.type === 'delivery' ? o.address?.area ?? 'Delivery' : 'Pickup'
   const timing = o.scheduledFor ? `for ${clock(o.scheduledFor)}` : o.late ? `${shortDuration(-minutesLeft)} late` : minutesLeft <= 0 ? 'due now' : `${shortDuration(minutesLeft)} left`
   return (
     <article className={cn('rounded-lg border bg-surface p-3', o.late ? 'border-danger/50' : 'border-line')}>
@@ -401,7 +372,7 @@ function OrderCard({ order: o, currency, nowMin, tableName, onOpen, onAdvance }:
         </div>
         <div className="mt-1 flex items-center gap-1.5 text-xs text-muted">
           <Icon className="size-3.5 text-faint" aria-hidden="true" />
-          <span className="truncate">{where}</span>
+          <span className="truncate">{whereTo(o)}</span>
           <span className="text-faint">·</span>
           <span className="truncate">{guestName(o.customer)}</span>
         </div>
@@ -432,7 +403,7 @@ function OrderCard({ order: o, currency, nowMin, tableName, onOpen, onAdvance }:
    Ticket
    -------------------------------------------------------------------------- */
 
-function OrderSheet({ order: o, currency, tableName, onClose, onAdvance }: { order: Order | null; currency: CurrencyCode; tableName?: string; onClose: () => void; onAdvance: (order: Order, status: OrderStatus) => void }) {
+function OrderSheet({ order: o, currency, onClose, onAdvance }: { order: Order | null; currency: CurrencyCode; onClose: () => void; onAdvance: (order: Order, status: OrderStatus) => void }) {
   const step = o ? nextStep(o) : null
   const isLive = o ? LIVE_ORDER_STATUSES.includes(o.status) : false
   return (
@@ -480,7 +451,15 @@ function OrderSheet({ order: o, currency, tableName, onClose, onAdvance }: { ord
                   </div>
                 </div>
               ) : null}
-              {o.type === 'dine_in' ? <p className="text-[0.8125rem] text-muted">{o.roomNumber ? `Room service · room ${o.roomNumber}` : `Table ${tableName ?? '—'}`}</p> : null}
+              {o.type === 'dine_in' ? (
+                <div className="flex items-start gap-2 text-[0.8125rem]">
+                  <BedDouble aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-faint" />
+                  <p className="text-muted">
+                    Room service · room {o.roomNumber ?? '—'}
+                    {o.paymentStatus === 'room_charge' ? ' · charged to the folio' : ''}
+                  </p>
+                </div>
+              ) : null}
 
               <ul className="divide-y divide-line-subtle rounded-lg border border-line">
                 {o.lines.map((l) => (
@@ -500,7 +479,7 @@ function OrderSheet({ order: o, currency, tableName, onClose, onAdvance }: { ord
                 <Line term="Subtotal" value={formatCurrency(o.subtotal, currency)} />
                 {o.discount ? <Line term="Discount" value={`−${formatCurrency(o.discount, currency)}`} /> : null}
                 {o.deliveryFee ? <Line term="Delivery" value={formatCurrency(o.deliveryFee, currency)} /> : null}
-                {o.serviceFee ? <Line term="Service fee" value={formatCurrency(o.serviceFee, currency)} /> : null}
+                {o.serviceFee ? <Line term={o.type === 'dine_in' ? 'Tray charge' : 'Service fee'} value={formatCurrency(o.serviceFee, currency)} /> : null}
                 <Line term="Tax" value={formatCurrency(o.tax, currency)} />
                 {o.tip ? <Line term="Tip" value={formatCurrency(o.tip, currency)} /> : null}
                 <Line term="Total" value={formatCurrency(o.total, currency)} strong />
@@ -545,5 +524,3 @@ function Line({ term, value, strong = false }: { term: string; value: string; st
     </div>
   )
 }
-
-export const __count = formatNumber

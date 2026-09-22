@@ -92,55 +92,6 @@ export interface Menu {
 }
 
 /* --------------------------------------------------------------------------
-   Floor
-   -------------------------------------------------------------------------- */
-
-export type TableShape = 'round' | 'square' | 'rect' | 'high'
-
-export type TableStatus = 'free' | 'reserved' | 'seated' | 'ordered' | 'bill' | 'needs_reset' | 'blocked'
-
-export const TABLE_STATUS_META: Record<TableStatus, { label: string; tone: string; hint: string }> = {
-  free: { label: 'Free', tone: 'bg-line-strong', hint: 'Nobody on it, nothing booked in the next hour.' },
-  reserved: { label: 'Reserved', tone: 'bg-info', hint: 'A party is due within the hour.' },
-  seated: { label: 'Seated', tone: 'bg-success', hint: 'Guests are at the table.' },
-  ordered: { label: 'Ordered', tone: 'bg-primary', hint: 'Food is on with the kitchen.' },
-  bill: { label: 'On the bill', tone: 'bg-warning', hint: 'They have asked for the check.' },
-  needs_reset: { label: 'Needs reset', tone: 'bg-danger', hint: 'Just left, not yet cleared.' },
-  blocked: { label: 'Blocked', tone: 'bg-line-strong', hint: 'Held back from bookings today.' },
-}
-
-export interface FloorZone {
-  id: string
-  name: string
-  description: string
-  sortOrder: number
-  /** Whether the zone is exposed to weather; the floor page shows it. */
-  outdoor: boolean
-}
-
-export interface DiningTable {
-  id: string
-  tenantId: string
-  zoneId: string
-  /** "T4", "Rail 2", "Bar 1" */
-  name: string
-  seats: number
-  minSeats: number
-  shape: TableShape
-  status: TableStatus
-  /** Can be pushed together with a neighbour for larger parties. */
-  joinable: boolean
-  /** Grid position on the floor map (columns and rows, 1-based). */
-  col: number
-  row: number
-  colSpan: number
-  rowSpan: number
-  /** Reservation currently on or next on the table, for the floor card. */
-  currentReservationId: string | null
-  nextReservationId: string | null
-}
-
-/* --------------------------------------------------------------------------
    Service and hours
    -------------------------------------------------------------------------- */
 
@@ -152,12 +103,8 @@ export interface ServicePeriod {
   /** "HH:MM" local. */
   startTime: string
   endTime: string
-  lastSeating: string
-  /** Minutes a table is held per party size band. */
-  turnMinutes: { upTo2: number; upTo4: number; upTo6: number; larger: number }
-  slotMinutes: 15 | 30
-  /** Covers accepted per slot from online bookings; walk-ins are on top. */
-  maxCoversPerSlot: number
+  /** Kitchen closes; printed on the menu. */
+  lastOrders: string
   /** 0 = Sunday … 6 = Saturday */
   weekdays: number[]
 }
@@ -181,8 +128,8 @@ export interface OrderingHours {
     weekdays: number[]
     zones: DeliveryZone[]
   }
-  /** QR ordering from the table. */
-  dineIn: { enabled: boolean }
+  /** Orders sent up to rooms; hotels only. `dine_in` orders carry the room number. */
+  roomService: { enabled: boolean; startTime: string; endTime: string; leadMinutes: number; trayCharge: number }
 }
 
 export interface Closure {
@@ -195,97 +142,20 @@ export interface DiningSettings {
   periods: ServicePeriod[]
   ordering: OrderingHours
   closures: Closure[]
-  /** Parties this size and up pay a deposit per cover to book online. */
-  depositFromParty: number
-  depositPerCover: number
-  /** Minutes a table is held past the booked time before it is released. */
-  graceMinutes: number
-  /** Largest party bookable online; bigger goes to the events inbox. */
-  maxOnlineParty: number
-}
-
-/* --------------------------------------------------------------------------
-   Table reservations
-   -------------------------------------------------------------------------- */
-
-export type ReservationStatus =
-  | 'booked'
-  | 'confirmed'
-  | 'arrived'
-  | 'seated'
-  | 'finished'
-  | 'no_show'
-  | 'cancelled'
-  | 'waitlist'
-
-export const RESERVATION_STATUS_META: Record<ReservationStatus, { label: string; tone: string }> = {
-  booked: { label: 'Booked', tone: 'bg-info' },
-  confirmed: { label: 'Confirmed', tone: 'bg-success' },
-  arrived: { label: 'Arrived', tone: 'bg-primary' },
-  seated: { label: 'Seated', tone: 'bg-primary' },
-  finished: { label: 'Finished', tone: 'bg-line-strong' },
-  no_show: { label: 'No-show', tone: 'bg-danger' },
-  cancelled: { label: 'Cancelled', tone: 'bg-danger' },
-  waitlist: { label: 'Waitlist', tone: 'bg-warning' },
-}
-
-export type ReservationSource = 'online' | 'phone' | 'walk_in' | 'google' | 'hotel_guest' | 'concierge'
-
-export const RESERVATION_SOURCE_LABEL: Record<ReservationSource, string> = {
-  online: 'Online',
-  phone: 'Phone',
-  walk_in: 'Walk-in',
-  google: 'Google',
-  hotel_guest: 'Hotel guest',
-  concierge: 'Concierge',
-}
-
-export type Occasion = 'birthday' | 'anniversary' | 'business' | 'date' | 'celebration' | 'family'
-
-export const OCCASION_LABEL: Record<Occasion, string> = {
-  birthday: 'Birthday',
-  anniversary: 'Anniversary',
-  business: 'Business',
-  date: 'Date night',
-  celebration: 'Celebration',
-  family: 'Family meal',
-}
-
-export interface TableReservation {
-  id: string
-  tenantId: string
-  customer: Customer
-  partySize: number
-  /** "YYYY-MM-DD" */
-  date: string
-  /** "HH:MM" */
-  time: string
-  /** Local ISO datetime. */
-  startsAt: string
-  durationMinutes: number
-  period: ServiceKey
-  tableIds: string[]
-  status: ReservationStatus
-  source: ReservationSource
-  occasion: Occasion | null
-  notes: string | null
-  allergies: string | null
-  highChairs: number
-  deposit: { amount: number; status: 'held' | 'charged' | 'refunded' } | null
-  /** Set when a stay at the hotel brought them in. */
-  stayId: string | null
-  createdAt: string
-  seatedAt: string | null
-  finishedAt: string | null
 }
 
 /* --------------------------------------------------------------------------
    Orders
    -------------------------------------------------------------------------- */
 
+/** `dine_in` orders are room service: the only way food is eaten on site without a table book. */
 export type OrderType = OrderChannel
 
-export const ORDER_TYPE_LABEL: Record<OrderType, string> = ORDER_CHANNEL_LABEL
+export const ORDER_TYPE_LABEL: Record<OrderType, string> = {
+  dine_in: 'Room service',
+  pickup: 'Pickup',
+  delivery: 'Delivery',
+}
 
 export type OrderStatus =
   | 'new'
@@ -311,13 +181,11 @@ export const ORDER_STATUS_META: Record<OrderStatus, { label: string; tone: strin
 /** The statuses a live board shows, in column order. */
 export const LIVE_ORDER_STATUSES: OrderStatus[] = ['new', 'accepted', 'preparing', 'ready', 'out_for_delivery']
 
-export type OrderSource = 'storefront' | 'phone' | 'qr' | 'counter' | 'uber_eats' | 'wolt' | 'deliveroo' | 'room_service'
+export type OrderSource = 'storefront' | 'phone' | 'uber_eats' | 'wolt' | 'deliveroo' | 'room_service'
 
 export const ORDER_SOURCE_LABEL: Record<OrderSource, string> = {
   storefront: 'Online',
   phone: 'Phone',
-  qr: 'QR at table',
-  counter: 'Counter',
   uber_eats: 'Uber Eats',
   wolt: 'Wolt',
   deliveroo: 'Deliveroo',
@@ -364,9 +232,7 @@ export interface Order {
   promisedAt: string
   readyAt: string | null
   completedAt: string | null
-  /** Dine-in only. */
-  tableId: string | null
-  /** Hotel room service. */
+  /** Room service only. */
   roomNumber: string | null
   /** Delivery only. */
   address: { line: string; area: string; instructions: string | null } | null
@@ -588,10 +454,7 @@ export interface HousekeepingTask {
 
 export interface DiningData {
   menu: Menu
-  zones: FloorZone[]
-  tables: DiningTable[]
   settings: DiningSettings
-  reservations: TableReservation[]
   orders: Order[]
 }
 

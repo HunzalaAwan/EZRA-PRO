@@ -45,8 +45,6 @@ export interface WorkspaceVocab {
 export interface WorkspaceModules {
   /** Orders and a menu. */
   dining: boolean
-  /** A table book and a floor plan. Restaurants take reservations by phone, so only hotels have one. */
-  reservations: boolean
   /** Rooms, stays, housekeeping, rates. */
   lodging: boolean
   /** Departure-based experiences (also true for hotels that sell dinners and tours). */
@@ -100,7 +98,7 @@ const WORKSPACE: DashboardNavSection = {
 const EXPERIENCES: WorkspaceProfile = {
   family: 'experiences',
   storefront: 'experiences',
-  modules: { dining: false, reservations: false, lodging: false, experiences: true },
+  modules: { dining: false, lodging: false, experiences: true },
   nav: DASHBOARD_NAV,
   vocab: {
     booking: 'booking',
@@ -144,7 +142,7 @@ const RESTAURANT_TODAY: DashboardNavItem[] = [
 const RESTAURANT: WorkspaceProfile = {
   family: 'hospitality',
   storefront: 'restaurant',
-  modules: { dining: true, reservations: false, lodging: false, experiences: true },
+  modules: { dining: true, lodging: false, experiences: true },
   nav: [
     { items: RESTAURANT_TODAY },
     {
@@ -189,13 +187,14 @@ const RESTAURANT: WorkspaceProfile = {
 }
 
 /* --------------------------------------------------------------------------
-   Hotel — the front desk first, then the restaurant downstairs.
+   Hotel — the front desk first, then the kitchen downstairs: orders to
+   rooms, pickup, and the menu. Tables are booked by phone.
    -------------------------------------------------------------------------- */
 
 const HOTEL: WorkspaceProfile = {
   family: 'hospitality',
   storefront: 'hotel',
-  modules: { dining: true, reservations: true, lodging: true, experiences: true },
+  modules: { dining: true, lodging: true, experiences: true },
   nav: [
     {
       items: [
@@ -209,9 +208,9 @@ const HOTEL: WorkspaceProfile = {
     {
       heading: 'Dining',
       items: [
-        { label: 'Table reservations', href: '/dashboard/reservations', icon: 'Utensils', countKey: 'reservationsToday' },
         { label: 'Orders', href: '/dashboard/orders', icon: 'ShoppingBag', countKey: 'liveOrders' },
         { label: 'Menu', href: '/dashboard/menu', icon: 'UtensilsCrossed' },
+        { label: 'Hours', href: '/dashboard/hours', icon: 'Clock' },
       ],
     },
     {
@@ -244,8 +243,8 @@ const HOTEL: WorkspaceProfile = {
     '/dashboard/calendar': '/dashboard/stays',
     '/dashboard/resources': '/dashboard/rooms',
     '/dashboard/availability': '/dashboard/rates',
-    '/dashboard/floor': '/dashboard/reservations',
-    '/dashboard/hours': '/dashboard/rates',
+    '/dashboard/floor': '/dashboard/orders',
+    '/dashboard/reservations': '/dashboard/orders',
   },
   overviewHint: 'arrivals',
 }

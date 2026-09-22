@@ -1,11 +1,17 @@
-import type { DeliveryZone, OrderChannel } from '@/lib/hospitality/types'
+import type { OrderChannel, OrderingHours } from '@/lib/hospitality/types'
 
 /* ==========================================================================
    The order cart — what a guest has picked from the menu, kept in the
    browser per storefront so a refresh or a second tab keeps it.
    ========================================================================== */
 
-export type CartMode = Exclude<OrderChannel, 'dine_in'>
+/** Pickup, delivery, or (hotels) sent up to the room. */
+export type CartMode = 'pickup' | 'delivery' | 'room'
+
+/** The menu channel a cart mode sells from. */
+export function channelFor(mode: CartMode): OrderChannel {
+  return mode === 'room' ? 'dine_in' : mode
+}
 
 export interface CartLine {
   /** itemId plus the chosen options, so the same dish with different choices is two lines. */
@@ -81,11 +87,12 @@ export interface CartTotals {
   belowMinimum: boolean
 }
 
-export function cartTotals(cart: Cart, zones: DeliveryZone[], taxRate: number): CartTotals {
+export function cartTotals(cart: Cart, ordering: OrderingHours, taxRate: number): CartTotals {
+  const zones = ordering.delivery.zones
   const subtotal = cart.lines.reduce((sum, line) => sum + line.unitPrice * line.qty, 0)
   const zone = cart.mode === 'delivery' ? zones.find((z) => z.id === cart.zoneId) ?? zones[0] : null
   const deliveryFee = zone ? zone.fee : 0
-  const serviceFee = Math.round(subtotal * SERVICE_FEE_RATE)
+  const serviceFee = cart.mode === 'room' ? ordering.roomService.trayCharge : Math.round(subtotal * SERVICE_FEE_RATE)
   const tax = Math.round(subtotal * taxRate)
   const tip = Math.round(subtotal * (cart.tipPercent / 100))
   const minOrder = zone?.minOrder ?? 0

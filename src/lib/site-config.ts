@@ -148,7 +148,6 @@ export interface DashboardNavItem {
     | 'todayDepartures'
     | 'unreadMessages'
     | 'abandonedCarts'
-    | 'reservationsToday'
     | 'liveOrders'
     | 'arrivalsToday'
     | 'roomsToClean'

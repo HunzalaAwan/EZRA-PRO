@@ -3,7 +3,7 @@
 import * as React from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowRight, BedDouble, Maximize2, Users } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { useStaySearch } from '@/hooks/use-stay-search'
@@ -14,8 +14,9 @@ import { cn, formatCurrency, formatDateShort } from '@/lib/utils'
 import type { CurrencyCode } from '@/types'
 
 /* ==========================================================================
-   <RoomsGrid> — every room type for the remembered dates: the rate for
-   those nights, what is left, and the door to the room page.
+   <RoomsGrid> — every room type for the remembered dates, as the same kind
+   of card the menu and the experiences use: picture with a badge, name, a
+   line about it, pills for the facts, the price and a button.
    ========================================================================== */
 
 export interface RoomAvailability {
@@ -46,60 +47,44 @@ export function RoomsGrid({ roomTypes, roomCounts, availability, settings, curre
   const guests = search.adults + search.children
 
   return (
-    <div className="grid gap-5 md:grid-cols-2">
+    <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {roomTypes.map((t) => {
         const total = roomCounts[t.id] ?? t.count
         const left = nights.length ? Math.min(...nights.map((n) => total - (booked.get(`${t.id}:${n}`) ?? 0))) : total
         const fits = guests <= t.maxGuests
         const quote = nights.length ? quoteStay({ type: t, plan: flexible, checkIn: search.checkIn, checkOut: search.checkOut, adults: search.adults, children: search.children, extraIds: [], settings }) : null
         const available = left > 0 && fits
+        const href = `/book/${slug}/rooms/${t.slug}?${staySearchQuery(search)}`
+        const badge = !fits ? `Sleeps ${t.maxGuests}` : left === 0 ? 'Full for these dates' : left <= 2 ? `Only ${left} left` : t.id.endsWith('river') ? 'River view' : null
         return (
-          <article key={t.id} className={cn('group flex flex-col overflow-hidden rounded-3xl border border-line bg-surface shadow-sm transition-all duration-400 ease-[var(--ease-out-expo)]', available ? 'hover:-translate-y-0.5 hover:border-primary/45 hover:shadow-lg' : 'opacity-75')}>
-            <Link href={`/book/${slug}/rooms/${t.slug}?${staySearchQuery(search)}`} className="relative block aspect-[16/10] bg-surface-sunken">
-              <Image src={t.imageUrls[0]} alt={t.name} fill sizes="(max-width: 768px) 100vw, 50vw" className="object-cover transition-transform duration-700 ease-[var(--ease-out-expo)] group-hover:scale-[1.03]" />
-              {left > 0 && left <= 2 && fits ? <span className="absolute top-3 left-3 rounded-full bg-surface/90 px-2.5 py-1 text-xs font-medium text-foreground backdrop-blur">Only {left} left</span> : null}
+          <li key={t.id} className={cn('group flex flex-col overflow-hidden rounded-2xl border border-line bg-surface transition-colors', available ? 'hover:border-line-strong' : 'opacity-75')}>
+            <Link href={href} className="relative block aspect-[4/3] bg-surface-sunken">
+              <Image src={t.imageUrls[0]} alt={t.name} fill sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 25vw" className="object-cover transition-transform duration-500 ease-[var(--ease-out-expo)] group-hover:scale-[1.03]" />
+              {badge ? <span className={cn('absolute top-2.5 left-2.5 rounded-full px-2.5 py-1 text-[0.6875rem] font-semibold', available ? 'bg-primary text-on-primary' : 'bg-surface/95 text-foreground')}>{badge}</span> : null}
             </Link>
-            <div className="flex flex-1 flex-col p-5 sm:p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <h3 className="font-display text-xl font-semibold tracking-tight text-foreground">{t.name}</h3>
-                  <p className="mt-1 text-sm text-muted">{t.view} view</p>
-                </div>
-                <div className="shrink-0 text-right">
-                  {quote ? (
-                    <>
-                      <p className="text-lg font-semibold text-foreground tabular-nums">{formatCurrency(quote.nightly, currency)}</p>
-                      <p className="text-xs text-subtle">a night · {formatCurrency(quote.roomTotal, currency)} for {quote.nights}</p>
-                    </>
-                  ) : (
-                    <p className="text-lg font-semibold text-foreground tabular-nums">from {formatCurrency(t.baseRate, currency)}</p>
-                  )}
-                </div>
+            <div className="flex flex-1 flex-col p-4">
+              <h3 className="text-[0.9375rem] font-semibold leading-snug text-foreground">{t.name}</h3>
+              <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-muted">{t.description}</p>
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {t.highlights.slice(0, 3).map((h) => (
+                  <span key={h} className="rounded-full bg-surface-sunken px-2 py-0.5 text-[0.6875rem] font-medium text-muted">
+                    {h}
+                  </span>
+                ))}
               </div>
-              <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-sm text-muted">
-                <li className="inline-flex items-center gap-1.5">
-                  <Users className="size-4 text-faint" aria-hidden="true" /> Sleeps {t.maxGuests}
-                </li>
-                <li className="inline-flex items-center gap-1.5">
-                  <BedDouble className="size-4 text-faint" aria-hidden="true" /> {t.beds.map((b) => `${b.count > 1 ? `${b.count} ` : ''}${b.type}`).join(' + ')}
-                </li>
-                <li className="inline-flex items-center gap-1.5">
-                  <Maximize2 className="size-4 text-faint" aria-hidden="true" /> {t.size} m²
-                </li>
-              </ul>
-              <p className="mt-3 line-clamp-2 text-sm text-muted">{t.description}</p>
-              <div className="mt-5 flex items-center justify-between gap-3 border-t border-line-subtle pt-4">
-                <span className="text-xs text-subtle">
-                  {!fits ? `Sleeps ${t.maxGuests}; you are ${guests}` : left === 0 ? `Full ${formatDateShort(`${search.checkIn}T12:00:00`)}–${formatDateShort(`${search.checkOut}T12:00:00`)}` : `${flexible.name} · ${flexible.description.split('.')[0]}`}
-                </span>
+              <div className="mt-auto flex items-end justify-between gap-2 pt-4">
+                <p className="text-[0.9375rem] font-semibold text-foreground tabular-nums">
+                  {quote ? formatCurrency(quote.nightly, currency) : formatCurrency(t.baseRate, currency)} <span className="text-xs font-normal text-subtle">a night</span>
+                  {quote ? <span className="block text-xs font-normal text-subtle">{formatCurrency(quote.roomTotal, currency)} for {quote.nights} · {formatDateShort(`${search.checkIn}T12:00:00`)}</span> : null}
+                </p>
                 <Button asChild size="sm" variant={available ? 'primary' : 'outline'} rightIcon={<ArrowRight aria-hidden="true" />}>
-                  <Link href={`/book/${slug}/rooms/${t.slug}?${staySearchQuery(search)}`}>{available ? 'See rates' : 'Other dates'}</Link>
+                  <Link href={href}>{available ? 'See rates' : 'Other dates'}</Link>
                 </Button>
               </div>
             </div>
-          </article>
+          </li>
         )
       })}
-    </div>
+    </ul>
   )
 }

@@ -55,7 +55,7 @@ export const RESTAURANT_SECTION_META: { key: StorefrontSectionKey; label: string
 
 /** The sections a hotel storefront can switch on and off. Rooms always show. */
 export const HOTEL_SECTION_META: { key: StorefrontSectionKey; label: string; hint: string }[] = [
-  { key: 'dining', label: 'Restaurant', hint: 'Reserve a table or order to the room.' },
+  { key: 'dining', label: 'Menu and room service', hint: 'The kitchen’s menu, orderable to the room or for pickup.' },
   { key: 'experiences', label: 'Experiences', hint: 'Dinners, walks and the spa, bookable by guests and visitors.' },
   { key: 'about', label: 'About the house', hint: 'Your story and the people at the desk.' },
   { key: 'reviews', label: 'Guest reviews', hint: 'Six recent reviews with the overall rating.' },
