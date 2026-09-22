@@ -1,4 +1,4 @@
-import { NOW, getCustomersByTenant } from '@/lib/demo'
+import { NOW, getBookingRows, getCustomersByTenant } from '@/lib/demo'
 import { addDays, createRng, hashSeed, rngInt, toDateKey } from '@/lib/utils'
 import type { Customer, HeatmapCell, Insight, KpiMetric, RangePreset, TimeSeriesPoint } from '@/types'
 
@@ -178,6 +178,8 @@ export interface KitchenSnapshot {
   categories: CategoryRow[]
   weeks: WeekRow[]
   topGuests: TopGuest[]
+  /** What guests said, all time: the score and how the stars fall. */
+  ratings: { average: number; count: number; distribution: { star: number; count: number }[] }
   insights: Insight[]
 }
 
@@ -571,6 +573,16 @@ export function getKitchenAnalytics(tenantId: string, preset: RangePreset = '30d
     .sort((a, b) => b.spend - a.spend)
     .slice(0, 6)
 
+  /* ---------- what guests said ---------- */
+  const stars = getBookingRows(tenantId)
+    .map((r) => r.booking.rating)
+    .filter((r): r is number => typeof r === 'number')
+  const ratings = {
+    average: stars.length ? Math.round((stars.reduce((a, b) => a + b, 0) / stars.length) * 10) / 10 : 0,
+    count: stars.length,
+    distribution: [5, 4, 3, 2, 1].map((star) => ({ star, count: stars.filter((v) => v === star).length })),
+  }
+
   /* ---------- what to change ---------- */
   const insights: Insight[] = []
   const worstDay = [...weekdays].sort((a, b) => b.lateRate - a.lateRate)[0]
@@ -665,6 +677,7 @@ export function getKitchenAnalytics(tenantId: string, preset: RangePreset = '30d
     categories,
     weeks,
     topGuests,
+    ratings,
     insights,
   }
 }

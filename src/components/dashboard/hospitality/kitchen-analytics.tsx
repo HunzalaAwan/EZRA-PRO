@@ -3,7 +3,7 @@
 import * as React from 'react'
 import Image from 'next/image'
 import { motion } from 'motion/react'
-import { BedDouble, Bike, ChartPie, Clock, ImageOff, LayoutDashboard, RefreshCw, ShoppingBag, TrendingUp, Users, UtensilsCrossed } from 'lucide-react'
+import { BedDouble, Bike, Clock, ImageOff, LayoutDashboard, RefreshCw, ShoppingBag, Star, TrendingUp, Users, UtensilsCrossed } from 'lucide-react'
 
 import { ExportMenu } from '@/components/dashboard/analytics/export-menu'
 import { InsightsBoard } from '@/components/dashboard/analytics/insights-board'
@@ -201,7 +201,9 @@ export function KitchenAnalytics({ initialSnapshot }: KitchenAnalyticsProps) {
                 <MixCard snapshot={snapshot} currency={currency} loading={pending} />
               </div>
               <div className="grid gap-4 xl:grid-cols-3">
-                <OccupancyHeatmap cells={snapshot.heatmap} currency={currency} measureLabel="Share of peak" startHour={7} endHour={23} height={260} title="Busy hours" description="Average orders an hour, by weekday" loading={pending} className="xl:col-span-2" />
+                <ChartContainer title="Peak hours" description={`Orders an hour on an average day · ${rangeLabel}`} height={240} loading={pending} className="xl:col-span-2" ariaLabel="Average orders per hour of the day." footer={<PeakFooter snapshot={snapshot} />}>
+                  <HourBars rows={snapshot.hours.filter((h) => h.orders > 0).map((h) => ({ hour: h.hour, value: Math.round((h.orders / snapshot.days) * 10) / 10 }))} format={(v) => `${v} an hour`} color="var(--chart-1)" fromZero />
+                </ChartContainer>
                 <LeaksCard snapshot={snapshot} currency={currency} loading={pending} />
               </div>
               <DishesCard dishes={snapshot.dishes.slice(0, 8)} categories={snapshot.categories} currency={currency} rangeLabel={rangeLabel} loading={pending} compact />
@@ -282,7 +284,8 @@ export function KitchenAnalytics({ initialSnapshot }: KitchenAnalyticsProps) {
               <ChartContainer title="New and returning" description="Orders a week, by whether the guest had ordered before" height={260} loading={pending} legend={<ChartLegend items={[{ key: 'returningGuests', label: 'Returning', color: 'var(--chart-1)' }, { key: 'newGuests', label: 'New', color: 'var(--chart-4)' }]} />} className="xl:col-span-2" ariaLabel="Weekly orders from new and returning guests.">
                 <StackedColumns groups={snapshot.weeks.map((w) => ({ label: w.label, values: { returningGuests: w.returningGuests, newGuests: w.newGuests } }))} series={[{ key: 'returningGuests', label: 'Returning', color: 'var(--chart-1)' }, { key: 'newGuests', label: 'New', color: 'var(--chart-4)' }]} format={(v) => formatNumber(v)} />
               </ChartContainer>
-              <Card className="min-w-0">
+              <RatingCard ratings={snapshot.ratings} loading={pending} />
+              <Card className="min-w-0 xl:col-span-3">
                 <CardHeader>
                   <CardTitle className="text-sm">Regulars</CardTitle>
                   <CardDescription>Who ordered most in the range.</CardDescription>
@@ -295,7 +298,7 @@ export function KitchenAnalytics({ initialSnapshot }: KitchenAnalyticsProps) {
                       ))}
                     </div>
                   ) : (
-                    <ul className="divide-y divide-line-subtle border-t border-line-subtle">
+                    <ul className="grid divide-y divide-line-subtle border-t border-line-subtle sm:grid-cols-2 sm:divide-y-0 sm:[&>li:nth-child(n+3)]:border-t sm:[&>li:nth-child(odd)]:border-r sm:[&>li]:border-line-subtle">
                       {snapshot.topGuests.map((g) => (
                         <li key={g.customer.id} className="flex items-center gap-3 px-5 py-2.5 text-[0.8125rem]">
                           <Avatar name={guestName(g.customer)} src={g.customer.avatarUrl} size="xs" />
@@ -327,7 +330,6 @@ export function KitchenAnalytics({ initialSnapshot }: KitchenAnalyticsProps) {
 
 function MixCard({ snapshot, currency, loading }: { snapshot: KitchenSnapshot; currency: CurrencyCode; loading: boolean }) {
   const total = snapshot.types.reduce((s, r) => s + r.orders, 0) || 1
-  const peaks = [...snapshot.hours].sort((a, b) => b.orders - a.orders).slice(0, 3)
   return (
     <Card className="min-w-0">
       <CardHeader>
@@ -362,20 +364,20 @@ function MixCard({ snapshot, currency, loading }: { snapshot: KitchenSnapshot; c
                 )
               })}
             </ul>
-            <div className="border-t border-line-subtle pt-3">
-              <p className="text-xs font-medium text-muted">Busiest hours</p>
-              <ul className="mt-2 flex flex-col gap-2">
-                {peaks.map((h) => (
-                  <li key={h.hour} className="flex items-center gap-3 text-[0.8125rem]">
-                    <span className="w-12 shrink-0 text-foreground tabular-nums">{String(h.hour).padStart(2, '0')}:00</span>
-                    <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-sunken">
-                      <span className="block h-full rounded-full bg-primary/70" style={{ width: `${(h.orders / (peaks[0]?.orders || 1)) * 100}%` }} />
-                    </span>
-                    <span className="w-16 shrink-0 text-right text-xs text-muted tabular-nums">{formatNumber(h.orders)} orders</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <dl className="grid grid-cols-3 gap-3 border-t border-line-subtle pt-3">
+              <div>
+                <dt className="text-xs text-subtle">Dishes an order</dt>
+                <dd className="mt-0.5 text-[0.9375rem] font-medium text-foreground tabular-nums">{snapshot.totals.orders ? (snapshot.totals.items / snapshot.totals.orders).toFixed(1) : '—'}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-subtle">Average order</dt>
+                <dd className="mt-0.5 text-[0.9375rem] font-medium text-foreground tabular-nums">{formatCurrency(snapshot.totals.orders ? Math.round(snapshot.totals.revenue / snapshot.totals.orders) : 0, currency)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-subtle">Tips an order</dt>
+                <dd className="mt-0.5 text-[0.9375rem] font-medium text-foreground tabular-nums">{formatCurrency(snapshot.totals.orders ? Math.round(snapshot.totals.tips / snapshot.totals.orders) : 0, currency)}</dd>
+              </div>
+            </dl>
           </>
         )}
       </CardContent>
@@ -616,6 +618,68 @@ function SlowMoversCard({ dishes, currency, loading, className }: { dishes: Dish
   )
 }
 
+function PeakFooter({ snapshot }: { snapshot: KitchenSnapshot }) {
+  const busiest = [...snapshot.hours].sort((a, b) => b.orders - a.orders)[0]
+  const quietest = [...snapshot.hours].filter((h) => h.orders > 0).sort((a, b) => a.orders - b.orders)[0]
+  if (!busiest) return null
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-subtle">
+      <span className="inline-flex items-center gap-1.5">
+        <span className="size-2 rounded-full" style={{ background: 'var(--chart-1)' }} aria-hidden="true" />
+        Orders an hour
+      </span>
+      <span className="ml-auto">
+        Busiest <span className="font-medium text-muted">{String(busiest.hour).padStart(2, '0')}:00</span> · quietest <span className="font-medium text-muted">{quietest ? `${String(quietest.hour).padStart(2, '0')}:00` : '—'}</span>
+      </span>
+    </div>
+  )
+}
+
+function RatingCard({ ratings, loading }: { ratings: KitchenSnapshot['ratings']; loading: boolean }) {
+  const max = Math.max(1, ...ratings.distribution.map((d) => d.count))
+  const tone = 'var(--chart-6)'
+  return (
+    <Card className="min-w-0">
+      <CardHeader>
+        <CardTitle className="text-sm">Guest rating</CardTitle>
+        <CardDescription>{ratings.count ? `${formatNumber(ratings.count)} reviews, all time` : 'No reviews yet'}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <Skeleton shape="block" className="h-32 w-full rounded-xl" />
+        ) : ratings.count ? (
+          <div className="flex flex-col gap-4">
+            <div className="flex items-end gap-3">
+              <p className="font-display text-[2.5rem] leading-none font-semibold tracking-tight text-foreground tabular-nums">{ratings.average.toFixed(1)}</p>
+              <div className="flex items-center gap-0.5 pb-1" aria-label={`${ratings.average.toFixed(1)} out of 5`}>
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <Star key={s} aria-hidden="true" className={cn('size-4', s <= Math.round(ratings.average) ? 'fill-current' : 'fill-transparent')} style={{ color: tone }} />
+                ))}
+              </div>
+            </div>
+            <ul className="flex flex-col gap-1.5">
+              {ratings.distribution.map((d) => (
+                <li key={d.star} className="flex items-center gap-2 text-xs">
+                  <span className="flex w-7 shrink-0 items-center gap-0.5 text-muted tabular-nums">
+                    {d.star}
+                    <Star aria-hidden="true" className="size-3 fill-current" style={{ color: tone }} />
+                  </span>
+                  <span className="h-2 flex-1 overflow-hidden rounded-full bg-surface-sunken">
+                    <span className="block h-full rounded-full" style={{ width: `${(d.count / max) * 100}%`, background: tone, opacity: d.star >= 4 ? 1 : 0.55 }} />
+                  </span>
+                  <span className="w-10 shrink-0 text-right text-muted tabular-nums">{d.count}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <p className="text-xs text-subtle">Guests are asked once, a day after the order.</p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 function Thumb({ src }: { src?: string }) {
   return <span className="relative size-8 shrink-0 overflow-hidden rounded-md bg-surface-sunken">{src ? <Image src={src} alt="" fill sizes="32px" className="object-cover" /> : <ImageOff aria-hidden="true" className="absolute inset-0 m-auto size-3.5 text-faint" />}</span>
 }
@@ -822,10 +886,10 @@ function HBars({ rows, format }: { rows: { label: string; value: number; hint?: 
   )
 }
 
-function HourBars({ rows, format, color }: { rows: { hour: number; value: number }[]; format: (v: number) => string; color: string }) {
+function HourBars({ rows, format, color, fromZero = false }: { rows: { hour: number; value: number }[]; format: (v: number) => string; color: string; fromZero?: boolean }) {
   const max = Math.max(1, ...rows.map((r) => r.value))
   const min = Math.min(...rows.map((r) => r.value), max)
-  const floor = Math.max(0, min - (max - min) * 0.6)
+  const floor = fromZero ? 0 : Math.max(0, min - (max - min) * 0.6)
   return (
     <div className="flex h-full flex-col">
       <div className="flex flex-1 items-end gap-1">

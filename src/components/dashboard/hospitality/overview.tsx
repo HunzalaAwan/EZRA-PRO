@@ -1,14 +1,13 @@
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowRight, BedDouble, Bike, ImageOff, Phone, ShoppingBag } from 'lucide-react'
+import { ArrowRight, BedDouble, Bike, ImageOff, Phone, ShoppingBag, Star } from 'lucide-react'
 
 import { PageHeader } from '@/components/dashboard/page-header'
 import { ChartDeltaChip } from '@/components/charts/chart-container'
-import { Sparkline } from '@/components/charts/sparkline'
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { NOW, TODAY_KEY, getUsersByTenant, CURRENT_USER } from '@/lib/demo'
+import { NOW, TODAY_KEY, getBookingRows, getUsersByTenant, CURRENT_USER } from '@/lib/demo'
 import { getDining, getLiveOrders, getLodging, getLodgingCounts } from '@/lib/hospitality'
 import { hm } from '@/lib/hospitality/hours'
 import { HOUSEKEEPING_META, ORDER_STATUS_META, ORDER_TYPE_LABEL, STAY_STATUS_META, type DiningData, type Order, type OrderType } from '@/lib/hospitality/types'
@@ -20,12 +19,13 @@ import { guestName, shortDuration } from './format'
 import { StatusWord } from './shared'
 
 /* ==========================================================================
-   Hospitality overview — the morning read, mostly in pictures.
+   Hospitality overview — the morning read, in pictures.
 
-   Four numbers with a fortnight behind each, the pass as a pipeline, the
-   day as a timeline, what sold with its photo, and the week as columns.
-   Hotels put the desk and housekeeping above the kitchen. A server
-   component: it reads the seam directly.
+   Four numbers, each with a fortnight drawn under it. The pass as a
+   pipeline, the day as a timeline, the busy hours as bars, what guests
+   said as stars, what sold as a short table, the week as columns. One
+   hue per number, one hue per order type, the rest in ink. Hotels put
+   the desk and housekeeping above the kitchen. A server component.
    ========================================================================== */
 
 const NOW_TIME = `${String(NOW.getHours()).padStart(2, '0')}:${String(NOW.getMinutes()).padStart(2, '0')}`
@@ -34,6 +34,8 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
 const SHORT_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const TYPE_TONE: Record<OrderType, string> = { pickup: 'var(--chart-1)', delivery: 'var(--chart-6)', dine_in: 'var(--chart-3)' }
 const TYPE_ICON: Record<OrderType, typeof ShoppingBag> = { pickup: ShoppingBag, delivery: Bike, dine_in: BedDouble }
+/** The hue each headline number owns, kept apart from the order-type hues. */
+const TONE = { orders: 'var(--chart-1)', revenue: 'var(--chart-4)', kitchen: 'var(--chart-3)', rating: 'var(--chart-6)', rooms: 'var(--chart-4)', clean: 'var(--chart-2)' }
 
 function greeting(hour: number) {
   if (hour < 12) return 'Good morning'
@@ -62,6 +64,26 @@ function fortnight(dining: DiningData) {
   })
 }
 
+/** What guests have said: the score, its spread and its drift by week. */
+function feedback(tenantId: string) {
+  const rated = getBookingRows(tenantId).filter((r) => typeof r.booking.rating === 'number')
+  const ratings = rated.map((r) => r.booking.rating as number)
+  const count = ratings.length
+  const average = count ? Math.round((ratings.reduce((a, b) => a + b, 0) / count) * 10) / 10 : 0
+  const distribution = [5, 4, 3, 2, 1].map((star) => ({ star, count: ratings.filter((v) => v === star).length }))
+  const weeks = Array.from({ length: 8 }, (_, i) => {
+    const from = addDays(NOW, (i - 7) * 7 - 6)
+    const to = addDays(NOW, (i - 7) * 7)
+    const inWeek = rated.filter((r) => {
+      const d = new Date(r.booking.createdAt)
+      return d >= from && d <= to
+    })
+    return inWeek.length ? inWeek.reduce((s, r) => s + (r.booking.rating as number), 0) / inWeek.length : average
+  })
+  const recent = rated.filter((r) => new Date(r.booking.createdAt) >= addDays(NOW, -30)).length
+  return { count, average, distribution, weeks, recent, low: distribution.filter((d) => d.star <= 2).reduce((s, d) => s + d.count, 0) }
+}
+
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0)
 const delta = (now: number, before: number) => (before ? Math.round(((now - before) / before) * 1000) / 10 : 0)
 
@@ -83,11 +105,10 @@ export function HospitalityOverview({ tenant, profile }: { tenant: Tenant; profi
   const yesterdayRow = days[days.length - 2]
   const doneToday = dining.orders.filter((o) => o.placedAt.startsWith(TODAY_KEY) && o.status === 'completed')
   const avgPrepToday = todayRow.prep ? Math.round(todayRow.prep) : 0
-  const hoursSoFar = Array.from({ length: NOW.getHours() + 1 }, (_, h) => dining.orders.filter((o) => o.placedAt.startsWith(TODAY_KEY) && new Date(o.placedAt).getHours() === h && o.status !== 'cancelled').length)
-  const topDishes = [...dining.menu.items].sort((a, b) => b.sold30d - a.sold30d).slice(0, 5)
-  const topMax = topDishes[0]?.sold30d ?? 1
-  const soldOut = dining.menu.items.filter((i) => i.status === 'sold_out').length
-  const onSale = dining.menu.items.filter((i) => i.status === 'available').length
+  const said = feedback(tenant.id)
+  const hourly = Array.from({ length: 24 }, (_, h) => dining.orders.filter((o) => !o.placedAt.startsWith(TODAY_KEY) && new Date(o.placedAt).getHours() === h && o.status !== 'cancelled').length / 13)
+  const topDishes = [...dining.menu.items].sort((a, b) => b.sold30d - a.sold30d).slice(0, 6)
+  const dishRevenue = sum(dining.menu.items.map((i) => i.revenue30d)) || 1
   const scheduled = live.filter((o) => o.scheduledFor).length
   const weekday = NOW.getDay()
   const current = dining.settings.periods.find((p) => p.weekdays.includes(weekday) && hm(p.startTime) <= NOW_MIN && hm(p.endTime) > NOW_MIN)
@@ -120,19 +141,18 @@ export function HospitalityOverview({ tenant, profile }: { tenant: Tenant; profi
       {/* ---------- numbers ---------- */}
       {lodging && lodgingCounts ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Tile label="Occupancy tonight" value={`${lodgingCounts.occupancyTonight}%`} hint={`${lodging.rooms.filter((r) => r.housekeeping !== 'out_of_order').length} rooms in sale`} tone="var(--chart-2)" />
-          <Tile label="Arrivals" value={lodgingCounts.arrivalsToday} hint={`from ${lodging.settings.checkInFrom}`} tone="var(--chart-6)" />
-          <Tile label="Departures" value={lodgingCounts.departuresToday} hint={`by ${lodging.settings.checkOutBy}`} tone="var(--chart-1)" />
-          <Tile label="Rooms to clean" value={lodgingCounts.roomsToClean} hint={`${lodging.housekeeping.filter((t) => t.priority === 'rush' && t.status !== 'done').length} rush`} tone="var(--chart-7)" />
+          <Tile label="Occupancy tonight" value={`${lodgingCounts.occupancyTonight}%`} hint={`${lodging.rooms.filter((r) => r.housekeeping !== 'out_of_order').length} rooms in sale`} tone={TONE.rooms} />
+          <Tile label="Arrivals" value={lodgingCounts.arrivalsToday} hint={`from ${lodging.settings.checkInFrom}`} tone={TONE.orders} />
+          <Tile label="Departures" value={lodgingCounts.departuresToday} hint={`by ${lodging.settings.checkOutBy}`} tone={TONE.kitchen} />
+          <Tile label="Rooms to clean" value={lodgingCounts.roomsToClean} hint={`${lodging.housekeeping.filter((t) => t.priority === 'rush' && t.status !== 'done').length} rush`} tone={TONE.clean} />
         </div>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Tile label="Live orders" value={live.length} hint={scheduled ? `${scheduled} for later` : 'on the pass'} series={hoursSoFar} tone="var(--chart-1)" seriesLabel="today by hour" />
-          <Tile label="Taken today" value={formatCurrency(todayRow.total, currency, { compact: true })} hint={`${doneToday.length} done`} series={days.map((d) => d.total)} tone="var(--chart-2)" delta={delta(sum(thisWeek.map((d) => d.total)), sum(lastWeek.map((d) => d.total)))} seriesLabel="14 days" />
-          <Tile label="Kitchen time" value={avgPrepToday ? shortDuration(avgPrepToday) : '—'} hint="order to ready" series={days.map((d) => Math.round(d.prep))} tone="var(--chart-3)" delta={yesterdayRow.prep ? delta(todayRow.prep, yesterdayRow.prep) : undefined} higherIsBetter={false} seriesLabel="14 days" />
-          <Tile label="On sale" value={onSale} hint={soldOut ? `${soldOut} sold out` : 'nothing sold out'} series={days.map((d) => d.items)} tone="var(--chart-6)" seriesLabel="dishes sold, 14 days" />
-        </div>
-      )}
+      ) : null}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Tile label="Orders today" value={todayRow.orders} hint={`${live.length} live${scheduled ? ` · ${scheduled} for later` : ''}`} series={days.map((d) => d.orders)} tone={TONE.orders} delta={delta(sum(thisWeek.map((d) => d.orders)), sum(lastWeek.map((d) => d.orders)))} seriesLabel="orders a day, 14 days" />
+        <Tile label="Taken today" value={formatCurrency(todayRow.total, currency, { compact: true })} hint={`${doneToday.length} orders done`} series={days.map((d) => d.total)} tone={TONE.revenue} delta={delta(sum(thisWeek.map((d) => d.total)), sum(lastWeek.map((d) => d.total)))} seriesLabel="revenue a day, 14 days" />
+        <Tile label="Kitchen time" value={avgPrepToday ? shortDuration(avgPrepToday) : '—'} hint="order to ready" series={days.map((d) => Math.round(d.prep))} tone={TONE.kitchen} delta={yesterdayRow.prep ? delta(todayRow.prep, yesterdayRow.prep) : undefined} higherIsBetter={false} seriesLabel="minutes a day, 14 days" />
+        <Tile label="Guest rating" value={said.count ? said.average.toFixed(1) : '—'} hint={said.count ? `${formatNumber(said.count)} reviews` : 'No reviews yet'} series={said.count ? said.weeks : undefined} tone={TONE.rating} seriesLabel="weekly average, 8 weeks" floor={3.5} ceiling={5} />
+      </div>
 
       {/* ---------- hotel: the desk today ---------- */}
       {lodging ? (
@@ -223,37 +243,95 @@ export function HospitalityOverview({ tenant, profile }: { tenant: Tenant; profi
         </Card>
       </div>
 
-      {/* ---------- what sold, the week ---------- */}
+      {/* ---------- busy hours and what guests said ---------- */}
       <div className="grid gap-5 xl:grid-cols-12">
-        <Card className="min-w-0 xl:col-span-6">
+        <Card className="min-w-0 xl:col-span-7">
           <CardHeader className="flex-row items-start justify-between gap-3">
             <div>
-              <CardTitle className="text-sm">What sold</CardTitle>
-              <CardDescription>Portions, last 30 days</CardDescription>
+              <CardTitle className="text-sm">Peak hours</CardTitle>
+              <CardDescription>Orders an hour on an average day, last two weeks</CardDescription>
+            </div>
+            <Button asChild size="xs" variant="ghost" rightIcon={<ArrowRight />}>
+              <Link href="/dashboard/analytics">Analytics</Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <PeakHours hourly={hourly} tone={TONE.orders} />
+          </CardContent>
+        </Card>
+
+        <Card className="min-w-0 xl:col-span-5">
+          <CardHeader className="flex-row items-start justify-between gap-3">
+            <div>
+              <CardTitle className="text-sm">Guest feedback</CardTitle>
+              <CardDescription>{said.count ? `${formatNumber(said.count)} reviews · ${said.recent} in the last 30 days` : 'Reviews appear here after the first orders'}</CardDescription>
+            </div>
+            <Button asChild size="xs" variant="ghost" rightIcon={<ArrowRight />}>
+              <Link href="/dashboard/reviews">Reviews</Link>
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <Feedback said={said} tone={TONE.rating} />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ---------- best sellers and the week ---------- */}
+      <div className="grid gap-5 xl:grid-cols-12">
+        <Card className="min-w-0 xl:col-span-7">
+          <CardHeader className="flex-row items-start justify-between gap-3">
+            <div>
+              <CardTitle className="text-sm">Best sellers</CardTitle>
+              <CardDescription>Last 30 days</CardDescription>
             </div>
             <Button asChild size="xs" variant="ghost" rightIcon={<ArrowRight />}>
               <Link href="/dashboard/menu">Menu</Link>
             </Button>
           </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            {topDishes.map((d) => (
-              <div key={d.id} className="flex items-center gap-3 text-[0.8125rem]">
-                <span className="relative size-9 shrink-0 overflow-hidden rounded-lg bg-surface-sunken">{d.imageUrl ? <Image src={d.imageUrl} alt="" fill sizes="36px" className="object-cover" /> : <ImageOff aria-hidden="true" className="absolute inset-0 m-auto size-3.5 text-faint" />}</span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="truncate text-foreground">{d.name}</span>
-                    <span className="shrink-0 text-muted tabular-nums">{formatNumber(d.sold30d)}</span>
-                  </div>
-                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface-sunken">
-                    <div className="h-full rounded-full bg-primary/70" style={{ width: `${Math.round((d.sold30d / topMax) * 100)}%` }} />
-                  </div>
-                </div>
-              </div>
-            ))}
+          <CardContent className="p-0">
+            <table className="w-full text-[0.8125rem]">
+              <thead>
+                <tr className="border-y border-line-subtle text-left text-[0.6875rem] font-medium tracking-wide text-subtle uppercase">
+                  <th className="px-5 py-2 sm:px-6">Dish</th>
+                  <th className="px-3 py-2 text-right">Sold</th>
+                  <th className="px-3 py-2 text-right">Revenue</th>
+                  <th className="hidden w-40 px-5 py-2 text-right sm:table-cell sm:px-6">Share</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line-subtle">
+                {topDishes.map((d) => {
+                  const share = Math.round((d.revenue30d / dishRevenue) * 1000) / 10
+                  const topRevenue = Math.max(1, ...topDishes.map((x) => x.revenue30d))
+                  return (
+                    <tr key={d.id}>
+                      <td className="px-5 py-2.5 sm:px-6">
+                        <span className="flex items-center gap-3">
+                          <span className="relative size-9 shrink-0 overflow-hidden rounded-lg bg-surface-sunken">{d.imageUrl ? <Image src={d.imageUrl} alt="" fill sizes="36px" className="object-cover" /> : <ImageOff aria-hidden="true" className="absolute inset-0 m-auto size-3.5 text-faint" />}</span>
+                          <span className="min-w-0">
+                            <span className="block truncate text-foreground">{d.name}</span>
+                            <span className="block truncate text-xs text-subtle">{dining.menu.categories.find((c) => c.id === d.categoryId)?.name}</span>
+                          </span>
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 text-right text-foreground tabular-nums">{formatNumber(d.sold30d)}</td>
+                      <td className="px-3 py-2.5 text-right text-muted tabular-nums">{formatCurrency(d.revenue30d, currency, { compact: true })}</td>
+                      <td className="hidden px-5 py-2.5 sm:table-cell sm:px-6">
+                        <span className="flex items-center gap-2">
+                          <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-sunken">
+                            <span className="block h-full rounded-full" style={{ width: `${Math.round((d.revenue30d / topRevenue) * 100)}%`, background: TONE.revenue }} />
+                          </span>
+                          <span className="w-10 text-right text-xs text-muted tabular-nums">{share}%</span>
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </CardContent>
         </Card>
 
-        <Card className="min-w-0 xl:col-span-6">
+        <Card className="min-w-0 xl:col-span-5">
           <CardHeader className="flex-row items-start justify-between gap-3">
             <div>
               <CardTitle className="text-sm">This week</CardTitle>
@@ -289,25 +367,44 @@ export function HospitalityOverview({ tenant, profile }: { tenant: Tenant; profi
 }
 
 /* --------------------------------------------------------------------------
-   A number with a fortnight behind it
+   A number with a fortnight drawn under it
    -------------------------------------------------------------------------- */
 
-function Tile({ label, value, hint, series, tone, delta: change, higherIsBetter = true, seriesLabel }: { label: string; value: string | number; hint: string; series?: number[]; tone: string; delta?: number; higherIsBetter?: boolean; seriesLabel?: string }) {
+function Tile({ label, value, hint, series, tone, delta: change, higherIsBetter = true, seriesLabel, floor, ceiling }: { label: string; value: string | number; hint: string; series?: number[]; tone: string; delta?: number; higherIsBetter?: boolean; seriesLabel?: string; floor?: number; ceiling?: number }) {
+  const drawn = series && series.some((v) => v > 0)
   return (
-    <Card className="flex-row items-center gap-4 p-4">
-      <div className="min-w-0 flex-1">
-        <p className="flex items-center gap-2 text-[0.8125rem] text-muted">
-          <span className="size-2 shrink-0 rounded-full" style={{ background: tone }} aria-hidden="true" />
-          <span className="truncate">{label}</span>
-        </p>
-        <p className="mt-2 font-display text-[1.75rem] leading-none font-semibold tracking-tight text-foreground tabular-nums">{value}</p>
-        <p className="mt-2 flex items-center gap-2 text-xs text-subtle">
+    <Card className="overflow-hidden">
+      <div className="flex flex-col gap-2 px-4 pt-4">
+        <div className="flex items-center justify-between gap-2">
+          <p className="flex min-w-0 items-center gap-2 text-[0.8125rem] text-muted">
+            <span className="size-2 shrink-0 rounded-full" style={{ background: tone }} aria-hidden="true" />
+            <span className="truncate">{label}</span>
+          </p>
           {change !== undefined ? <ChartDeltaChip value={change} higherIsBetter={higherIsBetter} size="xs" /> : null}
-          <span className="truncate">{hint}</span>
-        </p>
+        </div>
+        <p className="font-display text-[1.875rem] leading-none font-semibold tracking-tight text-foreground tabular-nums">{value}</p>
+        <p className="truncate text-xs text-subtle">{hint}</p>
       </div>
-      {series && series.some((v) => v > 0) ? <Sparkline values={series} width={72} height={40} color={tone} fill showLastDot ariaLabel={seriesLabel ? `${label}, ${seriesLabel}` : undefined} className="shrink-0" /> : null}
+      {drawn ? <div className="mt-3 h-12"><Wave values={series as number[]} tone={tone} label={seriesLabel ? `${label}, ${seriesLabel}` : undefined} floor={floor} ceiling={ceiling} /></div> : <div className="h-4" />}
     </Card>
+  )
+}
+
+/** A filled line that stretches to the card, the way the reference dashboards draw it. */
+function Wave({ values, tone, label, floor, ceiling }: { values: number[]; tone: string; label?: string; floor?: number; ceiling?: number }) {
+  const w = 100
+  const h = 32
+  const min = floor ?? Math.min(...values)
+  const max = ceiling ?? Math.max(...values)
+  const span = max - min || 1
+  const pts = values.map((v, i) => [(i / Math.max(1, values.length - 1)) * w, 3 + (h - 6) * (1 - (v - min) / span)] as const)
+  const line = pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(2)} ${y.toFixed(2)}`).join(' ')
+  const area = `${line} L${w} ${h} L0 ${h} Z`
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="block h-full w-full" {...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true })}>
+      <path d={area} fill={tone} fillOpacity={0.16} />
+      <path d={line} fill="none" stroke={tone} strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+    </svg>
   )
 }
 
@@ -318,7 +415,7 @@ function Tile({ label, value, hint, series, tone, delta: change, higherIsBetter 
 const PIPE = [
   { key: 'new', label: 'New', statuses: ['new'], tone: 'var(--chart-6)' },
   { key: 'kitchen', label: 'In the kitchen', statuses: ['accepted', 'preparing'], tone: 'var(--chart-1)' },
-  { key: 'ready', label: 'Ready', statuses: ['ready'], tone: 'var(--chart-2)' },
+  { key: 'ready', label: 'Ready', statuses: ['ready'], tone: 'var(--chart-4)' },
   { key: 'road', label: 'On the way', statuses: ['out_for_delivery'], tone: 'var(--chart-3)' },
 ] as const
 
@@ -389,7 +486,7 @@ function DayTimeline({ dining, weekday }: { dining: DiningData; weekday: number 
       label: 'Kitchen',
       segments: periods.map((p) => ({ from: hm(p.startTime), to: hm(p.endTime), label: p.name, tone: 'var(--chart-1)', off: !p.weekdays.includes(weekday) })),
     },
-    { label: 'Pickup', segments: ordering.pickup.enabled ? [{ from: hm(ordering.pickup.startTime), to: hm(ordering.pickup.endTime), tone: 'var(--chart-2)' }] : [] },
+    { label: 'Pickup', segments: ordering.pickup.enabled ? [{ from: hm(ordering.pickup.startTime), to: hm(ordering.pickup.endTime), tone: 'var(--chart-4)' }] : [] },
     { label: 'Delivery', segments: ordering.delivery.enabled ? [{ from: hm(ordering.delivery.startTime), to: hm(ordering.delivery.endTime), tone: 'var(--chart-6)' }] : [] },
     ...(ordering.roomService.enabled ? [{ label: 'Room service', segments: [{ from: hm(ordering.roomService.startTime), to: hm(ordering.roomService.endTime), tone: 'var(--chart-3)' }] }] : []),
   ]
@@ -433,6 +530,84 @@ function DayTimeline({ dining, weekday }: { dining: DiningData; weekday: number 
           {NOW_TIME}
         </span>
       </div>
+    </div>
+  )
+}
+
+/* --------------------------------------------------------------------------
+   Peak hours — one hue, the current hour in ink
+   -------------------------------------------------------------------------- */
+
+function PeakHours({ hourly, tone }: { hourly: number[]; tone: string }) {
+  const hours = Array.from({ length: 17 }, (_, i) => i + 7)
+  const max = Math.max(1, ...hours.map((h) => hourly[h]))
+  const peak = hours.reduce((best, h) => (hourly[h] > hourly[best] ? h : best), hours[0])
+  const nowHour = NOW.getHours()
+  return (
+    <div>
+      <div className="flex h-40 items-end gap-1.5" role="img" aria-label={`Average orders an hour: ${hours.map((h) => `${h}:00 ${hourly[h].toFixed(1)}`).join(', ')}`}>
+        {hours.map((h) => (
+          <div key={h} className="flex h-full min-w-0 flex-1 flex-col justify-end" title={`${String(h).padStart(2, '0')}:00 · ${hourly[h].toFixed(1)} orders an hour`}>
+            <span className={cn('block w-full rounded-t-[4px]', h === nowHour && 'bg-foreground')} style={{ height: `${(hourly[h] / max) * 100}%`, minHeight: hourly[h] ? 3 : 0, ...(h === nowHour ? {} : { background: tone, opacity: 0.85 }) }} />
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex gap-1.5 border-t border-line-subtle pt-1.5">
+        {hours.map((h) => (
+          <span key={h} className={cn('min-w-0 flex-1 overflow-visible text-center text-[0.625rem] whitespace-nowrap tabular-nums', h === nowHour ? 'font-semibold text-foreground' : 'text-subtle')}>
+            {h % 3 === 0 || h === nowHour ? String(h).padStart(2, '0') : ''}
+          </span>
+        ))}
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2 rounded-full" style={{ background: tone }} aria-hidden="true" />
+          Orders an hour
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2 rounded-full bg-foreground" aria-hidden="true" />
+          Now
+        </span>
+        <span className="ml-auto">
+          Busiest {String(peak).padStart(2, '0')}:00 · {hourly[peak].toFixed(1)} an hour
+        </span>
+      </div>
+    </div>
+  )
+}
+
+/* --------------------------------------------------------------------------
+   What guests said
+   -------------------------------------------------------------------------- */
+
+function Feedback({ said, tone }: { said: ReturnType<typeof feedback>; tone: string }) {
+  if (!said.count) return <p className="text-xs text-subtle">Ratings arrive with the receipt: guests are asked once, a day after the order.</p>
+  const max = Math.max(1, ...said.distribution.map((d) => d.count))
+  return (
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:gap-6">
+      <div className="shrink-0">
+        <p className="font-display text-[2.5rem] leading-none font-semibold tracking-tight text-foreground tabular-nums">{said.average.toFixed(1)}</p>
+        <div className="mt-2 flex items-center gap-0.5" aria-label={`${said.average.toFixed(1)} out of 5`}>
+          {[1, 2, 3, 4, 5].map((s) => (
+            <Star key={s} aria-hidden="true" className={cn('size-4', s <= Math.round(said.average) ? 'fill-current' : 'fill-transparent')} style={{ color: tone }} />
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-subtle">{said.low ? `${said.low} low ${said.low === 1 ? 'rating' : 'ratings'} to answer` : 'No low ratings'}</p>
+      </div>
+      <ul className="flex min-w-0 flex-1 flex-col gap-1.5">
+        {said.distribution.map((d) => (
+          <li key={d.star} className="flex items-center gap-2 text-xs">
+            <span className="flex w-7 shrink-0 items-center gap-0.5 text-muted tabular-nums">
+              {d.star}
+              <Star aria-hidden="true" className="size-3 fill-current" style={{ color: tone }} />
+            </span>
+            <span className="h-2 flex-1 overflow-hidden rounded-full bg-surface-sunken">
+              <span className="block h-full rounded-full" style={{ width: `${(d.count / max) * 100}%`, background: tone, opacity: d.star >= 4 ? 1 : 0.55 }} />
+            </span>
+            <span className="w-8 shrink-0 text-right text-muted tabular-nums">{d.count}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
