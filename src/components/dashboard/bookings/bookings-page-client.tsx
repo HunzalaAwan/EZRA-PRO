@@ -26,7 +26,7 @@ import {
   type RefundResult,
   type RefundTarget,
 } from '@/components/dashboard/bookings/refund-dialog'
-import type { BookingRowAction } from '@/components/dashboard/bookings/bookings-table'
+import type { BookingRowAction, Density } from '@/components/dashboard/bookings/bookings-table'
 import type { DataTableSort } from '@/components/ui/data-table'
 import { PageHeader } from '@/components/dashboard/page-header'
 import {
@@ -36,11 +36,13 @@ import {
   STATUS_TAB_LABEL,
   STATUS_TAB_MATCH,
   STATUS_TAB_ORDER,
+  SavedViewSelect,
+  isDefaultFilters,
   type BookingFilters,
   type BookingStatusTab,
   type SavedView,
 } from '@/components/dashboard/bookings/bookings-filters'
-import { BookingsTable } from '@/components/dashboard/bookings/bookings-table'
+import { BookingsDisplayMenu, BookingsTable } from '@/components/dashboard/bookings/bookings-table'
 import { BookingDetailSheet } from '@/components/dashboard/bookings/booking-detail-sheet'
 import { NewBookingDialog } from '@/components/dashboard/bookings/new-booking-dialog'
 
@@ -119,6 +121,8 @@ export function BookingsPageClient({ tenant, allRows: sourceRows, activities, no
   const [openBookingId, setOpenBookingId] = React.useState<string | null>(null)
   const [sheetOpen, setSheetOpen] = React.useState(false)
   const [newBookingOpen, setNewBookingOpen] = React.useState(false)
+  const [density, setDensity] = React.useState<Density>('compact')
+  const [groupByDay, setGroupByDay] = React.useState(true)
 
   /* ----------------------------------------------------------------------
      KPI strip — today against yesterday, both computed from real rows
@@ -542,39 +546,51 @@ export function BookingsPageClient({ tenant, allRows: sourceRows, activities, no
       </StatGrid>
 
       {/* ==================================================================
-          STATUS RAIL
+          TOOLBAR — status tabs and the saved view, then search and filters
           ================================================================== */}
-      <div className="-mx-1 overflow-x-auto px-1 no-scrollbar">
-        <Segmented
-          options={statusOptions}
-          value={statusTab}
-          onValueChange={(value) => {
-            setStatusTab(value)
-            setActiveViewId(null)
-            setPage(1)
-            setSelectedIds([])
-          }}
-          label="Filter reservations by status"
-          size="md"
-          className="min-w-max"
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="-mx-1 min-w-0 overflow-x-auto px-1 no-scrollbar">
+            <Segmented
+              options={statusOptions}
+              value={statusTab}
+              onValueChange={(value) => {
+                setStatusTab(value)
+                setActiveViewId(null)
+                setPage(1)
+                setSelectedIds([])
+              }}
+              label="Filter reservations by status"
+              size="md"
+              className="min-w-max"
+            />
+          </div>
+          <SavedViewSelect activeViewId={activeViewId} onApplyView={applyView} className="sm:ml-auto" />
+        </div>
+
+        <BookingsFilters
+          filters={filters}
+          onFiltersChange={applyFilters}
+          activities={activities}
+          resettable={activeViewId === null && (!isDefaultFilters(filters) || statusTab !== 'all')}
+          onReset={clearEverything}
+          resultSummary={
+            <>
+              {formatNumber(sortedRows.length)} of {formatNumber(allRows.length)} reservations
+            </>
+          }
+          trailing={
+            <BookingsDisplayMenu
+              density={density}
+              onDensityChange={setDensity}
+              groupByDay={groupByDay}
+              onGroupByDayChange={setGroupByDay}
+              canGroup={sort.id === 'departure'}
+              className="hidden md:inline-flex"
+            />
+          }
         />
       </div>
-
-      {/* ==================================================================
-          FILTERS
-          ================================================================== */}
-      <BookingsFilters
-        filters={filters}
-        onFiltersChange={applyFilters}
-        activities={activities}
-        activeViewId={activeViewId}
-        onApplyView={applyView}
-        resultSummary={
-          <>
-            {formatNumber(sortedRows.length)} of {formatNumber(allRows.length)} reservations
-          </>
-        }
-      />
 
       {/* ==================================================================
           TABLE
@@ -603,6 +619,8 @@ export function BookingsPageClient({ tenant, allRows: sourceRows, activities, no
           setPage(1)
         }}
         onClearFilters={clearEverything}
+        density={density}
+        groupByDay={groupByDay}
       />
 
       {/* ==================================================================

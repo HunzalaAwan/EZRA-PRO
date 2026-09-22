@@ -11,9 +11,7 @@ import {
   ListFilter,
   RotateCcw,
   Ship,
-  Sparkles,
   Waves,
-  X,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -26,15 +24,13 @@ import type {
 } from '@/types'
 import { CHANNEL_LABELS, NOW, TODAY_KEY } from '@/lib/demo-core'
 import { addDays, cn, toDateKey } from '@/lib/utils'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { SearchInput } from '@/components/ui/search-input'
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
@@ -47,7 +43,7 @@ import {
 /* ==========================================================================
    FILTER MODEL
    The reservations desk filters live here so the page, the table and the
-   saved-view rail all agree on one shape.
+   saved views all agree on one shape.
    ========================================================================== */
 
 /** The six tabs across the top of the reservations desk. */
@@ -123,8 +119,6 @@ const PAYMENT_OPTIONS: { value: PaymentStatus; label: string }[] = [
   { value: 'refunded', label: 'Refunded' },
   { value: 'failed', label: 'Payment failed' },
 ]
-
-const PAYMENT_LABEL = new Map(PAYMENT_OPTIONS.map((p) => [p.value, p.label]))
 
 /* --------------------------------------------------------------------------
    SAVED VIEWS — the shortcuts a reservations lead actually keeps pinned
@@ -211,30 +205,212 @@ export const SAVED_VIEWS: SavedView[] = [
   },
 ]
 
-/* --------------------------------------------------------------------------
-   ACTIVE CHIPS
-   -------------------------------------------------------------------------- */
+/* ==========================================================================
+   SAVED VIEW SELECT
+   One control instead of a rail of chips: the active view by name, or
+   "Custom view" once the operator has touched a tab or a filter.
+   ========================================================================== */
 
-interface ActiveChip {
-  key: string
-  prefix: string
-  label: string
-  clear: () => void
+export interface SavedViewSelectProps {
+  /** Id of the saved view currently applied, or `null` for a hand-rolled filter. */
+  activeViewId: string | null
+  onApplyView: (view: SavedView) => void
+  className?: string
+}
+
+export function SavedViewSelect({ activeViewId, onApplyView, className }: SavedViewSelectProps) {
+  const active = SAVED_VIEWS.find((view) => view.id === activeViewId) ?? null
+  const Icon = active?.icon ?? Bookmark
+  return (
+    <Select
+      value={activeViewId ?? ''}
+      onValueChange={(id) => {
+        const view = SAVED_VIEWS.find((v) => v.id === id)
+        if (view) onApplyView(view)
+      }}
+    >
+      <SelectTrigger
+        className={cn('w-full sm:w-[12.5rem]', className)}
+        aria-label="Saved view"
+        icon={<Icon className={cn('size-4', active ? 'text-primary' : 'text-subtle')} />}
+      >
+        <SelectValue placeholder="Custom view" />
+      </SelectTrigger>
+      <SelectContent align="end" className="min-w-[17rem]">
+        {SAVED_VIEWS.map((view) => {
+          const ViewIcon = view.icon
+          return (
+            <SelectItem
+              key={view.id}
+              value={view.id}
+              icon={<ViewIcon className="size-4" />}
+              description={view.hint}
+            >
+              {view.label}
+            </SelectItem>
+          )
+        })}
+      </SelectContent>
+    </Select>
+  )
 }
 
 /* ==========================================================================
-   COMPONENT
+   TOOLBAR
+   Search, the departure dates, one Filters button for the rest, and a Reset
+   that only appears once the desk has left a saved view.
    ========================================================================== */
+
+/** Shell shared by the date and Filters triggers so they sit level with the selects. */
+function triggerClass(active: boolean) {
+  return cn(
+    'group inline-flex h-10 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-medium whitespace-nowrap shadow-xs',
+    'transition-[color,background-color,border-color] duration-200 ease-[var(--ease-out-quint)]',
+    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+    'data-[state=open]:border-primary data-[state=open]:ring-3 data-[state=open]:ring-primary/20',
+    active
+      ? 'border-[color-mix(in_oklab,var(--info)_40%,transparent)] bg-info-soft text-info'
+      : 'border-line bg-surface text-foreground hover:border-line-strong',
+  )
+}
+
+function FilterField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-xs font-medium text-muted">{label}</span>
+      {children}
+    </div>
+  )
+}
+
+interface FiltersPopoverProps {
+  filters: BookingFilters
+  onFiltersChange: (next: BookingFilters) => void
+  activities: Activity[]
+}
+
+function FiltersPopover({ filters, onFiltersChange, activities }: FiltersPopoverProps) {
+  const set = <K extends keyof BookingFilters>(key: K, value: BookingFilters[K]) =>
+    onFiltersChange({ ...filters, [key]: value })
+
+  const count =
+    (filters.activityId !== 'all' ? 1 : 0) +
+    (filters.channel !== 'all' ? 1 : 0) +
+    (filters.payment !== 'all' ? 1 : 0)
+
+  const sortedActivities = React.useMemo(
+    () => [...activities].sort((a, b) => a.name.localeCompare(b.name)),
+    [activities],
+  )
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={triggerClass(count > 0)}
+          aria-label={count > 0 ? `Filters, ${count} active` : 'Filters'}
+        >
+          <ListFilter
+            aria-hidden="true"
+            className={cn('size-4 shrink-0', count > 0 ? 'text-info' : 'text-subtle')}
+          />
+          Filters
+          {count > 0 ? (
+            <span className="grid size-5 place-items-center rounded-full bg-info text-xs font-semibold text-on-primary tabular-nums">
+              {count}
+            </span>
+          ) : null}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" width="md" padding="sm" className="flex flex-col gap-3">
+        <div className="flex h-7 items-center justify-between">
+          <p className="text-sm font-semibold text-foreground">Filters</p>
+          {count > 0 ? (
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() =>
+                onFiltersChange({ ...filters, activityId: 'all', channel: 'all', payment: 'all' })
+              }
+            >
+              Clear
+            </Button>
+          ) : null}
+        </div>
+
+        <FilterField label="Experience">
+          <Select value={filters.activityId} onValueChange={(value) => set('activityId', value)}>
+            <SelectTrigger aria-label="Filter by experience" icon={<Ship className="size-4" />}>
+              <SelectValue placeholder="Experience" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All experiences</SelectItem>
+              {sortedActivities.map((activity) => (
+                <SelectItem key={activity.id} value={activity.id}>
+                  {activity.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FilterField>
+
+        <FilterField label="Channel">
+          <Select
+            value={filters.channel}
+            onValueChange={(value) => set('channel', value as BookingChannel | 'all')}
+          >
+            <SelectTrigger aria-label="Filter by booking channel" icon={<Globe className="size-4" />}>
+              <SelectValue placeholder="Channel" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All channels</SelectItem>
+              {(Object.keys(CHANNEL_LABELS) as BookingChannel[]).map((channel) => (
+                <SelectItem key={channel} value={channel}>
+                  {CHANNEL_LABELS[channel]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FilterField>
+
+        <FilterField label="Payment">
+          <Select
+            value={filters.payment}
+            onValueChange={(value) => set('payment', value as PaymentStatus | 'all')}
+          >
+            <SelectTrigger
+              aria-label="Filter by payment status"
+              icon={<CircleDollarSign className="size-4" />}
+            >
+              <SelectValue placeholder="Payment" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Any payment state</SelectItem>
+              {PAYMENT_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FilterField>
+      </PopoverContent>
+    </Popover>
+  )
+}
 
 export interface BookingsFiltersProps {
   filters: BookingFilters
   onFiltersChange: (next: BookingFilters) => void
   activities: Activity[]
-  /** Id of the saved view currently applied, or `null` for a hand-rolled filter. */
-  activeViewId: string | null
-  onApplyView: (view: SavedView) => void
-  /** Rendered next to the reset control, e.g. "1,284 of 13,268". */
+  /** Shows the Reset control; the page decides when the desk has drifted from a view. */
+  resettable?: boolean
+  onReset?: () => void
+  /** Rendered at the right, e.g. "1,284 of 13,268 reservations". */
   resultSummary?: React.ReactNode
+  /** Display controls rendered after the summary. */
+  trailing?: React.ReactNode
   className?: string
 }
 
@@ -242,9 +418,10 @@ export function BookingsFilters({
   filters,
   onFiltersChange,
   activities,
-  activeViewId,
-  onApplyView,
+  resettable = false,
+  onReset,
   resultSummary,
+  trailing,
   className,
 }: BookingsFiltersProps) {
   const set = React.useCallback(
@@ -254,277 +431,59 @@ export function BookingsFilters({
     [filters, onFiltersChange],
   )
 
-  const activityName = React.useMemo(() => {
-    if (filters.activityId === 'all') return null
-    return activities.find((a) => a.id === filters.activityId)?.name ?? null
-  }, [activities, filters.activityId])
-
-  const chips: ActiveChip[] = []
-  if (filters.search.trim()) {
-    chips.push({
-      key: 'search',
-      prefix: 'Search',
-      label: `"${filters.search.trim()}"`,
-      clear: () => set('search', ''),
-    })
-  }
-  if (activityName) {
-    chips.push({
-      key: 'activity',
-      prefix: 'Experience',
-      label: activityName,
-      clear: () => set('activityId', 'all'),
-    })
-  }
-  if (filters.channel !== 'all') {
-    chips.push({
-      key: 'channel',
-      prefix: 'Channel',
-      label: CHANNEL_LABELS[filters.channel],
-      clear: () => set('channel', 'all'),
-    })
-  }
-  if (filters.payment !== 'all') {
-    chips.push({
-      key: 'payment',
-      prefix: 'Payment',
-      label: PAYMENT_LABEL.get(filters.payment) ?? filters.payment,
-      clear: () => set('payment', 'all'),
-    })
-  }
-  if (filters.range) {
-    chips.push({
-      key: 'range',
-      prefix: 'Departing',
-      label: formatRangeLabel(filters.range),
-      clear: () => set('range', null),
-    })
-  }
-
   const fallbackRange = React.useMemo(
     () => rangeForPreset('30d', NOW) ?? { from: TODAY_KEY, to: TODAY_KEY },
     [],
   )
 
-  const sortedActivities = React.useMemo(
-    () => [...activities].sort((a, b) => a.name.localeCompare(b.name)),
-    [activities],
-  )
-
   return (
-    <div className={cn('flex flex-col gap-3', className)}>
-      {/* ---------------------------------------------------------------
-          Saved views
-          --------------------------------------------------------------- */}
-      <div className="-mx-1 flex items-center gap-1.5 overflow-x-auto px-1 pb-0.5 no-scrollbar">
-        <span className="hidden shrink-0 items-center gap-1.5 pr-1 text-xs font-semibold tracking-wider text-faint uppercase sm:inline-flex">
-          <Bookmark aria-hidden="true" className="size-3.5" />
-          Views
-        </span>
-        {SAVED_VIEWS.map((view) => {
-          const Icon = view.icon
-          const active = activeViewId === view.id
-          return (
-            <button
-              key={view.id}
-              type="button"
-              onClick={() => onApplyView(view)}
-              aria-pressed={active}
-              title={view.hint}
-              className={cn(
-                'group/view inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3',
-                'text-[0.8125rem] font-medium whitespace-nowrap',
-                'transition-[color,background-color,border-color,transform] duration-200 ease-[var(--ease-out-expo)]',
-                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
-                'active:scale-[0.97] motion-reduce:active:scale-100',
-                active
-                  ? 'border-[color-mix(in_oklab,var(--info)_40%,transparent)] bg-info-soft text-info shadow-xs'
-                  : 'border-line bg-surface text-muted hover:border-line-strong hover:bg-surface-sunken hover:text-foreground',
-              )}
-            >
-              <Icon
-                aria-hidden="true"
-                className={cn('size-3.5 shrink-0', active ? 'text-info' : 'text-faint')}
-              />
-              {view.label}
-            </button>
-          )
-        })}
-      </div>
+    <div className={cn('flex flex-wrap items-center gap-2', className)}>
+      <SearchInput
+        value={filters.search}
+        onValueChange={(value) => set('search', value)}
+        debounceMs={180}
+        label="Search reservations"
+        placeholder="Reference, guest name or email…"
+        shortcut={false}
+        fieldClassName="w-full rounded-lg sm:w-72"
+      />
 
-      {/* ---------------------------------------------------------------
-          Controls
-          --------------------------------------------------------------- */}
-      <div className="flex flex-col gap-2.5 rounded-2xl border border-line bg-surface p-2.5 sm:flex-row sm:items-center sm:gap-2">
-        <div className="min-w-0 flex-1 sm:max-w-sm">
-          <SearchInput
-            value={filters.search}
-            onValueChange={(value) => set('search', value)}
-            debounceMs={180}
-            tone="sunken"
-            label="Search reservations"
-            placeholder="Reference, guest name or email…"
-            shortcut={false}
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
-          <Select
-            value={filters.activityId}
-            onValueChange={(value) => set('activityId', value)}
-          >
-            <SelectTrigger
-              className="w-full sm:w-[11.5rem]"
-              aria-label="Filter by experience"
-              icon={<Ship className="size-4" />}
-            >
-              <SelectValue placeholder="Experience" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectLabel>Experience</SelectLabel>
-                <SelectItem value="all">All experiences</SelectItem>
-                {sortedActivities.map((activity) => (
-                  <SelectItem key={activity.id} value={activity.id}>
-                    {activity.name}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-
-          <Select
-            value={filters.channel}
-            onValueChange={(value) => set('channel', value as BookingChannel | 'all')}
-          >
-            <SelectTrigger
-              className="w-full sm:w-[10.5rem]"
-              aria-label="Filter by booking channel"
-              icon={<Globe className="size-4" />}
-            >
-              <SelectValue placeholder="Channel" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectLabel>Channel</SelectLabel>
-                <SelectItem value="all">All channels</SelectItem>
-                {(Object.keys(CHANNEL_LABELS) as BookingChannel[]).map((channel) => (
-                  <SelectItem key={channel} value={channel}>
-                    {CHANNEL_LABELS[channel]}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-
-          <Select
-            value={filters.payment}
-            onValueChange={(value) => set('payment', value as PaymentStatus | 'all')}
-          >
-            <SelectTrigger
-              className="w-full sm:w-[10rem]"
-              aria-label="Filter by payment status"
-              icon={<CircleDollarSign className="size-4" />}
-            >
-              <SelectValue placeholder="Payment" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectLabel>Payment</SelectLabel>
-                <SelectItem value="all">Any payment state</SelectItem>
-                {PAYMENT_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-
-          <DateRangePicker
-            value={filters.range ?? fallbackRange}
-            referenceDate={NOW}
-            onChange={(range) => set('range', range)}
-            numberOfMonths={2}
-            align="end"
-            label="Filter by departure date"
-            trigger={
-              <button
-                type="button"
-                className={cn(
-                  'group inline-flex h-10 w-full items-center gap-2 rounded-xl border px-3 text-sm font-medium sm:w-auto',
-                  'transition-[color,background-color,border-color] duration-200 ease-[var(--ease-out-quint)]',
-                  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
-                  'data-[state=open]:border-primary data-[state=open]:ring-2 data-[state=open]:ring-primary/25',
-                  filters.range
-                    ? 'border-[color-mix(in_oklab,var(--info)_40%,transparent)] bg-info-soft text-info'
-                    : 'border-line bg-surface text-foreground hover:border-line-strong hover:bg-surface-sunken',
-                )}
-              >
-                <CalendarClock
-                  aria-hidden="true"
-                  className={cn('size-4 shrink-0', filters.range ? 'text-info' : 'text-subtle')}
-                />
-                <span className="truncate tabular-nums">
-                  {filters.range ? formatRangeLabel(filters.range) : 'Any date'}
-                </span>
-              </button>
-            }
-          />
-        </div>
-      </div>
-
-      {/* ---------------------------------------------------------------
-          Active chips
-          --------------------------------------------------------------- */}
-      {(chips.length > 0 || resultSummary) && (
-        <div className="flex flex-wrap items-center gap-2">
-          {chips.length > 0 && (
-            <ListFilter aria-hidden="true" className="size-3.5 shrink-0 text-faint" />
-          )}
-
-          {chips.map((chip) => (
-            <Badge
-              key={chip.key}
-              variant="outline"
-              className="h-7 gap-1.5 border-line bg-surface pr-1 pl-2.5 text-foreground"
-            >
-              <span className="text-faint">{chip.prefix}</span>
-              <span className="max-w-[12rem] truncate font-medium">{chip.label}</span>
-              <button
-                type="button"
-                onClick={chip.clear}
-                aria-label={`Remove ${chip.prefix} filter`}
-                className={cn(
-                  'ml-0.5 grid size-5 shrink-0 place-items-center rounded-full text-faint',
-                  'transition-colors duration-150 hover:bg-surface-sunken hover:text-danger',
-                  'focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary',
-                )}
-              >
-                <X aria-hidden="true" className="size-3" />
-              </button>
-            </Badge>
-          ))}
-
-          {chips.length > 0 && (
-            <Button
-              variant="ghost"
-              size="xs"
-              onClick={() => onFiltersChange(DEFAULT_BOOKING_FILTERS)}
-              leftIcon={<RotateCcw />}
-            >
-              Reset
-            </Button>
-          )}
-
-          {resultSummary ? (
-            <span className="ml-auto inline-flex items-center gap-1.5 text-xs text-subtle tabular-nums">
-              <Sparkles aria-hidden="true" className="size-3.5 text-faint" />
-              {resultSummary}
+      <DateRangePicker
+        value={filters.range ?? fallbackRange}
+        referenceDate={NOW}
+        onChange={(range) => set('range', range)}
+        numberOfMonths={2}
+        align="start"
+        label="Filter by departure date"
+        trigger={
+          <button type="button" className={triggerClass(Boolean(filters.range))}>
+            <CalendarClock
+              aria-hidden="true"
+              className={cn('size-4 shrink-0', filters.range ? 'text-info' : 'text-subtle')}
+            />
+            <span className="truncate tabular-nums">
+              {filters.range ? formatRangeLabel(filters.range) : 'Any date'}
             </span>
+          </button>
+        }
+      />
+
+      <FiltersPopover filters={filters} onFiltersChange={onFiltersChange} activities={activities} />
+
+      {resettable && onReset ? (
+        <Button variant="ghost" size="sm" onClick={onReset} leftIcon={<RotateCcw />}>
+          Reset
+        </Button>
+      ) : null}
+
+      {resultSummary || trailing ? (
+        <div className="flex items-center gap-3 sm:ml-auto">
+          {resultSummary ? (
+            <span className="text-sm text-subtle tabular-nums">{resultSummary}</span>
           ) : null}
+          {trailing}
         </div>
-      )}
+      ) : null}
     </div>
   )
 }

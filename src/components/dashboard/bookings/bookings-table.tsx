@@ -15,6 +15,7 @@ import {
   Send,
   Users,
   X,
+  SlidersHorizontal,
 } from 'lucide-react'
 
 import type { BookingRow } from '@/lib/demo'
@@ -37,9 +38,12 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -51,8 +55,6 @@ import {
 } from '@/components/ui/data-table'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Pagination } from '@/components/ui/pagination'
-import { Segmented } from '@/components/ui/segmented'
-import { Switch } from '@/components/ui/switch'
 
 /* ==========================================================================
    The reservations list.
@@ -443,7 +445,7 @@ function BookingCard({
    TABLE
    ========================================================================== */
 
-type Density = 'comfortable' | 'compact'
+export type Density = 'comfortable' | 'compact'
 
 /** Nine columns need the narrower gutter; the shared table keeps its roomier default. */
 function dense(columns: DataTableColumn<BookingRow>[]): DataTableColumn<BookingRow>[] {
@@ -454,10 +456,65 @@ function dense(columns: DataTableColumn<BookingRow>[]): DataTableColumn<BookingR
   }))
 }
 
-const DENSITY_OPTIONS: { value: Density; label: string }[] = [
-  { value: 'compact', label: 'Compact' },
-  { value: 'comfortable', label: 'Comfortable' },
-]
+/* ==========================================================================
+   DISPLAY MENU
+   Row density and day grouping, tucked behind one button in the toolbar.
+   ========================================================================== */
+
+export interface BookingsDisplayMenuProps {
+  density: Density
+  onDensityChange: (density: Density) => void
+  groupByDay: boolean
+  onGroupByDayChange: (on: boolean) => void
+  /** Days only make sense when the list runs in departure order. */
+  canGroup: boolean
+  className?: string
+}
+
+export function BookingsDisplayMenu({
+  density,
+  onDensityChange,
+  groupByDay,
+  onGroupByDayChange,
+  canGroup,
+  className,
+}: BookingsDisplayMenuProps) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="secondary" leftIcon={<SlidersHorizontal />} className={className}>
+          Display
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel>Rows</DropdownMenuLabel>
+        <DropdownMenuRadioGroup
+          value={density}
+          onValueChange={(value) => onDensityChange(value as Density)}
+        >
+          <DropdownMenuRadioItem value="compact" onSelect={(event) => event.preventDefault()}>
+            Compact
+          </DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="comfortable" onSelect={(event) => event.preventDefault()}>
+            Comfortable
+          </DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuCheckboxItem
+          checked={groupByDay}
+          disabled={!canGroup}
+          onCheckedChange={(checked) => onGroupByDayChange(checked === true)}
+          onSelect={(event) => event.preventDefault()}
+        >
+          Group by day
+        </DropdownMenuCheckboxItem>
+        {!canGroup ? (
+          <p className="px-2.5 pt-0.5 pb-1.5 text-xs text-faint">Sort by time to group by day.</p>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
 
 export interface BookingsTableProps {
   /** Rows for the current page only. */
@@ -480,6 +537,10 @@ export interface BookingsTableProps {
   onPageChange: (page: number) => void
   onPageSizeChange: (size: number) => void
   onClearFilters: () => void
+  /** Row height, from the Display menu. */
+  density: Density
+  /** Day sections, from the Display menu; ignored unless sorted by departure. */
+  groupByDay: boolean
   loading?: boolean
   className?: string
 }
@@ -502,11 +563,11 @@ export function BookingsTable({
   onPageChange,
   onPageSizeChange,
   onClearFilters,
+  density,
+  groupByDay,
   loading = false,
   className,
 }: BookingsTableProps) {
-  const [density, setDensity] = React.useState<Density>('compact')
-  const [groupByDay, setGroupByDay] = React.useState(true)
 
   const selectedSet = React.useMemo(() => new Set(selectedIds), [selectedIds])
   const toggleOne = (id: string) => {
@@ -665,35 +726,8 @@ export function BookingsTable({
     />
   )
 
-  const from = totalItems === 0 ? 0 : (page - 1) * pageSize + 1
-  const to = Math.min(page * pageSize, totalItems)
-
   return (
     <div className={cn('flex flex-col gap-3', className)}>
-      {/* ---------- toolbar ---------- */}
-      <div className="hidden items-center justify-between gap-3 md:flex">
-        <p className="text-xs text-subtle tabular-nums">
-          {totalItems === 0 ? 'No reservations' : `Showing ${formatNumber(from)}–${formatNumber(to)} of ${formatNumber(totalItems)}`}
-          {sort.id === 'departure' ? (
-            <span className="text-faint"> · {sort.dir === 'desc' ? 'latest departure first' : 'earliest departure first'}</span>
-          ) : null}
-        </p>
-
-        <div className="flex items-center gap-4">
-          <label
-            className={cn(
-              'inline-flex items-center gap-2 text-xs font-medium text-muted',
-              !canGroup && 'opacity-50',
-            )}
-            title={canGroup ? undefined : 'Sort by departure to group by day'}
-          >
-            <Switch size="sm" checked={groupByDay} onCheckedChange={setGroupByDay} disabled={!canGroup} />
-            Group by day
-          </label>
-          <Segmented size="sm" label="Row density" options={DENSITY_OPTIONS} value={density} onValueChange={setDensity} />
-        </div>
-      </div>
-
       {/* ---------- desktop table ---------- */}
       <div className="hidden md:block">
         <DataTable
