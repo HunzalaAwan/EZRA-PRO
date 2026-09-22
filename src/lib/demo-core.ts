@@ -21,6 +21,7 @@
 
 import type {
   Activity,
+  ActivityFormat,
   ActivityFeedItem,
   ActivityMedia,
   ActivityPerformance,
@@ -1179,7 +1180,9 @@ interface ActivitySpec {
   reviewCount: number
   featured?: boolean
   resources: string[]
-  /** "HH:mm" departure times, tenant-local. */
+  /** Group departures unless said otherwise; open entry uses `times` as arrival slots. */
+  format?: ActivityFormat
+  /** "HH:mm" departure times (or arrival slots), tenant-local. */
   times: string[]
   /** JS weekday numbers (0=Sun … 6=Sat). Omit for every day. */
   weekdays?: number[]
@@ -1889,7 +1892,8 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     rating: 4.5,
     reviewCount: 921,
     resources: ['res_bh_trade_wind_flyer'],
-    times: ['12:00'],
+    format: 'open',
+    times: ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'],
     popularity: 0.64,
     freeCancelHours: 24,
   },
@@ -2417,7 +2421,8 @@ const RIDGELINE_SPECS: ActivitySpec[] = [
     reviewCount: 2640,
     featured: true,
     resources: ['res_rl_swing_rig', 'res_rl_4wd'],
-    times: ['09:30', '14:00'],
+    format: 'open',
+    times: ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'],
     popularity: 0.82,
     freeCancelHours: 24,
   },
@@ -2709,7 +2714,8 @@ const CASAVELA_SPECS: ActivitySpec[] = [
     rating: 4.9,
     reviewCount: 198,
     resources: ['res_cv_spa'],
-    times: ['10:00', '12:00', '15:00', '17:00'],
+    format: 'open',
+    times: ['10:00', '11:00', '12:00', '14:00', '15:00', '16:00', '17:00'],
     popularity: 0.55,
     freeCancelHours: 24,
   },
@@ -2735,6 +2741,7 @@ const CASAVELA_SPECS: ActivitySpec[] = [
     rating: 4.7,
     reviewCount: 241,
     resources: ['res_cv_kitchen_room'],
+    format: 'dates',
     times: ['21:30'],
     weekdays: [5, 6],
     popularity: 0.7,
@@ -2790,6 +2797,7 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     meetingPoint: spec.meetingPoint,
     category: tenant.vertical,
     status: spec.status ?? 'live',
+    format: spec.format ?? 'departures',
     difficulty: spec.difficulty,
     durationMinutes: spec.durationMinutes,
     minAge: spec.minAge,

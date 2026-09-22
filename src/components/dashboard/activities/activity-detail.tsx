@@ -98,6 +98,8 @@ import {
   storefrontHref,
 } from './activity-card'
 import type { ActivityDetailData } from './activity-data'
+import { DepartureSchedule } from './departure-schedule'
+import { ACTIVITY_FORMAT_META } from '@/lib/activity-format'
 
 /* ==========================================================================
    SMALL PARTS
@@ -614,113 +616,21 @@ function PricingTab({ detail }: { detail: ActivityDetailData }) {
   )
 }
 
-function ScheduleTab({ detail, now }: { detail: ActivityDetailData; now: Date }) {
+function ScheduleTab({ detail, nowIso }: { detail: ActivityDetailData; nowIso: string }) {
+  const activity = useActivityOverride(detail.activity)
   return (
-    <SectionCard
-      title="Upcoming departures"
-      description={`${detail.lifetime.upcomingDepartures} scheduled on the calendar.`}
-      action={
-        <Button variant="secondary" size="sm" asChild rightIcon={<ArrowUpRight />}>
-          <Link href="/dashboard/calendar">Open calendar</Link>
-        </Button>
-      }
-    >
-      {detail.upcoming.length === 0 ? (
-        <EmptyState
-          surface="dashed"
-          size="sm"
-          icon={CalendarClock}
-          title="Nothing scheduled"
-          description="This activity has no departures ahead. Add a schedule rule to start selling again."
-        />
-      ) : (
-        <ul className="flex list-none flex-col gap-2.5 p-0">
-          {detail.upcoming.map((departure) => {
-            const WeatherIcon = departure.weather
-              ? WEATHER_ICON[departure.weather.condition]
-              : null
-            return (
-              <li
-                key={departure.id}
-                className={cn(
-                  'group/dep flex flex-col gap-3 rounded-xl border border-line bg-surface p-3.5',
-                  'transition-[border-color,box-shadow] duration-300 hover:border-primary/40 hover:shadow-sm',
-                  'sm:flex-row sm:items-center',
-                )}
-              >
-                <div className="flex shrink-0 items-center gap-3 sm:w-56">
-                  <div className="grid size-12 shrink-0 place-items-center rounded-xl bg-surface-sunken text-center">
-                    <span className="text-[0.625rem] font-semibold tracking-wide text-subtle uppercase">
-                      {new Intl.DateTimeFormat('en-US', { month: 'short' }).format(
-                        new Date(departure.startsAt),
-                      )}
-                    </span>
-                    <span className="-mt-0.5 font-display text-base leading-none font-semibold">
-                      {new Date(departure.startsAt).getDate()}
-                    </span>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold">
-                      {formatTime(departure.startsAt)}
-                      <span className="text-faint"> – {formatTime(departure.endsAt)}</span>
-                    </p>
-                    <p className="text-xs text-subtle">
-                      {formatRelative(departure.startsAt, now)}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <CapacityBar
-                    booked={departure.booked}
-                    capacity={departure.capacity}
-                    held={departure.held}
-                    size="sm"
-                  />
-                </div>
-
-                <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
-                  {departure.weather && WeatherIcon ? (
-                    <SimpleTooltip
-                      label={`${titleCase(departure.weather.condition)} · ${departure.weather.tempC}°C · ${departure.weather.windKts} kts · ${departure.weather.goConfidence}% go confidence`}
-                    >
-                      <span
-                        className={cn(
-                          'inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium',
-                          departure.weather.goConfidence >= 75
-                            ? 'bg-success-soft text-success'
-                            : departure.weather.goConfidence >= 50
-                              ? 'bg-warning-soft text-warning'
-                              : 'bg-danger-soft text-danger',
-                        )}
-                      >
-                        <WeatherIcon className="size-3.5" aria-hidden="true" />
-                        {departure.weather.goConfidence}%
-                      </span>
-                    </SimpleTooltip>
-                  ) : null}
-
-                  {departure.staff.length > 0 ? (
-                    <AvatarGroup
-                      size="xs"
-                      max={3}
-                      label="Assigned crew"
-                      avatars={departure.staff.map((member) => ({
-                        id: member.id,
-                        name: member.name,
-                        src: member.avatarUrl,
-                      }))}
-                    />
-                  ) : null}
-
-                  <StatusBadge kind="departure" status={departure.status} size="sm" />
-                </div>
-              </li>
-            )
-          })}
-        </ul>
-      )}
-    </SectionCard>
+    <DepartureSchedule
+      rows={detail.upcoming}
+      crew={detail.crew}
+      format={activity.format}
+      activityName={activity.name}
+      maxCapacity={activity.maxCapacity}
+      minParticipants={activity.minParticipants}
+      durationMinutes={activity.durationMinutes}
+      usualTimes={detail.usualTimes}
+      nowIso={nowIso}
+      todayKey={nowIso.slice(0, 10)}
+    />
   )
 }
 
@@ -1208,6 +1118,10 @@ export function ActivityDetail({ detail, tenantSlug, nowIso }: ActivityDetailPro
                 {activity.minParticipants}–{activity.maxCapacity} guests
               </span>
               <DifficultyMeter difficulty={activity.difficulty} />
+              <span className="inline-flex items-center gap-1.5" title={ACTIVITY_FORMAT_META[activity.format].hint}>
+                {activity.format === 'open' ? <DoorOpen className="size-3.5" aria-hidden="true" /> : <CalendarClock className="size-3.5" aria-hidden="true" />}
+                {ACTIVITY_FORMAT_META[activity.format].label}
+              </span>
               <span className="inline-flex items-center gap-1.5">
                 <Gauge className="size-3.5" aria-hidden="true" />
                 {detail.summary.occupancy30d.toFixed(0)}% full · 30d
@@ -1245,7 +1159,7 @@ export function ActivityDetail({ detail, tenantSlug, nowIso }: ActivityDetailPro
               <PricingTab detail={detail} />
             </TabsContent>
             <TabsContent value="schedule">
-              <ScheduleTab detail={detail} now={now} />
+              <ScheduleTab detail={detail} nowIso={nowIso} />
             </TabsContent>
             <TabsContent value="performance">
               <PerformanceTab detail={detail} />

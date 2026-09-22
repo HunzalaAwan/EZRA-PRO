@@ -248,7 +248,7 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
       maxPerBooking: addOn.maxPerBooking,
       required: addOn.required,
     })),
-    schedule: { ...base.schedule, capacity: activity.maxCapacity },
+    schedule: { ...base.schedule, mode: activity.format === 'open' ? 'hours' : activity.format === 'dates' ? 'dates' : 'times', capacity: activity.maxCapacity },
     featured: activity.featured,
     freeCancellationHours: activity.cancellationPolicy.freeCancellationHours,
   }

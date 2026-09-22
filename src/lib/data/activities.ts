@@ -153,6 +153,7 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     meetingPoint: spec.meetingPoint,
     category: spec.category ?? tenant.vertical,
     status: spec.status,
+    format: 'departures',
     difficulty: spec.difficulty,
     durationMinutes: spec.durationMinutes,
     minAge: spec.minAge,

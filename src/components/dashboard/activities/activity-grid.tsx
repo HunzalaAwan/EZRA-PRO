@@ -4,7 +4,8 @@ import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowDownWideNarrow, LayoutGrid, Plus, Rows3, SlidersHorizontal } from 'lucide-react'
 
-import type { ActivityStatus, DifficultyLevel, VerticalKey } from '@/types'
+import type { ActivityFormat, ActivityStatus, DifficultyLevel, VerticalKey } from '@/types'
+import { ACTIVITY_FORMATS, ACTIVITY_FORMAT_META } from '@/lib/activity-format'
 import { cn, formatNumber, titleCase } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Segmented, type SegmentedOption } from '@/components/ui/segmented'
@@ -63,6 +64,7 @@ export function ActivityGrid({ rows, tenantSlug, cascadeKey, className }: Activi
 type StatusFilter = 'all' | ActivityStatus
 type CategoryFilter = 'all' | VerticalKey
 type DifficultyFilter = 'all' | DifficultyLevel
+type FormatFilter = 'all' | ActivityFormat
 type ViewMode = 'grid' | 'table'
 
 interface SortOption {
@@ -99,6 +101,7 @@ export function ActivityCatalog({ summaries, tenantSlug }: ActivityCatalogProps)
   const [status, setStatus] = React.useState<StatusFilter>('all')
   const [category, setCategory] = React.useState<CategoryFilter>('all')
   const [difficulty, setDifficulty] = React.useState<DifficultyFilter>('all')
+  const [format, setFormat] = React.useState<FormatFilter>('all')
   const [sort, setSort] = React.useState<{ id: ActivitySortId; dir: 'asc' | 'desc' }>({
     id: 'updated',
     dir: 'desc',
@@ -124,6 +127,7 @@ export function ActivityCatalog({ summaries, tenantSlug }: ActivityCatalogProps)
       if (status !== 'all' && activity.status !== status) return false
       if (category !== 'all' && activity.category !== category) return false
       if (difficulty !== 'all' && activity.difficulty !== difficulty) return false
+      if (format !== 'all' && activity.format !== format) return false
       if (!needle) return true
       return (
         activity.name.toLowerCase().includes(needle) ||
@@ -133,16 +137,17 @@ export function ActivityCatalog({ summaries, tenantSlug }: ActivityCatalogProps)
       )
     })
     return sortSummaries(rows, sort)
-  }, [summaries, query, status, category, difficulty, sort])
+  }, [summaries, query, status, category, difficulty, format, sort])
 
   const filtersActive =
-    query.trim().length > 0 || status !== 'all' || category !== 'all' || difficulty !== 'all'
+    query.trim().length > 0 || status !== 'all' || category !== 'all' || difficulty !== 'all' || format !== 'all'
 
   const clearFilters = () => {
     setQuery('')
     setStatus('all')
     setCategory('all')
     setDifficulty('all')
+    setFormat('all')
   }
 
   const statusOptions: SegmentedOption<StatusFilter>[] = [
@@ -159,7 +164,7 @@ export function ActivityCatalog({ summaries, tenantSlug }: ActivityCatalogProps)
     { value: 'table', label: 'Table', icon: Rows3, ariaLabel: 'Table view' },
   ]
 
-  const cascadeKey = `${status}-${category}-${difficulty}-${sortKey(sort)}-${query}`
+  const cascadeKey = `${status}-${category}-${difficulty}-${format}-${sortKey(sort)}-${query}`
 
   return (
     <div className="flex flex-col gap-4">
@@ -206,6 +211,20 @@ export function ActivityCatalog({ summaries, tenantSlug }: ActivityCatalogProps)
               {DIFFICULTIES.map((value) => (
                 <SelectItem key={value} value={value}>
                   {DIFFICULTY_LABEL[value]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={format} onValueChange={(value) => setFormat(value as FormatFilter)}>
+            <SelectTrigger className="w-full sm:w-40" aria-label="Filter by how it runs">
+              <SelectValue placeholder="Runs as" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Any format</SelectItem>
+              {ACTIVITY_FORMATS.map((value) => (
+                <SelectItem key={value} value={value}>
+                  {ACTIVITY_FORMAT_META[value].label}
                 </SelectItem>
               ))}
             </SelectContent>

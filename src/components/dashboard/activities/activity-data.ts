@@ -136,6 +136,10 @@ export interface ActivityDetailData {
   channels: { channel: BookingChannel; label: string; bookings: number; share: number; revenue: number }[]
   resources: Resource[]
   team: { id: string; name: string; avatarUrl: string; title: string; departures: number }[]
+  /** Staff who can be put on a departure. */
+  crew: { id: string; name: string; avatarUrl: string; title: string }[]
+  /** The start times this activity usually runs at, "HH:mm". */
+  usualTimes: string[]
 }
 
 /* ==========================================================================
@@ -518,9 +522,10 @@ export function getActivityDetail(activityId: string): ActivityDetailData | unde
     .sort((a, b) => b.bookings - a.bookings)
 
   /* ---- upcoming run sheet ---- */
+  const horizon = `${toDateKey(addDays(NOW, 30))}T00:00:00`
   const upcoming: DepartureRowLite[] = allDepartures
-    .filter((d) => d.startsAt >= NOW_ISO)
-    .slice(0, 10)
+    .filter((d) => d.startsAt >= NOW_ISO && d.startsAt < horizon)
+    .slice(0, 160)
     .map((d) => ({
       id: d.id,
       startsAt: d.startsAt,
@@ -674,6 +679,10 @@ export function getActivityDetail(activityId: string): ActivityDetailData | unde
     channels,
     resources,
     team,
+    crew: Array.from(users.values())
+      .filter((u) => u.isBookable && u.status === 'active')
+      .map((u) => ({ id: u.id, name: u.name, avatarUrl: u.avatarUrl, title: u.title })),
+    usualTimes: Array.from(new Set(allDepartures.map((d) => d.startsAt.slice(11, 16)))).sort(),
   }
 
   detailCache.set(activityId, detail)

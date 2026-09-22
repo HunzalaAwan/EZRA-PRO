@@ -130,6 +130,14 @@ export interface Money {
 
 export type ActivityStatus = 'draft' | 'live' | 'paused' | 'archived'
 
+/**
+ * How an experience runs: as group departures at set times (a boat, a
+ * tour), as open entry where guests arrive any time within the hours and
+ * capacity is per arrival slot (a park, a rental, a spa), or only on the
+ * fixed dates listed (an event, a workshop).
+ */
+export type ActivityFormat = 'departures' | 'open' | 'dates'
+
 export type PricingModel = 'per_person' | 'per_group' | 'per_unit' | 'tiered'
 
 export type DifficultyLevel = 'easy' | 'moderate' | 'challenging' | 'extreme'
@@ -216,6 +224,8 @@ export interface Activity {
   meetingPoint: string
   category: VerticalKey
   status: ActivityStatus
+  /** Group departures, open entry or fixed dates. */
+  format: ActivityFormat
   difficulty: DifficultyLevel
   /** Minutes. */
   durationMinutes: number

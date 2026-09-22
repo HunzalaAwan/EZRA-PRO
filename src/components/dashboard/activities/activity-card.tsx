@@ -6,10 +6,13 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   Archive,
+  CalendarRange,
   Copy,
+  DoorOpen,
   ExternalLink,
   Gauge,
   PencilLine,
+  Route,
   Star,
   Timer,
   TrendingDown,
@@ -17,6 +20,7 @@ import {
   Users,
 } from 'lucide-react'
 
+import { ACTIVITY_FORMAT_META } from '@/lib/activity-format'
 import type { Activity, DifficultyLevel } from '@/types'
 import { cn, formatCurrency, formatDelta, formatDuration, formatNumber } from '@/lib/utils'
 import { Card } from '@/components/ui/card'
@@ -328,6 +332,10 @@ export function ActivityCard({ summary, tenantSlug, className }: ActivityCardPro
             {activity.maxCapacity} max
           </span>
           <DifficultyMeter difficulty={activity.difficulty} className="text-subtle" />
+          <span className="inline-flex items-center gap-1.5" title={ACTIVITY_FORMAT_META[activity.format].hint}>
+            {activity.format === 'open' ? <DoorOpen className="size-3.5 text-faint" aria-hidden="true" /> : activity.format === 'dates' ? <CalendarRange className="size-3.5 text-faint" aria-hidden="true" /> : <Route className="size-3.5 text-faint" aria-hidden="true" />}
+            {ACTIVITY_FORMAT_META[activity.format].label}
+          </span>
         </div>
 
         <div className="mt-auto flex items-end justify-between gap-3 border-t border-line-subtle pt-3">

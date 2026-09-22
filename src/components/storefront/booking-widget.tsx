@@ -411,11 +411,11 @@ export function BookingWidget({
         <div>
           <div className="flex items-baseline justify-between gap-3">
             <h3 className="text-[0.8125rem] font-semibold tracking-tight text-foreground">
-              2 · Choose a time
+              {activity.format === 'open' ? '2 · Choose an arrival time' : '2 · Choose a time'}
             </h3>
             {day && day.slots.length > 0 ? (
               <span className="text-xs text-subtle">
-                {day.slots.length} {pluralize(day.slots.length, 'departure')}
+                {day.slots.length} {pluralize(day.slots.length, activity.format === 'open' ? 'arrival slot' : activity.format === 'dates' ? 'time' : 'departure')}
               </span>
             ) : null}
           </div>
