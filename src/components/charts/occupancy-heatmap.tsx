@@ -71,6 +71,8 @@ export interface OccupancyHeatmapProps {
   description?: string
   loading?: boolean
   className?: string
+  /** What the tint measures; the legend and tooltip say it. Defaults to Occupancy. */
+  measureLabel?: string
 }
 
 export function OccupancyHeatmap({
@@ -83,6 +85,7 @@ export function OccupancyHeatmap({
   description,
   loading = false,
   className,
+  measureLabel = 'Occupancy',
 }: OccupancyHeatmapProps) {
   const reduced = useReducedMotionSafe()
   const wrapperRef = useRef<HTMLDivElement>(null)
@@ -189,7 +192,7 @@ export function OccupancyHeatmap({
       footer={
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <div className="flex items-center gap-2">
-            <span className="text-[11px] text-subtle">Occupancy</span>
+            <span className="text-[11px] text-subtle">{measureLabel}</span>
             <span aria-hidden="true" className="flex gap-0.5">
               {[0, 25, 50, 75, 100].map((step) => (
                 <span key={step} className="h-2 w-5 rounded-[3px]" style={{ background: cellTint(step) }} />
@@ -340,7 +343,7 @@ export function OccupancyHeatmap({
             >
               <ChartTooltipRow
                 color="var(--series-occupancy)"
-                name="Occupancy"
+                name={measureLabel}
                 value={formatPercent(hover.cell.occupancy)}
               />
               <ChartTooltipRow name="Bookings" value={formatNumber(hover.cell.bookings)} muted />

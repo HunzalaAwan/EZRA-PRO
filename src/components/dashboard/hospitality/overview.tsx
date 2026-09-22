@@ -1,32 +1,39 @@
+import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowRight, Phone } from 'lucide-react'
+import { ArrowRight, BedDouble, Bike, ImageOff, Phone, ShoppingBag } from 'lucide-react'
 
 import { PageHeader } from '@/components/dashboard/page-header'
+import { ChartDeltaChip } from '@/components/charts/chart-container'
+import { Sparkline } from '@/components/charts/sparkline'
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { NOW, TODAY_KEY, getUsersByTenant, CURRENT_USER } from '@/lib/demo'
 import { getDining, getLiveOrders, getLodging, getLodgingCounts } from '@/lib/hospitality'
 import { hm } from '@/lib/hospitality/hours'
-import { HOUSEKEEPING_META, ORDER_STATUS_META, ORDER_TYPE_LABEL, STAY_STATUS_META, type DiningData, type Order } from '@/lib/hospitality/types'
-import { cn, formatCurrency, formatDateLong, formatNumber } from '@/lib/utils'
+import { HOUSEKEEPING_META, ORDER_STATUS_META, ORDER_TYPE_LABEL, STAY_STATUS_META, type DiningData, type Order, type OrderType } from '@/lib/hospitality/types'
+import { addDays, cn, formatCurrency, formatDateLong, formatNumber, toDateKey } from '@/lib/utils'
 import type { WorkspaceProfile } from '@/lib/workspace-profile'
 import type { Tenant } from '@/types'
 
 import { guestName, shortDuration } from './format'
-import { Dot, StatTile, StatusWord } from './shared'
+import { StatusWord } from './shared'
 
 /* ==========================================================================
-   Hospitality overview — the morning read.
+   Hospitality overview — the morning read, mostly in pictures.
 
-   Restaurant: the pass, today's hours, what sold, the week.
-   Hotel: the front desk and housekeeping on top, then the same kitchen
-   read with room service in it. A server component: it reads the seam
-   directly and hands the client tiles plain values.
+   Four numbers with a fortnight behind each, the pass as a pipeline, the
+   day as a timeline, what sold with its photo, and the week as columns.
+   Hotels put the desk and housekeeping above the kitchen. A server
+   component: it reads the seam directly.
    ========================================================================== */
 
 const NOW_TIME = `${String(NOW.getHours()).padStart(2, '0')}:${String(NOW.getMinutes()).padStart(2, '0')}`
+const NOW_MIN = hm(NOW_TIME)
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const SHORT_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const TYPE_TONE: Record<OrderType, string> = { pickup: 'var(--chart-1)', delivery: 'var(--chart-6)', dine_in: 'var(--chart-3)' }
+const TYPE_ICON: Record<OrderType, typeof ShoppingBag> = { pickup: ShoppingBag, delivery: Bike, dine_in: BedDouble }
 
 function greeting(hour: number) {
   if (hour < 12) return 'Good morning'
@@ -34,19 +41,29 @@ function greeting(hour: number) {
   return 'Good evening'
 }
 
-function weekOf(dining: DiningData) {
-  const weekStart = new Date(NOW)
-  weekStart.setDate(weekStart.getDate() - 6)
-  const weekKey = `${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, '0')}-${String(weekStart.getDate()).padStart(2, '0')}`
-  const weekOrders = dining.orders.filter((o) => o.placedAt.slice(0, 10) >= weekKey && o.status === 'completed')
-  const byType = (['dine_in', 'pickup', 'delivery'] as Order['type'][])
-    .map((t) => {
-      const rows = weekOrders.filter((o) => o.type === t)
-      return { t, n: rows.length, revenue: rows.reduce((s, o) => s + o.total, 0) }
-    })
-    .filter((b) => b.n > 0)
-  return { weekOrders, byType, total: byType.reduce((s, b) => s + b.revenue, 0) }
+/** Daily figures for the last fourteen days, oldest first. */
+function fortnight(dining: DiningData) {
+  const days = Array.from({ length: 14 }, (_, i) => toDateKey(addDays(NOW, i - 13)))
+  return days.map((date) => {
+    const rows = dining.orders.filter((o) => o.placedAt.startsWith(date))
+    const done = rows.filter((o) => o.status === 'completed')
+    const prep = done.filter((o) => o.readyAt).map((o) => Math.round((new Date(o.readyAt as string).getTime() - new Date(o.placedAt).getTime()) / 60_000))
+    const revenue: Record<OrderType, number> = { pickup: 0, delivery: 0, dine_in: 0 }
+    for (const o of done) revenue[o.type] += o.total
+    return {
+      date,
+      weekday: new Date(`${date}T12:00:00`).getDay(),
+      orders: rows.filter((o) => o.status !== 'cancelled').length,
+      revenue,
+      total: done.reduce((s, o) => s + o.total, 0),
+      items: done.reduce((s, o) => s + o.lines.reduce((n, l) => n + l.qty, 0), 0),
+      prep: prep.length ? prep.reduce((a, b) => a + b, 0) / prep.length : 0,
+    }
+  })
 }
+
+const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0)
+const delta = (now: number, before: number) => (before ? Math.round(((now - before) / before) * 1000) / 10 : 0)
 
 export function HospitalityOverview({ tenant, profile }: { tenant: Tenant; profile: WorkspaceProfile }) {
   const owner = getUsersByTenant(tenant.id).find((u) => u.role === 'owner') ?? CURRENT_USER
@@ -59,26 +76,27 @@ export function HospitalityOverview({ tenant, profile }: { tenant: Tenant; profi
 
   /* ---------- kitchen numbers ---------- */
 
-  const ordersToday = dining.orders.filter((o) => o.placedAt.startsWith(TODAY_KEY) && o.status !== 'cancelled' && o.status !== 'refunded')
-  const doneToday = ordersToday.filter((o) => o.status === 'completed')
-  const revenueToday = doneToday.reduce((s, o) => s + o.total, 0)
-  const prep = doneToday.filter((o) => o.readyAt).map((o) => Math.round((new Date(o.readyAt as string).getTime() - new Date(o.placedAt).getTime()) / 60_000))
-  const avgPrep = prep.length ? Math.round(prep.reduce((a, b) => a + b, 0) / prep.length) : 0
-  const week = weekOf(dining)
-  const topDishes = [...dining.menu.items].sort((a, b) => b.sold30d - a.sold30d).slice(0, 6)
+  const days = fortnight(dining)
+  const thisWeek = days.slice(7)
+  const lastWeek = days.slice(0, 7)
+  const todayRow = days[days.length - 1]
+  const yesterdayRow = days[days.length - 2]
+  const doneToday = dining.orders.filter((o) => o.placedAt.startsWith(TODAY_KEY) && o.status === 'completed')
+  const avgPrepToday = todayRow.prep ? Math.round(todayRow.prep) : 0
+  const hoursSoFar = Array.from({ length: NOW.getHours() + 1 }, (_, h) => dining.orders.filter((o) => o.placedAt.startsWith(TODAY_KEY) && new Date(o.placedAt).getHours() === h && o.status !== 'cancelled').length)
+  const topDishes = [...dining.menu.items].sort((a, b) => b.sold30d - a.sold30d).slice(0, 5)
   const topMax = topDishes[0]?.sold30d ?? 1
   const soldOut = dining.menu.items.filter((i) => i.status === 'sold_out').length
   const onSale = dining.menu.items.filter((i) => i.status === 'available').length
-  const onDelivery = dining.menu.items.filter((i) => i.status === 'available' && i.channels.includes('delivery')).length
-  const scheduled = live.filter((o) => o.scheduledFor).sort((a, b) => (a.scheduledFor ?? '').localeCompare(b.scheduledFor ?? ''))
-  const now = hm(NOW_TIME)
+  const scheduled = live.filter((o) => o.scheduledFor).length
   const weekday = NOW.getDay()
-  const current = dining.settings.periods.find((p) => p.weekdays.includes(weekday) && hm(p.startTime) <= now && hm(p.endTime) > now)
-  const next = dining.settings.periods.find((p) => p.weekdays.includes(weekday) && hm(p.startTime) > now)
+  const current = dining.settings.periods.find((p) => p.weekdays.includes(weekday) && hm(p.startTime) <= NOW_MIN && hm(p.endTime) > NOW_MIN)
+  const next = dining.settings.periods.find((p) => p.weekdays.includes(weekday) && hm(p.startTime) > NOW_MIN)
   const closure = dining.settings.closures.find((c) => c.date >= TODAY_KEY)
   const room = dining.settings.ordering.roomService
+  const typesInPlay = (['dine_in', 'pickup', 'delivery'] as OrderType[]).filter((t) => days.some((d) => d.revenue[t] > 0))
 
-  const kitchenLine = `${current ? `${current.name} until ${current.endTime}` : next ? `${next.name} opens ${next.startTime}` : 'kitchen closed'} · ${live.length} live ${live.length === 1 ? 'order' : 'orders'}${scheduled.length ? `, ${scheduled.length} scheduled` : ''}`
+  const kitchenLine = `${current ? `${current.name} until ${current.endTime}` : next ? `${next.name} opens ${next.startTime}` : 'kitchen closed'} · ${live.length} live`
   const headline = lodging && lodgingCounts ? `${formatDateLong(NOW)} · ${lodgingCounts.arrivalsToday} arriving, ${lodgingCounts.departuresToday} leaving, ${lodgingCounts.occupancyTonight}% tonight · ${kitchenLine}` : `${formatDateLong(NOW)} · ${kitchenLine}`
 
   return (
@@ -102,17 +120,17 @@ export function HospitalityOverview({ tenant, profile }: { tenant: Tenant; profi
       {/* ---------- numbers ---------- */}
       {lodging && lodgingCounts ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <StatTile label="Occupancy tonight" value={`${lodgingCounts.occupancyTonight}%`} line={`${lodging.rooms.filter((r) => r.housekeeping !== 'out_of_order').length} rooms in sale`} tone="bg-success" />
-          <StatTile label="Arrivals" hint={`from ${lodging.settings.checkInFrom}`} value={lodgingCounts.arrivalsToday} line={`${lodging.stays.filter((s) => s.checkIn === TODAY_KEY && !s.roomId && s.status !== 'in_house').length} still need a room`} tone="bg-warning" />
-          <StatTile label="Departures" hint={`by ${lodging.settings.checkOutBy}`} value={lodgingCounts.departuresToday} line={`${lodging.stays.filter((s) => s.checkOut === TODAY_KEY && s.status === 'checked_out').length} already out`} tone="bg-primary" />
-          <StatTile label="Rooms to clean" value={lodgingCounts.roomsToClean} line={`${lodging.housekeeping.filter((t) => t.priority === 'rush' && t.status !== 'done').length} rush turnovers`} tone="bg-danger" />
+          <Tile label="Occupancy tonight" value={`${lodgingCounts.occupancyTonight}%`} hint={`${lodging.rooms.filter((r) => r.housekeeping !== 'out_of_order').length} rooms in sale`} tone="var(--chart-2)" />
+          <Tile label="Arrivals" value={lodgingCounts.arrivalsToday} hint={`from ${lodging.settings.checkInFrom}`} tone="var(--chart-6)" />
+          <Tile label="Departures" value={lodgingCounts.departuresToday} hint={`by ${lodging.settings.checkOutBy}`} tone="var(--chart-1)" />
+          <Tile label="Rooms to clean" value={lodgingCounts.roomsToClean} hint={`${lodging.housekeeping.filter((t) => t.priority === 'rush' && t.status !== 'done').length} rush`} tone="var(--chart-7)" />
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <StatTile label="Live orders" hint="on the pass" value={live.length} line={`${live.filter((o) => o.late).length} running late · ${scheduled.length} scheduled for later`} tone="bg-primary" />
-          <StatTile label="Taken today" hint={`${doneToday.length} orders done`} value={formatCurrency(revenueToday, currency, { compact: true })} line={`Week so far ${formatCurrency(week.total, currency, { compact: true })} across ${week.weekOrders.length} orders`} tone="bg-success" />
-          <StatTile label="Kitchen time" hint="order to ready, today" value={avgPrep ? shortDuration(avgPrep) : '—'} line={`Pickup promise ${dining.settings.ordering.pickup.leadMinutes} min · delivery ${dining.settings.ordering.delivery.leadMinutes} min plus the ride`} />
-          <StatTile label="Menu" hint="dishes on sale" value={onSale} line={soldOut ? `${soldOut} sold out today · ${onDelivery} on delivery` : `Nothing sold out · ${onDelivery} on delivery`} tone={soldOut ? 'bg-danger' : 'bg-success'} />
+          <Tile label="Live orders" value={live.length} hint={scheduled ? `${scheduled} for later` : 'on the pass'} series={hoursSoFar} tone="var(--chart-1)" seriesLabel="today by hour" />
+          <Tile label="Taken today" value={formatCurrency(todayRow.total, currency, { compact: true })} hint={`${doneToday.length} done`} series={days.map((d) => d.total)} tone="var(--chart-2)" delta={delta(sum(thisWeek.map((d) => d.total)), sum(lastWeek.map((d) => d.total)))} seriesLabel="14 days" />
+          <Tile label="Kitchen time" value={avgPrepToday ? shortDuration(avgPrepToday) : '—'} hint="order to ready" series={days.map((d) => Math.round(d.prep))} tone="var(--chart-3)" delta={yesterdayRow.prep ? delta(todayRow.prep, yesterdayRow.prep) : undefined} higherIsBetter={false} seriesLabel="14 days" />
+          <Tile label="On sale" value={onSale} hint={soldOut ? `${soldOut} sold out` : 'nothing sold out'} series={days.map((d) => d.items)} tone="var(--chart-6)" seriesLabel="dishes sold, 14 days" />
         </div>
       )}
 
@@ -148,7 +166,7 @@ export function HospitalityOverview({ tenant, profile }: { tenant: Tenant; profi
                   id: t.id,
                   lead: `by ${t.dueBy}`,
                   name: `Room ${r?.number ?? ''}`,
-                  detail: `${t.kind.replace(/_/g, ' ')}${t.priority === 'rush' ? ' · rush' : ''}${t.note ? ` · ${t.note}` : ''}`,
+                  detail: `${t.kind.replace(/_/g, ' ')}${t.priority === 'rush' ? ' · rush' : ''}`,
                   status: r ? HOUSEKEEPING_META[r.housekeeping] : { label: t.status, tone: 'bg-line-strong' },
                 }
               })}
@@ -157,31 +175,21 @@ export function HospitalityOverview({ tenant, profile }: { tenant: Tenant; profi
         </div>
       ) : null}
 
-      {/* ---------- the pass and today ---------- */}
+      {/* ---------- the pass and the day ---------- */}
       <div className="grid gap-5 xl:grid-cols-12">
         <Card className="min-w-0 xl:col-span-7">
           <CardHeader className="flex-row items-start justify-between gap-3">
             <div>
               <CardTitle className="text-sm">On the pass</CardTitle>
-              <CardDescription>{live.length ? `${live.length} live · oldest placed ${live[live.length - 1]?.placedAt.slice(11, 16)}` : 'Nothing live'}</CardDescription>
+              <CardDescription>{live.length ? `${live.length} live${scheduled ? ` · ${scheduled} scheduled for later` : ''}` : 'Nothing live'}</CardDescription>
             </div>
             <Button asChild size="xs" variant="ghost" rightIcon={<ArrowRight />}>
               <Link href="/dashboard/orders">Orders</Link>
             </Button>
           </CardHeader>
-          <CardContent className="p-0">
-            <ul className="divide-y divide-line-subtle border-t border-line-subtle">
-              {live.slice(0, 8).map((o) => (
-                <li key={o.id} className="flex items-center gap-3 px-5 py-2.5 text-[0.8125rem]">
-                  <span className="w-12 shrink-0 text-foreground tabular-nums">{o.number}</span>
-                  <span className="w-24 shrink-0 truncate text-muted">{o.type === 'dine_in' ? `Room ${o.roomNumber}` : ORDER_TYPE_LABEL[o.type]}</span>
-                  <span className="min-w-0 flex-1 truncate text-muted">{o.lines.map((l) => `${l.qty}× ${l.name}`).join(', ')}</span>
-                  <span className={cn('shrink-0 text-xs tabular-nums', o.late ? 'text-danger' : 'text-subtle')}>{o.scheduledFor ? `for ${o.scheduledFor.slice(11, 16)}` : o.late ? 'late' : o.promisedAt.slice(11, 16)}</span>
-                  <StatusWord label={ORDER_STATUS_META[o.status].label} tone={ORDER_STATUS_META[o.status].tone} className="hidden sm:inline-flex" />
-                </li>
-              ))}
-              {live.length === 0 ? <li className="px-5 py-4 text-[0.8125rem] text-subtle">New orders appear here the moment a guest pays, or when you take one on the phone.</li> : null}
-            </ul>
+          <CardContent className="flex flex-col gap-4">
+            <Pipeline live={live} />
+            <DueList live={live} />
           </CardContent>
         </Card>
 
@@ -189,83 +197,28 @@ export function HospitalityOverview({ tenant, profile }: { tenant: Tenant; profi
           <CardHeader className="flex-row items-start justify-between gap-3">
             <div>
               <CardTitle className="text-sm">Today</CardTitle>
-              <CardDescription>{DAY_NAMES[weekday]} · as the storefront tells it</CardDescription>
+              <CardDescription>
+                {DAY_NAMES[weekday]} · {NOW_TIME}
+              </CardDescription>
             </div>
             <Button asChild size="xs" variant="ghost" rightIcon={<ArrowRight />}>
               <Link href="/dashboard/hours">Hours</Link>
             </Button>
           </CardHeader>
-          <CardContent className="flex flex-col gap-3 text-[0.8125rem]">
-            <ul className="flex flex-col gap-2">
-              {dining.settings.periods.map((p) => {
-                const open = p.weekdays.includes(weekday)
-                const state = !open ? 'Closed today' : now < hm(p.startTime) ? `Opens ${p.startTime}` : now < hm(p.endTime) ? `Open until ${p.endTime}` : 'Finished'
-                const tone = !open || now >= hm(p.endTime) ? 'bg-line-strong' : now < hm(p.startTime) ? 'bg-info' : 'bg-success'
-                return (
-                  <li key={p.id} className="flex items-center justify-between gap-3">
-                    <span className="inline-flex items-center gap-2 text-foreground">
-                      <Dot tone={tone} />
-                      {p.name}
-                    </span>
-                    <span className="text-muted tabular-nums">
-                      {p.startTime}–{p.endTime} <span className="text-subtle">· {state}</span>
-                    </span>
-                  </li>
-                )
-              })}
-            </ul>
-            <dl className="flex flex-col gap-1.5 border-t border-line-subtle pt-3 text-xs text-muted">
-              {room.enabled ? (
-                <div className="flex justify-between gap-3">
-                  <dt>Room service</dt>
-                  <dd className="text-foreground tabular-nums">
-                    {room.startTime}–{room.endTime} · up in {room.leadMinutes} min
-                  </dd>
-                </div>
-              ) : null}
-              <div className="flex justify-between gap-3">
-                <dt>Pickup</dt>
-                <dd className="text-foreground tabular-nums">
-                  {dining.settings.ordering.pickup.startTime}–{dining.settings.ordering.pickup.endTime}
-                </dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt>Delivery</dt>
-                <dd className="text-foreground tabular-nums">
-                  {dining.settings.ordering.delivery.startTime}–{dining.settings.ordering.delivery.endTime} · {dining.settings.ordering.delivery.zones.length} zones
-                </dd>
-              </div>
-              <div className="flex justify-between gap-3">
-                <dt>Tables</dt>
-                <dd className="inline-flex items-center gap-1.5 text-foreground">
-                  <Phone className="size-3" aria-hidden="true" />
-                  By phone · {tenant.contact.phone}
-                </dd>
-              </div>
+          <CardContent className="flex flex-col gap-4">
+            <DayTimeline dining={dining} weekday={weekday} />
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-line-subtle pt-3 text-xs text-muted">
+              <span className="inline-flex items-center gap-1.5">
+                <Phone className="size-3" aria-hidden="true" />
+                Tables by phone
+              </span>
+              {room.enabled ? <span>Room service up in {room.leadMinutes} min</span> : <span>Pickup ready in {dining.settings.ordering.pickup.leadMinutes} min</span>}
               {closure ? (
-                <div className="flex justify-between gap-3">
-                  <dt>Next closure</dt>
-                  <dd className="text-foreground">
-                    {closure.date.slice(5).replace('-', '/')} · {closure.reason}
-                  </dd>
-                </div>
+                <span className="ml-auto">
+                  Closed {closure.date.slice(5).replace('-', '/')} · {closure.reason}
+                </span>
               ) : null}
-            </dl>
-            {scheduled.length ? (
-              <div className="border-t border-line-subtle pt-3">
-                <p className="text-xs font-medium text-muted">Scheduled for later</p>
-                <ul className="mt-1.5 flex flex-col gap-1">
-                  {scheduled.slice(0, 4).map((o) => (
-                    <li key={o.id} className="flex items-center justify-between gap-3 text-xs">
-                      <span className="truncate text-foreground">
-                        {o.number} · {ORDER_TYPE_LABEL[o.type]} · {guestName(o.customer)}
-                      </span>
-                      <span className="shrink-0 text-muted tabular-nums">{o.scheduledFor?.slice(11, 16)}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -276,23 +229,24 @@ export function HospitalityOverview({ tenant, profile }: { tenant: Tenant; profi
           <CardHeader className="flex-row items-start justify-between gap-3">
             <div>
               <CardTitle className="text-sm">What sold</CardTitle>
-              <CardDescription>Portions in the last 30 days.</CardDescription>
+              <CardDescription>Portions, last 30 days</CardDescription>
             </div>
             <Button asChild size="xs" variant="ghost" rightIcon={<ArrowRight />}>
               <Link href="/dashboard/menu">Menu</Link>
             </Button>
           </CardHeader>
-          <CardContent className="flex flex-col gap-2.5">
+          <CardContent className="flex flex-col gap-3">
             {topDishes.map((d) => (
-              <div key={d.id} className="text-[0.8125rem]">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="truncate text-foreground">{d.name}</span>
-                  <span className="shrink-0 text-muted tabular-nums">
-                    {formatNumber(d.sold30d)} <span className="text-faint">· {formatCurrency(d.revenue30d, currency, { compact: true })}</span>
-                  </span>
-                </div>
-                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-sunken">
-                  <div className="h-full rounded-full bg-primary/70" style={{ width: `${Math.round((d.sold30d / topMax) * 100)}%` }} />
+              <div key={d.id} className="flex items-center gap-3 text-[0.8125rem]">
+                <span className="relative size-9 shrink-0 overflow-hidden rounded-lg bg-surface-sunken">{d.imageUrl ? <Image src={d.imageUrl} alt="" fill sizes="36px" className="object-cover" /> : <ImageOff aria-hidden="true" className="absolute inset-0 m-auto size-3.5 text-faint" />}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="truncate text-foreground">{d.name}</span>
+                    <span className="shrink-0 text-muted tabular-nums">{formatNumber(d.sold30d)}</span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface-sunken">
+                    <div className="h-full rounded-full bg-primary/70" style={{ width: `${Math.round((d.sold30d / topMax) * 100)}%` }} />
+                  </div>
                 </div>
               </div>
             ))}
@@ -300,32 +254,218 @@ export function HospitalityOverview({ tenant, profile }: { tenant: Tenant; profi
         </Card>
 
         <Card className="min-w-0 xl:col-span-6">
-          <CardHeader>
-            <CardTitle className="text-sm">This week</CardTitle>
-            <CardDescription>Completed orders, last seven days.</CardDescription>
+          <CardHeader className="flex-row items-start justify-between gap-3">
+            <div>
+              <CardTitle className="text-sm">This week</CardTitle>
+              <CardDescription>
+                {formatCurrency(sum(thisWeek.map((d) => d.total)), currency, { compact: true })} across {formatNumber(sum(thisWeek.map((d) => d.orders)))} orders
+              </CardDescription>
+            </div>
+            <span className="flex items-center gap-3 text-xs text-muted">
+              {typesInPlay.map((t) => (
+                <span key={t} className="inline-flex items-center gap-1.5">
+                  <span className="size-2 rounded-full" style={{ background: TYPE_TONE[t] }} aria-hidden="true" />
+                  {ORDER_TYPE_LABEL[t]}
+                </span>
+              ))}
+            </span>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            {week.byType.map((b) => (
-              <div key={b.t} className="text-[0.8125rem]">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-foreground">{ORDER_TYPE_LABEL[b.t]}</span>
-                  <span className="text-muted tabular-nums">
-                    {b.n} <span className="text-faint">· {formatCurrency(b.revenue, currency, { compact: true })}</span>
-                  </span>
-                </div>
-                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-sunken">
-                  <div className="h-full rounded-full bg-primary/70" style={{ width: `${week.total ? Math.round((b.revenue / week.total) * 100) : 0}%` }} />
-                </div>
-              </div>
-            ))}
-            <p className="pt-1 text-xs text-subtle">
-              {formatCurrency(week.total, currency)} across {week.weekOrders.length} orders. {lodging ? 'Rooms and experiences settle through Payments.' : 'Tasting menus and events settle through Payments.'}
-            </p>
-            <Button asChild size="xs" variant="outline" className="self-start">
-              <Link href="/dashboard/analytics">Analytics</Link>
-            </Button>
+            <WeekColumns days={thisWeek} types={typesInPlay} currency={currency} />
+            <div className="flex items-center justify-between border-t border-line-subtle pt-3 text-xs text-muted">
+              <span className="inline-flex items-center gap-2">
+                <ChartDeltaChip value={delta(sum(thisWeek.map((d) => d.total)), sum(lastWeek.map((d) => d.total)))} size="xs" />
+                vs last week
+              </span>
+              <Button asChild size="xs" variant="ghost" rightIcon={<ArrowRight />}>
+                <Link href="/dashboard/analytics">Analytics</Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
+      </div>
+    </div>
+  )
+}
+
+/* --------------------------------------------------------------------------
+   A number with a fortnight behind it
+   -------------------------------------------------------------------------- */
+
+function Tile({ label, value, hint, series, tone, delta: change, higherIsBetter = true, seriesLabel }: { label: string; value: string | number; hint: string; series?: number[]; tone: string; delta?: number; higherIsBetter?: boolean; seriesLabel?: string }) {
+  return (
+    <Card className="flex-row items-center gap-4 p-4">
+      <div className="min-w-0 flex-1">
+        <p className="flex items-center gap-2 text-[0.8125rem] text-muted">
+          <span className="size-2 shrink-0 rounded-full" style={{ background: tone }} aria-hidden="true" />
+          <span className="truncate">{label}</span>
+        </p>
+        <p className="mt-2 font-display text-[1.75rem] leading-none font-semibold tracking-tight text-foreground tabular-nums">{value}</p>
+        <p className="mt-2 flex items-center gap-2 text-xs text-subtle">
+          {change !== undefined ? <ChartDeltaChip value={change} higherIsBetter={higherIsBetter} size="xs" /> : null}
+          <span className="truncate">{hint}</span>
+        </p>
+      </div>
+      {series && series.some((v) => v > 0) ? <Sparkline values={series} width={72} height={40} color={tone} fill showLastDot ariaLabel={seriesLabel ? `${label}, ${seriesLabel}` : undefined} className="shrink-0" /> : null}
+    </Card>
+  )
+}
+
+/* --------------------------------------------------------------------------
+   The pass as a pipeline
+   -------------------------------------------------------------------------- */
+
+const PIPE = [
+  { key: 'new', label: 'New', statuses: ['new'], tone: 'var(--chart-6)' },
+  { key: 'kitchen', label: 'In the kitchen', statuses: ['accepted', 'preparing'], tone: 'var(--chart-1)' },
+  { key: 'ready', label: 'Ready', statuses: ['ready'], tone: 'var(--chart-2)' },
+  { key: 'road', label: 'On the way', statuses: ['out_for_delivery'], tone: 'var(--chart-3)' },
+] as const
+
+function Pipeline({ live }: { live: Order[] }) {
+  const counts = PIPE.map((p) => live.filter((o) => (p.statuses as readonly string[]).includes(o.status)).length)
+  const total = Math.max(1, sum(counts))
+  return (
+    <div>
+      <div className="flex h-2.5 w-full gap-0.5 overflow-hidden rounded-full bg-surface-sunken" role="img" aria-label={PIPE.map((p, i) => `${p.label} ${counts[i]}`).join(', ')}>
+        {PIPE.map((p, i) =>
+          counts[i] ? <span key={p.key} className="h-full" style={{ width: `${Math.max(4, (counts[i] / total) * 100)}%`, background: p.tone }} /> : null,
+        )}
+      </div>
+      <div className="mt-3 grid grid-cols-4 gap-2">
+        {PIPE.map((p, i) => (
+          <div key={p.key} className="min-w-0">
+            <p className="font-display text-xl leading-none font-semibold text-foreground tabular-nums">{counts[i]}</p>
+            <p className="mt-1 flex items-center gap-1.5 truncate text-xs text-muted">
+              <span className="size-1.5 shrink-0 rounded-full" style={{ background: p.tone }} aria-hidden="true" />
+              {p.label}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function DueList({ live }: { live: Order[] }) {
+  const due = [...live].filter((o) => !o.scheduledFor).sort((a, b) => a.promisedAt.localeCompare(b.promisedAt)).slice(0, 5)
+  if (due.length === 0) return <p className="border-t border-line-subtle pt-3 text-xs text-subtle">New orders appear here the moment a guest pays, or when you take one on the phone.</p>
+  return (
+    <ul className="divide-y divide-line-subtle border-t border-line-subtle">
+      {due.map((o) => {
+        const Icon = TYPE_ICON[o.type]
+        const left = hm(o.promisedAt.slice(11, 16)) - NOW_MIN
+        return (
+          <li key={o.id} className="flex items-center gap-3 py-2 text-[0.8125rem]">
+            <span className="w-12 shrink-0 text-foreground tabular-nums">{o.number}</span>
+            <Icon className="size-3.5 shrink-0 text-faint" aria-hidden="true" />
+            <span className="min-w-0 flex-1 truncate text-muted">
+              {o.type === 'dine_in' ? `Room ${o.roomNumber}` : o.type === 'delivery' ? o.address?.area ?? 'Delivery' : 'Pickup'} · {guestName(o.customer)}
+            </span>
+            <span className={cn('shrink-0 rounded-md px-1.5 py-0.5 text-xs tabular-nums', o.late ? 'bg-danger-soft text-danger' : left <= 5 ? 'bg-warning-soft text-warning' : 'bg-surface-sunken text-muted')}>{o.late ? `${shortDuration(-left)} late` : left <= 0 ? 'due now' : `${shortDuration(left)}`}</span>
+            <StatusWord label={ORDER_STATUS_META[o.status].label} tone={ORDER_STATUS_META[o.status].tone} className="hidden w-24 sm:inline-flex" />
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+/* --------------------------------------------------------------------------
+   The day as a timeline
+   -------------------------------------------------------------------------- */
+
+const DAY_START = 7 * 60
+const DAY_END = 24 * 60
+
+function pos(minutes: number) {
+  return `${Math.max(0, Math.min(100, ((minutes - DAY_START) / (DAY_END - DAY_START)) * 100))}%`
+}
+
+function DayTimeline({ dining, weekday }: { dining: DiningData; weekday: number }) {
+  const { periods, ordering } = dining.settings
+  const tracks: { label: string; segments: { from: number; to: number; label?: string; tone: string; off?: boolean }[] }[] = [
+    {
+      label: 'Kitchen',
+      segments: periods.map((p) => ({ from: hm(p.startTime), to: hm(p.endTime), label: p.name, tone: 'var(--chart-1)', off: !p.weekdays.includes(weekday) })),
+    },
+    { label: 'Pickup', segments: ordering.pickup.enabled ? [{ from: hm(ordering.pickup.startTime), to: hm(ordering.pickup.endTime), tone: 'var(--chart-2)' }] : [] },
+    { label: 'Delivery', segments: ordering.delivery.enabled ? [{ from: hm(ordering.delivery.startTime), to: hm(ordering.delivery.endTime), tone: 'var(--chart-6)' }] : [] },
+    ...(ordering.roomService.enabled ? [{ label: 'Room service', segments: [{ from: hm(ordering.roomService.startTime), to: hm(ordering.roomService.endTime), tone: 'var(--chart-3)' }] }] : []),
+  ]
+  const ticks = [8, 12, 16, 20, 24]
+  return (
+    <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-x-3 gap-y-2 text-xs" role="img" aria-label={tracks.map((t) => `${t.label}: ${t.segments.map((s) => `${s.label ? `${s.label} ` : ''}${Math.floor(s.from / 60)}:${String(s.from % 60).padStart(2, '0')} to ${Math.floor(s.to / 60)}:${String(s.to % 60).padStart(2, '0')}`).join(', ') || 'off'}`).join('. ')}>
+      <span aria-hidden="true" />
+      <div className="relative h-3.5">
+        {tracks[0].segments.map((s) => (
+          <span key={`${s.from}-label`} className={cn('absolute top-0 text-[0.625rem] whitespace-nowrap text-muted', s.off && 'opacity-40')} style={{ left: pos(s.from) }}>
+            {s.label}
+          </span>
+        ))}
+      </div>
+      {tracks.map((track, i) => (
+        <div key={track.label} className="contents">
+          <span className="self-center truncate text-muted">{track.label}</span>
+          <div className={cn('relative h-5 rounded-md bg-surface-sunken/70', i === 0 && 'h-6')}>
+            {track.segments.map((s) => (
+              <span
+                key={`${s.from}-${s.to}`}
+                className={cn('absolute inset-y-0.5 rounded', s.off && 'opacity-30')}
+                style={{ left: pos(s.from), width: `calc(${pos(s.to)} - ${pos(s.from)})`, background: s.tone }}
+                title={`${s.label ?? track.label} · ${Math.floor(s.from / 60)}:${String(s.from % 60).padStart(2, '0')}–${Math.floor(s.to / 60)}:${String(s.to % 60).padStart(2, '0')}`}
+              />
+            ))}
+            {i === 0 ? <span aria-hidden="true" className="absolute -top-1 -bottom-1 w-0.5 rounded-full bg-foreground" style={{ left: pos(NOW_MIN) }} /> : null}
+          </div>
+        </div>
+      ))}
+      <span aria-hidden="true" />
+      <div className="relative h-4">
+        {ticks
+          .filter((h) => Math.abs(h * 60 - NOW_MIN) > 80)
+          .map((h) => (
+            <span key={h} className="absolute -translate-x-1/2 text-[0.625rem] text-faint tabular-nums" style={{ left: pos(h * 60) }}>
+              {h === 24 ? '00' : String(h).padStart(2, '0')}
+            </span>
+          ))}
+        <span className="absolute -translate-x-1/2 rounded bg-foreground px-1 text-[0.625rem] font-medium text-background tabular-nums" style={{ left: pos(NOW_MIN), top: -2 }}>
+          {NOW_TIME}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+/* --------------------------------------------------------------------------
+   Seven columns
+   -------------------------------------------------------------------------- */
+
+function WeekColumns({ days, types, currency }: { days: ReturnType<typeof fortnight>; types: OrderType[]; currency: string }) {
+  const max = Math.max(1, ...days.map((d) => d.total))
+  return (
+    <div>
+      <div className="flex h-36 items-end gap-2">
+        {days.map((d) => (
+          <div key={d.date} className="flex h-full min-w-0 flex-1 flex-col justify-end gap-1" title={`${SHORT_DAYS[d.weekday]} · ${formatCurrency(d.total, currency as never)} · ${d.orders} orders`}>
+            <span className="text-center text-[0.625rem] text-subtle tabular-nums">{d.total ? formatCurrency(d.total, currency as never, { compact: true }) : ''}</span>
+            <div className="flex flex-col-reverse gap-px" style={{ height: `${(d.total / max) * 100}%`, minHeight: d.total ? 4 : 0 }}>
+              {types.map((t, j) => {
+                const v = d.revenue[t]
+                if (!v) return null
+                const last = types.slice(j + 1).every((n) => !d.revenue[n])
+                return <span key={t} className={cn('block w-full', last && 'rounded-t-[4px]')} style={{ height: `${(v / d.total) * 100}%`, background: TYPE_TONE[t] }} />
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex gap-2 border-t border-line-subtle pt-1.5">
+        {days.map((d) => (
+          <span key={d.date} className={cn('min-w-0 flex-1 truncate text-center text-[0.625rem] tabular-nums', d.date === TODAY_KEY ? 'font-semibold text-foreground' : 'text-subtle')}>
+            {SHORT_DAYS[d.weekday]}
+          </span>
+        ))}
       </div>
     </div>
   )

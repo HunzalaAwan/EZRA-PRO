@@ -17,6 +17,7 @@ import {
   type CalendarEvent,
   type ManifestRow,
 } from '@/lib/demo'
+import { getKitchenAnalytics, type KitchenSnapshot } from '@/lib/hospitality/analytics'
 import type {
   Activity,
   AnalyticsSnapshot,
@@ -104,6 +105,11 @@ export async function fetchManifest(tenantId: string, day: Date): Promise<Manife
 
 export async function fetchAnalytics(tenantId: string, preset: RangePreset): Promise<AnalyticsSnapshot> {
   return getAnalytics(tenantId, preset)
+}
+
+/** Kitchen analytics for a restaurant or hotel workspace: orders, dishes, hours and guests. */
+export async function fetchKitchenAnalytics(tenantId: string, preset: RangePreset): Promise<KitchenSnapshot> {
+  return getKitchenAnalytics(tenantId, preset)
 }
 
 export type BookingDetailData = BookingRow & { payments: Payment[] }

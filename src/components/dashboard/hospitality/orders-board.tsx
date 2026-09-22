@@ -3,13 +3,15 @@
 import * as React from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowUpRight, BedDouble, Bike, ChefHat, Columns3, List, MapPin, Phone, Plus, Printer, ShoppingBag } from 'lucide-react'
+import { ArrowRightLeft, ArrowUpRight, BedDouble, Bike, Check, ChefHat, Columns3, List, MapPin, Phone, Plus, Printer, ShoppingBag } from 'lucide-react'
 
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { DataTable, type DataTableColumn, type DataTableSort } from '@/components/ui/data-table'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { EmptyState } from '@/components/ui/empty-state'
+import { IconButton } from '@/components/ui/icon-button'
 import { SearchInput } from '@/components/ui/search-input'
 import { Segmented } from '@/components/ui/segmented'
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -27,13 +29,15 @@ import { StatTile, StatusWord, clock, guestName, minutesBetween, shortDuration }
 
    Live orders move left to right: New → In the kitchen → Ready → On the way
    → Done. A card is one order: number, where it is going (a pickup, a
-   delivery area, a room), what is on it, when it was promised. Tap it for
-   the ticket. Everything from the last two weeks sits in the list
-   underneath. Tables are booked by phone and never appear here.
+   delivery area, a room), what is on it, when it was promised. Drag a card
+   to any column, or pick the column from its Move menu; the button on the
+   card still names the one usual next step. Tap the card for the ticket.
+   Everything from the last two weeks sits in the list underneath.
    ========================================================================== */
 
 type TypeFilter = 'all' | OrderType
 type View = 'board' | 'list'
+type StageKey = 'new' | 'kitchen' | 'ready' | 'road' | 'done'
 
 const TYPE_ICON: Record<OrderType, React.ComponentType<{ className?: string; 'aria-hidden'?: boolean | 'true' }>> = {
   dine_in: BedDouble,
@@ -41,21 +45,28 @@ const TYPE_ICON: Record<OrderType, React.ComponentType<{ className?: string; 'ar
   delivery: Bike,
 }
 
-interface Column {
-  key: string
+interface Stage {
+  key: StageKey
   title: string
   statuses: OrderStatus[]
   hint: string
+  /** The status an order takes when it lands here; null when this stage does not apply to it. */
+  landing: (order: Order) => OrderStatus | null
 }
 
-const COLUMNS: Column[] = [
-  { key: 'new', title: 'New', statuses: ['new'], hint: 'Accept or turn down' },
-  { key: 'kitchen', title: 'In the kitchen', statuses: ['accepted', 'preparing'], hint: 'On the pass' },
-  { key: 'ready', title: 'Ready', statuses: ['ready'], hint: 'Waiting for the guest, the courier or the runner' },
-  { key: 'road', title: 'On the way', statuses: ['out_for_delivery'], hint: 'With a courier' },
+const STAGES: Stage[] = [
+  { key: 'new', title: 'New', statuses: ['new'], hint: 'Accept or turn down', landing: () => 'new' },
+  { key: 'kitchen', title: 'In the kitchen', statuses: ['accepted', 'preparing'], hint: 'On the pass', landing: (o) => (o.status === 'new' ? 'accepted' : 'preparing') },
+  { key: 'ready', title: 'Ready', statuses: ['ready'], hint: 'Waiting for the guest, the courier or the runner', landing: () => 'ready' },
+  { key: 'road', title: 'On the way', statuses: ['out_for_delivery'], hint: 'With a courier', landing: (o) => (o.type === 'delivery' ? 'out_for_delivery' : null) },
+  { key: 'done', title: 'Done', statuses: ['completed'], hint: 'Drop an order here when it is out the door', landing: () => 'completed' },
 ]
 
-/** The one next step for an order, by type and status. */
+function stageOf(order: Order): StageKey | null {
+  return STAGES.find((s) => s.statuses.includes(order.status))?.key ?? null
+}
+
+/** The one usual next step for an order, by type and status. */
 function nextStep(order: Order): { label: string; status: OrderStatus } | null {
   switch (order.status) {
     case 'new':
@@ -108,23 +119,26 @@ export function OrdersBoard({ orders: initial, menu, ordering, taxRate, nextNumb
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
   const [sort, setSort] = React.useState<DataTableSort>({ id: 'placed', dir: 'desc' })
   const [limit, setLimit] = React.useState(60)
+  const [dragId, setDragId] = React.useState<string | null>(null)
+  const [overKey, setOverKey] = React.useState<StageKey | null>(null)
 
   const nowMin = hm(nowIso.slice(11, 16))
 
   const byType = React.useMemo(() => orders.filter((o) => (type === 'all' ? true : o.type === type)), [orders, type])
   const live = React.useMemo(() => byType.filter((o) => LIVE_ORDER_STATUSES.includes(o.status)), [byType])
+  const doneToday = React.useMemo(() => byType.filter((o) => o.status === 'completed' && (o.completedAt ?? o.placedAt).startsWith(todayKey)).sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? '')), [byType, todayKey])
   const today = React.useMemo(() => orders.filter((o) => o.placedAt.startsWith(todayKey)), [orders, todayKey])
 
   const stats = React.useMemo(() => {
     const liveAll = orders.filter((o) => LIVE_ORDER_STATUSES.includes(o.status))
-    const doneToday = today.filter((o) => o.status === 'completed')
-    const revenueToday = doneToday.reduce((s, o) => s + o.total, 0)
-    const prep = doneToday.filter((o) => o.readyAt).map((o) => minutesBetween(o.placedAt, o.readyAt as string))
+    const done = today.filter((o) => o.status === 'completed')
+    const revenueToday = done.reduce((s, o) => s + o.total, 0)
+    const prep = done.filter((o) => o.readyAt).map((o) => minutesBetween(o.placedAt, o.readyAt as string))
     const avgPrep = prep.length ? Math.round(prep.reduce((a, b) => a + b, 0) / prep.length) : 0
     const late = liveAll.filter((o) => o.late).length
     const scheduled = liveAll.filter((o) => o.scheduledFor).length
     const mix = (['dine_in', 'pickup', 'delivery'] as OrderType[]).map((t) => ({ t, n: today.filter((o) => o.type === t && o.status !== 'cancelled').length })).filter((m) => m.n > 0)
-    return { live: liveAll.length, late, scheduled, revenueToday, doneToday: doneToday.length, avgPrep, mix }
+    return { live: liveAll.length, late, scheduled, revenueToday, doneToday: done.length, avgPrep, mix }
   }, [orders, today])
 
   const history = React.useMemo(() => {
@@ -150,34 +164,53 @@ export function OrdersBoard({ orders: initial, menu, ordering, taxRate, nextNumb
 
   /* ---------- actions ---------- */
 
-  const advance = (order: Order, status: OrderStatus) => {
-    const stamp = nowIso
-    setOrders((current) =>
-      current.map((o) =>
-        o.id === order.id
-          ? {
-              ...o,
-              status,
-              late: false,
-              readyAt: status === 'ready' ? stamp : o.readyAt,
-              completedAt: status === 'completed' ? stamp : o.completedAt,
-              courier: status === 'out_for_delivery' && !o.courier ? { name: 'Next available', status: 'picking_up', etaMinutes: 18 } : status === 'completed' && o.courier ? { ...o.courier, status: 'delivered', etaMinutes: 0 } : o.courier,
-              paymentStatus: status === 'refunded' ? 'refunded' : status === 'completed' && o.paymentStatus === 'pay_at_counter' ? 'paid' : o.paymentStatus,
-            }
-          : o,
-      ),
-    )
-    const messages: Partial<Record<OrderStatus, string>> = {
-      accepted: `${order.number} accepted`,
-      preparing: `${order.number} is on the pass`,
-      ready: `${order.number} ready · ${order.type === 'pickup' ? 'guest texted' : order.type === 'delivery' ? 'courier called' : `runner to room ${order.roomNumber ?? ''}`}`,
-      out_for_delivery: `${order.number} out for delivery`,
-      completed: `${order.number} done`,
-      cancelled: `${order.number} cancelled`,
-      refunded: `${order.number} refunded ${formatCurrency(order.total, currency)}`,
-    }
-    toast(messages[status] ?? order.number)
-  }
+  const advance = React.useCallback(
+    (order: Order, status: OrderStatus) => {
+      const stamp = nowIso
+      setOrders((current) =>
+        current.map((o) =>
+          o.id === order.id
+            ? {
+                ...o,
+                status,
+                late: false,
+                readyAt: status === 'ready' ? stamp : status === 'new' || status === 'accepted' || status === 'preparing' ? null : o.readyAt,
+                completedAt: status === 'completed' ? stamp : status === 'cancelled' || status === 'refunded' ? o.completedAt : null,
+                courier: status === 'out_for_delivery' && !o.courier ? { name: 'Next available', status: 'picking_up', etaMinutes: 18 } : status === 'completed' && o.courier ? { ...o.courier, status: 'delivered', etaMinutes: 0 } : o.courier,
+                paymentStatus: status === 'refunded' ? 'refunded' : status === 'completed' && o.paymentStatus === 'pay_at_counter' ? 'paid' : o.paymentStatus,
+              }
+            : o,
+        ),
+      )
+      const messages: Partial<Record<OrderStatus, string>> = {
+        new: `${order.number} back in New`,
+        accepted: `${order.number} accepted`,
+        preparing: `${order.number} is on the pass`,
+        ready: `${order.number} ready · ${order.type === 'pickup' ? 'guest texted' : order.type === 'delivery' ? 'courier called' : `runner to room ${order.roomNumber ?? ''}`}`,
+        out_for_delivery: `${order.number} out for delivery`,
+        completed: `${order.number} done`,
+        cancelled: `${order.number} cancelled`,
+        refunded: `${order.number} refunded ${formatCurrency(order.total, currency)}`,
+      }
+      toast(messages[status] ?? order.number)
+    },
+    [currency, nowIso],
+  )
+
+  /** Put an order in a column, whatever column it is in now. */
+  const moveTo = React.useCallback(
+    (order: Order, key: StageKey) => {
+      const stage = STAGES.find((s) => s.key === key)
+      if (!stage || stageOf(order) === key) return
+      const status = stage.landing(order)
+      if (!status) {
+        toast(`${order.number} is a ${ORDER_TYPE_LABEL[order.type].toLowerCase()} order`, { description: 'Only delivery orders go on the way.' })
+        return
+      }
+      advance(order, status)
+    },
+    [advance],
+  )
 
   const create = (order: Order) => {
     setOrders((current) => [order, ...current])
@@ -189,6 +222,17 @@ export function OrdersBoard({ orders: initial, menu, ordering, taxRate, nextNumb
   }
 
   const selected = selectedId ? orders.find((o) => o.id === selectedId) ?? null : null
+
+  /* ---------- drag and drop ---------- */
+
+  const dropOn = (key: StageKey, event: React.DragEvent) => {
+    event.preventDefault()
+    const id = event.dataTransfer.getData('text/plain') || dragId
+    const order = id ? orders.find((o) => o.id === id) : null
+    if (order) moveTo(order, key)
+    setOverKey(null)
+    setDragId(null)
+  }
 
   /* ---------- list columns ---------- */
 
@@ -254,6 +298,8 @@ export function OrdersBoard({ orders: initial, menu, ordering, taxRate, nextNumb
     [currency],
   )
 
+  const visibleStages = STAGES.filter((s) => !(s.key === 'road' && type !== 'all' && type !== 'delivery'))
+
   return (
     <div className="flex flex-col gap-6">
       {/* ---------- numbers ---------- */}
@@ -269,7 +315,7 @@ export function OrdersBoard({ orders: initial, menu, ordering, taxRate, nextNumb
         <div className="flex flex-col gap-3 border-b border-line-subtle px-3 py-3 sm:px-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Segmented size="sm" label="Order type" options={typeOptions} value={type} onValueChange={setType} hideLabelsOnMobile />
-            {view === 'list' ? <SearchInput value={query} onValueChange={setQuery} placeholder={roomService ? 'Order, guest, room or dish…' : 'Order, guest or dish…'} size="sm" aria-label="Search orders" fieldClassName="w-full sm:w-56" /> : null}
+            {view === 'list' ? <SearchInput value={query} onValueChange={setQuery} placeholder={roomService ? 'Order, guest, room or dish…' : 'Order, guest or dish…'} size="sm" aria-label="Search orders" fieldClassName="w-full sm:w-56" /> : <p className="hidden text-xs text-subtle xl:block">Drag a card to any column, or use its Move menu.</p>}
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <Segmented
@@ -291,24 +337,61 @@ export function OrdersBoard({ orders: initial, menu, ordering, taxRate, nextNumb
 
         {view === 'board' ? (
           <CardContent className="p-3 sm:p-4">
-            {live.length === 0 ? (
+            {live.length === 0 && doneToday.length === 0 ? (
               <EmptyState variant="no-data" size="sm" icon={ChefHat} title="Nothing on the pass" description="New orders land here the moment a guest pays, or when you take one on the phone." />
             ) : (
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                {COLUMNS.map((column) => {
-                  const cards = live.filter((o) => column.statuses.includes(o.status)).sort((a, b) => a.promisedAt.localeCompare(b.promisedAt))
-                  if (column.key === 'road' && type !== 'all' && type !== 'delivery') return null
+              <div className={cn('grid gap-3 md:grid-cols-2', visibleStages.length === 5 ? 'xl:grid-cols-5' : 'xl:grid-cols-4')}>
+                {visibleStages.map((stage) => {
+                  const cards = stage.key === 'done' ? doneToday.slice(0, 6) : live.filter((o) => stage.statuses.includes(o.status)).sort((a, b) => a.promisedAt.localeCompare(b.promisedAt))
+                  const count = stage.key === 'done' ? doneToday.length : cards.length
+                  const over = overKey === stage.key && dragId !== null
                   return (
-                    <section key={column.key} aria-label={column.title} className="flex min-w-0 flex-col rounded-xl bg-surface-sunken/60 p-2">
+                    <section
+                      key={stage.key}
+                      aria-label={stage.title}
+                      onDragOver={(e) => {
+                        e.preventDefault()
+                        e.dataTransfer.dropEffect = 'move'
+                        if (overKey !== stage.key) setOverKey(stage.key)
+                      }}
+                      onDragLeave={(e) => {
+                        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOverKey((k) => (k === stage.key ? null : k))
+                      }}
+                      onDrop={(e) => dropOn(stage.key, e)}
+                      className={cn('flex min-w-0 flex-col rounded-xl p-2 transition-colors', over ? 'bg-primary-soft/50 ring-2 ring-primary/40 ring-inset' : 'bg-surface-sunken/60', stage.key === 'done' && !over && 'bg-surface-sunken/30')}
+                    >
                       <header className="flex items-center justify-between px-1.5 pt-1 pb-2">
-                        <span className="text-xs font-medium text-muted">{column.title}</span>
-                        <span className="text-xs text-faint tabular-nums">{cards.length}</span>
+                        <span className="text-xs font-medium text-muted">{stage.title}</span>
+                        <span className="text-xs text-faint tabular-nums">{count}</span>
                       </header>
-                      <div className="flex flex-col gap-2">
-                        {cards.length === 0 ? <p className="px-1.5 py-6 text-center text-xs text-faint">{column.hint}</p> : null}
+                      <div className="flex min-h-[6rem] flex-1 flex-col gap-2">
+                        {cards.length === 0 ? <p className="px-1.5 py-6 text-center text-xs text-faint">{over ? 'Drop to move here' : stage.hint}</p> : null}
                         {cards.map((o) => (
-                          <OrderCard key={o.id} order={o} currency={currency} nowMin={nowMin} onOpen={() => setSelectedId(o.id)} onAdvance={advance} />
+                          <OrderCard
+                            key={o.id}
+                            order={o}
+                            currency={currency}
+                            nowMin={nowMin}
+                            dragging={dragId === o.id}
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData('text/plain', o.id)
+                              e.dataTransfer.effectAllowed = 'move'
+                              setDragId(o.id)
+                            }}
+                            onDragEnd={() => {
+                              setDragId(null)
+                              setOverKey(null)
+                            }}
+                            onOpen={() => setSelectedId(o.id)}
+                            onAdvance={advance}
+                            onMove={moveTo}
+                          />
                         ))}
+                        {stage.key === 'done' && doneToday.length > 6 ? (
+                          <button type="button" className="px-1.5 py-2 text-center text-xs text-muted hover:text-foreground" onClick={() => setView('list')}>
+                            {doneToday.length - 6} more in History
+                          </button>
+                        ) : null}
                       </div>
                     </section>
                   )
@@ -330,7 +413,7 @@ export function OrdersBoard({ orders: initial, menu, ordering, taxRate, nextNumb
         )}
       </Card>
 
-      <OrderSheet order={selected} currency={currency} onClose={() => setSelectedId(null)} onAdvance={advance} />
+      <OrderSheet order={selected} currency={currency} onClose={() => setSelectedId(null)} onAdvance={advance} onMove={moveTo} />
       <NewOrderDialog
         open={newOpen}
         onOpenChange={(open) => {
@@ -353,22 +436,69 @@ export function OrdersBoard({ orders: initial, menu, ordering, taxRate, nextNumb
 }
 
 /* --------------------------------------------------------------------------
+   Move menu — every column, with the one the order is in ticked
+   -------------------------------------------------------------------------- */
+
+function MoveMenu({ order, size = 'xs', label, onMove, onAdvance }: { order: Order; size?: 'xs' | 'sm'; label?: string; onMove: (order: Order, key: StageKey) => void; onAdvance: (order: Order, status: OrderStatus) => void }) {
+  const current = stageOf(order)
+  const isLive = LIVE_ORDER_STATUSES.includes(order.status)
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        {label ? (
+          <Button size={size} variant="outline" leftIcon={<ArrowRightLeft />}>
+            {label}
+          </Button>
+        ) : (
+          <IconButton size={size} variant="ghost" aria-label={`Move ${order.number}`}>
+            <ArrowRightLeft />
+          </IconButton>
+        )}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+        {STAGES.map((stage) => {
+          const here = stage.key === current
+          const status = stage.landing(order)
+          return (
+            <DropdownMenuItem key={stage.key} disabled={here || status === null} onSelect={() => onMove(order, stage.key)}>
+              <span className="flex w-full items-center justify-between gap-4">
+                <span>{stage.title}</span>
+                {here ? <Check className="size-3.5 text-muted" aria-hidden="true" /> : status ? <span className="text-xs text-subtle">{ORDER_STATUS_META[status].label}</span> : <span className="text-xs text-faint">delivery only</span>}
+              </span>
+            </DropdownMenuItem>
+          )
+        })}
+        {isLive ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem tone="danger" onSelect={() => onAdvance(order, 'cancelled')}>
+              Cancel order
+            </DropdownMenuItem>
+          </>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/* --------------------------------------------------------------------------
    Card
    -------------------------------------------------------------------------- */
 
-function OrderCard({ order: o, currency, nowMin, onOpen, onAdvance }: { order: Order; currency: CurrencyCode; nowMin: number; onOpen: () => void; onAdvance: (order: Order, status: OrderStatus) => void }) {
+function OrderCard({ order: o, currency, nowMin, dragging, onDragStart, onDragEnd, onOpen, onAdvance, onMove }: { order: Order; currency: CurrencyCode; nowMin: number; dragging: boolean; onDragStart: (e: React.DragEvent) => void; onDragEnd: () => void; onOpen: () => void; onAdvance: (order: Order, status: OrderStatus) => void; onMove: (order: Order, key: StageKey) => void }) {
   const Icon = TYPE_ICON[o.type]
   const step = nextStep(o)
   const promised = hm(o.promisedAt.slice(11, 16))
   const sameDay = o.promisedAt.slice(0, 10) === o.placedAt.slice(0, 10)
   const minutesLeft = promised - nowMin
-  const timing = o.scheduledFor ? `for ${clock(o.scheduledFor)}` : o.late ? `${shortDuration(-minutesLeft)} late` : minutesLeft <= 0 ? 'due now' : `${shortDuration(minutesLeft)} left`
+  const done = o.status === 'completed'
+  const timing = done ? `done ${o.completedAt ? clock(o.completedAt) : ''}` : o.scheduledFor ? `for ${clock(o.scheduledFor)}` : o.late ? `${shortDuration(-minutesLeft)} late` : minutesLeft <= 0 ? 'due now' : `${shortDuration(minutesLeft)} left`
   return (
-    <article className={cn('rounded-lg border bg-surface p-3', o.late ? 'border-danger/50' : 'border-line')}>
+    <article draggable onDragStart={onDragStart} onDragEnd={onDragEnd} className={cn('cursor-grab rounded-lg border bg-surface p-3 transition-opacity active:cursor-grabbing', o.late ? 'border-danger/50' : 'border-line', dragging && 'opacity-40', done && 'opacity-80')}>
       <button type="button" onClick={onOpen} className="block w-full text-left">
         <div className="flex items-center justify-between gap-2">
           <span className="text-[0.8125rem] text-foreground tabular-nums">{o.number}</span>
-          <span className={cn('text-xs tabular-nums', o.late ? 'text-danger' : 'text-subtle')}>{sameDay ? timing : formatDateShort(o.promisedAt)}</span>
+          <span className={cn('text-xs tabular-nums', o.late && !done ? 'text-danger' : 'text-subtle')}>{sameDay || done ? timing : formatDateShort(o.promisedAt)}</span>
         </div>
         <div className="mt-1 flex items-center gap-1.5 text-xs text-muted">
           <Icon className="size-3.5 text-faint" aria-hidden="true" />
@@ -376,24 +506,31 @@ function OrderCard({ order: o, currency, nowMin, onOpen, onAdvance }: { order: O
           <span className="text-faint">·</span>
           <span className="truncate">{guestName(o.customer)}</span>
         </div>
-        <ul className="mt-2 flex flex-col gap-0.5 text-[0.8125rem] text-foreground">
-          {o.lines.slice(0, 3).map((l) => (
-            <li key={l.id} className="flex gap-2">
-              <span className="w-5 shrink-0 text-subtle tabular-nums">{l.qty}×</span>
-              <span className="truncate">{l.name}</span>
-            </li>
-          ))}
-          {o.lines.length > 3 ? <li className="pl-7 text-xs text-subtle">+{o.lines.length - 3} more</li> : null}
-        </ul>
-        {o.notes ? <p className="mt-2 truncate text-xs text-warning">{o.notes}</p> : null}
+        {!done ? (
+          <ul className="mt-2 flex flex-col gap-0.5 text-[0.8125rem] text-foreground">
+            {o.lines.slice(0, 3).map((l) => (
+              <li key={l.id} className="flex gap-2">
+                <span className="w-5 shrink-0 text-subtle tabular-nums">{l.qty}×</span>
+                <span className="truncate">{l.name}</span>
+              </li>
+            ))}
+            {o.lines.length > 3 ? <li className="pl-7 text-xs text-subtle">+{o.lines.length - 3} more</li> : null}
+          </ul>
+        ) : (
+          <p className="mt-1.5 truncate text-xs text-subtle">{o.lines.map((l) => `${l.qty}× ${l.name}`).join(', ')}</p>
+        )}
+        {o.notes && !done ? <p className="mt-2 truncate text-xs text-warning">{o.notes}</p> : null}
       </button>
       <div className="mt-3 flex items-center justify-between gap-2">
         <span className="text-xs text-muted tabular-nums">{formatCurrency(o.total, currency)}</span>
-        {step ? (
-          <Button size="xs" variant={o.status === 'new' ? 'primary' : 'secondary'} onClick={() => onAdvance(o, step.status)}>
-            {step.label}
-          </Button>
-        ) : null}
+        <span className="flex items-center gap-1">
+          <MoveMenu order={o} onMove={onMove} onAdvance={onAdvance} />
+          {step ? (
+            <Button size="xs" variant={o.status === 'new' ? 'primary' : 'secondary'} onClick={() => onAdvance(o, step.status)}>
+              {step.label}
+            </Button>
+          ) : null}
+        </span>
       </div>
     </article>
   )
@@ -403,7 +540,7 @@ function OrderCard({ order: o, currency, nowMin, onOpen, onAdvance }: { order: O
    Ticket
    -------------------------------------------------------------------------- */
 
-function OrderSheet({ order: o, currency, onClose, onAdvance }: { order: Order | null; currency: CurrencyCode; onClose: () => void; onAdvance: (order: Order, status: OrderStatus) => void }) {
+function OrderSheet({ order: o, currency, onClose, onAdvance, onMove }: { order: Order | null; currency: CurrencyCode; onClose: () => void; onAdvance: (order: Order, status: OrderStatus) => void; onMove: (order: Order, key: StageKey) => void }) {
   const step = o ? nextStep(o) : null
   const isLive = o ? LIVE_ORDER_STATUSES.includes(o.status) : false
   return (
@@ -493,11 +630,8 @@ function OrderSheet({ order: o, currency, onClose, onAdvance }: { order: Order |
                   {step.label}
                 </Button>
               ) : null}
-              {isLive ? (
-                <Button size="sm" variant="outline" onClick={() => onAdvance(o, 'cancelled')}>
-                  Cancel order
-                </Button>
-              ) : o.status === 'completed' && o.paymentStatus === 'paid' ? (
+              {isLive || o.status === 'completed' ? <MoveMenu order={o} size="sm" label="Move to" onMove={onMove} onAdvance={onAdvance} /> : null}
+              {!isLive && o.status === 'completed' && o.paymentStatus === 'paid' ? (
                 <Button size="sm" variant="outline" onClick={() => onAdvance(o, 'refunded')}>
                   Refund
                 </Button>
