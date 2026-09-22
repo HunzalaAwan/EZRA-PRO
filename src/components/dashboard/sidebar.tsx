@@ -166,7 +166,7 @@ export function DashboardNavList({
             collapsed ? (
               <div aria-hidden="true" className="mx-auto mb-2 h-px w-6 rounded-full bg-line" />
             ) : (
-              <p className="mb-1.5 px-2.5 text-xs font-semibold tracking-[0.09em] text-faint uppercase">
+              <p className="mb-2 px-2.5 text-[0.8125rem] font-semibold tracking-[0.09em] text-faint uppercase">
                 {section.heading}
               </p>
             )
@@ -184,7 +184,7 @@ export function DashboardNavList({
                   onClick={onNavigate}
                   aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'group/nav relative flex items-center rounded-lg text-[0.8125rem] font-medium',
+                    'group/nav relative flex items-center rounded-lg text-[0.9375rem] font-medium',
                     'transition-colors duration-200 ease-[var(--ease-out-expo)]',
                     'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
                     collapsed ? 'h-10 w-10 justify-center' : 'gap-2.5 px-2.5 py-2',
@@ -231,7 +231,7 @@ export function DashboardNavList({
                       {showCount ? (
                         <span
                           className={cn(
-                            'shrink-0 rounded-full px-1.5 py-0.5 text-xs font-semibold tabular-nums',
+                            'shrink-0 rounded-full px-2 py-0.5 text-[0.8125rem] font-semibold tabular-nums',
                             active
                               ? 'bg-primary/15 text-primary'
                               : 'bg-surface-sunken text-subtle group-hover/nav:bg-surface group-hover/nav:text-foreground',
@@ -255,7 +255,7 @@ export function DashboardNavList({
                         <span className="flex items-center gap-2">
                           {item.label}
                           {showCount ? (
-                            <span className="rounded-full bg-surface-sunken px-1.5 text-xs font-semibold text-foreground tabular-nums">
+                            <span className="rounded-full bg-surface-sunken px-2 text-[0.8125rem] font-semibold text-foreground tabular-nums">
                               {count}
                             </span>
                           ) : null}
@@ -310,15 +310,15 @@ export function PlanUsageCard({ className }: { className?: string }) {
       />
 
       <div className="relative flex items-center justify-between gap-2">
-        <span className="flex items-center gap-1.5 text-[0.8125rem] font-semibold tracking-[-0.01em] text-foreground capitalize">
+        <span className="flex items-center gap-1.5 text-[0.9375rem] font-semibold tracking-[-0.01em] text-foreground capitalize">
           <Sparkles aria-hidden="true" className="size-3.5 text-primary" />
           {tenant.plan} plan
         </span>
-        <span className="text-xs font-semibold text-subtle tabular-nums">{percent}%</span>
+        <span className="text-[0.8125rem] font-semibold text-subtle tabular-nums">{percent}%</span>
       </div>
 
-      <p className="relative mt-2 text-xs text-subtle">{unitLabel}</p>
-      <p className="relative mt-0.5 text-sm font-semibold text-foreground tabular-nums">
+      <p className="relative mt-2 text-[0.8125rem] text-subtle">{unitLabel}</p>
+      <p className="relative mt-0.5 text-base font-semibold text-foreground tabular-nums">
         {formatNumber(used)}
         <span className="font-normal text-faint"> / {formatNumber(quota)}</span>
       </p>
@@ -453,7 +453,7 @@ export function Sidebar({ navCounts, className }: { navCounts: NavCounts; classN
               onClick={toggle}
               aria-label="Collapse sidebar"
               aria-expanded
-              className="group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-[0.8125rem] font-medium text-subtle transition-colors hover:bg-surface-sunken hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+              className="group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-[0.9375rem] font-medium text-subtle transition-colors hover:bg-surface-sunken hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
             >
               <PanelLeftClose aria-hidden="true" className="size-[1.125rem] shrink-0" />
               <span className="flex-1 text-left">Collapse</span>

@@ -137,10 +137,10 @@ export function TenantSwitcher({ collapsed = false, className }: TenantSwitcherP
     >
       <WorkspaceMark tenant={active} active className="size-8" />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[0.8125rem] font-semibold tracking-[-0.01em] text-foreground">
+        <span className="block truncate text-[0.9375rem] font-semibold tracking-[-0.01em] text-foreground">
           {active.name}
         </span>
-        <span className="block truncate text-xs text-subtle capitalize">
+        <span className="block truncate text-[0.8125rem] text-subtle capitalize">
           {active.plan} · {active.city}
         </span>
       </span>
@@ -183,7 +183,7 @@ export function TenantSwitcher({ collapsed = false, className }: TenantSwitcherP
               <WorkspaceMark tenant={tenant} className="size-8" />
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5">
-                  <span className="truncate text-[0.8125rem] font-medium text-foreground">
+                  <span className="truncate text-sm font-medium text-foreground">
                     {tenant.name}
                   </span>
                   {tenant.status === 'trialing' ? (
