@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 
-import { getDepartureById, getStorefront, getStorefrontAvailability, getLocationById, getWaiverById } from '@/lib/demo'
+import { getDepartureById, getStorefront, getStorefrontAvailability, getLocationById, getWaiverById, getPickupZonesByTenant } from '@/lib/demo'
 import { locationAddress } from '@/lib/locations'
 import { bookingReference, clamp, seatsRemaining } from '@/lib/utils'
 import type { Activity } from '@/types'
@@ -168,6 +168,7 @@ export default async function CheckoutPage({
   return (
     <CheckoutFlow
       waiver={getWaiverById(activity.waiverId)}
+      pickupZones={getPickupZonesByTenant(tenant.id).filter((zone) => zone.active && (activity.pickup?.zoneIds ?? []).includes(zone.id))}
       tenant={tenant}
       activity={activity}
       departure={departure}

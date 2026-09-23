@@ -29,7 +29,7 @@ import {
   formatTime,
   pluralize,
 } from '@/lib/utils'
-import type { Activity, Tenant, WaiverTemplate } from '@/types'
+import type { Activity, PickupZone, Tenant, WaiverTemplate } from '@/types'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { Button } from '@/components/ui/button'
 import { Field } from '@/components/ui/field'
@@ -54,6 +54,7 @@ import {
   type TravellerState,
   type WaiverState,
 } from '@/components/storefront/checkout-guest-details'
+import { CheckoutPickup, EMPTY_PICKUP, PICKUP_OTHER, validatePickup, type PickupChoice } from '@/components/storefront/checkout-pickup'
 
 /* ==========================================================================
    TYPES
@@ -77,6 +78,8 @@ function meetingPointFor(activity: Activity, departure: CheckoutDeparture) {
 export interface CheckoutFlowProps {
   /** The activity's waiver, signed at checkout. */
   waiver?: WaiverTemplate
+  /** Pickup zones this activity serves; empty when it has no pickup. */
+  pickupZones?: PickupZone[]
   tenant: Tenant
   activity: Activity
   departure: CheckoutDeparture
@@ -236,6 +239,7 @@ const COUNTRIES = [
 
 export function CheckoutFlow({
   waiver: waiverTemplate,
+  pickupZones = [],
   tenant,
   activity,
   departure,
@@ -284,6 +288,30 @@ export function CheckoutFlow({
   const [waiver, setWaiver] = React.useState<WaiverState>(EMPTY_WAIVER)
   const needsDetails = questions.length > 0 || Boolean(waiverTemplate) || travellers.length > 1
 
+  /* ---------- pickup ---------- */
+
+  const pickupRequired = Boolean(activity.pickup?.required)
+  const [pickup, setPickup] = React.useState<PickupChoice>(() => ({ ...EMPTY_PICKUP, mode: pickupRequired ? 'pickup' : 'meet' }))
+  const pickupZone = pickupZones.find((zone) => zone.id === pickup.zoneId)
+  const pickupFee = (pickup.mode === 'pickup' || pickupRequired) && pickupZone ? pickupZone.fee * quote.headcount : 0
+  /** The quote with the pickup fee on it, for the summary and the pay button. */
+  const displayQuote = React.useMemo(
+    () =>
+      pickupFee > 0 && pickupZone
+        ? {
+            ...quote,
+            addOnLines: [
+              ...quote.addOnLines,
+              { id: 'pickup', label: `Hotel pickup · ${pickupZone.name}`, kind: 'addon' as const, quantity: quote.headcount, unitPrice: pickupZone.fee, total: pickupFee },
+            ],
+            subtotal: quote.subtotal + pickupFee,
+            total: quote.total + pickupFee,
+          }
+        : quote,
+    [quote, pickupFee, pickupZone],
+  )
+  void PICKUP_OTHER
+
   /* ---------- validation and payment, one page ---------- */
 
   const focusFirstInvalid = () => {
@@ -300,6 +328,7 @@ export function CheckoutFlow({
     const guestResult = guestSchema.safeParse(guest)
     if (!guestResult.success) Object.assign(next, collectErrors(guestResult.error.issues))
     Object.assign(next, validateGuestDetails({ questions, travellers, bookingAnswers, waiver, template: waiverTemplate }))
+    if (pickupZones.length > 0) Object.assign(next, validatePickup(pickup, pickupRequired))
     if (scope === 'all') {
       const paymentResult = paymentSchema.safeParse(payment)
       if (!paymentResult.success) Object.assign(next, collectErrors(paymentResult.error.issues))
@@ -350,7 +379,7 @@ export function CheckoutFlow({
         tenant={tenant}
         activity={activity}
         departure={departure}
-        quote={quote}
+        quote={displayQuote}
         guest={guest}
         reference={reference}
         basePath={basePath}
@@ -388,13 +417,28 @@ export function CheckoutFlow({
             activity={activity}
             tenant={tenant}
             departure={departure}
-            quote={quote}
+            quote={displayQuote}
             reducedMotion={reducedMotion}
           />
 
           {/* ---------- details, then payment, one page ---------- */}
           <div className="mt-8 space-y-10">
             <GuestStep guest={guest} setGuest={setGuest} errors={errors} />
+            {pickupZones.length > 0 ? (
+              <div className="border-t border-line-subtle pt-10">
+                <CheckoutPickup
+                  zones={pickupZones}
+                  required={pickupRequired}
+                  meetingPoint={departure.location?.meetingPoint ?? activity.meetingPoint}
+                  startsAt={departure.startsAt}
+                  guests={quote.headcount}
+                  currency={tenant.currency}
+                  choice={pickup}
+                  setChoice={setPickup}
+                  errors={errors}
+                />
+              </div>
+            ) : null}
             {needsDetails ? (
               <div className="space-y-10 border-t border-line-subtle pt-10">
                 <GuestDetailsStep
@@ -426,7 +470,7 @@ export function CheckoutFlow({
                 brand={brand}
                 activity={activity}
                 tenant={tenant}
-                total={quote.total}
+                total={displayQuote.total}
                 submitting={submitting}
                 onExpressPay={expressPay}
               />
@@ -445,7 +489,7 @@ export function CheckoutFlow({
               leftIcon={<Lock aria-hidden="true" />}
               className="sm:min-w-52"
             >
-              Pay {formatCurrency(quote.total, tenant.currency, { decimals: true })}
+              Pay {formatCurrency(displayQuote.total, tenant.currency, { decimals: true })}
             </Button>
           </div>
         </div>
@@ -457,7 +501,7 @@ export function CheckoutFlow({
               activity={activity}
               tenant={tenant}
               departure={departure}
-              quote={quote}
+              quote={displayQuote}
             />
           </div>
         </aside>

@@ -1,6 +1,7 @@
 import type {
   Activity,
   ActivityKind,
+  ActivityPickup,
   ActivityLocation,
   CharterConfig,
   DifficultyLevel,
@@ -43,6 +44,8 @@ export interface ActivityOverride {
   guestQuestions?: GuestQuestion[]
   /** null clears the waiver; undefined keeps the seeded one. */
   waiverId?: string | null
+  /** null turns pickup off; undefined keeps the seeded setting. */
+  pickup?: ActivityPickup | null
   updatedAt: string
 }
 
@@ -117,6 +120,7 @@ export function applyActivityOverride<T extends Activity>(activity: T, override?
     pass: override.pass ?? activity.pass,
     guestQuestions: override.guestQuestions ?? activity.guestQuestions,
     waiverId: override.waiverId === undefined ? activity.waiverId : (override.waiverId ?? undefined),
+    pickup: override.pickup === undefined ? activity.pickup : (override.pickup ?? undefined),
     updatedAt: override.updatedAt,
   }
 }

@@ -171,6 +171,14 @@ export const DASHBOARD_NAV: DashboardNavSection[] = [
     ],
   },
   {
+    heading: 'Operations',
+    items: [
+      { label: 'Rentals', href: '/dashboard/rentals', icon: 'KeyRound' },
+      { label: 'Charter requests', href: '/dashboard/requests', icon: 'Inbox' },
+      { label: 'Pickups', href: '/dashboard/pickups', icon: 'Bus' },
+    ],
+  },
+  {
     heading: 'Catalog',
     items: [
       { label: 'Activities', href: '/dashboard/activities', icon: 'Waves' },

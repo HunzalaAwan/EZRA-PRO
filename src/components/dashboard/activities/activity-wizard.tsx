@@ -74,6 +74,7 @@ import {
 import { AddonEditor, type DraftAddOn } from './addon-editor'
 import { KindFields, KindPicker, defaultKindSettings, type DraftKindSettings } from './kind-fields'
 import { GuestQuestionsEditor, type WaiverOption } from './guest-questions-editor'
+import { PickupEditor, type DraftPickup, type PickupZoneOption } from './pickup-editor'
 import { ACTIVITY_KIND_META } from '@/lib/activity-kinds'
 import {
   LocationsEditor,
@@ -175,9 +176,10 @@ export interface ActivityDraft {
   /** Asked at checkout. */
   guestQuestions: GuestQuestion[]
   waiverId: string | null
+  pickup: DraftPickup
 }
 
-const STORAGE_KEY = 'ezra:activity-wizard:v6'
+const STORAGE_KEY = 'ezra:activity-wizard:v7'
 
 /** Dining is the one category whose product is a table, not a departure. */
 export const isDining = (draft: Pick<ActivityDraft, 'category'>) => draft.category === 'restaurants'
@@ -217,6 +219,7 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
     kindSettings: defaultKindSettings(),
     guestQuestions: [],
     waiverId: null,
+    pickup: { enabled: false, zoneIds: [], required: false },
     freeCancellationHours: 24,
     crewIds: [],
     dining,
@@ -322,6 +325,7 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
     kind: activity.kind ?? 'trip',
     guestQuestions: (activity.guestQuestions ?? []).map((question) => ({ ...question })),
     waiverId: activity.waiverId ?? null,
+    pickup: activity.pickup ? { enabled: true, zoneIds: [...activity.pickup.zoneIds], required: activity.pickup.required } : { enabled: false, zoneIds: [], required: false },
     kindSettings: {
       rental: activity.rental
         ? {
@@ -1094,6 +1098,8 @@ export interface ActivityWizardProps {
   locations?: Location[]
   /** The business's waiver templates, for the Guest details card. */
   waivers?: WaiverOption[]
+  /** The business's pickup zones, for the Hotel pickup card. */
+  pickupZones?: PickupZoneOption[]
 }
 
 export function ActivityWizard({
@@ -1105,6 +1111,7 @@ export function ActivityWizard({
   crew = [],
   locations = [],
   waivers = [],
+  pickupZones = [],
   mode = 'create',
   activityId,
   activity,
@@ -1261,6 +1268,7 @@ export function ActivityWizard({
           crewIds: draft.crewIds,
           guestQuestions: (draft.guestQuestions ?? []).filter((question) => question.label.trim().length > 0),
           waiverId: draft.waiverId ?? null,
+          pickup: draft.pickup?.enabled && draft.pickup.zoneIds.length > 0 ? { zoneIds: draft.pickup.zoneIds, required: draft.pickup.required } : null,
           locations: draft.schedule.locations.map((site) => {
             const rule = draft.schedule.locations.length > 1 ? site.schedule : draft.schedule
             return { locationId: site.locationId, times: rule.startTimes, weekdays: rule.weekdays }
@@ -1352,6 +1360,13 @@ export function ActivityWizard({
                       waiverId={draft.waiverId ?? null}
                       onWaiverChange={(waiverId) => patch({ waiverId })}
                       waivers={waivers}
+                    />
+                  ) : null}
+                  {step === 1 && !dining ? (
+                    <PickupEditor
+                      value={draft.pickup ?? { enabled: false, zoneIds: [], required: false }}
+                      onChange={(pickup) => patch({ pickup })}
+                      zones={pickupZones}
                     />
                   ) : null}
                   {step === 2 ? (

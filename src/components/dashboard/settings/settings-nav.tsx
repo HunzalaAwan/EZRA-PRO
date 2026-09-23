@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import { motion } from 'motion/react'
 import {
   Building2,
+  Bus,
   ChevronRight,
   CreditCard,
   FileSignature,
@@ -46,6 +47,12 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     label: 'Locations',
     description: 'Where you run from',
     icon: MapPin,
+  },
+  {
+    href: '/dashboard/settings/pickup',
+    label: 'Pickup zones',
+    description: 'Hotel pickup areas, times and fees',
+    icon: Bus,
   },
   {
     href: '/dashboard/settings/waivers',

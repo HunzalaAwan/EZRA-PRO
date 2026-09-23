@@ -284,6 +284,59 @@ export interface WaiverTemplate {
   updatedAt: string
 }
 
+/* ==========================================================================
+   PICKUP ZONES and CHARTER REQUESTS
+   ========================================================================== */
+
+/** An area the shuttle collects guests from, with its own lead time and fee. */
+export interface PickupZone {
+  id: string
+  tenantId: string
+  name: string
+  /** The location whose activities it serves; any when omitted. */
+  locationId?: string
+  /** Hotels and stops in the zone, shown to guests. */
+  stops: string[]
+  /** Minutes before the start time the shuttle collects. */
+  offsetMinutes: number
+  /** Per guest, minor units. 0 = included. */
+  fee: number
+  active: boolean
+}
+
+export interface ActivityPickup {
+  zoneIds: string[]
+  /** Every guest is collected; there is no meet-there option. */
+  required: boolean
+}
+
+export type CharterRequestStatus = 'new' | 'quoted' | 'paid' | 'declined'
+
+/** A private charter enquiry from the storefront, and the quote that answers it. */
+export interface CharterRequest {
+  id: string
+  tenantId: string
+  activitySlug: string
+  departureId?: string
+  startsAt: string
+  tierId?: string
+  party: number
+  name: string
+  email: string
+  message: string
+  createdAt: string
+  status: CharterRequestStatus
+  quote?: {
+    /** Minor units, for the whole charter. */
+    amount: number
+    depositPercent: number
+    note: string
+    validUntil: string
+    sentAt: string
+  }
+  paidAt?: string
+}
+
 /** What is being sold: seats on a trip, a private charter, a rental, a lesson or a pass. */
 export type ActivityKind = 'trip' | 'charter' | 'rental' | 'lesson' | 'pass'
 
@@ -353,6 +406,8 @@ export interface Activity {
   guestQuestions?: GuestQuestion[]
   /** The waiver every guest signs at checkout. */
   waiverId?: string
+  /** Hotel pickup: the zones served, and whether it is the only way to join. */
+  pickup?: ActivityPickup
   difficulty: DifficultyLevel
   /** Minutes. */
   durationMinutes: number
@@ -542,6 +597,8 @@ export interface Booking {
   activityId: string
   /** Answers to booking-level guest questions, keyed by question id. */
   answers?: Record<string, string>
+  /** Where the shuttle collects the party. */
+  pickup?: { zoneId: string; stop: string; time: string }
   departureId: string
   customerId: string
   status: BookingStatus

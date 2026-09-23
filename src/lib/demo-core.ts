@@ -28,6 +28,7 @@ import type {
   ActivityLocation,
   ActivityMedia,
   ActivityPerformance,
+  ActivityPickup,
   ActivityStatus,
   AddOn,
   AnalyticsSnapshot,
@@ -53,6 +54,7 @@ import type {
   Participant,
   Payment,
   PaymentStatus,
+  PickupZone,
   PlanTier,
   PriceTier,
   PricingModel,
@@ -393,6 +395,63 @@ export function getWaiversByTenant(tenantId: string): WaiverTemplate[] {
 
 export function getWaiverById(id: string | undefined): WaiverTemplate | undefined {
   return id ? WAIVERS.find((waiver) => waiver.id === id) : undefined
+}
+
+/* ==========================================================================
+   PICKUP ZONES — hotel pickup for the harbour trips.
+   ========================================================================== */
+
+export const PICKUP_ZONES: PickupZone[] = [
+  {
+    id: 'pz_bh_kaanapali',
+    tenantId: 'tnt_bluehorizon',
+    name: 'Kaanapali resorts',
+    stops: ['Hyatt Regency Maui', 'Westin Maui', 'Sheraton Maui', 'Marriott Ocean Club', 'Kaanapali Beach Hotel'],
+    offsetMinutes: 70,
+    fee: 1500,
+    active: true,
+  },
+  {
+    id: 'pz_bh_lahaina',
+    tenantId: 'tnt_bluehorizon',
+    name: 'Lahaina town',
+    stops: ['Lahaina Shores', 'Aina Nalu', 'Front Street stop'],
+    offsetMinutes: 55,
+    fee: 1000,
+    active: true,
+  },
+  {
+    id: 'pz_bh_kihei',
+    tenantId: 'tnt_bluehorizon',
+    name: 'Kihei & Wailea',
+    stops: ['Grand Wailea', 'Four Seasons Wailea', 'Andaz Maui', 'Maui Coast Hotel', 'Kihei Kai Nani'],
+    offsetMinutes: 50,
+    fee: 1500,
+    active: true,
+  },
+  {
+    id: 'pz_bh_maalaea',
+    tenantId: 'tnt_bluehorizon',
+    name: 'Maalaea condos',
+    stops: ['Maalaea Banyans', 'Island Sands', 'Hono Kai'],
+    offsetMinutes: 20,
+    fee: 0,
+    active: true,
+  },
+]
+
+export function getPickupZonesByTenant(tenantId: string): PickupZone[] {
+  return PICKUP_ZONES.filter((zone) => zone.tenantId === tenantId)
+}
+
+const ALL_BH_ZONES = ['pz_bh_kaanapali', 'pz_bh_lahaina', 'pz_bh_kihei', 'pz_bh_maalaea']
+const PICKUP_BY_SLUG: Record<string, ActivityPickup> = {
+  'molokini-crater-dawn-patrol': { zoneIds: ALL_BH_ZONES, required: false },
+  'family-reef-snorkel': { zoneIds: ALL_BH_ZONES, required: false },
+  'turtle-town-kayak-snorkel': { zoneIds: ['pz_bh_kihei', 'pz_bh_maalaea'], required: false },
+  'whale-watch-eco-cruise': { zoneIds: ALL_BH_ZONES, required: false },
+  'sunset-catamaran-sail-snorkel': { zoneIds: ALL_BH_ZONES, required: false },
+  'night-manta-ray-dive': { zoneIds: ['pz_bh_kihei'], required: false },
 }
 
 /* ==========================================================================
@@ -1474,7 +1533,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     format: 'open',
     times: ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'],
     locations: [{ location: 'kaanapali' }],
-    popularity: 0.55,
+    popularity: 0.3,
     freeCancelHours: 24,
   },
   {
@@ -1509,7 +1568,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     format: 'open',
     times: ['07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00'],
     locations: [{ location: 'kihei' }],
-    popularity: 0.5,
+    popularity: 0.28,
     freeCancelHours: 24,
   },
   {
@@ -3234,6 +3293,7 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     meetingPoint: spec.meetingPoint,
     locations: activityLocations(tenant, spec),
     guestQuestions: GUEST_QUESTIONS[spec.slug] ?? [],
+    ...(PICKUP_BY_SLUG[spec.slug] ? { pickup: PICKUP_BY_SLUG[spec.slug] } : {}),
     waiverId: MOTOR_ACTIVITIES.has(spec.slug) ? 'wvr_bluehorizon_motor' : `wvr_${tenant.id.replace(/^tnt_/, '')}_general`,
     category: tenant.vertical,
     status: spec.status ?? 'live',

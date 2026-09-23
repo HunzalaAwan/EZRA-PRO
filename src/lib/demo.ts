@@ -98,6 +98,7 @@ import {
   NOW,
   NOW_MS,
   SPEC_BY_TENANT,
+  PICKUP_ZONES,
   TAX_RATE,
   TENANTS,
   activitiesByTenant,
@@ -527,6 +528,16 @@ function seedAnswers(questions: GuestQuestion[], key: string, child: boolean): R
   return out
 }
 
+/** About four in ten guests on a pickup trip ride the shuttle. */
+function seedPickup(zoneIds: string[], bookingId: string, startsAt: Date): { pickup?: { zoneId: string; stop: string; time: string } } {
+  const rng = createRng(hashSeed(`pickup:${bookingId}`))
+  if (rng() > 0.42 || zoneIds.length === 0) return {}
+  const zone = PICKUP_ZONES.find((entry) => entry.id === rngPick(rng, zoneIds))
+  if (!zone) return {}
+  const time = new Date(startsAt.getTime() - zone.offsetMinutes * 60_000)
+  return { pickup: { zoneId: zone.id, stop: rngPick(rng, zone.stops), time: isoLocal(time) } }
+}
+
 const allDepartures: Departure[] = []
 const allBookings: Booking[] = []
 const allPayments: Payment[] = []
@@ -948,6 +959,7 @@ for (const [tenantId, specs] of SPEC_BY_TENANT) {
               currency,
               participants,
               ...(bookingQs.length > 0 ? { answers: seedAnswers(bookingQs, `bk_${bookingId}`, false) } : {}),
+              ...(activity.pickup ? seedPickup(activity.pickup.zoneIds, bookingId, startsAt) : {}),
               createdAt: isoLocal(createdAt),
               updatedAt: isoLocal(new Date(updatedMs)),
               departureAt: departure.startsAt,
