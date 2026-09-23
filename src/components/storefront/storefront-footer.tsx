@@ -193,7 +193,7 @@ export function StorefrontFooter({ tenant, className }: StorefrontFooterProps) {
                 { label: 'About us', href: `${base}#about` },
                 { label: 'Guest reviews', href: `${base}#reviews` },
                 { label: 'Contact & directions', href: `${base}#contact` },
-                { label: 'Gift cards', href: `${base}#contact` },
+                { label: 'Gift cards', href: `${base}/gift-cards` },
                 { label: 'Group & private charters', href: `${base}#contact` },
               ].map((item) => (
                 <li key={item.label}>

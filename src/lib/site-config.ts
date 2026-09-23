@@ -175,6 +175,7 @@ export const DASHBOARD_NAV: DashboardNavSection[] = [
   {
     heading: 'Operations',
     items: [
+      { label: 'Walk-in sale', href: '/dashboard/walk-in', icon: 'Banknote' },
       { label: 'Rentals', href: '/dashboard/rentals', icon: 'KeyRound' },
       { label: 'Charter requests', href: '/dashboard/requests', icon: 'Inbox' },
       { label: 'Pickups', href: '/dashboard/pickups', icon: 'Bus' },
@@ -190,6 +191,7 @@ export const DASHBOARD_NAV: DashboardNavSection[] = [
       { label: 'Activities', href: '/dashboard/activities', icon: 'Waves' },
       { label: 'Resources', href: '/dashboard/resources', icon: 'Ship' },
       { label: 'Availability', href: '/dashboard/availability', icon: 'CalendarClock' },
+      { label: 'Pricing', href: '/dashboard/pricing', icon: 'Tags' },
     ],
   },
   {

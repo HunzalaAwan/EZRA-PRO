@@ -56,6 +56,9 @@ import {
 } from '@/components/storefront/checkout-guest-details'
 import { CheckoutPickup, EMPTY_PICKUP, PICKUP_OTHER, validatePickup, type PickupChoice } from '@/components/storefront/checkout-pickup'
 import { TicketQr, ticketPayload } from '@/components/ui/ticket-qr'
+import { CheckoutDiscounts } from '@/components/storefront/checkout-discounts'
+import { applyRules, giftProblem, promoDiscount, promoProblem } from '@/lib/pricing'
+import { usePricing } from '@/hooks/use-pricing'
 
 /* ==========================================================================
    TYPES
@@ -77,6 +80,8 @@ function meetingPointFor(activity: Activity, departure: CheckoutDeparture) {
 }
 
 export interface CheckoutFlowProps {
+  /** The demo clock, for pricing rules and code validity. */
+  nowIso?: string
   /** The activity's waiver, signed at checkout. */
   waiver?: WaiverTemplate
   /** Pickup zones this activity serves; empty when it has no pickup. */
@@ -240,6 +245,7 @@ const COUNTRIES = [
 
 export function CheckoutFlow({
   waiver: waiverTemplate,
+  nowIso,
   pickupZones = [],
   tenant,
   activity,
@@ -250,9 +256,15 @@ export function CheckoutFlow({
 }: CheckoutFlowProps) {
   const reducedMotion = useReducedMotionSafe()
 
+  const pricing = usePricing(tenant.slug)
+  const guestsSelected = selection.tiers.reduce((sum, tier) => sum + tier.qty, 0)
+  const ruleResult = React.useMemo(
+    () => applyRules(pricing.rules, { activitySlug: activity.slug, startsAt: departure.startsAt, nowIso: nowIso ?? departure.startsAt, guests: Math.max(1, guestsSelected) }),
+    [pricing.rules, activity.slug, departure.startsAt, nowIso, guestsSelected],
+  )
   const quote = React.useMemo(
-    () => buildQuote(activity, tenant.slug, selection, departure.priceMultiplier),
-    [activity, tenant.slug, selection, departure.priceMultiplier],
+    () => buildQuote(activity, tenant.slug, selection, departure.priceMultiplier * ruleResult.multiplier),
+    [activity, tenant.slug, selection, departure.priceMultiplier, ruleResult.multiplier],
   )
 
   const [errors, setErrors] = React.useState<Errors>({})
@@ -296,7 +308,7 @@ export function CheckoutFlow({
   const pickupZone = pickupZones.find((zone) => zone.id === pickup.zoneId)
   const pickupFee = (pickup.mode === 'pickup' || pickupRequired) && pickupZone ? pickupZone.fee * quote.headcount : 0
   /** The quote with the pickup fee on it, for the summary and the pay button. */
-  const displayQuote = React.useMemo(
+  const withPickup = React.useMemo(
     () =>
       pickupFee > 0 && pickupZone
         ? {
@@ -311,6 +323,28 @@ export function CheckoutFlow({
         : quote,
     [quote, pickupFee, pickupZone],
   )
+
+  /* ---------- promo code and gift card ---------- */
+
+  const todayKey = (nowIso ?? departure.startsAt).slice(0, 10)
+  const [promoCode, setPromoCode] = React.useState<string | null>(null)
+  const [giftCode, setGiftCode] = React.useState<string | null>(null)
+  const promo = pricing.promos.find((entry) => entry.code === promoCode)
+  const card = pricing.giftCards.find((entry) => entry.code === giftCode)
+  const itemsSubtotal = [...quote.ticketLines, ...quote.addOnLines].reduce((sum, line) => sum + line.total, 0)
+  const promoOff = promo && !promoProblem(promo, { activitySlug: activity.slug, subtotal: itemsSubtotal, todayKey }) ? promoDiscount(promo, itemsSubtotal) : 0
+  const giftOff = card && !giftProblem(card, todayKey) ? Math.min(card.balance, Math.max(0, withPickup.total - promoOff)) : 0
+  const displayQuote = React.useMemo(() => {
+    if (promoOff === 0 && giftOff === 0) return withPickup
+    const lines = [...withPickup.addOnLines]
+    if (promoOff > 0 && promo) lines.push({ id: 'promo', label: `Code ${promo.code}`, kind: 'addon' as const, quantity: 1, unitPrice: -promoOff, total: -promoOff })
+    if (giftOff > 0 && card) lines.push({ id: 'gift', label: `Gift card …${card.code.slice(-4)}`, kind: 'addon' as const, quantity: 1, unitPrice: -giftOff, total: -giftOff })
+    return { ...withPickup, addOnLines: lines, total: Math.max(0, withPickup.total - promoOff - giftOff) }
+  }, [withPickup, promoOff, giftOff, promo, card])
+  const finishPayment = () => {
+    pricing.recordRedemption(promoOff > 0 ? promo?.code : undefined, giftOff > 0 && card ? { code: card.code, amount: giftOff } : undefined)
+    setConfirmed(true)
+  }
   void PICKUP_OTHER
 
   /* ---------- validation and payment, one page ---------- */
@@ -330,7 +364,7 @@ export function CheckoutFlow({
     if (!guestResult.success) Object.assign(next, collectErrors(guestResult.error.issues))
     Object.assign(next, validateGuestDetails({ questions, travellers, bookingAnswers, waiver, template: waiverTemplate }))
     if (pickupZones.length > 0) Object.assign(next, validatePickup(pickup, pickupRequired))
-    if (scope === 'all') {
+    if (scope === 'all' && displayQuote.total > 0) {
       const paymentResult = paymentSchema.safeParse(payment)
       if (!paymentResult.success) Object.assign(next, collectErrors(paymentResult.error.issues))
     }
@@ -347,7 +381,7 @@ export function CheckoutFlow({
     setSubmitting(true)
     window.setTimeout(() => {
       setSubmitting(false)
-      setConfirmed(true)
+      finishPayment()
       window.scrollTo({ top: 0, behavior: 'auto' })
     }, 1400)
   }
@@ -360,7 +394,7 @@ export function CheckoutFlow({
     setSubmitting(true)
     window.setTimeout(() => {
       setSubmitting(false)
-      setConfirmed(true)
+      finishPayment()
       toast.success(`Paid with ${method}`)
     }, 1100)
   }
@@ -425,6 +459,21 @@ export function CheckoutFlow({
           {/* ---------- details, then payment, one page ---------- */}
           <div className="mt-8 space-y-10">
             <GuestStep guest={guest} setGuest={setGuest} errors={errors} />
+            <CheckoutDiscounts
+              promos={pricing.promos}
+              giftCards={pricing.giftCards}
+              activitySlug={activity.slug}
+              subtotal={itemsSubtotal}
+              todayKey={todayKey}
+              currency={tenant.currency}
+              promoCode={promoCode}
+              giftCode={giftCode}
+              onPromo={setPromoCode}
+              onGift={setGiftCode}
+              promoOff={promoOff}
+              giftOff={giftOff}
+              rules={ruleResult.applied}
+            />
             {pickupZones.length > 0 ? (
               <div className="border-t border-line-subtle pt-10">
                 <CheckoutPickup
@@ -868,9 +917,11 @@ function SummaryLines({
           <li key={line.id} className="flex items-baseline justify-between gap-3">
             <span className="min-w-0 truncate text-muted">
               {line.label}
-              <span className="ml-1.5 text-xs text-faint">
-                {line.quantity} × {formatCurrency(line.unitPrice, tenant.currency)}
-              </span>
+              {line.total >= 0 ? (
+                <span className="ml-1.5 text-xs text-faint">
+                  {line.quantity} × {formatCurrency(line.unitPrice, tenant.currency)}
+                </span>
+              ) : null}
             </span>
             <span className="shrink-0 tabular font-medium text-foreground">
               {formatCurrency(line.total, tenant.currency)}

@@ -37,6 +37,8 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { LESSON_LEVELS } from '@/lib/activity-kinds'
+import { applyRules } from '@/lib/pricing'
+import { usePricing } from '@/hooks/use-pricing'
 import { IconButton } from '@/components/ui/icon-button'
 import { SimpleTooltip } from '@/components/ui/tooltip'
 import { TrustSeal } from '@/components/storefront/trust-bar'
@@ -225,6 +227,8 @@ export interface BookingWidgetProps {
   checkoutPath: string
   initialDateKey?: string
   initialGuests?: number
+  /** The demo clock, so early-bird and last-minute rules price correctly. */
+  nowIso?: string
   /** `sheet` drops the card chrome for the mobile bottom sheet. */
   variant?: 'rail' | 'sheet'
   className?: string
@@ -239,6 +243,7 @@ export function BookingWidget({
   checkoutPath,
   initialDateKey,
   initialGuests,
+  nowIso,
   variant = 'rail',
   className,
 }: BookingWidgetProps) {
@@ -363,9 +368,18 @@ export function BookingWidget({
     [activity.priceTiers, activity.addOns, tierQty, addOnOn, headcount],
   )
 
+  const { rules } = usePricing(tenantSlug)
+  const ruleResult = React.useMemo(
+    () =>
+      slot
+        ? applyRules(rules, { activitySlug: activity.slug, startsAt: slot.startsAt, nowIso: nowIso ?? slot.startsAt, guests: Math.max(1, headcount) })
+        : { multiplier: 1, applied: [] },
+    [rules, slot, activity.slug, nowIso, headcount],
+  )
+
   const quote = React.useMemo(
-    () => buildQuote(activity, tenantSlug, selection, slot?.priceMultiplier ?? 1),
-    [activity, tenantSlug, selection, slot],
+    () => buildQuote(activity, tenantSlug, selection, (slot?.priceMultiplier ?? 1) * ruleResult.multiplier),
+    [activity, tenantSlug, selection, slot, ruleResult.multiplier],
   )
 
   const canReserve =
@@ -908,6 +922,16 @@ export function BookingWidget({
             <AnimatedTotal value={quote.total} currency={currency} reducedMotion={reducedMotion} />
           </div>
         </div>
+
+        {ruleResult.applied.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5" aria-label="Price adjustments">
+            {ruleResult.applied.map((rule) => (
+              <span key={rule.id} className={cn('rounded-full px-2.5 py-1 text-xs font-medium', rule.percent < 0 ? 'bg-success-soft text-success' : 'bg-surface-sunken text-muted')}>
+                {rule.name} {rule.percent > 0 ? `+${rule.percent}%` : `${rule.percent}%`}
+              </span>
+            ))}
+          </div>
+        ) : null}
 
         {/* ---------- reserve ---------- */}
         <div className="space-y-3">

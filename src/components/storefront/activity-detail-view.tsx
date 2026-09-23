@@ -151,6 +151,8 @@ export interface ActivityDetailViewProps {
   initialGuests?: number
   /** Trailing-90-day booking count, for the social-proof line. */
   recentBookings: number
+  /** The frozen demo clock, for pricing rules. */
+  nowIso?: string
   /** The business's locations, to name the places this runs from. */
   locations?: Location[]
 }
@@ -164,6 +166,7 @@ export function ActivityDetailView({
   activity,
   days,
   locations = [],
+  nowIso,
   reviews,
   ratingBuckets,
   related,
@@ -625,6 +628,7 @@ export function ActivityDetailView({
                 checkoutPath={checkoutPath}
                 initialDateKey={initialDateKey}
                 initialGuests={initialGuests}
+                nowIso={nowIso}
               />
               <TrustBar
                 variant="inline"
@@ -722,6 +726,7 @@ export function ActivityDetailView({
               checkoutPath={checkoutPath}
               initialDateKey={initialDateKey}
               initialGuests={initialGuests}
+              nowIso={nowIso}
               variant="sheet"
             />
           </SheetBody>

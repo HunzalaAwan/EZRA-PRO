@@ -188,6 +188,7 @@ export default async function ActivityPage({
       initialDateKey={initialDateKey}
       initialGuests={initialGuests}
       recentBookings={recentBookings}
+      nowIso={`${NOW.getFullYear()}-${String(NOW.getMonth() + 1).padStart(2, '0')}-${String(NOW.getDate()).padStart(2, '0')}T${String(NOW.getHours()).padStart(2, '0')}:${String(NOW.getMinutes()).padStart(2, '0')}:00`}
     />
   )
 }
