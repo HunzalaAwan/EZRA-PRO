@@ -1616,7 +1616,11 @@ function BasicsStep({ draft, patch, errors, currency }: StepProps) {
   const settings = draft.kindSettings ?? defaultKindSettings()
   const pickKind = (next: ActivityKind) => {
     const mode = ACTIVITY_KIND_META[next].defaultFormat === 'open' ? 'hours' : 'times'
-    patch({ kind: next, schedule: { ...draft.schedule, mode } })
+    patch({
+      kind: next,
+      schedule: { ...draft.schedule, mode },
+      ...(next === 'charter' ? { maxCapacity: settings.charter.maxGuests } : {}),
+    })
   }
   return (
     <div className="flex flex-col gap-5">
@@ -1626,7 +1630,11 @@ function BasicsStep({ draft, patch, errors, currency }: StepProps) {
           <KindFields
             kind={kind}
             settings={settings}
-            onChange={(kindSettings) => patch({ kindSettings })}
+            onChange={(kindSettings) =>
+              patch(kind === 'charter' ? { kindSettings, maxCapacity: kindSettings.charter.maxGuests } : { kindSettings })
+            }
+            minGuests={draft.minParticipants}
+            onMinGuests={(minParticipants) => patch({ minParticipants })}
             tiers={draft.tiers}
             currencySymbol={currencySymbol(currency)}
             errors={errors}
@@ -1784,6 +1792,8 @@ function TourBasicsFields({ draft, patch, errors }: StepProps) {
             onChange={(event) => patch({ minAge: Number.parseInt(event.target.value, 10) || 0 })}
           />
         </Field>
+        {(draft.kind ?? 'trip') === 'charter' ? null : (
+        <>
         <Field
           label="Seats per departure"
           error={errors.maxCapacity}
@@ -1813,6 +1823,8 @@ function TourBasicsFields({ draft, patch, errors }: StepProps) {
             }
           />
         </Field>
+        </>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-1.5">

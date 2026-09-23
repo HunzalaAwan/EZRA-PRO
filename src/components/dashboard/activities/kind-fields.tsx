@@ -82,7 +82,12 @@ export function KindFields({
   tiers,
   currencySymbol,
   errors,
+  minGuests = 1,
+  onMinGuests,
 }: {
+  /** Charter only: the fewest guests a charter goes out with (the activity's minimum). */
+  minGuests?: number
+  onMinGuests?: (value: number) => void
   kind: ActivityKind
   settings: DraftKindSettings
   onChange: (settings: DraftKindSettings) => void
@@ -143,8 +148,11 @@ export function KindFields({
 
       {kind === 'charter' ? (
         <div className="mt-3 grid gap-4 sm:grid-cols-2">
-          <Field label="Most guests per charter" required error={errors['charter.maxGuests']}>
+          <Field label="Most guests per charter" required error={errors['charter.maxGuests']} description="The boat, vehicle or guide's limit.">
             {(control) => <Input {...control} type="number" min={1} value={settings.charter.maxGuests} onChange={(e) => set('charter', { maxGuests: num(e.target.value) })} />}
+          </Field>
+          <Field label="Fewest guests" error={errors.minParticipants} description="Below this, you do not take the charter.">
+            {(control) => <Input {...control} type="number" min={1} value={minGuests} onChange={(e) => onMinGuests?.(Math.max(1, num(e.target.value)))} />}
           </Field>
           <Field label="Notice needed" description="Hours before a charter can start.">
             {(control) => <Input {...control} type="number" min={0} value={settings.charter.noticeHours} onChange={(e) => set('charter', { noticeHours: num(e.target.value) })} />}
