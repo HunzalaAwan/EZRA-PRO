@@ -81,6 +81,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
 import { RefundDialog, type RefundResult } from '@/components/dashboard/bookings/refund-dialog'
 import { ChannelBadge } from '@/components/dashboard/bookings/bookings-table'
+import { formatAnswer } from '@/lib/guest-requirements'
 
 /* ==========================================================================
    SMALL PARTS
@@ -684,6 +685,18 @@ export function BookingDetailContent({
               </span>
             </div>
 
+            {booking.answers && Object.keys(booking.answers).length > 0 ? (
+              <dl className="mb-3 grid gap-x-4 gap-y-1 rounded-xl bg-surface-sunken px-3 py-2.5 text-xs sm:grid-cols-2">
+                {(activity.guestQuestions ?? [])
+                  .filter((question) => question.scope === 'booking' && booking.answers?.[question.id])
+                  .map((question) => (
+                    <div key={question.id} className="flex min-w-0 gap-1.5">
+                      <dt className="text-subtle">{question.label}:</dt>
+                      <dd className="min-w-0 truncate font-medium text-foreground">{formatAnswer(question, booking.answers?.[question.id])}</dd>
+                    </div>
+                  ))}
+              </dl>
+            ) : null}
             <ul className="flex flex-col divide-y divide-line-subtle">
               {booking.participants.map((participant) => {
                 const name = `${participant.firstName} ${participant.lastName}`
@@ -730,6 +743,13 @@ export function BookingDetailContent({
                         {participant.notes ? (
                           <span className="truncate text-xs text-warning">{participant.notes}</span>
                         ) : null}
+                        {(activity.guestQuestions ?? [])
+                          .filter((question) => question.scope === 'guest' && participant.answers?.[question.id])
+                          .map((question) => (
+                            <span key={question.id} className="text-xs text-subtle">
+                              {question.label}: <span className="font-medium text-foreground">{formatAnswer(question, participant.answers?.[question.id])}</span>
+                            </span>
+                          ))}
                       </div>
                     </div>
 

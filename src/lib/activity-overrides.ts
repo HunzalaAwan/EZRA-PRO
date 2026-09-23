@@ -4,6 +4,7 @@ import type {
   ActivityLocation,
   CharterConfig,
   DifficultyLevel,
+  GuestQuestion,
   LessonConfig,
   PassConfig,
   RentalConfig,
@@ -39,6 +40,9 @@ export interface ActivityOverride {
   charter?: CharterConfig
   lesson?: LessonConfig
   pass?: PassConfig
+  guestQuestions?: GuestQuestion[]
+  /** null clears the waiver; undefined keeps the seeded one. */
+  waiverId?: string | null
   updatedAt: string
 }
 
@@ -111,6 +115,8 @@ export function applyActivityOverride<T extends Activity>(activity: T, override?
     charter: override.charter ?? activity.charter,
     lesson: override.lesson ?? activity.lesson,
     pass: override.pass ?? activity.pass,
+    guestQuestions: override.guestQuestions ?? activity.guestQuestions,
+    waiverId: override.waiverId === undefined ? activity.waiverId : (override.waiverId ?? undefined),
     updatedAt: override.updatedAt,
   }
 }

@@ -19,12 +19,13 @@
  * =============================================================================
  */
 
+import { presetQuestion } from '@/lib/guest-requirements'
 import type {
   Activity,
+  ActivityFeedItem,
   ActivityFormat,
   ActivityKind,
   ActivityLocation,
-  ActivityFeedItem,
   ActivityMedia,
   ActivityPerformance,
   ActivityStatus,
@@ -43,6 +44,7 @@ import type {
   DifficultyLevel,
   FunnelStage,
   GeoSource,
+  GuestQuestion,
   HeatmapCell,
   Insight,
   KpiMetric,
@@ -62,6 +64,7 @@ import type {
   TimeSeriesPoint,
   TrendDirection,
   User,
+  WaiverTemplate,
   WeatherSnapshot,
 } from '@/types'
 
@@ -336,6 +339,98 @@ export const TENANTS: Tenant[] = [
 
 export const tenantById = new Map(TENANTS.map((t) => [t.id, t]))
 export const tenantBySlug = new Map(TENANTS.map((t) => [t.slug, t]))
+
+/* ==========================================================================
+   WAIVERS — one release per business, plus a watercraft agreement for the
+   motorised rentals. Guests sign the activity's waiver at checkout.
+   ========================================================================== */
+
+function releaseBody(business: string) {
+  return [
+    `I am taking part voluntarily in activities run by ${business}. I understand they involve risks, including injury from water, weather, equipment, wildlife and other guests, and I accept those risks for myself and anyone I sign for.`,
+    'I confirm that everyone I sign for is in good health, has told the crew about any medical condition, and will follow every safety briefing and instruction from the guides and captain.',
+    `I release ${business}, its crew and partners from claims for injury, loss or damage, except where caused by their gross negligence. I agree to pay for equipment lost or damaged through misuse.`,
+    'I consent to emergency first aid and medical treatment if it is needed, and I allow photos taken during the activity to be shared with me.',
+  ].join('\n\n')
+}
+
+export const WAIVERS: WaiverTemplate[] = TENANTS.flatMap((tenant) => {
+  const slug = tenant.id.replace(/^tnt_/, '')
+  const base: WaiverTemplate = {
+    id: `wvr_${slug}_general`,
+    tenantId: tenant.id,
+    title: 'Release and assumption of risk',
+    body: releaseBody(tenant.legalName),
+    version: 3,
+    minorsNeedGuardian: true,
+    minorAge: 18,
+    updatedAt: '2026-03-02T09:00:00',
+  }
+  if (tenant.id !== 'tnt_bluehorizon') return [base]
+  return [
+    base,
+    {
+      id: 'wvr_bluehorizon_motor',
+      tenantId: tenant.id,
+      title: 'Motorised watercraft agreement',
+      body: [
+        'The driver holds a valid boat licence or state boater card and will carry it on the day.',
+        'I will ride only inside the marked zone, keep 100 feet from swimmers, divers and other craft, and return by the agreed time. Late returns are charged in 15-minute blocks.',
+        `I am responsible for damage to the watercraft beyond normal wear, up to the deposit held, and for the full cost of damage caused by riding outside the rules. ${tenant.legalName} may end a rental at any time for unsafe riding.`,
+        'No alcohol or drugs before or during the rental. Vests stay on at all times.',
+      ].join('\n\n'),
+      version: 2,
+      minorsNeedGuardian: true,
+      minorAge: 18,
+      updatedAt: '2026-05-18T09:00:00',
+    },
+  ]
+})
+
+export function getWaiversByTenant(tenantId: string): WaiverTemplate[] {
+  return WAIVERS.filter((waiver) => waiver.tenantId === tenantId)
+}
+
+export function getWaiverById(id: string | undefined): WaiverTemplate | undefined {
+  return id ? WAIVERS.find((waiver) => waiver.id === id) : undefined
+}
+
+/* ==========================================================================
+   GUEST QUESTIONS — what each activity asks at checkout.
+   ========================================================================== */
+
+const MOTOR_ACTIVITIES = new Set(['jet-ski-safari', 'jet-ski-rental'])
+
+const GUEST_QUESTIONS: Record<string, GuestQuestion[]> = {
+  'molokini-crater-dawn-patrol': [presetQuestion('swim'), presetQuestion('wetsuit'), presetQuestion('fins')],
+  'turtle-town-kayak-snorkel': [presetQuestion('swim'), presetQuestion('fins')],
+  'family-reef-snorkel': [presetQuestion('swim'), presetQuestion('wetsuit'), presetQuestion('fins')],
+  'lanai-coast-snorkel-sail': [presetQuestion('swim'), presetQuestion('fins')],
+  'sunset-catamaran-sail-snorkel': [presetQuestion('swim'), presetQuestion('dietary')],
+  'night-manta-ray-dive': [
+    presetQuestion('certification', {
+      allowed: ['Open Water', 'Advanced Open Water', 'Rescue Diver', 'Divemaster or higher'],
+      limitMessage: 'The night dive needs an Open Water certification or higher.',
+    }),
+    presetQuestion('wetsuit'),
+    presetQuestion('weight', { help: 'For the weight belt.' }),
+  ],
+  'west-maui-parasail-flight': [
+    presetQuestion('weight', { max: 136, limitMessage: 'Flyers have to be between 20 and 136 kg for the harness.' }),
+  ],
+  'beginner-surf-lesson': [
+    presetQuestion('swim', { allowed: ['Confident swimmer', 'Can swim'], limitMessage: 'Surf lessons need guests who can swim.' }),
+    presetQuestion('height', { help: 'So we pick the right board.' }),
+    presetQuestion('weight', { help: 'So we pick the right board.' }),
+  ],
+  'jet-ski-safari': [presetQuestion('licence'), presetQuestion('medical')],
+  'jet-ski-rental': [presetQuestion('licence'), presetQuestion('medical')],
+  'kayak-sup-rental': [presetQuestion('swim'), presetQuestion('experience')],
+  'private-sportfishing-charter': [presetQuestion('dietary')],
+  'private-catamaran-charter': [presetQuestion('dietary')],
+  'blue-water-freedive-course': [presetQuestion('swim'), presetQuestion('medical'), presetQuestion('wetsuit')],
+  'sunrise-sup-yoga': [presetQuestion('experience')],
+}
 
 /* ==========================================================================
    LOCATIONS — the places a business runs from. Most run from one base,
@@ -3138,6 +3233,8 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     requirements: spec.requirements,
     meetingPoint: spec.meetingPoint,
     locations: activityLocations(tenant, spec),
+    guestQuestions: GUEST_QUESTIONS[spec.slug] ?? [],
+    waiverId: MOTOR_ACTIVITIES.has(spec.slug) ? 'wvr_bluehorizon_motor' : `wvr_${tenant.id.replace(/^tnt_/, '')}_general`,
     category: tenant.vertical,
     status: spec.status ?? 'live',
     format: spec.format ?? 'departures',

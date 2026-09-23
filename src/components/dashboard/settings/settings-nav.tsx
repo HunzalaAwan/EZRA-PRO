@@ -8,6 +8,7 @@ import {
   Building2,
   ChevronRight,
   CreditCard,
+  FileSignature,
   MapPin,
   Plug,
   ReceiptText,
@@ -43,8 +44,14 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
   {
     href: '/dashboard/settings/locations',
     label: 'Locations',
-    description: 'The bases you run from',
+    description: 'Where you run from',
     icon: MapPin,
+  },
+  {
+    href: '/dashboard/settings/waivers',
+    label: 'Waivers & forms',
+    description: 'Waivers, guest questions and sizes',
+    icon: FileSignature,
   },
   {
     href: '/dashboard/settings/booking',

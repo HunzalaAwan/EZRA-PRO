@@ -18,6 +18,17 @@ import {
 
 import type { Booking, Customer, CurrencyCode } from '@/types'
 import type { ManifestRow } from '@/lib/demo'
+import { formatAnswer, shortOption } from '@/lib/guest-requirements'
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { toast } from '@/components/ui/toaster'
 import { cn, formatCurrency } from '@/lib/utils'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -156,6 +167,8 @@ interface PartyRowData {
   tiers: string
   waivers: { signed: number; total: number }
   notes: string[]
+  /** Sizes and key answers, for the crew: "Wetsuit M, L · Fins S". */
+  gear: string
 }
 
 function buildParties(row: ManifestRow): PartyRowData[] {
@@ -174,6 +187,18 @@ function buildParties(row: ManifestRow): PartyRowData[] {
         if (participant.notes) notes.push(`${participant.firstName}: ${participant.notes}`)
       }
       if (booking.notes) notes.unshift(booking.notes)
+      const questions = row.activity.guestQuestions ?? []
+      const gear = questions
+        .filter((question) => question.gear || question.kind === 'number')
+        .map((question) => {
+          const values = booking.participants
+            .map((participant) => participant.answers?.[question.id])
+            .filter((value): value is string => Boolean(value))
+            .map((value) => (question.gear ? shortOption(value) : formatAnswer(question, value)))
+          return values.length > 0 ? `${question.label.replace(/ size.*$/i, '')} ${values.join(', ')}` : ''
+        })
+        .filter(Boolean)
+        .join(' · ')
 
       return {
         booking,
@@ -183,6 +208,7 @@ function buildParties(row: ManifestRow): PartyRowData[] {
           .join(' · '),
         waivers: { signed, total: booking.participants.length },
         notes,
+        gear,
       }
     })
     .filter((party) => Boolean(party.customer))
@@ -214,6 +240,15 @@ export function CheckInList({
 }: CheckInListProps) {
   const [query, setQuery] = React.useState('')
   const parties = React.useMemo(() => buildParties(row), [row])
+  /* A party without every waiver signed needs a reason before it checks in. */
+  const [pending, setPending] = React.useState<PartyRowData | null>(null)
+  const [reason, setReason] = React.useState<string>('Signed on paper at the desk')
+  const confirmPending = () => {
+    if (!pending) return
+    onToggle(pending.booking.id, true)
+    toast.success(`${pending.customer.firstName} ${pending.customer.lastName} checked in`, { description: `Waiver override: ${reason}.` })
+    setPending(null)
+  }
 
   const visible = React.useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -320,6 +355,7 @@ export function CheckInList({
                   <span className="font-mono tracking-tight">{party.booking.reference}</span>
                   {party.tiers ? <span> · {party.tiers}</span> : null}
                 </p>
+                {party.gear ? <p className="mt-0.5 truncate text-xs font-medium text-muted">{party.gear}</p> : null}
 
                 {party.notes.length > 0 ? (
                   <ul className="mt-1.5 flex flex-col gap-1">
@@ -391,7 +427,7 @@ export function CheckInList({
                 ) : null}
                 <CheckInToggle
                   checked={isIn}
-                  onChange={(next) => onToggle(party.booking.id, next)}
+                  onChange={(next) => (next && !waiverOk ? setPending(party) : onToggle(party.booking.id, next))}
                   label={`Check in ${name}, party of ${party.booking.partySize}`}
                 />
               </div>
@@ -408,6 +444,32 @@ export function CheckInList({
           No guest on this departure matches “{query.trim()}”.
         </p>
       ) : null}
+      <Dialog open={pending !== null} onOpenChange={(value) => !value && setPending(null)}>
+        <DialogContent size="sm">
+          <DialogHeader divider>
+            <DialogTitle>Waiver not signed</DialogTitle>
+            <DialogDescription>
+              {pending ? `${pending.waivers.total - pending.waivers.signed} of ${pending.waivers.total} guests in ${pending.customer.lastName}'s party have not signed. Record why they can go.` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody className="flex flex-col gap-2 py-4">
+            {['Signed on paper at the desk', 'Signing on their phone now', 'Manager approved'].map((option) => (
+              <label key={option} className={cn('flex cursor-pointer items-center gap-3 rounded-xl border px-3.5 py-2.5 text-sm', reason === option ? 'border-primary bg-primary-soft/30' : 'border-line')}>
+                <input type="radio" name="waiver-override" className="accent-[var(--primary)]" checked={reason === option} onChange={() => setReason(option)} />
+                {option}
+              </label>
+            ))}
+          </DialogBody>
+          <DialogFooter divider>
+            <Button variant="ghost" size="sm" onClick={() => setPending(null)}>
+              Not yet
+            </Button>
+            <Button size="sm" onClick={confirmPending}>
+              Check in anyway
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

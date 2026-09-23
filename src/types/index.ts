@@ -242,6 +242,48 @@ export interface CancellationPolicy {
   summary: string
 }
 
+/* ==========================================================================
+   GUEST REQUIREMENTS (questions, waivers)
+   ========================================================================== */
+
+export type GuestQuestionKind = 'text' | 'number' | 'choice' | 'yesno' | 'size' | 'date'
+
+/** Something an activity needs to know from each guest, or once per booking. */
+export interface GuestQuestion {
+  id: string
+  label: string
+  kind: GuestQuestionKind
+  scope: 'guest' | 'booking'
+  required: boolean
+  /** For choice and size. */
+  options?: string[]
+  unit?: string
+  min?: number
+  max?: number
+  /** Answers outside this list stop the booking (a licence, a certification). */
+  allowed?: string[]
+  /** Shown when an answer falls outside min/max or allowed. */
+  limitMessage?: string
+  help?: string
+  /** Counted on the gear prep list. */
+  gear?: boolean
+  /** Library preset this came from. */
+  preset?: string
+}
+
+export interface WaiverTemplate {
+  id: string
+  tenantId: string
+  title: string
+  /** Plain text, paragraphs split by blank lines. */
+  body: string
+  version: number
+  minorsNeedGuardian: boolean
+  /** Guests under this age are minors. */
+  minorAge: number
+  updatedAt: string
+}
+
 /** What is being sold: seats on a trip, a private charter, a rental, a lesson or a pass. */
 export type ActivityKind = 'trip' | 'charter' | 'rental' | 'lesson' | 'pass'
 
@@ -307,6 +349,10 @@ export interface Activity {
   charter?: CharterConfig
   lesson?: LessonConfig
   pass?: PassConfig
+  /** Asked at checkout; answers show on the booking, the manifest and the gear list. */
+  guestQuestions?: GuestQuestion[]
+  /** The waiver every guest signs at checkout. */
+  waiverId?: string
   difficulty: DifficultyLevel
   /** Minutes. */
   durationMinutes: number
@@ -484,6 +530,8 @@ export interface Participant {
   notes?: string
   waiverSigned: boolean
   tierLabel: string
+  /** Answers to the activity's guest questions, keyed by question id. */
+  answers?: Record<string, string>
 }
 
 export interface Booking {
@@ -492,6 +540,8 @@ export interface Booking {
   /** Human-facing confirmation code, e.g. "EZR-8KQ2M". */
   reference: string
   activityId: string
+  /** Answers to booking-level guest questions, keyed by question id. */
+  answers?: Record<string, string>
   departureId: string
   customerId: string
   status: BookingStatus

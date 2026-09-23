@@ -35,7 +35,7 @@ import {
 } from 'lucide-react'
 import { z } from 'zod'
 
-import type { Activity, ActivityKind, CurrencyCode, DifficultyLevel, Location, VerticalKey } from '@/types'
+import type { Activity, ActivityKind, CurrencyCode, DifficultyLevel, GuestQuestion, Location, VerticalKey } from '@/types'
 import { saveActivityOverride } from '@/lib/activity-overrides'
 import {
   cn,
@@ -73,6 +73,7 @@ import {
 } from './pricing-tier-editor'
 import { AddonEditor, type DraftAddOn } from './addon-editor'
 import { KindFields, KindPicker, defaultKindSettings, type DraftKindSettings } from './kind-fields'
+import { GuestQuestionsEditor, type WaiverOption } from './guest-questions-editor'
 import { ACTIVITY_KIND_META } from '@/lib/activity-kinds'
 import {
   LocationsEditor,
@@ -171,9 +172,12 @@ export interface ActivityDraft {
   /** What is sold: trip, charter, rental, lesson or pass. Ignored for Dining. */
   kind: ActivityKind
   kindSettings: DraftKindSettings
+  /** Asked at checkout. */
+  guestQuestions: GuestQuestion[]
+  waiverId: string | null
 }
 
-const STORAGE_KEY = 'ezra:activity-wizard:v5'
+const STORAGE_KEY = 'ezra:activity-wizard:v6'
 
 /** Dining is the one category whose product is a table, not a departure. */
 export const isDining = (draft: Pick<ActivityDraft, 'category'>) => draft.category === 'restaurants'
@@ -211,6 +215,8 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
     featured: false,
     kind: 'trip',
     kindSettings: defaultKindSettings(),
+    guestQuestions: [],
+    waiverId: null,
     freeCancellationHours: 24,
     crewIds: [],
     dining,
@@ -314,6 +320,8 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
     featured: activity.featured,
     freeCancellationHours: activity.cancellationPolicy.freeCancellationHours,
     kind: activity.kind ?? 'trip',
+    guestQuestions: (activity.guestQuestions ?? []).map((question) => ({ ...question })),
+    waiverId: activity.waiverId ?? null,
     kindSettings: {
       rental: activity.rental
         ? {
@@ -1084,6 +1092,8 @@ export interface ActivityWizardProps {
   initialDraft?: ActivityDraft
   /** The business's locations; the schedule step asks which this runs from. */
   locations?: Location[]
+  /** The business's waiver templates, for the Guest details card. */
+  waivers?: WaiverOption[]
 }
 
 export function ActivityWizard({
@@ -1094,6 +1104,7 @@ export function ActivityWizard({
   nowIso,
   crew = [],
   locations = [],
+  waivers = [],
   mode = 'create',
   activityId,
   activity,
@@ -1106,7 +1117,10 @@ export function ActivityWizard({
   const exitHref = editing ? `/dashboard/activities/${activityId}` : '/dashboard/activities'
 
   const initial = React.useMemo(
-    () => withHomeLocation(initialDraft ?? (activity ? draftFromActivity(activity, nowIso) : createDefaultDraft(defaultCategory, nowIso)), locations),
+    () => {
+      const start = withHomeLocation(initialDraft ?? (activity ? draftFromActivity(activity, nowIso) : createDefaultDraft(defaultCategory, nowIso)), locations)
+      return !activity && !start.waiverId && waivers[0] ? { ...start, waiverId: waivers[0].id } : start
+    },
     [initialDraft, activity, defaultCategory, nowIso],
   )
 
@@ -1245,6 +1259,8 @@ export function ActivityWizard({
           kind: draft.kind ?? 'trip',
           ...kindOverride(draft),
           crewIds: draft.crewIds,
+          guestQuestions: (draft.guestQuestions ?? []).filter((question) => question.label.trim().length > 0),
+          waiverId: draft.waiverId ?? null,
           locations: draft.schedule.locations.map((site) => {
             const rule = draft.schedule.locations.length > 1 ? site.schedule : draft.schedule
             return { locationId: site.locationId, times: rule.startTimes, weekdays: rule.weekdays }
@@ -1328,6 +1344,15 @@ export function ActivityWizard({
                   ) : null}
                   {step === 1 ? (
                     <DescriptionStep draft={draft} patch={patch} errors={errors} />
+                  ) : null}
+                  {step === 1 && !dining ? (
+                    <GuestQuestionsEditor
+                      questions={draft.guestQuestions ?? []}
+                      onChange={(guestQuestions) => patch({ guestQuestions })}
+                      waiverId={draft.waiverId ?? null}
+                      onWaiverChange={(waiverId) => patch({ waiverId })}
+                      waivers={waivers}
+                    />
                   ) : null}
                   {step === 2 ? (
                     <div className="flex flex-col gap-3">
@@ -1451,6 +1476,7 @@ export function ActivityWizard({
                     <ReviewStep
                       draft={draft}
                       locations={locations}
+                      waivers={waivers}
                       crew={crew}
                       currency={currency}
                       tenantName={tenantName}
@@ -2032,6 +2058,7 @@ function DescriptionStep({ draft, patch, errors }: StepProps) {
 function ReviewStep({
   draft,
   locations = [],
+  waivers = [],
   crew,
   currency,
   tenantName,
@@ -2042,6 +2069,7 @@ function ReviewStep({
 }: {
   draft: ActivityDraft
   locations?: Location[]
+  waivers?: WaiverOption[]
   crew: WizardCrewMember[]
   currency: CurrencyCode
   tenantName: string
@@ -2100,6 +2128,11 @@ function ReviewStep({
     : [
         { label: 'Name', value: draft.name, step: 0 },
         { label: 'Type', value: ACTIVITY_KIND_META[draft.kind ?? 'trip'].label, step: 0 },
+        {
+          label: 'Guest details',
+          value: `${(draft.guestQuestions ?? []).length} ${pluralize((draft.guestQuestions ?? []).length, 'question')} · ${waivers.find((waiver) => waiver.id === draft.waiverId)?.title ?? 'no waiver'}`,
+          step: 1,
+        },
         { label: 'Category', value: CATEGORY_OPTIONS.find((c) => c.value === draft.category)?.label, step: 0 },
         { label: 'Difficulty', value: draft.difficulty.charAt(0).toUpperCase() + draft.difficulty.slice(1), step: 0 },
         { label: 'Duration', value: draft.durationMinutes > 0 ? formatDuration(draft.durationMinutes) : 'Flexible', step: 0 },

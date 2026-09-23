@@ -44,6 +44,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { IconButton } from '@/components/ui/icon-button'
 import { toast } from '@/components/ui/toaster'
 import { CheckInList, CheckInRing } from '@/components/dashboard/bookings/check-in-list'
+import { gearTally, shortOption, type GearLine } from '@/lib/guest-requirements'
 
 /* ==========================================================================
    ManifestView — pick a departure, work its guest list.
@@ -111,6 +112,54 @@ function countRow(row: ManifestRow, checkedIn: Record<string, boolean>, noShows:
 /* ==========================================================================
    DEPARTURE LIST (the left rail)
    ========================================================================== */
+
+/** Sizes to prep, as chips: "Wetsuit · S 2 · M 5 · L 1". */
+function GearLines({ lines, className }: { lines: GearLine[]; className?: string }) {
+  if (lines.length === 0) return null
+  return (
+    <div className={cn('flex flex-col gap-1.5', className)}>
+      {lines.map((line) => (
+        <div key={line.questionId} className="flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="w-24 shrink-0 font-medium text-muted">{line.label.replace(/ size.*$/i, '')}</span>
+          {line.counts.map((entry) => (
+            <span key={entry.option} className="inline-flex items-center gap-1 rounded-md border border-line bg-surface px-1.5 py-0.5 tabular-nums">
+              <span className="font-semibold text-foreground">{shortOption(entry.option)}</span>
+              <span className="text-subtle">×{entry.count}</span>
+            </span>
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** Every gear question across the day's departures, added up by activity. */
+function DayGear({ manifest }: { manifest: ManifestRow[] }) {
+  const byActivity = new Map<string, { name: string; rows: ManifestRow[] }>()
+  for (const row of manifest) {
+    const entry = byActivity.get(row.activity.id) ?? { name: row.activity.name, rows: [] }
+    entry.rows.push(row)
+    byActivity.set(row.activity.id, entry)
+  }
+  const groups = Array.from(byActivity.values())
+    .map((group) => ({ name: group.name, lines: gearTally(group.rows[0].activity.guestQuestions, group.rows.flatMap((row) => row.bookings)) }))
+    .filter((group) => group.lines.length > 0)
+  if (groups.length === 0) return null
+  return (
+    <div className="rounded-2xl border border-line bg-surface p-4 print:break-inside-avoid">
+      <p className="text-sm font-semibold text-foreground">Gear for the day</p>
+      <p className="mt-0.5 text-xs text-subtle">From the sizes guests gave at checkout.</p>
+      <div className="mt-3 flex flex-col gap-3">
+        {groups.map((group) => (
+          <div key={group.name}>
+            <p className="mb-1.5 text-xs font-semibold text-foreground">{group.name}</p>
+            <GearLines lines={group.lines} />
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function DepartureList({
   rows,
@@ -308,6 +357,17 @@ function DepartureDetail({
           </div>
         </div>
       </div>
+
+      {/* ---- gear ------------------------------------------------------------ */}
+      {(() => {
+        const lines = gearTally(activity.guestQuestions, row.bookings)
+        return lines.length > 0 ? (
+          <div className="border-b border-line-subtle px-5 py-3.5">
+            <p className="mb-2 text-xs font-semibold tracking-wide text-subtle uppercase">Gear to prep</p>
+            <GearLines lines={lines} />
+          </div>
+        ) : null
+      })()}
 
       {/* ---- guests ---------------------------------------------------------- */}
       <div className="p-5">
@@ -554,6 +614,7 @@ export function ManifestView({ initialManifest, className }: ManifestViewProps) 
                   />
                 </div>
               </div>
+              <DayGear manifest={manifest} />
             </aside>
 
             <section className="min-w-0 lg:col-span-8 xl:col-span-9" aria-live="polite">

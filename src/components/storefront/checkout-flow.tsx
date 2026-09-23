@@ -29,7 +29,7 @@ import {
   formatTime,
   pluralize,
 } from '@/lib/utils'
-import type { Activity, Tenant } from '@/types'
+import type { Activity, Tenant, WaiverTemplate } from '@/types'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { Button } from '@/components/ui/button'
 import { Field } from '@/components/ui/field'
@@ -45,6 +45,15 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { toast } from '@/components/ui/toaster'
 import { buildQuote, type QuoteSelection } from '@/components/storefront/booking-widget'
+import {
+  EMPTY_WAIVER,
+  GuestDetailsStep,
+  WaiverStep,
+  makeTravellers,
+  validateGuestDetails,
+  type TravellerState,
+  type WaiverState,
+} from '@/components/storefront/checkout-guest-details'
 
 /* ==========================================================================
    TYPES
@@ -66,6 +75,8 @@ function meetingPointFor(activity: Activity, departure: CheckoutDeparture) {
 }
 
 export interface CheckoutFlowProps {
+  /** The activity's waiver, signed at checkout. */
+  waiver?: WaiverTemplate
   tenant: Tenant
   activity: Activity
   departure: CheckoutDeparture
@@ -224,6 +235,7 @@ const COUNTRIES = [
    ========================================================================== */
 
 export function CheckoutFlow({
+  waiver: waiverTemplate,
   tenant,
   activity,
   departure,
@@ -264,6 +276,14 @@ export function CheckoutFlow({
 
   const brand = detectBrand(payment.cardNumber)
 
+  /* ---------- guests and waiver ---------- */
+
+  const questions = activity.guestQuestions ?? []
+  const [travellers, setTravellers] = React.useState<TravellerState[]>(() => makeTravellers(quote.headcount))
+  const [bookingAnswers, setBookingAnswers] = React.useState<Record<string, string>>({})
+  const [waiver, setWaiver] = React.useState<WaiverState>(EMPTY_WAIVER)
+  const needsDetails = questions.length > 0 || Boolean(waiverTemplate) || travellers.length > 1
+
   /* ---------- validation and payment, one page ---------- */
 
   const focusFirstInvalid = () => {
@@ -279,6 +299,7 @@ export function CheckoutFlow({
     const next: Errors = {}
     const guestResult = guestSchema.safeParse(guest)
     if (!guestResult.success) Object.assign(next, collectErrors(guestResult.error.issues))
+    Object.assign(next, validateGuestDetails({ questions, travellers, bookingAnswers, waiver, template: waiverTemplate }))
     if (scope === 'all') {
       const paymentResult = paymentSchema.safeParse(payment)
       if (!paymentResult.success) Object.assign(next, collectErrors(paymentResult.error.issues))
@@ -374,6 +395,29 @@ export function CheckoutFlow({
           {/* ---------- details, then payment, one page ---------- */}
           <div className="mt-8 space-y-10">
             <GuestStep guest={guest} setGuest={setGuest} errors={errors} />
+            {needsDetails ? (
+              <div className="space-y-10 border-t border-line-subtle pt-10">
+                <GuestDetailsStep
+                  questions={questions}
+                  travellers={travellers}
+                  setTravellers={setTravellers}
+                  bookingAnswers={bookingAnswers}
+                  setBookingAnswers={setBookingAnswers}
+                  leadName={`${guest.firstName} ${guest.lastName}`}
+                  minorAge={waiverTemplate?.minorAge ?? 18}
+                  errors={errors}
+                />
+                {waiverTemplate ? (
+                  <WaiverStep
+                    template={waiverTemplate}
+                    waiver={waiver}
+                    setWaiver={setWaiver}
+                    hasMinors={travellers.some((traveller) => traveller.minor)}
+                    errors={errors}
+                  />
+                ) : null}
+              </div>
+            ) : null}
             <div className="border-t border-line-subtle pt-10">
               <PaymentStep
                 payment={payment}

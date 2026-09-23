@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 
-import { getDepartureById, getStorefront, getStorefrontAvailability, getLocationById } from '@/lib/demo'
+import { getDepartureById, getStorefront, getStorefrontAvailability, getLocationById, getWaiverById } from '@/lib/demo'
 import { locationAddress } from '@/lib/locations'
 import { bookingReference, clamp, seatsRemaining } from '@/lib/utils'
 import type { Activity } from '@/types'
@@ -167,6 +167,7 @@ export default async function CheckoutPage({
 
   return (
     <CheckoutFlow
+      waiver={getWaiverById(activity.waiverId)}
       tenant={tenant}
       activity={activity}
       departure={departure}

@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { Button } from '@/components/ui/button'
 
-import { getUsersByTenant, getLocationsByTenant } from '@/lib/demo'
+import { getUsersByTenant, getLocationsByTenant, getWaiversByTenant } from '@/lib/demo'
 import { NOW_ISO } from '@/components/dashboard/activities/activity-data'
 import { ActivityWizard } from '@/components/dashboard/activities/activity-wizard'
 
@@ -43,6 +43,7 @@ export default async function NewActivityPage() {
         nowIso={NOW_ISO}
         crew={crew}
         locations={getLocationsByTenant(tenant.id)}
+        waivers={getWaiversByTenant(tenant.id).map((waiver) => ({ id: waiver.id, title: waiver.title }))}
       />
     </div>
   )

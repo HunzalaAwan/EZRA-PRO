@@ -39,6 +39,7 @@ import type {
   DifficultyLevel,
   FunnelStage,
   GeoSource,
+  GuestQuestion,
   HeatmapCell,
   Insight,
   KpiMetric,
@@ -491,6 +492,41 @@ const CARD_BRANDS = ['Visa', 'Mastercard', 'Amex', 'Discover']
 
 const RATING_WEIGHTS: [number, number][] = [[5, 66], [4, 24], [3, 7], [2, 2], [1, 1]]
 
+/** Plausible answers, from their own seed so the rest of the dataset does not move. */
+function seedAnswers(questions: GuestQuestion[], key: string, child: boolean): Record<string, string> {
+  const rng = createRng(hashSeed(`answers:${key}`))
+  const out: Record<string, string> = {}
+  for (const question of questions) {
+    if (!question.required && rng() < 0.8) continue
+    switch (question.kind) {
+      case 'number': {
+        const [lo, hi] = question.unit === 'cm' ? (child ? [115, 150] : [155, 192]) : child ? [22, 45] : [52, 98]
+        out[question.id] = String(rngInt(rng, lo, hi))
+        break
+      }
+      case 'size':
+      case 'choice': {
+        const options = question.allowed && question.allowed.length > 0 ? question.allowed : question.options ?? []
+        if (options.length === 0) break
+        // Middle sizes and the first choices are the common answers.
+        const mid = question.kind === 'size' ? (child ? 1 : Math.floor((options.length - 1) / 2)) : 0
+        const spread = question.kind === 'size' ? rngInt(rng, -1, 1) : rng() < 0.6 ? 0 : rngInt(rng, 0, options.length - 1)
+        out[question.id] = options[Math.min(options.length - 1, Math.max(0, mid + spread))]
+        break
+      }
+      case 'yesno':
+        out[question.id] = 'Yes'
+        break
+      case 'text':
+        out[question.id] = rngPick(rng, ['Vegetarian', 'No shellfish', 'Mild asthma, has an inhaler', 'Gluten free', 'None'])
+        break
+      default:
+        break
+    }
+  }
+  return out
+}
+
 const allDepartures: Departure[] = []
 const allBookings: Booking[] = []
 const allPayments: Payment[] = []
@@ -824,6 +860,8 @@ for (const [tenantId, specs] of SPEC_BY_TENANT) {
             }
 
             /* ---- participants ---- */
+            const guestQs = (activity.guestQuestions ?? []).filter((question) => question.scope === 'guest')
+            const bookingQs = (activity.guestQuestions ?? []).filter((question) => question.scope === 'booking')
             const participants: Participant[] = []
             for (let pi = 0; pi < size; pi++) {
               const isChild = pi >= adults && childTier !== undefined
@@ -846,6 +884,9 @@ for (const [tenantId, specs] of SPEC_BY_TENANT) {
                     : undefined,
                 waiverSigned: isPast ? rng() < 0.97 : rng() < 0.72,
                 tierLabel: isChild && childTier ? childTier.label : adultTier.label,
+                ...(guestQs.length > 0
+                  ? { answers: seedAnswers(guestQs, `par_${bookingId}_${pi + 1}`, isChild) }
+                  : {}),
               })
             }
 
@@ -906,6 +947,7 @@ for (const [tenantId, specs] of SPEC_BY_TENANT) {
               amountPaid,
               currency,
               participants,
+              ...(bookingQs.length > 0 ? { answers: seedAnswers(bookingQs, `bk_${bookingId}`, false) } : {}),
               createdAt: isoLocal(createdAt),
               updatedAt: isoLocal(new Date(updatedMs)),
               departureAt: departure.startsAt,
