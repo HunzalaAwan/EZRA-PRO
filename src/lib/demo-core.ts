@@ -3007,6 +3007,8 @@ const SALTLINE_SPECS: ActivitySpec[] = [
 const RIDGELINE_SPECS: ActivitySpec[] = [
   {
     slug: 'shotover-canyon-swing',
+    kind: 'activity',
+    ride: { maxWeightKg: 140 },
     name: 'Shotover Canyon Swing',
     tagline: '109 metres of freefall, seventy metres above the river, and eight ways to be launched.',
     description:
@@ -3056,6 +3058,7 @@ const RIDGELINE_SPECS: ActivitySpec[] = [
   },
   {
     slug: 'alpine-heli-hike',
+    route: { distance: 8, unit: 'km', track: 'Ridge traverse above the Dart', elevationM: 420 },
     name: 'Alpine Heli-Hike',
     tagline: 'Twelve minutes up, four hours on a ridge no track reaches.',
     description:
@@ -3155,6 +3158,7 @@ const RIDGELINE_SPECS: ActivitySpec[] = [
   },
   {
     slug: 'remarkables-guided-ascent',
+    route: { distance: 11, unit: 'km', track: 'Remarkables summit route', elevationM: 1100 },
     name: 'Remarkables Guided Ascent',
     tagline: 'Single Cone at dawn, roped up, back at the car park before the crowds park.',
     description:
@@ -3206,6 +3210,7 @@ const RIDGELINE_SPECS: ActivitySpec[] = [
   },
   {
     slug: 'glenorchy-e-bike-tour',
+    route: { distance: 40, unit: 'km', track: 'Glenorchy lagoon loop', elevationM: 150 },
     name: 'Glenorchy E-Bike Tour',
     tagline: 'Forty kilometres of lakeside trail with a motor doing the hills for you.',
     description:
@@ -3244,6 +3249,39 @@ const RIDGELINE_SPECS: ActivitySpec[] = [
     times: ['09:30'],
     weekdays: [1, 2, 4, 5, 6],
     popularity: 0.6,
+    freeCancelHours: 24,
+  },
+  {
+    slug: 'queenstown-e-bike-hire',
+    kind: 'rental',
+    rental: { units: 12, bufferMinutes: 15, damageDeposit: 15000, minutes: [240, 480], category: 'bike', billing: 'length', seatsPerUnit: 1, licence: 'none' },
+    name: 'Queenstown E-Bike Hire',
+    tagline: 'A full-suspension e-bike, a trail map and the whole Wakatipu basin to yourself.',
+    description:
+      'Take one of the guided-tour e-bikes out on your own. We fit it, hand you a helmet, a lock and a map of the Queenstown Trail with the easy lakeside legs and the café stops marked, and you ride at your own pace.',
+    highlights: ['Full-suspension e-bikes from the tour fleet', 'Queenstown Trail map with the café stops', 'Helmet, lock and repair kit', 'Half day or full day'],
+    included: ['E-bike', 'Helmet', 'Lock and repair kit', 'Trail map'],
+    excluded: ['Guide', 'Transfers'],
+    requirements: ['Riders 14 and over', 'Height 150 cm minimum'],
+    meetingPoint: 'Ridgeline base, 18 Shotover Street — bikes go out from the side door.',
+    difficulty: 'easy',
+    durationMinutes: 240,
+    minAge: 14,
+    maxCapacity: 12,
+    pricingModel: 'per_unit',
+    tiers: [
+      ['Half day', 8900, 0, 12, 'Per bike, four hours'],
+      ['Full day', 12900, 0, 12, 'Per bike, eight hours'],
+    ],
+    addOns: [['Child seat', 2000, 'For riders under 20 kg.', 2, 'Baby']],
+    photos: ['photo-1485965120184-e220f721d03e', 'photo-1501785888041-af3ef285b470', 'photo-1506905925346-21bda4d32df4'],
+    colorKey: 'reef',
+    rating: 4.6,
+    reviewCount: 142,
+    resources: ['res_rl_ebikes'],
+    format: 'open',
+    times: ['08:30', '09:30', '10:30', '12:30', '13:30'],
+    popularity: 0.35,
     freeCancelHours: 24,
   },
 ]

@@ -295,3 +295,27 @@ export function routeLabel(route: RouteInfo): string {
   const distance = `${Math.round(route.distance * 10) / 10} ${route.unit}`
   return route.track ? `${distance} · ${route.track}` : distance
 }
+
+/** How the storefront groups its catalogue: one shelf per kind, in this order. */
+export const STOREFRONT_GROUPS: Record<ActivityKind, { label: string; blurb: string }> = {
+  trip: { label: 'Tours & trips', blurb: 'Set departures with a guide or crew.' },
+  activity: { label: 'Activities', blurb: 'Pick a time slot and turn up.' },
+  charter: { label: 'Private charters', blurb: 'The whole boat or guide, just your group.' },
+  rental: { label: 'Rentals', blurb: 'Take it out yourself, by the hour or the day.' },
+  lesson: { label: 'Lessons & courses', blurb: 'Coached, with a level and a small class.' },
+  pass: { label: 'Passes & tickets', blurb: 'Entry for the day. Come and go.' },
+}
+
+/** "per person", "per bike", "per vehicle a day", "per group". */
+export function priceUnit(activity: Pick<Activity, 'kind' | 'rental'>): string {
+  switch (activity.kind ?? 'trip') {
+    case 'rental':
+      return `per ${rentalCategoryMeta(activity.rental?.category).unit}${activity.rental?.billing === 'day' ? ' a day' : ''}`
+    case 'charter':
+      return 'per group'
+    case 'pass':
+      return 'per ticket'
+    default:
+      return 'per person'
+  }
+}

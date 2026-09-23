@@ -3,11 +3,26 @@
 import * as React from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowRight, Clock, Flame, SlidersHorizontal, Sparkles, Users } from 'lucide-react'
-import { kindCardFacts, kindChipLabel } from '@/lib/activity-kinds'
+import {
+  Anchor,
+  ArrowRight,
+  Clock,
+  Flame,
+  GraduationCap,
+  KeyRound,
+  LayoutGrid,
+  Route,
+  SlidersHorizontal,
+  Sparkles,
+  Ticket,
+  Users,
+  Zap,
+  type LucideIcon,
+} from 'lucide-react'
+import { ACTIVITY_KINDS, STOREFRONT_GROUPS, kindCardFacts, kindChipLabel, priceUnit } from '@/lib/activity-kinds'
 
 import { cn, formatCurrency, formatDuration, formatNumber, pluralize } from '@/lib/utils'
-import type { Activity, CurrencyCode, DifficultyLevel } from '@/types'
+import type { Activity, ActivityKind, CurrencyCode, DifficultyLevel } from '@/types'
 import { StaggerGroup, StaggerItem } from '@/components/motion/stagger'
 import { Reveal } from '@/components/motion/reveal'
 import {
@@ -40,6 +55,17 @@ const DIFFICULTY_TONE: Record<DifficultyLevel, string> = {
   challenging: 'text-warning',
   extreme: 'text-danger',
 }
+
+const GROUP_ICONS: Record<ActivityKind, LucideIcon> = {
+  trip: Route,
+  activity: Zap,
+  charter: Anchor,
+  rental: KeyRound,
+  lesson: GraduationCap,
+  pass: Ticket,
+}
+
+type GroupKey = ActivityKind | 'all'
 
 type SortKey = 'recommended' | 'price-asc' | 'price-desc' | 'rating' | 'duration'
 
@@ -90,6 +116,33 @@ export function ActivityShowcase({
   const mobileLayout = settings.mobileLayout
   const desktopLayout = settings.desktopLayout
   const [sort, setSort] = React.useState<SortKey>('recommended')
+  const [group, setGroup] = React.useState<GroupKey>('all')
+  const sectionRef = React.useRef<HTMLElement>(null)
+
+  // A shared link can open straight on one shelf: ?type=rental
+  React.useEffect(() => {
+    try {
+      const wanted = new URLSearchParams(window.location.search).get('type')
+      if (wanted && (ACTIVITY_KINDS as string[]).includes(wanted)) setGroup(wanted as ActivityKind)
+    } catch {
+      /* no URL to read */
+    }
+  }, [])
+
+  const choose = (next: GroupKey) => {
+    setGroup(next)
+    try {
+      const url = new URL(window.location.href)
+      if (next === 'all') url.searchParams.delete('type')
+      else url.searchParams.set('type', next)
+      window.history.replaceState(null, '', url)
+    } catch {
+      /* the filter still works without the URL */
+    }
+    // Once the bar is stuck, bring the start of the list back into view.
+    const top = sectionRef.current?.getBoundingClientRect().top ?? 0
+    if (top < 0) sectionRef.current?.scrollIntoView({ block: 'start' })
+  }
 
   /* ---------- the catalogue, in the chosen order ---------- */
 
@@ -119,16 +172,49 @@ export function ActivityShowcase({
     return sorted
   }, [activities, sort])
 
+  /* ---------- shelves: one per kind that has something on sale ---------- */
+
+  const groups = React.useMemo(
+    () =>
+      ACTIVITY_KINDS.map((kind) => ({ kind, items: filtered.filter((activity) => (activity.kind ?? 'trip') === kind) })).filter(
+        (entry) => entry.items.length > 0,
+      ),
+    [filtered],
+  )
+  const grouped = groups.length > 1
+  const active: GroupKey = group !== 'all' && groups.some((entry) => entry.kind === group) ? group : 'all'
+  const activeItems = active === 'all' ? filtered : (groups.find((entry) => entry.kind === active)?.items ?? [])
+
   const showFeatured =
+    active === 'all' &&
     sort === 'recommended' &&
     featured.length > 0 &&
     (wide || mobileLayout === 'cards')
   const heroCards = featured.slice(0, 2)
   const heroIds = new Set(showFeatured ? heroCards.map((a) => a.id) : [])
-  const gridCards = filtered.filter((a) => !heroIds.has(a.id))
+
+  const grid = (items: Activity[], key: string) => (
+    <StaggerGroup
+      key={key}
+      stagger={0.05}
+      className={cn('grid', GRID_MOBILE[mobileLayout], GRID_DESKTOP[desktopLayout])}
+    >
+      {items.map((activity) => (
+        <StaggerItem key={activity.id} direction="up" className="h-full">
+          <ActivityCard
+            activity={activity}
+            currency={currency}
+            basePath={basePath}
+            mobileLayout={mobileLayout}
+            desktopLayout={desktopLayout}
+          />
+        </StaggerItem>
+      ))}
+    </StaggerGroup>
+  )
 
   return (
-    <section id="experiences" className="scroll-mt-24 bg-background py-16 sm:py-20 lg:py-24">
+    <section ref={sectionRef} id="experiences" className="scroll-mt-20 bg-background py-16 sm:py-20 lg:py-24">
       <div className="mx-auto w-full max-w-[88rem] px-4 sm:px-6 lg:px-10">
         {/* ---------- heading ---------- */}
         <Reveal className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
@@ -141,8 +227,10 @@ export function ActivityShowcase({
               Every experience we run
             </h2>
             <p className="mt-3 text-base leading-relaxed text-muted">
-              {formatNumber(activities.length)} {pluralize(activities.length, 'experience')}, all
-              with live availability. Pick a date and your seats are held the moment you reserve.
+              {active === 'all'
+                ? `${formatNumber(activities.length)} ${pluralize(activities.length, 'experience')}${grouped ? ` in ${groups.length} categories` : ''}, all with live availability.`
+                : `${formatNumber(activeItems.length)} in ${STOREFRONT_GROUPS[active].label.toLowerCase()}. ${STOREFRONT_GROUPS[active].blurb}`}{' '}
+              Pick a date and your place is held the moment you reserve.
             </p>
           </div>
 
@@ -167,35 +255,109 @@ export function ActivityShowcase({
           </div>
         </Reveal>
 
-        {/* ---------- featured ---------- */}
-        {showFeatured ? (
-          <StaggerGroup stagger={0.08} className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-2">
-            {heroCards.map((activity) => (
-              <StaggerItem key={activity.id} direction="up">
-                <FeatureCard activity={activity} currency={currency} basePath={basePath} />
-              </StaggerItem>
-            ))}
-          </StaggerGroup>
+        {/* ---------- categories ---------- */}
+        {grouped ? (
+          <div className="sticky top-16 z-20 sm:top-[4.5rem] -mx-4 mt-8 border-b border-line-subtle bg-background/92 px-4 py-3 backdrop-blur-md sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10">
+            <div role="tablist" aria-label="Categories" className="no-scrollbar -my-1 flex gap-2 overflow-x-auto py-1">
+              {[{ kind: 'all' as const, count: activities.length }, ...groups.map((entry) => ({ kind: entry.kind, count: entry.items.length }))].map(({ kind, count }) => {
+                const on = active === kind
+                const Icon = kind === 'all' ? LayoutGrid : GROUP_ICONS[kind]
+                return (
+                  <button
+                    key={kind}
+                    type="button"
+                    role="tab"
+                    aria-selected={on}
+                    aria-controls="catalogue-list"
+                    onClick={() => choose(kind)}
+                    className={cn(
+                      'inline-flex h-10 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors duration-200',
+                      'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+                      on
+                        ? 'border-primary bg-primary text-on-primary shadow-sm'
+                        : 'border-line bg-surface text-foreground hover:border-primary/40 hover:text-primary',
+                    )}
+                  >
+                    <Icon className="size-4" aria-hidden="true" />
+                    {kind === 'all' ? 'All' : STOREFRONT_GROUPS[kind].label}
+                    <span
+                      className={cn(
+                        'rounded-full px-1.5 text-xs font-semibold tabular-nums',
+                        on ? 'bg-white/20 text-on-primary' : 'bg-surface-sunken text-muted',
+                      )}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
         ) : null}
 
-        {/* ---------- grid ---------- */}
-        {/* ---------- grid ---------- */}
-          <StaggerGroup
-            stagger={0.05}
-            className={cn('mt-6 grid', GRID_MOBILE[mobileLayout], GRID_DESKTOP[desktopLayout])}
-          >
-            {gridCards.map((activity) => (
-              <StaggerItem key={activity.id} direction="up" className="h-full">
-                <ActivityCard
-                  activity={activity}
-                  currency={currency}
-                  basePath={basePath}
-                  mobileLayout={mobileLayout}
-                  desktopLayout={desktopLayout}
-                />
-              </StaggerItem>
-            ))}
-          </StaggerGroup>
+        <div id="catalogue-list" role={grouped ? 'tabpanel' : undefined}>
+          {/* ---------- featured ---------- */}
+          {showFeatured && !grouped ? (
+            <StaggerGroup stagger={0.08} className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-2">
+              {heroCards.map((activity) => (
+                <StaggerItem key={activity.id} direction="up">
+                  <FeatureCard activity={activity} currency={currency} basePath={basePath} />
+                </StaggerItem>
+              ))}
+            </StaggerGroup>
+          ) : null}
+
+          {active === 'all' && grouped ? (
+            /* ---------- one shelf per category ---------- */
+            <div className="mt-10 flex flex-col gap-14 sm:gap-16">
+              {groups.map((entry) => {
+                // Most-booked cards lead their own shelf, so every category shows and nothing repeats.
+                const heroes = entry.items.filter((activity) => heroIds.has(activity.id))
+                const items = entry.items.filter((activity) => !heroIds.has(activity.id))
+                const Icon = GROUP_ICONS[entry.kind]
+                const meta = STOREFRONT_GROUPS[entry.kind]
+                return (
+                  <section key={entry.kind} aria-labelledby={`shelf-${entry.kind}`}>
+                    <div className="mb-5 flex flex-wrap items-end justify-between gap-x-6 gap-y-2 border-b border-line-subtle pb-4">
+                      <div className="flex items-center gap-3">
+                        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary-soft text-primary">
+                          <Icon className="size-5" aria-hidden="true" />
+                        </span>
+                        <div>
+                          <h3 id={`shelf-${entry.kind}`} className="font-display text-xl font-semibold tracking-tight text-foreground">
+                            {meta.label}
+                            <span className="ml-2 text-sm font-medium text-subtle tabular-nums">{entry.items.length}</span>
+                          </h3>
+                          <p className="text-sm text-muted">{meta.blurb}</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => choose(entry.kind)}
+                        className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm font-semibold text-primary transition-colors hover:bg-primary-soft focus-visible:outline-2 focus-visible:outline-primary"
+                      >
+                        Only {meta.label.toLowerCase()}
+                        <ArrowRight className="size-4" aria-hidden="true" />
+                      </button>
+                    </div>
+                    {heroes.length > 0 ? (
+                      <StaggerGroup stagger={0.08} className={cn('grid grid-cols-1 gap-5 lg:grid-cols-2', items.length > 0 && 'mb-5')}>
+                        {heroes.map((activity) => (
+                          <StaggerItem key={activity.id} direction="up">
+                            <FeatureCard activity={activity} currency={currency} basePath={basePath} />
+                          </StaggerItem>
+                        ))}
+                      </StaggerGroup>
+                    ) : null}
+                    {items.length > 0 ? grid(items, `${entry.kind}-${sort}`) : null}
+                  </section>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="mt-6">{grid(activeItems.filter((activity) => !heroIds.has(activity.id)), `${active}-${sort}`)}</div>
+          )}
+        </div>
       </div>
     </section>
   )
@@ -275,7 +437,7 @@ function FeatureCard({
           </p>
           <p className="font-display text-lg font-semibold tabular text-foreground">
             {formatCurrency(activity.basePrice, currency)}
-            <span className="ml-1 text-xs font-medium text-subtle">per person</span>
+            <span className="ml-1 text-xs font-medium text-subtle">{priceUnit(activity)}</span>
           </p>
         </div>
         <span
@@ -423,6 +585,7 @@ function ActivityCard({
             </p>
             <p className={cn('font-display font-semibold tabular text-foreground', small ? 'text-base sm:text-lg' : 'text-lg')}>
               {formatCurrency(activity.basePrice, currency)}
+              <span className={cn('ml-1 text-xs font-medium text-subtle', small && 'hidden sm:inline')}>{priceUnit(activity)}</span>
             </p>
           </div>
           <span
