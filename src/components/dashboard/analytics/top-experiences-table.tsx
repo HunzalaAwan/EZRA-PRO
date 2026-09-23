@@ -88,7 +88,7 @@ export function TopExperiencesTable({ items, currency, rangeLabel, loading = fal
         cell: (item) => (
           <span className="flex min-w-[12rem] max-w-[22rem] items-center gap-2.5">
             <span aria-hidden="true" className="h-4 w-1 shrink-0 rounded-full" style={{ background: ACTIVITY_COLOR_VAR[item.colorKey] }} />
-            <span className="truncate text-[0.8125rem] font-medium text-foreground">{item.name}</span>
+            <span className="truncate text-sm font-medium text-foreground">{item.name}</span>
           </span>
         ),
       },
@@ -100,7 +100,7 @@ export function TopExperiencesTable({ items, currency, rangeLabel, loading = fal
         numeric: true,
         defaultSortDir: 'desc',
         width: '6.5rem',
-        cell: (item) => <span className="text-[0.8125rem] font-medium tabular-nums">{formatNumber(item.bookings)}</span>,
+        cell: (item) => <span className="text-sm font-medium tabular-nums">{formatNumber(item.bookings)}</span>,
       },
       {
         id: 'occupancy',
@@ -114,7 +114,7 @@ export function TopExperiencesTable({ items, currency, rangeLabel, loading = fal
             <span className="h-1.5 w-16 overflow-hidden rounded-full bg-well">
               <span className="block h-full rounded-full" style={{ width: `${Math.min(100, item.occupancy)}%`, background: 'var(--series-occupancy)' }} />
             </span>
-            <span className="text-[0.8125rem] text-muted tabular-nums">{formatPercent(item.occupancy, 0)}</span>
+            <span className="text-sm text-muted tabular-nums">{formatPercent(item.occupancy, 0)}</span>
           </span>
         ),
       },
@@ -128,7 +128,7 @@ export function TopExperiencesTable({ items, currency, rangeLabel, loading = fal
         width: '5.5rem',
         hideBelow: 'lg',
         cell: (item) => (
-          <span className="inline-flex items-center gap-1 text-[0.8125rem] font-medium tabular-nums">
+          <span className="inline-flex items-center gap-1 text-sm font-medium tabular-nums">
             <Star aria-hidden="true" className="size-3.5 fill-current text-warning" />
             {item.rating.toFixed(1)}
           </span>
@@ -152,7 +152,7 @@ export function TopExperiencesTable({ items, currency, rangeLabel, loading = fal
         numeric: true,
         defaultSortDir: 'desc',
         width: '7.5rem',
-        cell: (item) => <span className="text-[0.8125rem] font-semibold text-foreground tabular-nums">{formatCurrency(item.revenue, currency)}</span>,
+        cell: (item) => <span className="text-sm font-semibold text-foreground tabular-nums">{formatCurrency(item.revenue, currency)}</span>,
       },
     ],
     [currency],
@@ -162,8 +162,8 @@ export function TopExperiencesTable({ items, currency, rangeLabel, loading = fal
     <Card className={cn('overflow-hidden', className)}>
       <div className="flex flex-col gap-3 px-5 pt-5 pb-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
-          <h3 className="font-display text-[0.9375rem] font-semibold tracking-[-0.015em] text-foreground">Top experiences</h3>
-          <p className="mt-0.5 text-xs text-subtle">
+          <h3 className="font-display text-base font-semibold tracking-[-0.015em] text-foreground">Top experiences</h3>
+          <p className="mt-0.5 text-[0.8125rem] text-subtle">
             {formatNumber(items.length)} products · {rangeLabel}
           </p>
         </div>
@@ -203,6 +203,7 @@ export function TopExperiencesTable({ items, currency, rangeLabel, loading = fal
           loadingRowCount={6}
           rowHeight="compact"
           ariaLabel="Top experiences"
+          containerClassName="type-crm"
           empty={
             <EmptyState
               variant="no-results"
