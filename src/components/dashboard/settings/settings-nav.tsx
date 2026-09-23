@@ -11,6 +11,7 @@ import {
   CreditCard,
   FileSignature,
   MapPin,
+  MessagesSquare,
   Plug,
   ReceiptText,
   TicketCheck,
@@ -59,6 +60,12 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     label: 'Waivers & forms',
     description: 'Waivers, guest questions and sizes',
     icon: FileSignature,
+  },
+  {
+    href: '/dashboard/settings/messages',
+    label: 'Messages',
+    description: 'Emails and texts each booking sends',
+    icon: MessagesSquare,
   },
   {
     href: '/dashboard/settings/booking',

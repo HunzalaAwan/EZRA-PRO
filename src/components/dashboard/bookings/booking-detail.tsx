@@ -38,7 +38,9 @@ import {
 } from 'lucide-react'
 
 import type { BookingLineItem, Payment, User } from '@/types'
-import { CHANNEL_LABELS, CURRENT_TENANT, NOW, getUsersByTenant } from '@/lib/demo-core'
+import { CHANNEL_LABELS, CURRENT_TENANT, NOW, getUsersByTenant, tenantById } from '@/lib/demo-core'
+import { buildMessageLog, manageLink } from '@/lib/messaging'
+import { useMessageTemplates } from '@/hooks/use-message-templates'
 import type { BookingDetailData } from '@/lib/actions/dashboard'
 import {
   cn,
@@ -765,6 +767,8 @@ export function BookingDetailContent({
           </SectionCard>
 
           {/* Order summary */}
+          <MessagesCard detail={detail} />
+
           <SectionCard title="Order summary" icon={Receipt}>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[22rem] text-sm">
@@ -1255,4 +1259,68 @@ export interface BookingDetailProps {
 
 export function BookingDetail({ detail, className }: BookingDetailProps) {
   return <BookingDetailContent detail={detail} layout="page" className={className} />
+}
+
+/* --------------------------------------------------------------------------
+   Messages: what this booking has been sent, and the guest's own link.
+   -------------------------------------------------------------------------- */
+
+function MessagesCard({ detail }: { detail: BookingDetailContentProps['detail'] }) {
+  const { booking, activity, customer, departure } = detail
+  const tenant = tenantById.get(booking.tenantId) ?? CURRENT_TENANT
+  const { templates } = useMessageTemplates(tenant.id)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const nowIso = `${NOW.getFullYear()}-${pad(NOW.getMonth() + 1)}-${pad(NOW.getDate())}T${pad(NOW.getHours())}:${pad(NOW.getMinutes())}:00`
+  const log = React.useMemo(
+    () => buildMessageLog({ booking, activity, customer, departure, templates, nowIso, tenantSlug: tenant.slug, business: tenant.name, currency: tenant.currency }),
+    [booking, activity, customer, departure, templates, nowIso, tenant],
+  )
+  const link = manageLink(tenant.slug, booking.reference)
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}${link}`)
+      toast.success('Guest link copied', { description: 'They can sign waivers, add guests, reschedule and pay the balance.' })
+    } catch {
+      toast.error('Could not copy the link')
+    }
+  }
+  const sent = log.filter((entry) => entry.status !== 'scheduled').length
+  return (
+    <SectionCard
+      title={`Messages · ${sent}`}
+      icon={Mail}
+      toolbar={
+        <div className="flex items-center gap-1.5">
+          <Button variant="ghost" size="xs" onClick={copy}>Copy guest link</Button>
+          <Button asChild variant="outline" size="xs">
+            <a href={link} target="_blank" rel="noreferrer">Open guest page</a>
+          </Button>
+        </div>
+      }
+    >
+      {log.length === 0 ? (
+        <p className="text-sm text-subtle">No messages for this booking.</p>
+      ) : (
+        <ol className="flex list-none flex-col gap-2.5 p-0">
+          {log.map((entry) => (
+            <li key={entry.id} className="flex items-start gap-3">
+              <span aria-hidden="true" className={cn('mt-0.5 grid size-7 shrink-0 place-items-center rounded-full', entry.status === 'scheduled' ? 'border border-dashed border-line text-faint' : 'bg-surface-sunken text-subtle')}>
+                {entry.channel === 'sms' ? <MessageSquare className="size-3.5" /> : <Mail className="size-3.5" />}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="flex flex-wrap items-center gap-x-2 text-sm">
+                  <span className="font-medium text-foreground">{entry.name}</span>
+                  <span className="text-xs text-subtle">{entry.channel === 'sms' ? 'Text' : 'Email'} · {formatDateTime(entry.sentAt)}</span>
+                  <Badge variant={entry.status === 'scheduled' ? 'neutral' : entry.status === 'clicked' ? 'success' : entry.status === 'opened' ? 'info' : 'outline'} size="sm">
+                    {entry.status === 'scheduled' ? 'Scheduled' : entry.status === 'clicked' ? 'Clicked' : entry.status === 'opened' ? 'Opened' : 'Delivered'}
+                  </Badge>
+                </p>
+                <p className="truncate text-xs text-muted">{entry.preview}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+    </SectionCard>
+  )
 }

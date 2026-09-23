@@ -151,6 +151,7 @@ export interface DashboardNavItem {
     | 'liveOrders'
     | 'arrivalsToday'
     | 'roomsToClean'
+    | 'openConversations'
   children?: { label: string; href: string }[]
   /** Hidden unless the tenant's plan enables this feature. */
   requiresFeature?: string
@@ -167,6 +168,7 @@ export const DASHBOARD_NAV: DashboardNavSection[] = [
       { label: 'Overview', href: '/dashboard', icon: 'LayoutDashboard' },
       { label: 'Calendar', href: '/dashboard/calendar', icon: 'CalendarDays', countKey: 'todayDepartures' },
       { label: 'Bookings', href: '/dashboard/bookings', icon: 'Ticket', countKey: 'pendingBookings' },
+      { label: 'Inbox', href: '/dashboard/inbox', icon: 'MessageCircle', countKey: 'openConversations' },
       { label: 'Manifest', href: '/dashboard/manifest', icon: 'ClipboardList' },
     ],
   },

@@ -10,6 +10,8 @@ import { BOOKINGS, NOW, getDeparturesForDay, getNotifications } from '@/lib/demo
 import { getHospitalityCounts } from '@/lib/hospitality'
 import { getWorkspaceTenant } from '@/lib/workspace'
 import type { Tenant } from '@/types'
+import { countOpenThreads } from '@/lib/inbox'
+import { getWorkspaceProfile } from '@/lib/workspace-profile'
 
 export const metadata: Metadata = {
   title: {
@@ -37,6 +39,7 @@ function computeNavCounts(tenant: Tenant): NavCounts {
     todayDepartures: getDeparturesForDay(tenant.id, NOW).length,
     unreadMessages: getNotifications(tenant.id).filter((n) => !n.read).length,
     abandonedCarts: countOpenAbandoned(tenant),
+    openConversations: getWorkspaceProfile(tenant.vertical).family === 'experiences' ? countOpenThreads(tenant.id) : 0,
     ...getHospitalityCounts(tenant),
   }
 }

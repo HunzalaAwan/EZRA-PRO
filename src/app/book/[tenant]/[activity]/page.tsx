@@ -1,22 +1,15 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 
-import { NOW, getBookingRows, getStorefront, getStorefrontAvailability, getLocationsByTenant } from '@/lib/demo'
-import { getDayCapacity, sharedSeatsLeft, type DayCapacity } from '@/lib/capacity'
+import { NOW, getBookingRows, getStorefront, getLocationsByTenant } from '@/lib/demo'
+import { buildDays } from '@/lib/storefront-availability'
 import { addDays, clamp, toDateKey } from '@/lib/utils'
-import type { Activity } from '@/types'
 import {
   ActivityDetailView,
   type RatingBucket,
   type StorefrontReview,
 } from '@/components/storefront/activity-detail-view'
-import type {
-  AvailabilityDay,
-  AvailabilitySlot,
-} from '@/components/storefront/booking-widget'
 
-/** How far ahead the date strip runs. */
-const STRIP_DAYS = 21
 /** Window used for the "booked recently" social-proof line. */
 const RECENT_WINDOW_DAYS = 90
 
@@ -63,56 +56,6 @@ export async function generateMetadata({
    AVAILABILITY — CalendarEvent[] flattened into a contiguous day strip
    ========================================================================== */
 
-function buildDays(activity: Activity): AvailabilityDay[] {
-  const byDay = new Map<string, AvailabilitySlot[]>()
-  // Shared fleets and boats: seats are the lower of the departure's own and what the pool allows.
-  const days = new Map<string, DayCapacity>()
-  const capacityFor = (key: string) => {
-    let entry = days.get(key)
-    if (!entry) {
-      entry = getDayCapacity(activity.tenantId, new Date(`${key}T12:00:00`))
-      days.set(key, entry)
-    }
-    return entry
-  }
-
-  for (const event of getStorefrontAvailability(activity.id, STRIP_DAYS + 14)) {
-    const { departure } = event
-    const key = departure.startsAt.slice(0, 10)
-    const multiplier = departure.priceMultiplier ?? 1
-    const seatsLeft = activity.requiredResourceIds.length > 0 ? sharedSeatsLeft(capacityFor(key), activity, departure, event.seatsLeft) : event.seatsLeft
-    const slot: AvailabilitySlot = {
-      departureId: departure.id,
-      startsAt: departure.startsAt,
-      endsAt: departure.endsAt,
-      capacity: departure.capacity,
-      seatsLeft,
-      status: departure.status,
-      priceMultiplier: multiplier,
-      leadPrice: Math.round((departure.priceOverride ?? activity.basePrice) * multiplier),
-      locationId: departure.locationId,
-      soldOut: seatsLeft <= 0 || departure.status === 'sold_out',
-    }
-    const list = byDay.get(key)
-    if (list) list.push(slot)
-    else byDay.set(key, [slot])
-  }
-
-  return Array.from({ length: STRIP_DAYS }, (_, index) => {
-    const dateKey = toDateKey(addDays(NOW, index))
-    const slots = (byDay.get(dateKey) ?? []).sort((a, b) =>
-      a.startsAt < b.startsAt ? -1 : a.startsAt > b.startsAt ? 1 : 0,
-    )
-    const open = slots.filter((slot) => !slot.soldOut)
-    return {
-      dateKey,
-      slots,
-      fromPrice: open.length > 0 ? Math.min(...open.map((slot) => slot.leadPrice)) : 0,
-      seatsLeft: open.reduce((total, slot) => total + slot.seatsLeft, 0),
-      soldOut: slots.length > 0 && open.length === 0,
-    }
-  })
-}
 
 /* ==========================================================================
    REVIEWS
