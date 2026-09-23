@@ -749,7 +749,7 @@ export function BookingsTable({
           stickyHeader
           rowHeight={density}
           ariaLabel="Reservations"
-          containerClassName="rounded-2xl border border-line bg-surface [&_th]:text-[0.8125rem]"
+          containerClassName="type-crm rounded-2xl border border-line bg-surface"
           groupBy={grouped ? groupBy : undefined}
           renderGroupHeader={renderGroupHeader}
           getRowClassName={(row) =>

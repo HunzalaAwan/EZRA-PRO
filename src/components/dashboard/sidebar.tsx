@@ -184,7 +184,7 @@ export function DashboardNavList({
                   onClick={onNavigate}
                   aria-current={active ? 'page' : undefined}
                   className={cn(
-                    'group/nav relative flex items-center rounded-lg text-[0.9375rem] font-medium',
+                    'group/nav relative flex items-center rounded-lg text-sm font-medium',
                     'transition-colors duration-200 ease-[var(--ease-out-expo)]',
                     'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
                     collapsed ? 'h-10 w-10 justify-center' : 'gap-2.5 px-2.5 py-2',
@@ -392,7 +392,7 @@ export function Sidebar({ navCounts, className }: { navCounts: NavCounts; classN
         data-collapsed={collapsed || undefined}
         style={{ width: collapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED }}
         className={cn(
-          'sticky top-0 z-30 hidden h-dvh shrink-0 flex-col border-r border-line bg-surface lg:flex',
+          'type-nav sticky top-0 z-30 hidden h-dvh shrink-0 flex-col border-r border-line bg-surface lg:flex',
           mounted && 'transition-[width] duration-300 ease-[var(--ease-out-expo)]',
           className,
         )}

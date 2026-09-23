@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Figtree, Geist, Instrument_Serif, Inter, Sora } from 'next/font/google'
+import { Figtree, Geist, Instrument_Serif, Inter, Poppins, Sora } from 'next/font/google'
 import { ThemeProvider, themeInitScript } from '@/components/providers/theme-provider'
 import { Toaster } from '@/components/ui/toaster'
 import './globals.css'
@@ -15,6 +15,14 @@ const inter = Inter({
 const figtree = Figtree({
   subsets: ['latin'],
   variable: '--font-figtree',
+  display: 'swap',
+})
+
+/** The dashboard sidebar's face. */
+const poppins = Poppins({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-poppins',
   display: 'swap',
 })
 
@@ -85,7 +93,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${figtree.variable} ${geist.variable} ${sora.variable} ${instrumentSerif.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${figtree.variable} ${poppins.variable} ${geist.variable} ${sora.variable} ${instrumentSerif.variable}`}>
       <head>
         {/* Applies the stored theme before first paint — prevents a flash of the wrong scheme. */}
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />

@@ -955,3 +955,27 @@ html.lenis body {
   font-family: var(--font-sans);
   font-feature-settings: normal;
 }
+
+/* Sidebar: Poppins, medium weight. */
+.type-nav {
+  font-family: var(--font-poppins), var(--font-sans);
+}
+
+/* Bookings and Customers tables: Inter at its default shapes, 14px rows,
+   13px semibold sentence-case headers, CRM-style. Unlayered so it wins over
+   the table's utility classes. */
+.type-crm {
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: normal;
+}
+.type-crm th,
+.type-crm th button {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--fg-muted);
+}
+.type-crm td {
+  font-size: 0.875rem;
+}

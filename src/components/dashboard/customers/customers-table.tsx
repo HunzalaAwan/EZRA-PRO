@@ -484,7 +484,7 @@ export function CustomersTable({
             stickyHeader
             rowHeight="compact"
             ariaLabel="Guests"
-            containerClassName="[&_th]:text-[0.8125rem]"
+            containerClassName="type-crm"
             groupBy={banded ? groupBy : undefined}
             renderGroupHeader={renderGroupHeader}
             empty={

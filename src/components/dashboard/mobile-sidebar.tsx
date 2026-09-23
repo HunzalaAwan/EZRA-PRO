@@ -51,7 +51,7 @@ export function MobileSidebar({ navCounts, className }: { navCounts: NavCounts; 
         </IconButton>
       </SheetTrigger>
 
-      <SheetContent side="left" size="sm" className="w-[19rem] p-0 sm:max-w-[19rem]">
+      <SheetContent side="left" size="sm" className="type-nav w-[19rem] p-0 sm:max-w-[19rem]">
         <SheetHeader className="py-3.5 pl-4">
           <SheetTitle className="sr-only">Dashboard navigation</SheetTitle>
           <SheetDescription className="sr-only">
