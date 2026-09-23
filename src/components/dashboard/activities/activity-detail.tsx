@@ -628,6 +628,7 @@ function ScheduleTab({ detail, nowIso }: { detail: ActivityDetailData; nowIso: s
       minParticipants={activity.minParticipants}
       durationMinutes={activity.durationMinutes}
       usualTimes={detail.usualTimes}
+      locations={detail.locations}
       nowIso={nowIso}
       todayKey={nowIso.slice(0, 10)}
     />
@@ -1122,6 +1123,12 @@ export function ActivityDetail({ detail, tenantSlug, nowIso }: ActivityDetailPro
                 {activity.format === 'open' ? <DoorOpen className="size-3.5" aria-hidden="true" /> : <CalendarClock className="size-3.5" aria-hidden="true" />}
                 {ACTIVITY_FORMAT_META[activity.format].label}
               </span>
+              {activity.locations.length > 1 ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <MapPin className="size-3.5" aria-hidden="true" />
+                  {activity.locations.length} locations
+                </span>
+              ) : null}
               <span className="inline-flex items-center gap-1.5">
                 <Gauge className="size-3.5" aria-hidden="true" />
                 {detail.summary.occupancy30d.toFixed(0)}% full · 30d

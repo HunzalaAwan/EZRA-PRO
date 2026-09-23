@@ -9,6 +9,7 @@ import {
   Hourglass,
   Layers,
   ListFilter,
+  MapPin,
   RotateCcw,
   Ship,
   Waves,
@@ -89,6 +90,8 @@ export interface BookingFilters {
   activityId: string | 'all'
   channel: BookingChannel | 'all'
   payment: PaymentStatus | 'all'
+  /** The location the departure leaves from, or every location. */
+  locationId: string | 'all'
   /** `null` means "any date" — the picker still shows a sensible default range. */
   range: DateRange | null
 }
@@ -98,6 +101,7 @@ export const DEFAULT_BOOKING_FILTERS: BookingFilters = {
   activityId: 'all',
   channel: 'all',
   payment: 'all',
+  locationId: 'all',
   range: null,
 }
 
@@ -107,6 +111,7 @@ export function isDefaultFilters(filters: BookingFilters) {
     filters.activityId === 'all' &&
     filters.channel === 'all' &&
     filters.payment === 'all' &&
+    filters.locationId === 'all' &&
     filters.range === null
   )
 }
@@ -287,13 +292,15 @@ interface FiltersPopoverProps {
   filters: BookingFilters
   onFiltersChange: (next: BookingFilters) => void
   activities: Activity[]
+  locations: { id: string; name: string }[]
 }
 
-function FiltersPopover({ filters, onFiltersChange, activities }: FiltersPopoverProps) {
+function FiltersPopover({ filters, onFiltersChange, activities, locations }: FiltersPopoverProps) {
   const set = <K extends keyof BookingFilters>(key: K, value: BookingFilters[K]) =>
     onFiltersChange({ ...filters, [key]: value })
 
   const count =
+    (filters.locationId !== 'all' ? 1 : 0) +
     (filters.activityId !== 'all' ? 1 : 0) +
     (filters.channel !== 'all' ? 1 : 0) +
     (filters.payment !== 'all' ? 1 : 0)
@@ -331,13 +338,31 @@ function FiltersPopover({ filters, onFiltersChange, activities }: FiltersPopover
               variant="ghost"
               size="xs"
               onClick={() =>
-                onFiltersChange({ ...filters, activityId: 'all', channel: 'all', payment: 'all' })
+                onFiltersChange({ ...filters, activityId: 'all', channel: 'all', payment: 'all', locationId: 'all' })
               }
             >
               Clear
             </Button>
           ) : null}
         </div>
+
+        {locations.length > 1 ? (
+          <FilterField label="Location">
+            <Select value={filters.locationId} onValueChange={(value) => set('locationId', value)}>
+              <SelectTrigger aria-label="Filter by location" icon={<MapPin className="size-4" />}>
+                <SelectValue placeholder="Location" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All locations</SelectItem>
+                {locations.map((entry) => (
+                  <SelectItem key={entry.id} value={entry.id}>
+                    {entry.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterField>
+        ) : null}
 
         <FilterField label="Experience">
           <Select value={filters.activityId} onValueChange={(value) => set('activityId', value)}>
@@ -404,6 +429,8 @@ export interface BookingsFiltersProps {
   filters: BookingFilters
   onFiltersChange: (next: BookingFilters) => void
   activities: Activity[]
+  /** The business's locations; the popover offers a filter when there is more than one. */
+  locations?: { id: string; name: string }[]
   /** Shows the Reset control; the page decides when the desk has drifted from a view. */
   resettable?: boolean
   onReset?: () => void
@@ -418,6 +445,7 @@ export function BookingsFilters({
   filters,
   onFiltersChange,
   activities,
+  locations = [],
   resettable = false,
   onReset,
   resultSummary,
@@ -468,7 +496,7 @@ export function BookingsFilters({
         }
       />
 
-      <FiltersPopover filters={filters} onFiltersChange={onFiltersChange} activities={activities} />
+      <FiltersPopover filters={filters} onFiltersChange={onFiltersChange} activities={activities} locations={locations} />
 
       {resettable && onReset ? (
         <Button variant="ghost" size="sm" onClick={onReset} leftIcon={<RotateCcw />}>

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 
-import { NOW, getBookingRows, getStorefront, getStorefrontAvailability } from '@/lib/demo'
+import { NOW, getBookingRows, getStorefront, getStorefrontAvailability, getLocationsByTenant } from '@/lib/demo'
 import { addDays, clamp, toDateKey } from '@/lib/utils'
 import type { Activity } from '@/types'
 import {
@@ -78,6 +78,7 @@ function buildDays(activity: Activity): AvailabilityDay[] {
       status: departure.status,
       priceMultiplier: multiplier,
       leadPrice: Math.round((departure.priceOverride ?? activity.basePrice) * multiplier),
+      locationId: departure.locationId,
       soldOut: event.seatsLeft <= 0 || departure.status === 'sold_out',
     }
     const list = byDay.get(key)
@@ -223,6 +224,7 @@ export default async function ActivityPage({
       tenant={tenant}
       activity={activity}
       days={days}
+      locations={getLocationsByTenant(tenant.id)}
       reviews={reviews}
       ratingBuckets={buckets}
       related={related}

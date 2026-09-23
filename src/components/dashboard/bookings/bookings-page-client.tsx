@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 
 import type { BookingRow } from '@/lib/demo'
-import type { Activity, Tenant } from '@/types'
+import type { Activity, Location, Tenant } from '@/types'
 import { addDays, formatNumber, percentChange, toDateKey, formatCurrency } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { StatCard, StatGrid } from '@/components/ui/stat'
@@ -71,6 +71,8 @@ export interface BookingsPageClientProps {
   tenant: Tenant
   allRows: BookingRow[]
   activities: Activity[]
+  /** The business's locations, for the filter and the default. */
+  locations: Location[]
   now: Date
   todayKey: string
 }
@@ -82,7 +84,7 @@ export interface BookingsPageClientProps {
  * handed down as a prop; it must never be re-fetched or re-generated here,
  * or the entire synthetic dataset ships into the client bundle again.
  */
-export function BookingsPageClient({ tenant, allRows: sourceRows, activities, now: NOW, todayKey: TODAY_KEY }: BookingsPageClientProps) {
+export function BookingsPageClient({ tenant, allRows: sourceRows, activities, locations, now: NOW, todayKey: TODAY_KEY }: BookingsPageClientProps) {
   /* Refunds and cancellations made at this desk, layered over the server rows. */
   const [adjustments, setAdjustments] = React.useState<Record<string, { refunded: number; cancelled: boolean }>>({})
   const allRows = React.useMemo(
@@ -197,6 +199,7 @@ export function BookingsPageClient({ tenant, allRows: sourceRows, activities, no
      Filtering (everything except the status tab) then tab counts, so the
      numbers on the rail always describe what the rail would show.
      ---------------------------------------------------------------------- */
+  const defaultLocationId = locations.find((site) => site.isDefault)?.id ?? locations[0]?.id
   const preTabRows = React.useMemo(() => {
     const needle = filters.search.trim().toLowerCase()
     const from = filters.range?.from
@@ -207,13 +210,14 @@ export function BookingsPageClient({ tenant, allRows: sourceRows, activities, no
       if (filters.activityId !== 'all' && row.activity.id !== filters.activityId) return false
       if (filters.channel !== 'all' && row.booking.channel !== filters.channel) return false
       if (filters.payment !== 'all' && row.booking.paymentStatus !== filters.payment) return false
+      if (filters.locationId !== 'all' && (row.departure.locationId ?? defaultLocationId) !== filters.locationId) return false
       if (from && to) {
         const key = row.departure.startsAt.slice(0, 10)
         if (key < from || key > to) return false
       }
       return true
     })
-  }, [allRows, filters])
+  }, [allRows, filters, defaultLocationId])
 
   const tabCounts = React.useMemo(() => {
     const counts: Record<BookingStatusTab, number> = {
@@ -572,6 +576,7 @@ export function BookingsPageClient({ tenant, allRows: sourceRows, activities, no
           filters={filters}
           onFiltersChange={applyFilters}
           activities={activities}
+          locations={locations.map((site) => ({ id: site.id, name: site.name }))}
           resettable={activeViewId === null && (!isDefaultFilters(filters) || statusTab !== 'all')}
           onReset={clearEverything}
           resultSummary={

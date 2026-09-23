@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { requireWorkspaceRoute } from '@/lib/workspace'
 
-import { NOW, TODAY_KEY, getActivitiesByTenant, getBookingRows } from '@/lib/demo'
+import { NOW, TODAY_KEY, getActivitiesByTenant, getBookingRows, getLocationsByTenant } from '@/lib/demo'
 import { BookingsPageClient } from '@/components/dashboard/bookings/bookings-page-client'
 
 export const dynamic = 'force-dynamic'
@@ -27,6 +27,7 @@ export default async function BookingsPage() {
       tenant={tenant}
       allRows={allRows}
       activities={activities}
+      locations={getLocationsByTenant(tenant.id)}
       now={NOW}
       todayKey={TODAY_KEY}
     />

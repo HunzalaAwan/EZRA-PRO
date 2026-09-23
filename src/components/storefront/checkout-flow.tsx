@@ -56,6 +56,13 @@ export interface CheckoutDeparture {
   endsAt: string
   seatsLeft: number
   priceMultiplier: number
+  /** The location this run leaves from, when the business has more than one. */
+  location?: { name: string; addressLine: string; meetingPoint: string }
+}
+
+/** Where to meet for this run: the location's own note, or the activity's. */
+function meetingPointFor(activity: Activity, departure: CheckoutDeparture) {
+  return departure.location?.meetingPoint ?? activity.meetingPoint
 }
 
 export interface CheckoutFlowProps {
@@ -866,7 +873,10 @@ function OrderSummary({
           <MapPin className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
           <div className="min-w-0">
             <dt className="sr-only">Meeting point</dt>
-            <dd className="text-xs leading-relaxed text-muted">{activity.meetingPoint}</dd>
+            <dd className="text-xs leading-relaxed text-muted">
+              {departure.location ? <span className="block font-medium text-foreground">{departure.location.name}</span> : null}
+              {meetingPointFor(activity, departure)}
+            </dd>
           </div>
         </div>
       </dl>
@@ -1035,7 +1045,7 @@ function Confirmation({
       `DTEND;TZID=${tenant.timezone}:${icsStamp(departure.endsAt)}`,
       `SUMMARY:${activity.name} — ${tenant.name}`,
       `LOCATION:${tenant.contact.addressLine.replace(/,/g, '\\,')}`,
-      `DESCRIPTION:Confirmation ${reference}. ${activity.meetingPoint.replace(/,/g, '\\,')}`,
+      `DESCRIPTION:Confirmation ${reference}. ${meetingPointFor(activity, departure).replace(/,/g, '\\,')}`,
       'END:VEVENT',
       'END:VCALENDAR',
     ].join('\r\n')
@@ -1068,7 +1078,7 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
 <div class="head"><div style="font-size:12px;letter-spacing:.16em;text-transform:uppercase;opacity:.8">${tenant.name}</div><div class="code">${reference}</div></div>
 <div class="body"><h1>${activity.name}</h1>
 <p>${formatDateLong(departure.startsAt)} · ${formatTime(departure.startsAt)}–${formatTime(departure.endsAt)}</p>
-<p>${activity.meetingPoint}</p>
+<p>${departure.location ? `${departure.location.name} — ` : ''}${meetingPointFor(activity, departure)}</p>
 <p>${quote.headcount} guest(s) · Lead guest: ${guest.firstName} ${guest.lastName}</p>
 <table>${rows}</table>
 <div class="total"><span>Total paid</span><span>${formatCurrency(quote.total, tenant.currency, { decimals: true })}</span></div>
@@ -1206,7 +1216,11 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
             <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">
               Meeting point
             </dt>
-            <dd className="mt-1 text-sm leading-relaxed text-muted">{activity.meetingPoint}</dd>
+            <dd className="mt-1 text-sm leading-relaxed text-muted">
+              {departure.location ? <span className="block font-medium text-foreground">{departure.location.name}</span> : null}
+              {meetingPointFor(activity, departure)}
+              {departure.location ? <span className="block text-xs text-subtle">{departure.location.addressLine}</span> : null}
+            </dd>
           </div>
         </dl>
 

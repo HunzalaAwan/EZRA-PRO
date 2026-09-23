@@ -11,6 +11,7 @@ import {
   DoorOpen,
   ExternalLink,
   Gauge,
+  MapPin,
   PencilLine,
   Route,
   Star,
@@ -336,6 +337,12 @@ export function ActivityCard({ summary, tenantSlug, className }: ActivityCardPro
             {activity.format === 'open' ? <DoorOpen className="size-3.5 text-faint" aria-hidden="true" /> : activity.format === 'dates' ? <CalendarRange className="size-3.5 text-faint" aria-hidden="true" /> : <Route className="size-3.5 text-faint" aria-hidden="true" />}
             {ACTIVITY_FORMAT_META[activity.format].label}
           </span>
+          {activity.locations.length > 1 ? (
+            <span className="inline-flex items-center gap-1.5">
+              <MapPin className="size-3.5 text-faint" aria-hidden="true" />
+              {activity.locations.length} locations
+            </span>
+          ) : null}
         </div>
 
         <div className="mt-auto flex items-end justify-between gap-3 border-t border-line-subtle pt-3">

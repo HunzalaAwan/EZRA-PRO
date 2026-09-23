@@ -35,7 +35,7 @@ import {
 } from 'lucide-react'
 import { z } from 'zod'
 
-import type { Activity, CurrencyCode, DifficultyLevel, VerticalKey } from '@/types'
+import type { Activity, CurrencyCode, DifficultyLevel, Location, VerticalKey } from '@/types'
 import { saveActivityOverride } from '@/lib/activity-overrides'
 import {
   cn,
@@ -73,6 +73,7 @@ import {
 } from './pricing-tier-editor'
 import { AddonEditor, type DraftAddOn } from './addon-editor'
 import {
+  LocationsEditor,
   ScheduleEditor,
   defaultSchedule,
   describeSchedule,
@@ -166,7 +167,7 @@ export interface ActivityDraft {
   dining: DiningDraft
 }
 
-const STORAGE_KEY = 'ezra:activity-wizard:v2'
+const STORAGE_KEY = 'ezra:activity-wizard:v3'
 
 /** Dining is the one category whose product is a table, not a departure. */
 export const isDining = (draft: Pick<ActivityDraft, 'category'>) => draft.category === 'restaurants'
@@ -209,9 +210,18 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
 }
 
 /** The editor, filled in from an activity that already exists. */
+/** A draft that has not picked a location yet starts on the business's default one. */
+export function withHomeLocation(draft: ActivityDraft, locations: Location[]): ActivityDraft {
+  const current = draft.schedule.locations ?? []
+  if (current.length > 0 || locations.length === 0) return draft
+  const home = locations.find((site) => site.isDefault) ?? locations[0]
+  return { ...draft, schedule: { ...draft.schedule, locations: [{ locationId: home.id, ownTimes: false, startTimes: [] }] } }
+}
+
 export function draftFromActivity(activity: Activity, nowIso: string): ActivityDraft {
   const base = createDefaultDraft(activity.category, nowIso)
   const restaurant = activity.category === 'restaurants'
+  const homeTimes = activity.locations[0]?.times ?? []
   return {
     ...base,
     name: activity.name,
@@ -248,7 +258,17 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
       maxPerBooking: addOn.maxPerBooking,
       required: addOn.required,
     })),
-    schedule: { ...base.schedule, mode: activity.format === 'open' ? 'hours' : activity.format === 'dates' ? 'dates' : 'times', capacity: activity.maxCapacity },
+    schedule: {
+      ...base.schedule,
+      mode: activity.format === 'open' ? 'hours' : activity.format === 'dates' ? 'dates' : 'times',
+      capacity: activity.maxCapacity,
+      startTimes: homeTimes.length > 0 ? homeTimes : base.schedule.startTimes,
+      locations: activity.locations.map((site, index) => ({
+        locationId: site.locationId,
+        ownTimes: index > 0 && site.times.join(',') !== homeTimes.join(','),
+        startTimes: site.times,
+      })),
+    },
     featured: activity.featured,
     freeCancellationHours: activity.cancellationPolicy.freeCancellationHours,
   }
@@ -451,10 +471,17 @@ const STEP_SCHEMAS = [
         lastEntryMinutes: z.number().int().min(0),
         entryInterval: z.number().int().min(0),
         dates: z.array(z.object({ dateKey: z.string(), time: z.string() })),
+        locations: z.array(z.object({ locationId: z.string(), ownTimes: z.boolean(), startTimes: z.array(z.string()) })),
       }),
     })
     .superRefine(({ schedule }, ctx) => {
       const issue = (key: string, message: string) => ctx.addIssue({ code: 'custom', path: ['schedule', key], message })
+      if (schedule.locations.length === 0) issue('locations', 'Tick at least one location this runs from')
+      if (schedule.mode === 'times') {
+        for (const site of schedule.locations) {
+          if (site.ownTimes && site.startTimes.length === 0) issue(`location.${site.locationId}`, 'Add a start time for this location, or use the usual times')
+        }
+      }
       if (schedule.mode === 'dates') {
         if (schedule.dates.length === 0) issue('dates', 'Add at least one date')
         return
@@ -972,6 +999,8 @@ export interface ActivityWizardProps {
   /** The activity being edited; the draft is built from it on the client. */
   activity?: Activity
   initialDraft?: ActivityDraft
+  /** The business's locations; the schedule step asks which this runs from. */
+  locations?: Location[]
 }
 
 export function ActivityWizard({
@@ -981,6 +1010,7 @@ export function ActivityWizard({
   defaultCategory,
   nowIso,
   crew = [],
+  locations = [],
   mode = 'create',
   activityId,
   activity,
@@ -993,7 +1023,7 @@ export function ActivityWizard({
   const exitHref = editing ? `/dashboard/activities/${activityId}` : '/dashboard/activities'
 
   const initial = React.useMemo(
-    () => initialDraft ?? (activity ? draftFromActivity(activity, nowIso) : createDefaultDraft(defaultCategory, nowIso)),
+    () => withHomeLocation(initialDraft ?? (activity ? draftFromActivity(activity, nowIso) : createDefaultDraft(defaultCategory, nowIso)), locations),
     [initialDraft, activity, defaultCategory, nowIso],
   )
 
@@ -1078,7 +1108,7 @@ export function ActivityWizard({
   }
 
   const reset = () => {
-    setDraft(editing ? initial : createDefaultDraft(defaultCategory, nowIso))
+    setDraft(editing ? initial : withHomeLocation(createDefaultDraft(defaultCategory, nowIso), locations))
     setStep(0)
     setFurthest(0)
     setErrors({})
@@ -1130,6 +1160,10 @@ export function ActivityWizard({
           minParticipants: draft.minParticipants,
           featured: draft.featured,
           crewIds: draft.crewIds,
+          locations: draft.schedule.locations.map((site) => ({
+            locationId: site.locationId,
+            times: site.ownTimes ? site.startTimes : draft.schedule.startTimes,
+          })),
         })
         toast.success('Changes saved', { description: `${draft.name} is updated on the storefront.` })
         router.push(exitHref)
@@ -1299,12 +1333,22 @@ export function ActivityWizard({
                         errors={errors}
                       />
                     ) : (
-                      <ScheduleEditor
-                        schedule={draft.schedule}
-                        onChange={(schedule) => patch({ schedule })}
-                        nowIso={nowIso}
-                        errors={errors}
-                      />
+                      <div className="flex flex-col gap-6">
+                        {locations.length > 0 ? (
+                          <LocationsEditor
+                            schedule={draft.schedule}
+                            onChange={(schedule) => patch({ schedule })}
+                            locations={locations}
+                            errors={errors}
+                          />
+                        ) : null}
+                        <ScheduleEditor
+                          schedule={draft.schedule}
+                          onChange={(schedule) => patch({ schedule })}
+                          nowIso={nowIso}
+                          errors={errors}
+                        />
+                      </div>
                     )
                   ) : null}
                   {step === 4 && crew.length > 0 ? (
@@ -1318,6 +1362,7 @@ export function ActivityWizard({
                   {step === 5 ? (
                     <ReviewStep
                       draft={draft}
+                      locations={locations}
                       crew={crew}
                       currency={currency}
                       tenantName={tenantName}
@@ -1865,6 +1910,7 @@ function DescriptionStep({ draft, patch, errors }: StepProps) {
 
 function ReviewStep({
   draft,
+  locations = [],
   crew,
   currency,
   tenantName,
@@ -1874,6 +1920,7 @@ function ReviewStep({
   onJump,
 }: {
   draft: ActivityDraft
+  locations?: Location[]
   crew: WizardCrewMember[]
   currency: CurrencyCode
   tenantName: string
@@ -1888,6 +1935,12 @@ function ReviewStep({
   const fromPrice = priced.length === 0 ? 0 : Math.min(...priced.map((tier) => tier.price))
   const generated = previewDepartures(draft.schedule, nowIso, 14)
   const departures = generated.reduce((acc, day) => acc + (day.open ? 1 : day.times.length), 0)
+  const locationNames = draft.schedule.locations
+    .map((site) => {
+      const found = locations.find((entry) => entry.id === site.locationId)
+      return found ? `${found.name}${site.ownTimes ? ' (own times)' : ''}` : null
+    })
+    .filter((name): name is string => Boolean(name))
   const seats = generated.reduce((acc, day) => acc + day.seats, 0)
   const dining = isDining(draft)
   const d = draft.dining
@@ -1948,6 +2001,9 @@ function ReviewStep({
           value: `${priced.length} ${pluralize(priced.length, 'tier')} from ${formatCurrency(fromPrice, currency)} · ${draft.addOns.length} ${pluralize(draft.addOns.length, 'add-on')}`,
           step: 3,
         },
+        ...(locations.length > 0
+          ? [{ label: 'Runs from', value: locationNames.length > 0 ? locationNames.join(', ') : 'No location picked', step: 4 }]
+          : []),
         { label: 'Schedule', value: describeSchedule(draft.schedule), step: 4 },
         crewRow,
       ]

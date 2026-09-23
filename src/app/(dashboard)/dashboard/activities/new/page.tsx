@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { Button } from '@/components/ui/button'
 
-import { getUsersByTenant } from '@/lib/demo'
+import { getUsersByTenant, getLocationsByTenant } from '@/lib/demo'
 import { NOW_ISO } from '@/components/dashboard/activities/activity-data'
 import { ActivityWizard } from '@/components/dashboard/activities/activity-wizard'
 
@@ -42,6 +42,7 @@ export default async function NewActivityPage() {
         defaultCategory={tenant.vertical}
         nowIso={NOW_ISO}
         crew={crew}
+        locations={getLocationsByTenant(tenant.id)}
       />
     </div>
   )

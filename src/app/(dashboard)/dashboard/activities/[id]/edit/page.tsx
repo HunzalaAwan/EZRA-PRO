@@ -5,7 +5,7 @@ import { notFound } from 'next/navigation'
 
 import { PageHeader } from '@/components/dashboard/page-header'
 import { Button } from '@/components/ui/button'
-import { getActivityById } from '@/lib/demo'
+import { getActivityById, getLocationsByTenant } from '@/lib/demo'
 import { getUsersByTenant } from '@/lib/demo'
 import { NOW_ISO } from '@/components/dashboard/activities/activity-data'
 import { ActivityWizard } from '@/components/dashboard/activities/activity-wizard'
@@ -58,6 +58,7 @@ export default async function EditActivityPage({ params }: EditActivityPageProps
         activityId={activity.id}
         activity={activity}
         crew={crew}
+        locations={getLocationsByTenant(tenant.id)}
         currency={tenant.currency}
         tenantName={tenant.name}
         tenantSlug={tenant.slug}

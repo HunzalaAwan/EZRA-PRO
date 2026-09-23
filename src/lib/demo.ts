@@ -520,427 +520,433 @@ for (const [tenantId, specs] of SPEC_BY_TENANT) {
     const isGroupPriced = activity.pricingModel === 'per_group'
     const crewSize = activity.maxCapacity >= 30 ? 3 : activity.maxCapacity >= 14 ? 2 : 1
 
-    for (let off = -back; off <= fwd; off++) {
-      const day = startOfDay(addDays(NOW, off))
-      if (spec.weekdays && !spec.weekdays.includes(day.getDay())) continue
-      const wd = mondayIndex(day)
-      const inStorm = off <= STORM_TO && off >= STORM_FROM
+    /* One pass per base the activity runs from: each has its own times and, sometimes, days. */
+    for (const site of activity.locations) {
+      const siteTimes = site.times.length > 0 ? site.times : spec.times
+      const siteWeekdays = site.weekdays ?? spec.weekdays
+      for (let off = -back; off <= fwd; off++) {
+        const day = startOfDay(addDays(NOW, off))
+        if (siteWeekdays && !siteWeekdays.includes(day.getDay())) continue
+        const wd = mondayIndex(day)
+        const inStorm = off <= STORM_TO && off >= STORM_FROM
 
-      for (const time of spec.times) {
-        const startsAt = atTime(day, time)
-        const startMs = startsAt.getTime()
-        const endsAt = new Date(startMs + activity.durationMinutes * 60_000)
-        const hour = startsAt.getHours()
-        const isPast = startMs < NOW_MS
+        for (const time of siteTimes) {
+          const startsAt = atTime(day, time)
+          const startMs = startsAt.getTime()
+          const endsAt = new Date(startMs + activity.durationMinutes * 60_000)
+          const hour = startsAt.getHours()
+          const isPast = startMs < NOW_MS
 
-        let capacity = activity.maxCapacity
-        if (rng() < 0.08) {
-          capacity = Math.max(activity.minParticipants + 1, round(capacity * (0.7 + rng() * 0.2)))
-        }
-
-        const demand =
-          spec.popularity *
-          trendFactor(off) *
-          MONTH_FACTOR[day.getMonth()] *
-          WEEKDAY_UPLIFT[wd] *
-          todFactor(hour) *
-          paceFactor(off) *
-          stormFactor(off) *
-          (0.8 + rng() * 0.36)
-
-        const booked = clamp(round(capacity * clamp(demand, 0, 1.05)), 0, capacity)
-
-        const cancelRoll = rng()
-        const departureCancelled = inStorm
-          ? cancelRoll < 0.58
-          : isPast
-            ? cancelRoll < 0.028
-            : cancelRoll < 0.01
-        const holdRoll = rng()
-        const weatherHold =
-          !departureCancelled && !isPast && off <= 10 && (off === 4 ? holdRoll < 0.4 : holdRoll < 0.028)
-
-        const held =
-          !isPast && !departureCancelled && rng() < 0.18
-            ? Math.min(rngInt(rng, 1, 3), Math.max(0, capacity - booked))
-            : 0
-
-        let status: DepartureStatus
-        if (departureCancelled) status = 'cancelled'
-        else if (isPast) status = 'completed'
-        else if (weatherHold) status = 'weather_hold'
-        else if (capacity - booked - held <= 0) status = 'sold_out'
-        else if (off <= 3) status = 'confirmed'
-        else status = 'scheduled'
-
-        const assignedStaffIds: string[] = []
-        if (staff.length > 0) {
-          const startIdx = rngInt(rng, 0, staff.length - 1)
-          const n = Math.min(crewSize, staff.length)
-          for (let s = 0; s < n; s++) assignedStaffIds.push(staff[(startIdx + s) % staff.length].id)
-        }
-
-        let weather: WeatherSnapshot | undefined
-        if (off >= -10 && off <= 10) {
-          const condition = inStorm ? 'storm' : rngWeighted(rng, WEATHER_CONDITIONS)
-          const goConfidence =
-            condition === 'clear'
-              ? rngInt(rng, 95, 99)
-              : condition === 'cloudy'
-                ? rngInt(rng, 86, 96)
-                : condition === 'wind'
-                  ? rngInt(rng, 58, 82)
-                  : condition === 'rain'
-                    ? rngInt(rng, 52, 78)
-                    : rngInt(rng, 6, 26)
-          weather = {
-            condition,
-            tempC: rngInt(rng, 22, 31),
-            windKts: condition === 'storm' ? rngInt(rng, 28, 42) : condition === 'wind' ? rngInt(rng, 16, 26) : rngInt(rng, 4, 15),
-            swellM: Math.round((condition === 'storm' ? 2.4 + rng() * 1.8 : 0.4 + rng() * 1.4) * 10) / 10,
-            goConfidence,
+          let capacity = activity.maxCapacity
+          if (rng() < 0.08) {
+            capacity = Math.max(activity.minParticipants + 1, round(capacity * (0.7 + rng() * 0.2)))
           }
-        }
 
-        const departureId = `dep_${(departureSeq++).toString(36).padStart(5, '0')}`
-        const fill = capacity === 0 ? 0 : booked / capacity
-        const departure: Departure = {
-          id: departureId,
-          tenantId,
-          activityId: activity.id,
-          startsAt: isoLocal(startsAt),
-          endsAt: isoLocal(endsAt),
-          capacity,
-          booked,
-          held,
-          status,
-          assignedStaffIds,
-          assignedResourceIds: activity.requiredResourceIds,
-          weather,
-          notes: rng() < 0.1 ? rngPick(rng, DEPARTURE_NOTES) : undefined,
-          priceMultiplier:
-            tenant.features.dynamicPricing && fill > 0.85 && !isPast
-              ? 1 + rngInt(rng, 1, 3) / 20
-              : undefined,
-        }
-        allDepartures.push(departure)
+          const demand =
+            spec.popularity *
+            trendFactor(off) *
+            MONTH_FACTOR[day.getMonth()] *
+            WEEKDAY_UPLIFT[wd] *
+            todFactor(hour) *
+            paceFactor(off) *
+            stormFactor(off) *
+            (0.8 + rng() * 0.36)
 
-        if (booked === 0) continue
+          const booked = clamp(round(capacity * clamp(demand, 0, 1.05)), 0, capacity)
 
-        /* ---- parties that add up to exactly `booked` ---- */
-        const parties: number[] = []
-        if (isGroupPriced) {
-          parties.push(booked)
-        } else {
-          let left = booked
-          while (left > 0) {
-            let size = rngWeighted(rng, PARTY_WEIGHTS)
-            if (size > left) size = left
-            parties.push(size)
-            left -= size
+          const cancelRoll = rng()
+          const departureCancelled = inStorm
+            ? cancelRoll < 0.58
+            : isPast
+              ? cancelRoll < 0.028
+              : cancelRoll < 0.01
+          const holdRoll = rng()
+          const weatherHold =
+            !departureCancelled && !isPast && off <= 10 && (off === 4 ? holdRoll < 0.4 : holdRoll < 0.028)
+
+          const held =
+            !isPast && !departureCancelled && rng() < 0.18
+              ? Math.min(rngInt(rng, 1, 3), Math.max(0, capacity - booked))
+              : 0
+
+          let status: DepartureStatus
+          if (departureCancelled) status = 'cancelled'
+          else if (isPast) status = 'completed'
+          else if (weatherHold) status = 'weather_hold'
+          else if (capacity - booked - held <= 0) status = 'sold_out'
+          else if (off <= 3) status = 'confirmed'
+          else status = 'scheduled'
+
+          const assignedStaffIds: string[] = []
+          if (staff.length > 0) {
+            const startIdx = rngInt(rng, 0, staff.length - 1)
+            const n = Math.min(crewSize, staff.length)
+            for (let s = 0; s < n; s++) assignedStaffIds.push(staff[(startIdx + s) % staff.length].id)
           }
-        }
 
-        for (const size of parties) {
-          const bookingId = `bkg_${(bookingSeq++).toString(36).padStart(5, '0')}`
-          const customer = pickCustomer(tenantId, rng)
-          const channel = rngWeighted(rng, CHANNEL_WEIGHTS)
-          const leadDays = rngWeighted(rng, LEAD_WEIGHTS)
-          let createdMs = startMs - leadDays * DAY_MS - rngInt(rng, 0, 900) * 60_000
-          if (createdMs > NOW_MS) createdMs = NOW_MS - rngInt(rng, 5, 5760) * 60_000
-          const createdAt = new Date(createdMs)
-
-          const lineItems: BookingLineItem[] = []
-          let li = 0
-          let subtotal = 0
-
-          let children = 0
-          if (!isGroupPriced && childTier && size >= 3 && rng() < 0.45) {
-            children = rngInt(rng, 1, Math.min(2, size - 1))
-          }
-          const adults = size - children
-
-          if (isGroupPriced) {
-            lineItems.push({
-              id: `li_${bookingId}_${++li}`,
-              label: adultTier.label,
-              kind: 'ticket',
-              quantity: 1,
-              unitPrice: adultTier.price,
-              total: adultTier.price,
-            })
-            subtotal += adultTier.price
-          } else {
-            const adultTotal = adults * adultTier.price
-            lineItems.push({
-              id: `li_${bookingId}_${++li}`,
-              label: adultTier.label,
-              kind: 'ticket',
-              quantity: adults,
-              unitPrice: adultTier.price,
-              total: adultTotal,
-            })
-            subtotal += adultTotal
-            if (children > 0 && childTier) {
-              const childTotal = children * childTier.price
-              lineItems.push({
-                id: `li_${bookingId}_${++li}`,
-                label: childTier.label,
-                kind: 'ticket',
-                quantity: children,
-                unitPrice: childTier.price,
-                total: childTotal,
-              })
-              subtotal += childTotal
+          let weather: WeatherSnapshot | undefined
+          if (off >= -10 && off <= 10) {
+            const condition = inStorm ? 'storm' : rngWeighted(rng, WEATHER_CONDITIONS)
+            const goConfidence =
+              condition === 'clear'
+                ? rngInt(rng, 95, 99)
+                : condition === 'cloudy'
+                  ? rngInt(rng, 86, 96)
+                  : condition === 'wind'
+                    ? rngInt(rng, 58, 82)
+                    : condition === 'rain'
+                      ? rngInt(rng, 52, 78)
+                      : rngInt(rng, 6, 26)
+            weather = {
+              condition,
+              tempC: rngInt(rng, 22, 31),
+              windKts: condition === 'storm' ? rngInt(rng, 28, 42) : condition === 'wind' ? rngInt(rng, 16, 26) : rngInt(rng, 4, 15),
+              swellM: Math.round((condition === 'storm' ? 2.4 + rng() * 1.8 : 0.4 + rng() * 1.4) * 10) / 10,
+              goConfidence,
             }
           }
 
-          let addonPicks = 0
-          for (const ad of activity.addOns) {
-            if (addonPicks >= 2) break
-            if (rng() < 0.19) {
-              const cap = ad.maxPerBooking ?? 4
-              const qty = clamp(rngInt(rng, 1, Math.min(cap, Math.max(1, size))), 1, cap)
-              const totalLine = qty * ad.price
-              lineItems.push({
-                id: `li_${bookingId}_${++li}`,
-                label: ad.label,
-                kind: 'addon',
-                quantity: qty,
-                unitPrice: ad.price,
-                total: totalLine,
-              })
-              subtotal += totalLine
-              addonPicks++
-            }
-          }
-
-          let discountTotal = 0
-          let promoCode: string | undefined
-          if (rng() < 0.12) {
-            const [code, pct] = rngPick(rng, PROMO_CODES)
-            promoCode = code
-            discountTotal = round(subtotal * (pct / 100))
-            lineItems.push({
-              id: `li_${bookingId}_${++li}`,
-              label: `Promo ${code} (-${pct}%)`,
-              kind: 'discount',
-              quantity: 1,
-              unitPrice: -discountTotal,
-              total: -discountTotal,
-            })
-          }
-
-          const net = subtotal - discountTotal
-          const feeTotal = channel === 'walk_in' ? 0 : round(net * 0.06)
-          if (feeTotal > 0) {
-            lineItems.push({
-              id: `li_${bookingId}_${++li}`,
-              label: 'Booking & harbour fee',
-              kind: 'fee',
-              quantity: 1,
-              unitPrice: feeTotal,
-              total: feeTotal,
-            })
-          }
-          const taxTotal = round(net * taxRate)
-          if (taxTotal > 0) {
-            lineItems.push({
-              id: `li_${bookingId}_${++li}`,
-              label: taxLabel,
-              kind: 'tax',
-              quantity: 1,
-              unitPrice: taxTotal,
-              total: taxTotal,
-            })
-          }
-          const total = net + feeTotal + taxTotal
-
-          /* ---- status ---- */
-          let bookingStatus: BookingStatus
-          const roll = rng()
-          if (status === 'cancelled') {
-            bookingStatus = 'cancelled'
-          } else if (isPast) {
-            bookingStatus = roll < 0.04 ? 'no_show' : roll < 0.075 ? 'cancelled' : 'completed'
-          } else {
-            if (roll < 0.045) bookingStatus = 'cancelled'
-            else if (roll < 0.085) bookingStatus = 'pending'
-            else if (off === 0 && rng() < 0.45) bookingStatus = 'checked_in'
-            else bookingStatus = 'confirmed'
-          }
-          if (bookingStatus === 'completed' && rng() < 0.014) bookingStatus = 'refunded'
-
-          let chargeAmount = 0
-          let refundAmount: number | undefined
-          let paymentStatus: PaymentStatus
-          if (bookingStatus === 'pending') {
-            paymentStatus = 'unpaid'
-          } else if (bookingStatus === 'cancelled') {
-            chargeAmount = total
-            refundAmount = rng() < 0.78 ? total : round(total * 0.5)
-            paymentStatus = refundAmount >= total ? 'refunded' : 'partially_refunded'
-          } else if (bookingStatus === 'refunded') {
-            chargeAmount = total
-            refundAmount = total
-            paymentStatus = 'refunded'
-          } else {
-            const pr = rng()
-            if (pr < 0.9) {
-              chargeAmount = total
-              paymentStatus = 'paid'
-            } else if (pr < 0.97) {
-              chargeAmount = round(total * 0.3)
-              paymentStatus = 'deposit_paid'
-            } else {
-              paymentStatus = 'unpaid'
-            }
-          }
-          const amountPaid = chargeAmount - (refundAmount ?? 0)
-
-          let cancelledAt: string | undefined
-          let cancellationReason: string | undefined
-          if (bookingStatus === 'cancelled' || bookingStatus === 'refunded') {
-            const upper = Math.min(NOW_MS, startMs)
-            const span = Math.max(60_000, upper - createdMs)
-            cancelledAt = isoLocal(new Date(createdMs + Math.floor(rng() * span)))
-            cancellationReason =
-              status === 'cancelled'
-                ? inStorm
-                  ? 'Operator cancelled — tropical storm, unsafe sea state'
-                  : 'Operator cancelled — conditions'
-                : rngPick(rng, CANCEL_REASONS)
-          }
-
-          /* ---- participants ---- */
-          const participants: Participant[] = []
-          for (let pi = 0; pi < size; pi++) {
-            const isChild = pi >= adults && childTier !== undefined
-            const first = pi === 0 ? customer.firstName : rngPick(rng, FIRST_NAMES)
-            const last = pi === 0 || rng() < 0.68 ? customer.lastName : rngPick(rng, LAST_NAMES)
-            participants.push({
-              id: `par_${bookingId}_${pi + 1}`,
-              firstName: first,
-              lastName: last,
-              age: isChild ? rngInt(rng, 5, 12) : rng() < 0.62 ? rngInt(rng, 21, 44) : rngInt(rng, 45, 71),
-              notes:
-                rng() < 0.08
-                  ? rngPick(rng, [
-                      'Nervous swimmer — keep close',
-                      'Vegetarian',
-                      'Shellfish allergy',
-                      'Wears contact lenses',
-                      'Previous shoulder injury',
-                    ])
-                  : undefined,
-              waiverSigned: isPast ? rng() < 0.97 : rng() < 0.72,
-              tierLabel: isChild && childTier ? childTier.label : adultTier.label,
-            })
-          }
-
-          let rating: number | undefined
-          let reviewText: string | undefined
-          if (bookingStatus === 'completed' && rng() < 0.35) {
-            rating = rngWeighted(rng, RATING_WEIGHTS)
-            if (rng() < 0.5) {
-              reviewText =
-                rating === 5
-                  ? rngPick(rng, REVIEWS_5)
-                  : rating === 4
-                    ? rngPick(rng, REVIEWS_4)
-                    : rating === 3
-                      ? rngPick(rng, REVIEWS_3)
-                      : rngPick(rng, REVIEWS_LOW)
-            }
-          }
-
-          const source =
-            channel === 'ota'
-              ? rngPick(rng, OTA_SOURCES)
-              : channel === 'reseller'
-                ? rngPick(rng, RESELLER_SOURCES)
-                : channel === 'concierge'
-                  ? rngPick(rng, CONCIERGE_SOURCES)
-                  : channel === 'website_widget'
-                    ? websiteHost
-                    : channel === 'google'
-                      ? 'Google Things to do'
-                      : channel === 'phone'
-                        ? 'Inbound call'
-                        : channel === 'walk_in'
-                          ? 'Harbour desk'
-                          : 'Direct'
-
-          const updatedMs = cancelledAt
-            ? new Date(cancelledAt).getTime()
-            : Math.min(NOW_MS, createdMs + rngInt(rng, 5, 2880) * 60_000)
-
-          allBookings.push({
-            id: bookingId,
+          const departureId = `dep_${(departureSeq++).toString(36).padStart(5, '0')}`
+          const fill = capacity === 0 ? 0 : booked / capacity
+          const departure: Departure = {
+            id: departureId,
             tenantId,
-            reference: bookingReference(bookingId),
             activityId: activity.id,
-            departureId,
-            customerId: customer.id,
-            status: bookingStatus,
-            paymentStatus,
-            channel,
-            partySize: size,
-            lineItems,
-            subtotal,
-            discountTotal,
-            taxTotal,
-            feeTotal,
-            total,
-            amountPaid,
-            currency,
-            participants,
-            createdAt: isoLocal(createdAt),
-            updatedAt: isoLocal(new Date(updatedMs)),
-            departureAt: departure.startsAt,
-            notes: rng() < 0.1 ? rngPick(rng, GUEST_NOTES) : undefined,
-            internalNotes: rng() < 0.08 ? rngPick(rng, INTERNAL_NOTES) : undefined,
-            source,
-            promoCode,
-            cancelledAt,
-            cancellationReason,
-            refundAmount,
-            rating,
-            reviewText,
-          })
+            locationId: site.locationId,
+            startsAt: isoLocal(startsAt),
+            endsAt: isoLocal(endsAt),
+            capacity,
+            booked,
+            held,
+            status,
+            assignedStaffIds,
+            assignedResourceIds: activity.requiredResourceIds,
+            weather,
+            notes: rng() < 0.1 ? rngPick(rng, DEPARTURE_NOTES) : undefined,
+            priceMultiplier:
+              tenant.features.dynamicPricing && fill > 0.85 && !isPast
+                ? 1 + rngInt(rng, 1, 3) / 20
+                : undefined,
+          }
+          allDepartures.push(departure)
 
-          /* ---- payments ---- */
-          if (chargeAmount > 0) {
-            const method = rngWeighted(rng, PAYMENT_METHODS)
-            const isCard = method === 'card' || method === 'apple_pay' || method === 'google_pay'
-            const processorFee = method === 'cash' || method === 'gift_card' ? 0 : round(chargeAmount * 0.029) + 30
-            allPayments.push({
-              id: `pay_${(paymentSeq++).toString(36).padStart(5, '0')}`,
+          if (booked === 0) continue
+
+          /* ---- parties that add up to exactly `booked` ---- */
+          const parties: number[] = []
+          if (isGroupPriced) {
+            parties.push(booked)
+          } else {
+            let left = booked
+            while (left > 0) {
+              let size = rngWeighted(rng, PARTY_WEIGHTS)
+              if (size > left) size = left
+              parties.push(size)
+              left -= size
+            }
+          }
+
+          for (const size of parties) {
+            const bookingId = `bkg_${(bookingSeq++).toString(36).padStart(5, '0')}`
+            const customer = pickCustomer(tenantId, rng)
+            const channel = rngWeighted(rng, CHANNEL_WEIGHTS)
+            const leadDays = rngWeighted(rng, LEAD_WEIGHTS)
+            let createdMs = startMs - leadDays * DAY_MS - rngInt(rng, 0, 900) * 60_000
+            if (createdMs > NOW_MS) createdMs = NOW_MS - rngInt(rng, 5, 5760) * 60_000
+            const createdAt = new Date(createdMs)
+
+            const lineItems: BookingLineItem[] = []
+            let li = 0
+            let subtotal = 0
+
+            let children = 0
+            if (!isGroupPriced && childTier && size >= 3 && rng() < 0.45) {
+              children = rngInt(rng, 1, Math.min(2, size - 1))
+            }
+            const adults = size - children
+
+            if (isGroupPriced) {
+              lineItems.push({
+                id: `li_${bookingId}_${++li}`,
+                label: adultTier.label,
+                kind: 'ticket',
+                quantity: 1,
+                unitPrice: adultTier.price,
+                total: adultTier.price,
+              })
+              subtotal += adultTier.price
+            } else {
+              const adultTotal = adults * adultTier.price
+              lineItems.push({
+                id: `li_${bookingId}_${++li}`,
+                label: adultTier.label,
+                kind: 'ticket',
+                quantity: adults,
+                unitPrice: adultTier.price,
+                total: adultTotal,
+              })
+              subtotal += adultTotal
+              if (children > 0 && childTier) {
+                const childTotal = children * childTier.price
+                lineItems.push({
+                  id: `li_${bookingId}_${++li}`,
+                  label: childTier.label,
+                  kind: 'ticket',
+                  quantity: children,
+                  unitPrice: childTier.price,
+                  total: childTotal,
+                })
+                subtotal += childTotal
+              }
+            }
+
+            let addonPicks = 0
+            for (const ad of activity.addOns) {
+              if (addonPicks >= 2) break
+              if (rng() < 0.19) {
+                const cap = ad.maxPerBooking ?? 4
+                const qty = clamp(rngInt(rng, 1, Math.min(cap, Math.max(1, size))), 1, cap)
+                const totalLine = qty * ad.price
+                lineItems.push({
+                  id: `li_${bookingId}_${++li}`,
+                  label: ad.label,
+                  kind: 'addon',
+                  quantity: qty,
+                  unitPrice: ad.price,
+                  total: totalLine,
+                })
+                subtotal += totalLine
+                addonPicks++
+              }
+            }
+
+            let discountTotal = 0
+            let promoCode: string | undefined
+            if (rng() < 0.12) {
+              const [code, pct] = rngPick(rng, PROMO_CODES)
+              promoCode = code
+              discountTotal = round(subtotal * (pct / 100))
+              lineItems.push({
+                id: `li_${bookingId}_${++li}`,
+                label: `Promo ${code} (-${pct}%)`,
+                kind: 'discount',
+                quantity: 1,
+                unitPrice: -discountTotal,
+                total: -discountTotal,
+              })
+            }
+
+            const net = subtotal - discountTotal
+            const feeTotal = channel === 'walk_in' ? 0 : round(net * 0.06)
+            if (feeTotal > 0) {
+              lineItems.push({
+                id: `li_${bookingId}_${++li}`,
+                label: 'Booking & harbour fee',
+                kind: 'fee',
+                quantity: 1,
+                unitPrice: feeTotal,
+                total: feeTotal,
+              })
+            }
+            const taxTotal = round(net * taxRate)
+            if (taxTotal > 0) {
+              lineItems.push({
+                id: `li_${bookingId}_${++li}`,
+                label: taxLabel,
+                kind: 'tax',
+                quantity: 1,
+                unitPrice: taxTotal,
+                total: taxTotal,
+              })
+            }
+            const total = net + feeTotal + taxTotal
+
+            /* ---- status ---- */
+            let bookingStatus: BookingStatus
+            const roll = rng()
+            if (status === 'cancelled') {
+              bookingStatus = 'cancelled'
+            } else if (isPast) {
+              bookingStatus = roll < 0.04 ? 'no_show' : roll < 0.075 ? 'cancelled' : 'completed'
+            } else {
+              if (roll < 0.045) bookingStatus = 'cancelled'
+              else if (roll < 0.085) bookingStatus = 'pending'
+              else if (off === 0 && rng() < 0.45) bookingStatus = 'checked_in'
+              else bookingStatus = 'confirmed'
+            }
+            if (bookingStatus === 'completed' && rng() < 0.014) bookingStatus = 'refunded'
+
+            let chargeAmount = 0
+            let refundAmount: number | undefined
+            let paymentStatus: PaymentStatus
+            if (bookingStatus === 'pending') {
+              paymentStatus = 'unpaid'
+            } else if (bookingStatus === 'cancelled') {
+              chargeAmount = total
+              refundAmount = rng() < 0.78 ? total : round(total * 0.5)
+              paymentStatus = refundAmount >= total ? 'refunded' : 'partially_refunded'
+            } else if (bookingStatus === 'refunded') {
+              chargeAmount = total
+              refundAmount = total
+              paymentStatus = 'refunded'
+            } else {
+              const pr = rng()
+              if (pr < 0.9) {
+                chargeAmount = total
+                paymentStatus = 'paid'
+              } else if (pr < 0.97) {
+                chargeAmount = round(total * 0.3)
+                paymentStatus = 'deposit_paid'
+              } else {
+                paymentStatus = 'unpaid'
+              }
+            }
+            const amountPaid = chargeAmount - (refundAmount ?? 0)
+
+            let cancelledAt: string | undefined
+            let cancellationReason: string | undefined
+            if (bookingStatus === 'cancelled' || bookingStatus === 'refunded') {
+              const upper = Math.min(NOW_MS, startMs)
+              const span = Math.max(60_000, upper - createdMs)
+              cancelledAt = isoLocal(new Date(createdMs + Math.floor(rng() * span)))
+              cancellationReason =
+                status === 'cancelled'
+                  ? inStorm
+                    ? 'Operator cancelled — tropical storm, unsafe sea state'
+                    : 'Operator cancelled — conditions'
+                  : rngPick(rng, CANCEL_REASONS)
+            }
+
+            /* ---- participants ---- */
+            const participants: Participant[] = []
+            for (let pi = 0; pi < size; pi++) {
+              const isChild = pi >= adults && childTier !== undefined
+              const first = pi === 0 ? customer.firstName : rngPick(rng, FIRST_NAMES)
+              const last = pi === 0 || rng() < 0.68 ? customer.lastName : rngPick(rng, LAST_NAMES)
+              participants.push({
+                id: `par_${bookingId}_${pi + 1}`,
+                firstName: first,
+                lastName: last,
+                age: isChild ? rngInt(rng, 5, 12) : rng() < 0.62 ? rngInt(rng, 21, 44) : rngInt(rng, 45, 71),
+                notes:
+                  rng() < 0.08
+                    ? rngPick(rng, [
+                        'Nervous swimmer — keep close',
+                        'Vegetarian',
+                        'Shellfish allergy',
+                        'Wears contact lenses',
+                        'Previous shoulder injury',
+                      ])
+                    : undefined,
+                waiverSigned: isPast ? rng() < 0.97 : rng() < 0.72,
+                tierLabel: isChild && childTier ? childTier.label : adultTier.label,
+              })
+            }
+
+            let rating: number | undefined
+            let reviewText: string | undefined
+            if (bookingStatus === 'completed' && rng() < 0.35) {
+              rating = rngWeighted(rng, RATING_WEIGHTS)
+              if (rng() < 0.5) {
+                reviewText =
+                  rating === 5
+                    ? rngPick(rng, REVIEWS_5)
+                    : rating === 4
+                      ? rngPick(rng, REVIEWS_4)
+                      : rating === 3
+                        ? rngPick(rng, REVIEWS_3)
+                        : rngPick(rng, REVIEWS_LOW)
+              }
+            }
+
+            const source =
+              channel === 'ota'
+                ? rngPick(rng, OTA_SOURCES)
+                : channel === 'reseller'
+                  ? rngPick(rng, RESELLER_SOURCES)
+                  : channel === 'concierge'
+                    ? rngPick(rng, CONCIERGE_SOURCES)
+                    : channel === 'website_widget'
+                      ? websiteHost
+                      : channel === 'google'
+                        ? 'Google Things to do'
+                        : channel === 'phone'
+                          ? 'Inbound call'
+                          : channel === 'walk_in'
+                            ? 'Harbour desk'
+                            : 'Direct'
+
+            const updatedMs = cancelledAt
+              ? new Date(cancelledAt).getTime()
+              : Math.min(NOW_MS, createdMs + rngInt(rng, 5, 2880) * 60_000)
+
+            allBookings.push({
+              id: bookingId,
               tenantId,
-              bookingId,
-              amount: chargeAmount,
+              reference: bookingReference(bookingId),
+              activityId: activity.id,
+              departureId,
+              customerId: customer.id,
+              status: bookingStatus,
+              paymentStatus,
+              channel,
+              partySize: size,
+              lineItems,
+              subtotal,
+              discountTotal,
+              taxTotal,
+              feeTotal,
+              total,
+              amountPaid,
               currency,
-              method,
-              status: 'succeeded',
-              processorFee,
-              netAmount: chargeAmount - processorFee,
+              participants,
               createdAt: isoLocal(createdAt),
-              last4: isCard ? String(rngInt(rng, 1000, 9999)) : undefined,
-              brand: isCard ? rngPick(rng, CARD_BRANDS) : undefined,
+              updatedAt: isoLocal(new Date(updatedMs)),
+              departureAt: departure.startsAt,
+              notes: rng() < 0.1 ? rngPick(rng, GUEST_NOTES) : undefined,
+              internalNotes: rng() < 0.08 ? rngPick(rng, INTERNAL_NOTES) : undefined,
+              source,
+              promoCode,
+              cancelledAt,
+              cancellationReason,
+              refundAmount,
+              rating,
+              reviewText,
             })
-            if (refundAmount && refundAmount > 0) {
+
+            /* ---- payments ---- */
+            if (chargeAmount > 0) {
+              const method = rngWeighted(rng, PAYMENT_METHODS)
+              const isCard = method === 'card' || method === 'apple_pay' || method === 'google_pay'
+              const processorFee = method === 'cash' || method === 'gift_card' ? 0 : round(chargeAmount * 0.029) + 30
               allPayments.push({
                 id: `pay_${(paymentSeq++).toString(36).padStart(5, '0')}`,
                 tenantId,
                 bookingId,
-                amount: -refundAmount,
+                amount: chargeAmount,
                 currency,
                 method,
-                status: 'refunded',
-                processorFee: 0,
-                netAmount: -refundAmount,
-                createdAt: cancelledAt ?? isoLocal(createdAt),
+                status: 'succeeded',
+                processorFee,
+                netAmount: chargeAmount - processorFee,
+                createdAt: isoLocal(createdAt),
+                last4: isCard ? String(rngInt(rng, 1000, 9999)) : undefined,
+                brand: isCard ? rngPick(rng, CARD_BRANDS) : undefined,
               })
+              if (refundAmount && refundAmount > 0) {
+                allPayments.push({
+                  id: `pay_${(paymentSeq++).toString(36).padStart(5, '0')}`,
+                  tenantId,
+                  bookingId,
+                  amount: -refundAmount,
+                  currency,
+                  method,
+                  status: 'refunded',
+                  processorFee: 0,
+                  netAmount: -refundAmount,
+                  createdAt: cancelledAt ?? isoLocal(createdAt),
+                })
+              }
             }
           }
         }

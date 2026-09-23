@@ -1,4 +1,4 @@
-import type { Activity, DifficultyLevel } from '@/types'
+import type { Activity, ActivityLocation, DifficultyLevel } from '@/types'
 
 /* ==========================================================================
    Activity overrides — edits made in the activity editor, kept in the
@@ -22,6 +22,8 @@ export interface ActivityOverride {
   minParticipants: number
   featured: boolean
   crewIds: string[]
+  /** The bases it runs from and the times at each; absent on edits saved before bases existed. */
+  locations?: ActivityLocation[]
   updatedAt: string
 }
 
@@ -88,6 +90,7 @@ export function applyActivityOverride<T extends Activity>(activity: T, override?
     minAge: override.minAge,
     minParticipants: override.minParticipants,
     featured: override.featured,
+    locations: override.locations && override.locations.length > 0 ? override.locations : activity.locations,
     updatedAt: override.updatedAt,
   }
 }

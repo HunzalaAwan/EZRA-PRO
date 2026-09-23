@@ -1,7 +1,8 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 
-import { getDepartureById, getStorefront, getStorefrontAvailability } from '@/lib/demo'
+import { getDepartureById, getStorefront, getStorefrontAvailability, getLocationById } from '@/lib/demo'
+import { locationAddress } from '@/lib/locations'
 import { bookingReference, clamp, seatsRemaining } from '@/lib/utils'
 import type { Activity } from '@/types'
 import {
@@ -133,12 +134,18 @@ export default async function CheckoutPage({
   const departureRow = valid ? requested : fallback
   if (!departureRow) notFound()
 
+  const site = departureRow.locationId ? getLocationById(departureRow.locationId) : undefined
+  const siteMeeting = activity.locations.find((entry) => entry.locationId === departureRow.locationId)?.meetingPoint
+
   const departure: CheckoutDeparture = {
     id: departureRow.id,
     startsAt: departureRow.startsAt,
     endsAt: departureRow.endsAt,
     seatsLeft: seatsRemaining(departureRow.capacity, departureRow.booked, departureRow.held),
     priceMultiplier: departureRow.priceMultiplier ?? 1,
+    location: site
+      ? { name: site.name, addressLine: locationAddress(site), meetingPoint: siteMeeting ?? activity.meetingPoint }
+      : undefined,
   }
 
   /* ---------- selection ---------- */

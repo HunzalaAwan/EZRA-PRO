@@ -151,6 +151,8 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     excluded: spec.excluded,
     requirements: spec.requirements,
     meetingPoint: spec.meetingPoint,
+    /* Legacy seam: bases are resolved by the live demo module. */
+    locations: [],
     category: spec.category ?? tenant.vertical,
     status: spec.status,
     format: 'departures',

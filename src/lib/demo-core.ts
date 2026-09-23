@@ -22,6 +22,7 @@
 import type {
   Activity,
   ActivityFormat,
+  ActivityLocation,
   ActivityFeedItem,
   ActivityMedia,
   ActivityPerformance,
@@ -44,6 +45,7 @@ import type {
   HeatmapCell,
   Insight,
   KpiMetric,
+  Location,
   NotificationItem,
   Participant,
   Payment,
@@ -333,6 +335,125 @@ export const TENANTS: Tenant[] = [
 
 export const tenantById = new Map(TENANTS.map((t) => [t.id, t]))
 export const tenantBySlug = new Map(TENANTS.map((t) => [t.slug, t]))
+
+/* ==========================================================================
+   LOCATIONS — the places a business runs from. Most run from one base,
+   built from their address; Blue Horizon and Coral Cay run several.
+   ========================================================================== */
+
+const NAMED_LOCATIONS: Location[] = [
+  {
+    id: 'loc_bluehorizon_maalaea',
+    tenantId: 'tnt_bluehorizon',
+    slug: 'maalaea',
+    name: 'Maalaea Harbor',
+    addressLine: '101 Maalaea Boat Harbor Rd',
+    city: 'Wailuku, HI 96793',
+    phone: '+1 (808) 555-0164',
+    notes: 'Free parking in the harbor lot. Check in at the blue tent by the ramp.',
+    isDefault: true,
+    status: 'active',
+  },
+  {
+    id: 'loc_bluehorizon_lahaina',
+    tenantId: 'tnt_bluehorizon',
+    slug: 'lahaina',
+    name: 'Lahaina Harbor',
+    addressLine: '675 Wharf St',
+    city: 'Lahaina, HI 96761',
+    phone: '+1 (808) 555-0171',
+    notes: 'Metered parking on Front St; the harbor is a two-minute walk.',
+    isDefault: false,
+    status: 'active',
+  },
+  {
+    id: 'loc_bluehorizon_kaanapali',
+    tenantId: 'tnt_bluehorizon',
+    slug: 'kaanapali',
+    name: 'Kaanapali Beach',
+    addressLine: '2435 Kaanapali Pkwy',
+    city: 'Lahaina, HI 96761',
+    phone: '+1 (808) 555-0182',
+    notes: 'Use the Whalers Village garage. The beach shack is at the foot of the steps.',
+    isDefault: false,
+    status: 'active',
+  },
+  {
+    id: 'loc_bluehorizon_kihei',
+    tenantId: 'tnt_bluehorizon',
+    slug: 'kihei',
+    name: 'Kihei',
+    addressLine: '1847 S Kihei Rd',
+    city: 'Kihei, HI 96753',
+    phone: '+1 (808) 555-0193',
+    notes: 'The dive loft and the boat ramp are a short drive apart; your confirmation says which.',
+    isDefault: false,
+    status: 'active',
+  },
+  {
+    id: 'loc_coralcay_cairns',
+    tenantId: 'tnt_coralcay',
+    slug: 'cairns',
+    name: 'Marlin Marina, Cairns',
+    addressLine: '1 Spence St',
+    city: 'Cairns City QLD 4870',
+    isDefault: true,
+    status: 'active',
+  },
+  {
+    id: 'loc_coralcay_port-douglas',
+    tenantId: 'tnt_coralcay',
+    slug: 'port-douglas',
+    name: 'Port Douglas Marina',
+    addressLine: '44 Wharf St',
+    city: 'Port Douglas QLD 4877',
+    isDefault: false,
+    status: 'active',
+  },
+]
+
+/** A single base built from the business's own address. */
+function defaultLocationFor(tenant: Tenant): Location {
+  const [addressLine, ...rest] = tenant.contact.addressLine.split(', ')
+  return {
+    id: `loc_${tenant.id.replace(/^tnt_/, '')}_main`,
+    tenantId: tenant.id,
+    slug: 'main',
+    name: tenant.city.split(',')[0].trim(),
+    addressLine,
+    city: rest.join(', ') || tenant.city,
+    phone: tenant.contact.phone,
+    isDefault: true,
+    status: 'active',
+  }
+}
+
+export const LOCATIONS: Location[] = TENANTS.flatMap((tenant) => {
+  const named = NAMED_LOCATIONS.filter((site) => site.tenantId === tenant.id)
+  return named.length > 0 ? named : [defaultLocationFor(tenant)]
+})
+
+export const locationById = new Map(LOCATIONS.map((site) => [site.id, site]))
+export const locationsByTenant = new Map<string, Location[]>()
+for (const site of LOCATIONS) {
+  const list = locationsByTenant.get(site.tenantId)
+  if (list) list.push(site)
+  else locationsByTenant.set(site.tenantId, [site])
+}
+
+export function getLocationsByTenant(tenantId: string): Location[] {
+  return locationsByTenant.get(tenantId) ?? []
+}
+
+export function getLocationById(id: string): Location | undefined {
+  return locationById.get(id)
+}
+
+/** The base activities run from unless they say otherwise. */
+export function getDefaultLocation(tenantId: string): Location | undefined {
+  const list = getLocationsByTenant(tenantId)
+  return list.find((site) => site.isDefault) ?? list[0]
+}
 
 export const CURRENT_TENANT = TENANTS[0]
 
@@ -1155,6 +1276,14 @@ function buildMedia(slug: string, name: string, ids: string[]): ActivityMedia[] 
 type TierSpec = [label: string, price: number, min: number, max: number, note?: string]
 type AddOnSpec = [label: string, price: number, note: string, max: number | null, icon?: string]
 
+interface SpecLocation {
+  /** Location slug within the business. */
+  location: string
+  times?: string[]
+  weekdays?: number[]
+  meetingPoint?: string
+}
+
 interface ActivitySpec {
   slug: string
   name: string
@@ -1186,6 +1315,12 @@ interface ActivitySpec {
   times: string[]
   /** JS weekday numbers (0=Sun … 6=Sat). Omit for every day. */
   weekdays?: number[]
+  /**
+   * The bases this runs from, by location slug; the first is home. Omit for
+   * the business's default base. A base without its own times or weekdays
+   * runs on the spec's.
+   */
+  locations?: SpecLocation[]
   /** 0..1 — drives how full departures run. */
   popularity: number
   freeCancelHours?: number
@@ -1255,6 +1390,10 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     featured: true,
     resources: ['res_bh_alii_nui'],
     times: ['16:30'],
+    locations: [
+      { location: 'maalaea' },
+      { location: 'lahaina', times: ['17:00'], meetingPoint: 'Lahaina Harbor, Slip 9 — boarding from 16:30.' },
+    ],
     popularity: 0.9,
     freeCancelHours: 24,
     seoTitle: 'Sunset Catamaran Sail & Snorkel in Maui | Blue Horizon',
@@ -1366,6 +1505,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     reviewCount: 863,
     resources: ['res_bh_kayak_fleet'],
     times: ['07:30', '10:30'],
+    locations: [{ location: 'kihei' }],
     popularity: 0.72,
     freeCancelHours: 24,
   },
@@ -1421,6 +1561,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     reviewCount: 312,
     resources: ['res_bh_pelagic_pursuit'],
     times: ['06:30'],
+    locations: [{ location: 'lahaina' }],
     weekdays: [1, 3, 5, 6],
     popularity: 0.62,
     freeCancelHours: 72,
@@ -1473,6 +1614,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     reviewCount: 1547,
     resources: ['res_bh_jetski_fleet'],
     times: ['09:30', '15:00'],
+    locations: [{ location: 'kaanapali' }],
     popularity: 0.68,
     freeCancelHours: 24,
   },
@@ -1525,6 +1667,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     reviewCount: 1102,
     resources: ['res_bh_surf_fleet'],
     times: ['08:00', '11:00'],
+    locations: [{ location: 'lahaina' }],
     weekdays: [0, 2, 4, 6],
     popularity: 0.74,
     freeCancelHours: 24,
@@ -1579,6 +1722,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     featured: true,
     resources: ['res_bh_manta_voyager'],
     times: ['19:00'],
+    locations: [{ location: 'kihei' }],
     weekdays: [2, 4, 5, 6],
     popularity: 0.92,
     freeCancelHours: 48,
@@ -1628,6 +1772,10 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     reviewCount: 2310,
     resources: ['res_bh_alii_nui'],
     times: ['08:00', '10:30', '13:00'],
+    locations: [
+      { location: 'maalaea' },
+      { location: 'lahaina', times: ['09:00', '12:00'], meetingPoint: 'Lahaina Harbor, Slip 9 — boarding 20 minutes prior.' },
+    ],
     popularity: 0.8,
     freeCancelHours: 24,
   },
@@ -1678,6 +1826,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     reviewCount: 476,
     resources: ['res_bh_sup_fleet'],
     times: ['06:30'],
+    locations: [{ location: 'kihei' }],
     weekdays: [0, 1, 3, 5],
     popularity: 0.6,
     freeCancelHours: 12,
@@ -1735,6 +1884,10 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     featured: true,
     resources: ['res_bh_kaimana_sky'],
     times: ['09:00', '13:00'],
+    locations: [
+      { location: 'maalaea' },
+      { location: 'lahaina', times: ['10:00', '14:00'], meetingPoint: 'Lahaina Harbor, Slip 9 — family check-in desk opens 45 minutes prior.' },
+    ],
     popularity: 0.78,
     freeCancelHours: 24,
   },
@@ -1840,6 +1993,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     reviewCount: 654,
     resources: ['res_bh_alii_nui'],
     times: ['08:00'],
+    locations: [{ location: 'lahaina' }],
     weekdays: [0, 2, 4, 6],
     popularity: 0.7,
     freeCancelHours: 48,
@@ -1894,6 +2048,14 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     resources: ['res_bh_trade_wind_flyer'],
     format: 'open',
     times: ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'],
+    locations: [
+      { location: 'kaanapali' },
+      {
+        location: 'kihei',
+        times: ['10:00', '11:00', '12:00', '13:00', '14:00', '15:00'],
+        meetingPoint: 'Kihei Boat Ramp — the Blue Horizon parasail boat, check in 20 minutes prior.',
+      },
+    ],
     popularity: 0.64,
     freeCancelHours: 24,
   },
@@ -1945,6 +2107,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     reviewCount: 41,
     resources: ['res_bh_manta_voyager'],
     times: ['08:00'],
+    locations: [{ location: 'kihei' }],
     weekdays: [1, 4],
     popularity: 0.4,
     freeCancelHours: 72,
@@ -2102,6 +2265,7 @@ const CORAL_CAY_SPECS: ActivitySpec[] = [
     reviewCount: 1204,
     resources: ['res_cc_sailaway'],
     times: ['08:30'],
+    locations: [{ location: 'port-douglas' }],
     popularity: 0.72,
     freeCancelHours: 24,
   },
@@ -2757,6 +2921,23 @@ export const SPEC_BY_TENANT: [string, ActivitySpec[]][] = [
   ['tnt_casavela', CASAVELA_SPECS],
 ]
 
+/** Resolve a spec's bases to location ids, defaulting to the business's home base. */
+function activityLocations(tenant: Tenant, spec: ActivitySpec): ActivityLocation[] {
+  const sites = getLocationsByTenant(tenant.id)
+  const home = sites.find((site) => site.isDefault) ?? sites[0]
+  const wanted = spec.locations && spec.locations.length > 0 ? spec.locations : [{ location: home?.slug ?? 'main' }]
+  return wanted.map((entry: SpecLocation) => {
+    const site = sites.find((candidate) => candidate.slug === entry.location) ?? home
+    const resolved: ActivityLocation = {
+      locationId: site?.id ?? `loc_${tenant.id.replace(/^tnt_/, '')}_main`,
+      times: entry.times ?? spec.times,
+    }
+    if (entry.weekdays) resolved.weekdays = entry.weekdays
+    if (entry.meetingPoint) resolved.meetingPoint = entry.meetingPoint
+    return resolved
+  })
+}
+
 function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
   const id = `act_${spec.slug}`
   const priceTiers: PriceTier[] = spec.tiers.map(([label, price, min, max, note]) => ({
@@ -2795,6 +2976,7 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     excluded: spec.excluded,
     requirements: spec.requirements,
     meetingPoint: spec.meetingPoint,
+    locations: activityLocations(tenant, spec),
     category: tenant.vertical,
     status: spec.status ?? 'live',
     format: spec.format ?? 'departures',

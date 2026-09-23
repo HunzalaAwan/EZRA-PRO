@@ -32,6 +32,7 @@ import {
   getCustomerById,
   getResourcesByTenant,
   getUsersByTenant,
+  getLocationById,
 } from '@/lib/demo'
 import { addDays, average, clamp, fillRate, percentChange, startOfDay, toDateKey } from '@/lib/utils'
 
@@ -95,6 +96,8 @@ export interface DepartureRowLite {
   status: DepartureStatus
   staff: { id: string; name: string; avatarUrl: string }[]
   resources: string[]
+  /** The location it leaves from; undefined on single-site businesses. */
+  locationId?: string
   weather: WeatherSnapshot | null
 }
 
@@ -140,6 +143,8 @@ export interface ActivityDetailData {
   crew: { id: string; name: string; avatarUrl: string; title: string }[]
   /** The start times this activity usually runs at, "HH:mm". */
   usualTimes: string[]
+  /** The locations this runs from, named. */
+  locations: { id: string; name: string }[]
 }
 
 /* ==========================================================================
@@ -539,6 +544,7 @@ export function getActivityDetail(activityId: string): ActivityDetailData | unde
         .filter((u): u is NonNullable<typeof u> => Boolean(u))
         .map((u) => ({ id: u.id, name: u.name, avatarUrl: u.avatarUrl })),
       resources: d.assignedResourceIds,
+      locationId: d.locationId,
       weather: d.weather ?? null,
     }))
 
@@ -683,6 +689,10 @@ export function getActivityDetail(activityId: string): ActivityDetailData | unde
       .filter((u) => u.isBookable && u.status === 'active')
       .map((u) => ({ id: u.id, name: u.name, avatarUrl: u.avatarUrl, title: u.title })),
     usualTimes: Array.from(new Set(allDepartures.map((d) => d.startsAt.slice(11, 16)))).sort(),
+    locations: activity.locations
+      .map((site) => getLocationById(site.locationId))
+      .filter((site): site is NonNullable<typeof site> => Boolean(site))
+      .map((site) => ({ id: site.id, name: site.name })),
   }
 
   detailCache.set(activityId, detail)

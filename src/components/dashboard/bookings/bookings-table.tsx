@@ -19,7 +19,7 @@ import {
 } from 'lucide-react'
 
 import type { BookingRow } from '@/lib/demo'
-import { CHANNEL_LABELS } from '@/lib/demo-core'
+import { CHANNEL_LABELS, getLocationById } from '@/lib/demo-core'
 import { ACTIVITY_COLOR_VAR } from '@/components/charts/chart-container'
 import type { BookingChannel, CurrencyCode, PaymentStatus } from '@/types'
 import {
@@ -637,13 +637,16 @@ export function BookingsTable({
         sortable: true,
         hideBelow: 'lg',
         cell: ({ activity, departure }) => (
-          <span className="flex min-w-[9rem] max-w-[16rem] items-center gap-2.5">
+          <span className="flex min-w-[9rem] max-w-[19rem] items-center gap-2.5">
             <span
               aria-hidden="true"
               className="h-4 w-1 shrink-0 rounded-full"
               style={{ background: ACTIVITY_COLOR_VAR[activity.colorKey] }}
             />
             <span className="truncate text-[0.8125rem] text-foreground">{activity.name}</span>
+            {activity.locations.length > 1 && departure.locationId ? (
+              <span className="hidden max-w-[8rem] shrink-0 truncate text-xs text-faint xl:inline">· {getLocationById(departure.locationId)?.name}</span>
+            ) : null}
             {departure.status === 'cancelled' || departure.status === 'weather_hold' ? (
               <StatusBadge kind="departure" status={departure.status} size="sm" showIcon={false} className="shrink-0" />
             ) : null}

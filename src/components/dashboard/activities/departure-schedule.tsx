@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { AlertTriangle, ArrowUpRight, CalendarClock, CalendarPlus, Check, Minus, Plus, Users, X } from 'lucide-react'
+import { AlertTriangle, ArrowUpRight, CalendarClock, CalendarPlus, Check, MapPin, Minus, Plus, Users, X } from 'lucide-react'
 
 import { Avatar, AvatarGroup } from '@/components/ui/avatar'
 import { StatusBadge } from '@/components/ui/badge'
@@ -14,6 +14,7 @@ import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { CapacityBar } from '@/components/ui/progress'
 import { Segmented } from '@/components/ui/segmented'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
 import { SimpleTooltip } from '@/components/ui/tooltip'
@@ -53,6 +54,8 @@ export interface DepartureScheduleProps {
   minParticipants: number
   durationMinutes: number
   usualTimes: string[]
+  /** The locations this runs from; with more than one, rows say which and the list can filter. */
+  locations?: { id: string; name: string }[]
   nowIso: string
   todayKey: string
 }
@@ -70,10 +73,13 @@ const dayLabel = (dateKey: string, todayKey: string) => {
   return diff === 0 ? `Today · ${long}` : diff === 1 ? `Tomorrow · ${long}` : long
 }
 
-export function DepartureSchedule({ rows: initial, crew, format, activityName, maxCapacity, minParticipants, durationMinutes, usualTimes, nowIso, todayKey }: DepartureScheduleProps) {
+export function DepartureSchedule({ rows: initial, crew, format, activityName, maxCapacity, minParticipants, durationMinutes, usualTimes, locations = [], nowIso, todayKey }: DepartureScheduleProps) {
   const [rows, setRows] = React.useState(initial)
   const [range, setRange] = React.useState<RangeKey>('7d')
   const [seats, setSeats] = React.useState<SeatFilter>('all')
+  const [site, setSite] = React.useState<string>('all')
+  const multiSite = locations.length > 1
+  const siteName = (id: string | undefined) => locations.find((entry) => entry.id === id)?.name ?? locations[0]?.name ?? ''
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
   const [adding, setAdding] = React.useState(false)
   const open = format === 'open'
@@ -87,6 +93,7 @@ export function DepartureSchedule({ rows: initial, crew, format, activityName, m
       rows.filter((r) => {
         const key = dateKeyOf(r.startsAt)
         if (key < todayKey || key >= endKey) return false
+        if (site !== 'all' && (r.locationId ?? locations[0]?.id) !== site) return false
         const fill = fillOf(r)
         if (seats === 'open' && (fill >= 85 || r.status === 'cancelled')) return false
         if (seats === 'nearly' && (fill < 85 || fill >= 100 || r.status === 'cancelled')) return false
@@ -94,7 +101,7 @@ export function DepartureSchedule({ rows: initial, crew, format, activityName, m
         if (seats === 'cancelled' && r.status !== 'cancelled') return false
         return true
       }),
-    [rows, todayKey, endKey, seats],
+    [rows, todayKey, endKey, seats, site, locations],
   )
   const days = React.useMemo(() => {
     const map = new Map<string, DepartureRowLite[]>()
@@ -176,6 +183,15 @@ export function DepartureSchedule({ rows: initial, crew, format, activityName, m
           value={range}
           onValueChange={setRange}
         />
+        {multiSite ? (
+          <Segmented
+            size="sm"
+            label="Location"
+            options={[{ value: 'all', label: 'All locations' }, ...locations.map((entry) => ({ value: entry.id, label: entry.name }))]}
+            value={site}
+            onValueChange={setSite}
+          />
+        ) : null}
         <Segmented
           size="sm"
           label="Seats"
@@ -228,6 +244,12 @@ export function DepartureSchedule({ rows: initial, crew, format, activityName, m
                               <span className="text-faint"> – {formatTime(r.endsAt)}</span>
                             </p>
                             <p className={cn('text-xs', upcoming && dateKey === todayKey && new Date(r.startsAt).getTime() - now.getTime() < 2 * 3_600_000 && !dead ? 'text-warning' : 'text-subtle')}>{dead && r.status === 'completed' ? 'Away' : formatRelative(r.startsAt, now)}</p>
+                            {multiSite ? (
+                              <p className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted">
+                                <MapPin className="size-3" aria-hidden="true" />
+                                {siteName(r.locationId)}
+                              </p>
+                            ) : null}
                           </div>
                         </div>
                         <div className="min-w-0 flex-1">
@@ -257,7 +279,7 @@ export function DepartureSchedule({ rows: initial, crew, format, activityName, m
       )}
 
       <RunSheet row={selected} crew={crew} open={open} noun={noun} minParticipants={minParticipants} now={now} todayKey={todayKey} onClose={() => setSelectedId(null)} onStatus={setStatus} onSeats={changeSeats} onCrew={toggleCrew} />
-      <AddRunDialog open={adding} onOpenChange={setAdding} noun={noun} isOpenEntry={open} activityName={activityName} maxCapacity={maxCapacity} durationMinutes={durationMinutes} usualTimes={usualTimes} crew={crew} todayKey={todayKey} onAdd={add} />
+      <AddRunDialog open={adding} onOpenChange={setAdding} noun={noun} isOpenEntry={open} activityName={activityName} maxCapacity={maxCapacity} durationMinutes={durationMinutes} usualTimes={usualTimes} crew={crew} locations={locations} todayKey={todayKey} onAdd={add} />
     </div>
   )
 }
@@ -402,11 +424,12 @@ function RunSheet({ row: r, crew, open, noun, minParticipants, now, todayKey, on
   )
 }
 
-function AddRunDialog({ open, onOpenChange, noun, isOpenEntry, activityName, maxCapacity, durationMinutes, usualTimes, crew, todayKey, onAdd }: { open: boolean; onOpenChange: (open: boolean) => void; noun: string; isOpenEntry: boolean; activityName: string; maxCapacity: number; durationMinutes: number; usualTimes: string[]; crew: CrewOption[]; todayKey: string; onAdd: (row: DepartureRowLite) => void }) {
+function AddRunDialog({ open, onOpenChange, noun, isOpenEntry, activityName, maxCapacity, durationMinutes, usualTimes, crew, locations = [], todayKey, onAdd }: { open: boolean; onOpenChange: (open: boolean) => void; noun: string; isOpenEntry: boolean; activityName: string; maxCapacity: number; durationMinutes: number; usualTimes: string[]; crew: CrewOption[]; locations?: { id: string; name: string }[]; todayKey: string; onAdd: (row: DepartureRowLite) => void }) {
   const [date, setDate] = React.useState(todayKey)
   const [time, setTime] = React.useState(usualTimes[0] ?? '09:00')
   const [capacity, setCapacity] = React.useState(maxCapacity)
   const [crewIds, setCrewIds] = React.useState<string[]>([])
+  const [locationId, setLocationId] = React.useState(locations[0]?.id ?? '')
 
   React.useEffect(() => {
     if (!open) return
@@ -414,7 +437,8 @@ function AddRunDialog({ open, onOpenChange, noun, isOpenEntry, activityName, max
     setTime(usualTimes[0] ?? '09:00')
     setCapacity(maxCapacity)
     setCrewIds([])
-  }, [open, todayKey, usualTimes, maxCapacity])
+    setLocationId(locations[0]?.id ?? '')
+  }, [open, todayKey, usualTimes, maxCapacity, locations])
 
   const valid = /^\d{4}-\d{2}-\d{2}$/.test(date) && /^\d{2}:\d{2}$/.test(time) && capacity > 0
   const submit = () => {
@@ -422,7 +446,7 @@ function AddRunDialog({ open, onOpenChange, noun, isOpenEntry, activityName, max
     const startsAt = `${date}T${time}:00`
     const end = new Date(new Date(startsAt).getTime() + durationMinutes * 60_000)
     const endsAt = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, '0')}-${String(end.getDate()).padStart(2, '0')}T${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}:00`
-    onAdd({ id: `dep_new_${Date.now().toString(36)}`, startsAt, endsAt, capacity, booked: 0, held: 0, status: 'scheduled', staff: crew.filter((c) => crewIds.includes(c.id)).map((c) => ({ id: c.id, name: c.name, avatarUrl: c.avatarUrl })), resources: [], weather: null })
+    onAdd({ id: `dep_new_${Date.now().toString(36)}`, startsAt, endsAt, locationId: locations.length > 0 ? locationId : undefined, capacity, booked: 0, held: 0, status: 'scheduled', staff: crew.filter((c) => crewIds.includes(c.id)).map((c) => ({ id: c.id, name: c.name, avatarUrl: c.avatarUrl })), resources: [], weather: null })
   }
 
   return (
@@ -437,6 +461,22 @@ function AddRunDialog({ open, onOpenChange, noun, isOpenEntry, activityName, max
             <Field label="Date" required>{(control) => <Input {...control} type="date" min={todayKey} value={date} onChange={(e) => setDate(e.target.value)} />}</Field>
             <Field label="Time" required description={usualTimes.length ? `Usually ${usualTimes.slice(0, 4).join(', ')}${usualTimes.length > 4 ? '…' : ''}` : undefined}>{(control) => <Input {...control} type="time" value={time} onChange={(e) => setTime(e.target.value)} />}</Field>
           </div>
+          {locations.length > 1 ? (
+            <Field label="Location" required>
+              <Select value={locationId} onValueChange={setLocationId}>
+                <SelectTrigger aria-label="Location" icon={<MapPin className="size-4" />}>
+                  <SelectValue placeholder="Location" />
+                </SelectTrigger>
+                <SelectContent>
+                  {locations.map((entry) => (
+                    <SelectItem key={entry.id} value={entry.id}>
+                      {entry.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          ) : null}
           <Field label="Seats" required description={`${activityName} normally takes ${maxCapacity}.`}>{(control) => <Input {...control} type="number" inputMode="numeric" min={1} max={500} value={capacity} onChange={(e) => setCapacity(Math.max(0, Number(e.target.value || 0)))} leftIcon={<Users />} />}</Field>
           {!isOpenEntry && crew.length ? (
             <Field label="Crew" optional>

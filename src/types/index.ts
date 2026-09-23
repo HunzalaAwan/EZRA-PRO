@@ -94,6 +94,39 @@ export interface TenantStats {
   reviewCount: number
 }
 
+/* ==========================================================================
+   LOCATIONS (the places a business runs from)
+   ========================================================================== */
+
+export interface Location {
+  id: string
+  tenantId: string
+  /** URL-safe and unique within the business, e.g. "lahaina". */
+  slug: string
+  name: string
+  addressLine: string
+  city: string
+  /** IANA zone; the business timezone applies when omitted. */
+  timezone?: string
+  phone?: string
+  /** Shown to guests under the address: parking, the check-in desk, what to look for. */
+  notes?: string
+  /** Where activities run from unless they say otherwise. */
+  isDefault: boolean
+  status: 'active' | 'paused'
+}
+
+/** One place an activity runs from, with the times it runs there. */
+export interface ActivityLocation {
+  locationId: string
+  /** "HH:mm" start times (or arrival slots) at this place; empty means the activity's usual times. */
+  times: string[]
+  /** JS weekday numbers (0=Sun … 6=Sat); omit to run on the activity's usual days. */
+  weekdays?: number[]
+  /** Where to meet at this place; the activity's own meeting point applies when omitted. */
+  meetingPoint?: string
+}
+
 export type Role = 'owner' | 'admin' | 'manager' | 'staff' | 'guide' | 'viewer'
 
 export interface User {
@@ -222,6 +255,8 @@ export interface Activity {
   excluded: string[]
   requirements: string[]
   meetingPoint: string
+  /** Where it runs from, with the times at each place. A single-site business has one entry. */
+  locations: ActivityLocation[]
   category: VerticalKey
   status: ActivityStatus
   /** Group departures, open entry or fixed dates. */
@@ -270,6 +305,8 @@ export interface Departure {
   id: string
   tenantId: string
   activityId: string
+  /** The place this run leaves from; undefined means the business's default location. */
+  locationId?: string
   /** Full ISO datetime in tenant timezone. */
   startsAt: string
   endsAt: string

@@ -9,6 +9,7 @@ import {
   CircleAlert,
   Clock,
   Info,
+  MapPin,
   Minus,
   Plus,
   ShieldCheck,
@@ -24,13 +25,14 @@ import {
   fromDateKey,
   pluralize,
 } from '@/lib/utils'
-import type { Activity, CurrencyCode, DepartureStatus, VerticalKey } from '@/types'
+import type { Activity, CurrencyCode, DepartureStatus, Location, VerticalKey } from '@/types'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { IconButton } from '@/components/ui/icon-button'
 import { SimpleTooltip } from '@/components/ui/tooltip'
 import { TrustSeal } from '@/components/storefront/trust-bar'
+import { locationAddress } from '@/lib/locations'
 
 /* ==========================================================================
    AVAILABILITY CONTRACT
@@ -52,6 +54,8 @@ export interface AvailabilitySlot {
   priceMultiplier: number
   /** Lead-tier price after the multiplier, minor units. */
   leadPrice: number
+  /** The location this run leaves from; absent on single-site businesses. */
+  locationId?: string
   soldOut: boolean
 }
 
@@ -208,6 +212,8 @@ export interface BookingWidgetProps {
   tenantSlug: string
   currency: CurrencyCode
   days: AvailabilityDay[]
+  /** The business's locations. With more than one on the activity, guests pick one first. */
+  locations?: Location[]
   checkoutPath: string
   initialDateKey?: string
   initialGuests?: number
@@ -220,7 +226,8 @@ export function BookingWidget({
   activity,
   tenantSlug,
   currency,
-  days,
+  days: allDays,
+  locations = [],
   checkoutPath,
   initialDateKey,
   initialGuests,
@@ -231,7 +238,44 @@ export function BookingWidget({
   const reducedMotion = useReducedMotionSafe()
   const stripRef = React.useRef<HTMLDivElement>(null)
 
+  /* ---------- location ---------- */
+
+  const sites = React.useMemo(
+    () =>
+      activity.locations
+        .map((site) => ({ ...site, location: locations.find((entry) => entry.id === site.locationId) }))
+        .filter((site): site is typeof site & { location: Location } => Boolean(site.location)),
+    [activity.locations, locations],
+  )
+  const multiSite = sites.length > 1
+  const [locationId, setLocationId] = React.useState<string>(() => sites[0]?.locationId ?? '')
+  const stepNo = (n: number) => (multiSite ? n + 1 : n)
+
+  /* Only the chosen location's runs, with the day totals recomputed. */
+  const days = React.useMemo(() => {
+    if (!multiSite) return allDays
+    return allDays.map((day) => {
+      const slots = day.slots.filter((slot) => !slot.locationId || slot.locationId === locationId)
+      const open = slots.filter((slot) => !slot.soldOut)
+      return {
+        ...day,
+        slots,
+        fromPrice: open.length > 0 ? Math.min(...open.map((slot) => slot.leadPrice)) : 0,
+        seatsLeft: open.reduce((total, slot) => total + slot.seatsLeft, 0),
+        soldOut: slots.length > 0 && open.length === 0,
+      }
+    })
+  }, [allDays, multiSite, locationId])
+
   const bookableDays = React.useMemo(() => days.filter((d) => !d.soldOut && d.slots.length > 0), [days])
+
+  // A new location means a new strip: land on its first bookable day.
+  const previousLocation = React.useRef(locationId)
+  React.useEffect(() => {
+    if (previousLocation.current === locationId) return
+    previousLocation.current = locationId
+    setDateKey(bookableDays[0]?.dateKey ?? days[0]?.dateKey ?? '')
+  }, [locationId, bookableDays, days])
 
   const [dateKey, setDateKey] = React.useState<string>(() => {
     const requested = initialDateKey && days.find((d) => d.dateKey === initialDateKey)
@@ -363,11 +407,50 @@ export function BookingWidget({
       </header>
 
       <div className="flex flex-col gap-6 px-5 py-5">
+        {/* ---------- location ---------- */}
+        {multiSite ? (
+          <div>
+            <h3 className="text-[0.8125rem] font-semibold tracking-tight text-foreground">1 · Choose a location</h3>
+            <div className="mt-3 grid gap-2" role="radiogroup" aria-label="Location">
+              {sites.map((site) => {
+                const on = site.locationId === locationId
+                const runs = allDays.reduce(
+                  (total, day) => total + day.slots.filter((slot) => slot.locationId === site.locationId && !slot.soldOut).length,
+                  0,
+                )
+                return (
+                  <button
+                    key={site.locationId}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    onClick={() => setLocationId(site.locationId)}
+                    className={cn(
+                      'flex w-full min-w-0 items-start gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors duration-200',
+                      'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+                      on ? 'border-primary bg-primary-soft/30' : 'border-line hover:border-line-strong',
+                    )}
+                  >
+                    <MapPin className={cn('mt-0.5 size-4 shrink-0', on ? 'text-primary' : 'text-faint')} aria-hidden="true" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-medium text-foreground">{site.location.name}</span>
+                      <span className="block truncate text-xs text-subtle">{locationAddress(site.location)}</span>
+                    </span>
+                    <span className="shrink-0 pt-0.5 text-xs text-subtle tabular-nums">
+                      {runs} {pluralize(runs, activity.format === 'open' ? 'slot' : 'departure')}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ) : null}
+
         {/* ---------- date strip ---------- */}
         <div>
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-[0.8125rem] font-semibold tracking-tight text-foreground">
-              1 · Choose a date
+              {stepNo(1)} · Choose a date
             </h3>
             <div className="flex items-center gap-1">
               <IconButton
@@ -411,7 +494,7 @@ export function BookingWidget({
         <div>
           <div className="flex items-baseline justify-between gap-3">
             <h3 className="text-[0.8125rem] font-semibold tracking-tight text-foreground">
-              {activity.format === 'open' ? '2 · Choose an arrival time' : '2 · Choose a time'}
+              {stepNo(2)} · {activity.format === 'open' ? 'Choose an arrival time' : 'Choose a time'}
             </h3>
             {day && day.slots.length > 0 ? (
               <span className="text-xs text-subtle">
@@ -443,7 +526,7 @@ export function BookingWidget({
         <div>
           <div className="flex items-baseline justify-between gap-3">
             <h3 className="text-[0.8125rem] font-semibold tracking-tight text-foreground">
-              3 · Who is coming
+              {stepNo(3)} · Who is coming
             </h3>
             {slot ? (
               <span
@@ -552,7 +635,7 @@ export function BookingWidget({
         {activity.addOns.length > 0 ? (
           <div>
             <h3 className="text-[0.8125rem] font-semibold tracking-tight text-foreground">
-              4 · Make it better
+              {stepNo(4)} · Make it better
             </h3>
             <div className="mt-3 space-y-2">
               {activity.addOns.map((addOn) => {

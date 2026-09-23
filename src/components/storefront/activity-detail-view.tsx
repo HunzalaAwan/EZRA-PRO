@@ -32,7 +32,8 @@ import {
   formatNumber,
   pluralize,
 } from '@/lib/utils'
-import type { Activity, DifficultyLevel, Tenant } from '@/types'
+import type { Activity, DifficultyLevel, Location, Tenant } from '@/types'
+import { locationAddress } from '@/lib/locations'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
@@ -131,6 +132,11 @@ export interface RatingBucket {
   count: number
 }
 
+function clockLabel(hhmm: string) {
+  const [hours, minutes] = hhmm.split(':').map(Number)
+  return new Date(2000, 0, 1, hours, minutes).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+}
+
 export interface ActivityDetailViewProps {
   tenant: Tenant
   activity: Activity
@@ -144,6 +150,8 @@ export interface ActivityDetailViewProps {
   initialGuests?: number
   /** Trailing-90-day booking count, for the social-proof line. */
   recentBookings: number
+  /** The business's locations, to name the places this runs from. */
+  locations?: Location[]
 }
 
 /* ==========================================================================
@@ -154,6 +162,7 @@ export function ActivityDetailView({
   tenant,
   activity,
   days,
+  locations = [],
   reviews,
   ratingBuckets,
   related,
@@ -163,6 +172,13 @@ export function ActivityDetailView({
   initialGuests,
   recentBookings,
 }: ActivityDetailViewProps) {
+  const sites = React.useMemo(
+    () =>
+      activity.locations
+        .map((site) => ({ ...site, location: locations.find((entry) => entry.id === site.locationId) }))
+        .filter((site): site is typeof site & { location: Location } => Boolean(site.location)),
+    [activity.locations, locations],
+  )
   const reducedMotion = useReducedMotionSafe()
   const [lightbox, setLightbox] = React.useState<number | null>(null)
   const [mobileWidget, setMobileWidget] = React.useState(false)
@@ -458,19 +474,43 @@ export function ActivityDetailView({
             </Section>
 
             {/* ---------- meeting point ---------- */}
-            <Section id="meeting" title="Meeting point">
+            <Section id="meeting" title={sites.length > 1 ? 'Where it runs from' : 'Meeting point'}>
               <div className="overflow-hidden rounded-2xl border border-line bg-surface">
                 <MeetingPointMap label={tenant.city} />
                 <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="flex min-w-0 items-start gap-3">
-                    <MapPin className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium leading-relaxed text-foreground">
-                        {activity.meetingPoint}
-                      </p>
-                      <p className="mt-1 text-xs text-subtle">{tenant.contact.addressLine}</p>
+                  {sites.length > 1 ? (
+                    <ul className="flex min-w-0 flex-1 list-none flex-col gap-4 p-0">
+                      {sites.map((site) => (
+                        <li key={site.locationId} className="flex min-w-0 items-start gap-3">
+                          <MapPin className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-foreground">{site.location.name}</p>
+                            <p className="mt-0.5 text-sm leading-relaxed text-muted">
+                              {site.meetingPoint ?? activity.meetingPoint}
+                            </p>
+                            <p className="mt-1 text-xs text-subtle">
+                              {locationAddress(site.location)}
+                              {site.times.length > 0
+                                ? ` · ${activity.format === 'open' ? 'Arrivals' : 'Departs'} ${site.times.map(clockLabel).join(', ')}`
+                                : ''}
+                            </p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="flex min-w-0 items-start gap-3">
+                      <MapPin className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium leading-relaxed text-foreground">
+                          {activity.meetingPoint}
+                        </p>
+                        <p className="mt-1 text-xs text-subtle">
+                          {sites[0] ? locationAddress(sites[0].location) : tenant.contact.addressLine}
+                        </p>
+                      </div>
                     </div>
-                  </div>
+                  )}
                   <Button
                     asChild
                     size="sm"
@@ -572,6 +612,7 @@ export function ActivityDetailView({
                 tenantSlug={tenant.slug}
                 currency={tenant.currency}
                 days={days}
+                locations={locations}
                 checkoutPath={checkoutPath}
                 initialDateKey={initialDateKey}
                 initialGuests={initialGuests}
@@ -668,6 +709,7 @@ export function ActivityDetailView({
               tenantSlug={tenant.slug}
               currency={tenant.currency}
               days={days}
+              locations={locations}
               checkoutPath={checkoutPath}
               initialDateKey={initialDateKey}
               initialGuests={initialGuests}

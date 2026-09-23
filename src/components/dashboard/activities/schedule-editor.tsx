@@ -1,6 +1,8 @@
 'use client'
 
 import * as React from 'react'
+import Link from 'next/link'
+import type { Location } from '@/types'
 import {
   CalendarClock,
   CalendarDays,
@@ -14,6 +16,7 @@ import {
 } from 'lucide-react'
 
 import { addDays, cn, fromDateKey, toDateKey } from '@/lib/utils'
+import { locationAddress } from '@/lib/locations'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Field } from '@/components/ui/field'
@@ -21,6 +24,7 @@ import { Slider } from '@/components/ui/slider'
 import { Badge } from '@/components/ui/badge'
 import { RadioGroup, RadioGroupCard } from '@/components/ui/radio-group'
 import { Segmented } from '@/components/ui/segmented'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Switch } from '@/components/ui/switch'
 import { toast } from '@/components/ui/toaster'
 
@@ -44,6 +48,14 @@ export interface ScheduleDate {
   time: string
 }
 
+/** One of the business's locations this runs from, and whether it keeps its own start times. */
+export interface DraftLocation {
+  locationId: string
+  /** Its own start times instead of the schedule's. */
+  ownTimes: boolean
+  startTimes: string[]
+}
+
 export interface DraftSchedule {
   mode: ScheduleMode
   /** 0=Sun … 6=Sat, matching RecurrenceRule in the domain model. */
@@ -63,6 +75,8 @@ export interface DraftSchedule {
   entryInterval: number
   /** `dates` only. */
   dates: ScheduleDate[]
+  /** The locations this runs from, in the business's order. */
+  locations: DraftLocation[]
 }
 
 /** Mon-first display order — the calendar grid starts on Monday. */
@@ -89,6 +103,7 @@ export function defaultSchedule(nowIso: string): DraftSchedule {
     mode: 'times',
     weekdays: [1, 2, 3, 4, 5, 6, 0],
     startTimes: ['09:00', '13:30'],
+    locations: [],
     capacity: 16,
     seasonStart: '',
     seasonEnd: '',
@@ -681,6 +696,192 @@ function DateList({
           ))}
         </ul>
       ) : null}
+      {error ? <p className="mt-1.5 text-xs font-medium text-danger">{error}</p> : null}
+    </div>
+  )
+}
+
+/* ==========================================================================
+   LOCATIONS — which of the business's locations this runs from, and whether
+   a location keeps its own start times.
+   ========================================================================== */
+
+export interface LocationsEditorProps {
+  schedule: DraftSchedule
+  onChange: (schedule: DraftSchedule) => void
+  locations: Location[]
+  errors?: Record<string, string>
+  className?: string
+}
+
+export function LocationsEditor({ schedule, onChange, locations, errors, className }: LocationsEditorProps) {
+  const picked = schedule.locations
+  const multi = picked.length > 1
+  const usual = schedule.startTimes.map(formatClock).join(', ')
+
+  const toggle = (locationId: string, on: boolean) => {
+    if (on) {
+      const order = new Map(locations.map((site, index) => [site.id, index]))
+      const next = [...picked, { locationId, ownTimes: false, startTimes: [] }]
+      next.sort((a, b) => (order.get(a.locationId) ?? 0) - (order.get(b.locationId) ?? 0))
+      onChange({ ...schedule, locations: next })
+    } else {
+      onChange({ ...schedule, locations: picked.filter((site) => site.locationId !== locationId) })
+    }
+  }
+
+  const patchSite = (locationId: string, patch: Partial<DraftLocation>) =>
+    onChange({
+      ...schedule,
+      locations: picked.map((site) => (site.locationId === locationId ? { ...site, ...patch } : site)),
+    })
+
+  return (
+    <div className={className}>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <div>
+          <p className="text-[0.8125rem] font-medium">Where it runs from</p>
+          <p className="mt-0.5 text-xs text-muted">
+            Tick every location this runs from. Guests choose one at checkout and only see that location&rsquo;s dates and times.
+          </p>
+        </div>
+        <Link href="/dashboard/settings/locations" className="text-xs font-medium text-primary hover:underline">
+          Manage locations
+        </Link>
+      </div>
+
+      <ul className="mt-2.5 flex list-none flex-col gap-2 p-0">
+        {locations.map((site) => {
+          const entry = picked.find((item) => item.locationId === site.id)
+          const on = Boolean(entry)
+          const siteError = errors?.[`location.${site.id}`]
+          return (
+            <li
+              key={site.id}
+              className={cn('rounded-xl border p-3 transition-colors', on ? 'border-primary/40 bg-primary-soft/20' : 'border-line')}
+            >
+              <label className="flex cursor-pointer items-start gap-3">
+                <Checkbox
+                  checked={on}
+                  onCheckedChange={(checked) => toggle(site.id, checked === true)}
+                  className="mt-0.5"
+                  aria-label={site.name}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
+                    {site.name}
+                    {site.isDefault ? (
+                      <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-medium text-muted">Default</span>
+                    ) : null}
+                  </span>
+                  <span className="block text-xs text-subtle">{locationAddress(site)}</span>
+                </span>
+              </label>
+
+              {entry && multi && schedule.mode === 'times' ? (
+                <div className="mt-3 border-t border-line-subtle pt-3 pl-7">
+                  <label className="inline-flex items-center gap-2 text-xs font-medium text-muted">
+                    <Switch
+                      size="sm"
+                      checked={entry.ownTimes}
+                      onCheckedChange={(checked) =>
+                        patchSite(site.id, {
+                          ownTimes: checked,
+                          startTimes: checked && entry.startTimes.length === 0 ? [...schedule.startTimes] : entry.startTimes,
+                        })
+                      }
+                    />
+                    Different start times here
+                  </label>
+                  {entry.ownTimes ? (
+                    <TimeChips
+                      className="mt-2.5"
+                      times={entry.startTimes}
+                      onChange={(startTimes) => patchSite(site.id, { startTimes })}
+                      error={siteError}
+                      label={`Start time at ${site.name}`}
+                    />
+                  ) : (
+                    <p className="mt-1.5 text-xs text-subtle">Runs at the usual times{usual ? `: ${usual}` : ''}.</p>
+                  )}
+                </div>
+              ) : null}
+            </li>
+          )
+        })}
+      </ul>
+      {errors?.locations ? <p className="mt-1.5 text-xs font-medium text-danger">{errors.locations}</p> : null}
+      {multi && schedule.mode !== 'times' ? (
+        <p className="mt-2 text-xs text-subtle">
+          {schedule.mode === 'hours' ? 'The opening hours apply at every location.' : 'The dates apply at every location.'}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
+/** Removable time chips with an input to add one: the per-location start times. */
+function TimeChips({
+  times,
+  onChange,
+  error,
+  label,
+  className,
+}: {
+  times: string[]
+  onChange: (times: string[]) => void
+  error?: string
+  label: string
+  className?: string
+}) {
+  const [timeDraft, setTimeDraft] = React.useState('11:00')
+
+  const add = () => {
+    if (!/^\d{2}:\d{2}$/.test(timeDraft)) {
+      toast.error('Pick a valid start time')
+      return
+    }
+    if (times.includes(timeDraft)) {
+      toast('That time is already on the list')
+      return
+    }
+    onChange([...times, timeDraft].sort())
+  }
+
+  return (
+    <div className={className}>
+      <div className="flex flex-wrap items-center gap-2">
+        {times.map((time) => (
+          <span
+            key={time}
+            className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface py-1 pr-1 pl-2.5 text-[0.8125rem] font-medium"
+          >
+            <Clock className="size-3.5 text-faint" aria-hidden="true" />
+            {formatClock(time)}
+            <button
+              type="button"
+              aria-label={`Remove ${formatClock(time)}`}
+              onClick={() => onChange(times.filter((value) => value !== time))}
+              className="grid size-5 place-items-center rounded-full text-faint transition-colors hover:bg-danger-soft hover:text-danger focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"
+            >
+              <X className="size-3" aria-hidden="true" />
+            </button>
+          </span>
+        ))}
+        <span className="flex items-center gap-1.5">
+          <Input
+            type="time"
+            size="sm"
+            className="w-32"
+            value={timeDraft}
+            aria-label={label}
+            onChange={(event) => setTimeDraft(event.target.value)}
+          />
+          <Button type="button" variant="secondary" size="sm" leftIcon={<Plus />} onClick={add}>
+            Add time
+          </Button>
+        </span>
+      </div>
       {error ? <p className="mt-1.5 text-xs font-medium text-danger">{error}</p> : null}
     </div>
   )
