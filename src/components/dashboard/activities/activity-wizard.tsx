@@ -79,6 +79,7 @@ import {
   describeSchedule,
   formatClock,
   previewDepartures,
+  type DraftLocation,
   type DraftSchedule,
 } from './schedule-editor'
 import {
@@ -167,7 +168,7 @@ export interface ActivityDraft {
   dining: DiningDraft
 }
 
-const STORAGE_KEY = 'ezra:activity-wizard:v3'
+const STORAGE_KEY = 'ezra:activity-wizard:v4'
 
 /** Dining is the one category whose product is a table, not a departure. */
 export const isDining = (draft: Pick<ActivityDraft, 'category'>) => draft.category === 'restaurants'
@@ -215,7 +216,28 @@ export function withHomeLocation(draft: ActivityDraft, locations: Location[]): A
   const current = draft.schedule.locations ?? []
   if (current.length > 0 || locations.length === 0) return draft
   const home = locations.find((site) => site.isDefault) ?? locations[0]
-  return { ...draft, schedule: { ...draft.schedule, locations: [{ locationId: home.id, ownTimes: false, startTimes: [] }] } }
+  return { ...draft, schedule: { ...draft.schedule, locations: [{ locationId: home.id, schedule: { ...draft.schedule, locations: [] } }] } }
+}
+
+/** The activity's rule, with each location's own days and times laid over it. */
+function scheduleFromActivity(activity: Activity, base: DraftSchedule, homeTimes: string[]): DraftSchedule {
+  const shared: DraftSchedule = {
+    ...base,
+    mode: activity.format === 'open' ? 'hours' : activity.format === 'dates' ? 'dates' : 'times',
+    capacity: activity.maxCapacity,
+    startTimes: homeTimes.length > 0 ? homeTimes : base.startTimes,
+    weekdays: activity.locations[0]?.weekdays ?? base.weekdays,
+    locations: [],
+  }
+  const sites: DraftLocation[] = activity.locations.map((site) => ({
+    locationId: site.locationId,
+    schedule: {
+      ...shared,
+      startTimes: site.times.length > 0 ? site.times : shared.startTimes,
+      weekdays: site.weekdays ?? shared.weekdays,
+    },
+  }))
+  return { ...shared, locations: sites }
 }
 
 export function draftFromActivity(activity: Activity, nowIso: string): ActivityDraft {
@@ -258,17 +280,7 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
       maxPerBooking: addOn.maxPerBooking,
       required: addOn.required,
     })),
-    schedule: {
-      ...base.schedule,
-      mode: activity.format === 'open' ? 'hours' : activity.format === 'dates' ? 'dates' : 'times',
-      capacity: activity.maxCapacity,
-      startTimes: homeTimes.length > 0 ? homeTimes : base.schedule.startTimes,
-      locations: activity.locations.map((site, index) => ({
-        locationId: site.locationId,
-        ownTimes: index > 0 && site.times.join(',') !== homeTimes.join(','),
-        startTimes: site.times,
-      })),
-    },
+    schedule: scheduleFromActivity(activity, base.schedule, homeTimes),
     featured: activity.featured,
     freeCancellationHours: activity.cancellationPolicy.freeCancellationHours,
   }
@@ -471,16 +483,27 @@ const STEP_SCHEMAS = [
         lastEntryMinutes: z.number().int().min(0),
         entryInterval: z.number().int().min(0),
         dates: z.array(z.object({ dateKey: z.string(), time: z.string() })),
-        locations: z.array(z.object({ locationId: z.string(), ownTimes: z.boolean(), startTimes: z.array(z.string()) })),
+        locations: z.array(z.object({ locationId: z.string(), schedule: z.custom<DraftSchedule>() })),
       }),
     })
     .superRefine(({ schedule }, ctx) => {
       const issue = (key: string, message: string) => ctx.addIssue({ code: 'custom', path: ['schedule', key], message })
       if (schedule.locations.length === 0) issue('locations', 'Tick at least one location this runs from')
-      if (schedule.mode === 'times') {
+      if (schedule.locations.length > 1) {
+        // Each location carries its own rule; the shared one below is not used.
         for (const site of schedule.locations) {
-          if (site.ownTimes && site.startTimes.length === 0) issue(`location.${site.locationId}`, 'Add a start time for this location, or use the usual times')
+          const rule = site.schedule
+          const key = (field: string) => `location.${site.locationId}.${field}`
+          if (schedule.mode === 'dates') {
+            if (rule.dates.length === 0) issue(key('dates'), 'Add at least one date at this location')
+            continue
+          }
+          if (rule.weekdays.length === 0) issue(key('weekdays'), 'Pick at least one day at this location')
+          if (rule.seasonStart && rule.seasonEnd && rule.seasonEnd < rule.seasonStart) issue(key('seasonEnd'), 'The end date must come after the start date')
+          if (schedule.mode === 'times' && rule.startTimes.length === 0) issue(key('startTimes'), 'Add at least one start time at this location')
+          if (schedule.mode === 'hours' && rule.closesAt <= rule.opensAt) issue(key('closesAt'), 'Closing must come after opening')
         }
+        return
       }
       if (schedule.mode === 'dates') {
         if (schedule.dates.length === 0) issue('dates', 'Add at least one date')
@@ -1160,10 +1183,10 @@ export function ActivityWizard({
           minParticipants: draft.minParticipants,
           featured: draft.featured,
           crewIds: draft.crewIds,
-          locations: draft.schedule.locations.map((site) => ({
-            locationId: site.locationId,
-            times: site.ownTimes ? site.startTimes : draft.schedule.startTimes,
-          })),
+          locations: draft.schedule.locations.map((site) => {
+            const rule = draft.schedule.locations.length > 1 ? site.schedule : draft.schedule
+            return { locationId: site.locationId, times: rule.startTimes, weekdays: rule.weekdays }
+          }),
         })
         toast.success('Changes saved', { description: `${draft.name} is updated on the storefront.` })
         router.push(exitHref)
@@ -1339,15 +1362,18 @@ export function ActivityWizard({
                             schedule={draft.schedule}
                             onChange={(schedule) => patch({ schedule })}
                             locations={locations}
+                            nowIso={nowIso}
                             errors={errors}
                           />
                         ) : null}
-                        <ScheduleEditor
-                          schedule={draft.schedule}
-                          onChange={(schedule) => patch({ schedule })}
-                          nowIso={nowIso}
-                          errors={errors}
-                        />
+                        {draft.schedule.locations.length > 1 ? null : (
+                          <ScheduleEditor
+                            schedule={draft.schedule}
+                            onChange={(schedule) => patch({ schedule })}
+                            nowIso={nowIso}
+                            errors={errors}
+                          />
+                        )}
                       </div>
                     )
                   ) : null}
@@ -1938,7 +1964,7 @@ function ReviewStep({
   const locationNames = draft.schedule.locations
     .map((site) => {
       const found = locations.find((entry) => entry.id === site.locationId)
-      return found ? `${found.name}${site.ownTimes ? ' (own times)' : ''}` : null
+      return found ? (draft.schedule.locations.length > 1 ? `${found.name}: ${describeSchedule(site.schedule)}` : found.name) : null
     })
     .filter((name): name is string => Boolean(name))
   const seats = generated.reduce((acc, day) => acc + day.seats, 0)

@@ -7,6 +7,7 @@ import {
   CalendarClock,
   CalendarDays,
   CalendarRange,
+  ChevronDown,
   Clock,
   DoorOpen,
   Infinity as InfinityIcon,
@@ -48,12 +49,15 @@ export interface ScheduleDate {
   time: string
 }
 
-/** One of the business's locations this runs from, and whether it keeps its own start times. */
+/** One of the business's locations this runs from, with its own schedule. */
 export interface DraftLocation {
   locationId: string
-  /** Its own start times instead of the schedule's. */
-  ownTimes: boolean
-  startTimes: string[]
+  /**
+   * The rule at this location: days, times, seats and season. Read only when
+   * the activity runs from more than one location; with one, the activity's
+   * own schedule is the rule. Its `locations` is always empty.
+   */
+  schedule: DraftSchedule
 }
 
 export interface DraftSchedule {
@@ -230,31 +234,30 @@ export interface ScheduleEditorProps {
   /** The frozen demo clock, serialised from the server. */
   nowIso: string
   errors?: Record<string, string>
+  /** Hide "How it goes on sale" when a parent shows it once for several locations. */
+  showMode?: boolean
   className?: string
 }
 
-export function ScheduleEditor({ schedule, onChange, nowIso, errors, className }: ScheduleEditorProps) {
-  const set = (patch: Partial<DraftSchedule>) => onChange({ ...schedule, ...patch })
-  const unlimited = schedule.capacity === 0
-
-  const preview = React.useMemo(() => previewDepartures(schedule, nowIso), [schedule, nowIso])
-  const totalDepartures = preview.reduce((acc, day) => acc + (day.open ? 1 : day.times.length), 0)
-  const totalSeats = preview.reduce((acc, day) => acc + day.seats, 0)
-
-  const countLabel =
-    schedule.mode === 'hours' ? 'open days' : schedule.mode === 'dates' ? 'dates' : 'departures'
-
+/** "How it goes on sale": start times, open hours or specific dates. */
+export function ModePicker({
+  value,
+  onChange,
+  hint = 'Pick the one that matches how the day actually works. You can change it later.',
+}: {
+  value: ScheduleMode
+  onChange: (mode: ScheduleMode) => void
+  hint?: string
+}) {
   return (
-    <div className={cn('flex flex-col gap-6', className)}>
-      {/* ---------- mode ---------- */}
       <fieldset>
         <legend className="text-[0.8125rem] font-medium">How it goes on sale</legend>
         <p className="mt-0.5 mb-2.5 text-xs text-muted">
-          Pick the one that matches how the day actually works. You can change it later.
+          {hint}
         </p>
         <RadioGroup
-          value={schedule.mode}
-          onValueChange={(value) => set({ mode: value as ScheduleMode })}
+          value={value}
+          onValueChange={(next) => onChange(next as ScheduleMode)}
           className="grid gap-2.5 lg:grid-cols-3"
         >
           {SCHEDULE_MODES.map((option) => (
@@ -268,6 +271,23 @@ export function ScheduleEditor({ schedule, onChange, nowIso, errors, className }
           ))}
         </RadioGroup>
       </fieldset>
+  )
+}
+
+export function ScheduleEditor({ schedule, onChange, nowIso, errors, showMode = true, className }: ScheduleEditorProps) {
+  const set = (patch: Partial<DraftSchedule>) => onChange({ ...schedule, ...patch })
+  const unlimited = schedule.capacity === 0
+
+  const preview = React.useMemo(() => previewDepartures(schedule, nowIso), [schedule, nowIso])
+  const totalDepartures = preview.reduce((acc, day) => acc + (day.open ? 1 : day.times.length), 0)
+  const totalSeats = preview.reduce((acc, day) => acc + day.seats, 0)
+
+  const countLabel =
+    schedule.mode === 'hours' ? 'open days' : schedule.mode === 'dates' ? 'dates' : 'departures'
+
+  return (
+    <div className={cn('flex flex-col gap-6', className)}>
+      {showMode ? <ModePicker value={schedule.mode} onChange={(mode) => set({ mode })} /> : null}
 
       {schedule.mode !== 'dates' ? (
         <WeekdayPicker
@@ -702,187 +722,179 @@ function DateList({
 }
 
 /* ==========================================================================
-   LOCATIONS — which of the business's locations this runs from, and whether
-   a location keeps its own start times.
+   LOCATIONS — which of the business's locations this runs from. With more
+   than one, each location opens into its own schedule: days, start times,
+   seats and season. How it goes on sale is shared.
    ========================================================================== */
 
 export interface LocationsEditorProps {
   schedule: DraftSchedule
   onChange: (schedule: DraftSchedule) => void
   locations: Location[]
+  /** The frozen demo clock, serialised from the server. */
+  nowIso: string
   errors?: Record<string, string>
   className?: string
 }
 
-export function LocationsEditor({ schedule, onChange, locations, errors, className }: LocationsEditorProps) {
+const ownRule = (schedule: DraftSchedule): DraftSchedule => ({ ...schedule, locations: [] })
+
+export function LocationsEditor({ schedule, onChange, locations, nowIso, errors, className }: LocationsEditorProps) {
   const picked = schedule.locations
   const multi = picked.length > 1
-  const usual = schedule.startTimes.map(formatClock).join(', ')
+  const [openIds, setOpenIds] = React.useState<string[]>(() => (picked[0] ? [picked[0].locationId] : []))
+
+  const errorsFor = React.useCallback(
+    (locationId: string) => {
+      const prefix = `location.${locationId}.`
+      const out: Record<string, string> = {}
+      for (const [key, message] of Object.entries(errors ?? {})) {
+        if (key.startsWith(prefix)) out[key.slice(prefix.length)] = message
+      }
+      return out
+    },
+    [errors],
+  )
+
+  // A location with a problem opens so the operator sees why Continue refused.
+  React.useEffect(() => {
+    const broken = picked.filter((site) => Object.keys(errorsFor(site.locationId)).length > 0).map((site) => site.locationId)
+    if (broken.length > 0) setOpenIds((ids) => Array.from(new Set([...ids, ...broken])))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [errors])
+
+  const order = new Map(locations.map((site, index) => [site.id, index]))
+  const sorted = (list: DraftLocation[]) =>
+    [...list].sort((a, b) => (order.get(a.locationId) ?? 0) - (order.get(b.locationId) ?? 0))
 
   const toggle = (locationId: string, on: boolean) => {
     if (on) {
-      const order = new Map(locations.map((site, index) => [site.id, index]))
-      const next = [...picked, { locationId, ownTimes: false, startTimes: [] }]
-      next.sort((a, b) => (order.get(a.locationId) ?? 0) - (order.get(b.locationId) ?? 0))
-      onChange({ ...schedule, locations: next })
+      // Going from one location to two: the shared rule becomes the first location's own.
+      const current = picked.length === 1 ? [{ ...picked[0], schedule: ownRule(schedule) }] : picked
+      const seed = picked.length >= 2 ? ownRule(picked[0].schedule) : ownRule(schedule)
+      onChange({ ...schedule, locations: sorted([...current, { locationId, schedule: seed }]) })
+      setOpenIds((ids) => [...ids, locationId])
+      return
+    }
+    const next = picked.filter((site) => site.locationId !== locationId)
+    if (next.length === 1 && picked.length > 1) {
+      // Back to one location: its rule becomes the activity's schedule again.
+      onChange({ ...next[0].schedule, mode: schedule.mode, locations: next })
     } else {
-      onChange({ ...schedule, locations: picked.filter((site) => site.locationId !== locationId) })
+      onChange({ ...schedule, locations: next })
     }
   }
 
-  const patchSite = (locationId: string, patch: Partial<DraftLocation>) =>
+  const setMode = (mode: ScheduleMode) =>
     onChange({
       ...schedule,
-      locations: picked.map((site) => (site.locationId === locationId ? { ...site, ...patch } : site)),
+      mode,
+      locations: picked.map((site) => ({ ...site, schedule: { ...site.schedule, mode } })),
     })
 
+  const patchSite = (locationId: string, next: DraftSchedule) =>
+    onChange({
+      ...schedule,
+      locations: picked.map((site) =>
+        site.locationId === locationId ? { ...site, schedule: { ...next, mode: schedule.mode, locations: [] } } : site,
+      ),
+    })
+
+  const toggleOpen = (locationId: string) =>
+    setOpenIds((ids) => (ids.includes(locationId) ? ids.filter((id) => id !== locationId) : [...ids, locationId]))
+
   return (
-    <div className={className}>
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <div>
-          <p className="text-[0.8125rem] font-medium">Where it runs from</p>
-          <p className="mt-0.5 text-xs text-muted">
-            Tick every location this runs from. Guests choose one at checkout and only see that location&rsquo;s dates and times.
-          </p>
+    <div className={cn('flex flex-col gap-6', className)}>
+      <div>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+          <div>
+            <p className="text-[0.8125rem] font-medium">Where it runs from</p>
+            <p className="mt-0.5 text-xs text-muted">
+              Tick every location this runs from. With more than one, open each location to set its own days, times and seats.
+              Guests choose a location at checkout and only see its dates and times.
+            </p>
+          </div>
+          <Link href="/dashboard/settings/locations" className="text-xs font-medium text-primary hover:underline">
+            Manage locations
+          </Link>
         </div>
-        <Link href="/dashboard/settings/locations" className="text-xs font-medium text-primary hover:underline">
-          Manage locations
-        </Link>
-      </div>
 
-      <ul className="mt-2.5 flex list-none flex-col gap-2 p-0">
-        {locations.map((site) => {
-          const entry = picked.find((item) => item.locationId === site.id)
-          const on = Boolean(entry)
-          const siteError = errors?.[`location.${site.id}`]
-          return (
-            <li
-              key={site.id}
-              className={cn('rounded-xl border p-3 transition-colors', on ? 'border-primary/40 bg-primary-soft/20' : 'border-line')}
-            >
-              <label className="flex cursor-pointer items-start gap-3">
-                <Checkbox
-                  checked={on}
-                  onCheckedChange={(checked) => toggle(site.id, checked === true)}
-                  className="mt-0.5"
-                  aria-label={site.name}
-                />
-                <span className="min-w-0 flex-1">
-                  <span className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
-                    {site.name}
-                    {site.isDefault ? (
-                      <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-medium text-muted">Default</span>
-                    ) : null}
-                  </span>
-                  <span className="block text-xs text-subtle">{locationAddress(site)}</span>
-                </span>
-              </label>
+        {multi ? (
+          <div className="mt-4">
+            <ModePicker value={schedule.mode} onChange={setMode} hint="Applies at every location." />
+          </div>
+        ) : null}
 
-              {entry && multi && schedule.mode === 'times' ? (
-                <div className="mt-3 border-t border-line-subtle pt-3 pl-7">
-                  <label className="inline-flex items-center gap-2 text-xs font-medium text-muted">
-                    <Switch
-                      size="sm"
-                      checked={entry.ownTimes}
-                      onCheckedChange={(checked) =>
-                        patchSite(site.id, {
-                          ownTimes: checked,
-                          startTimes: checked && entry.startTimes.length === 0 ? [...schedule.startTimes] : entry.startTimes,
-                        })
-                      }
+        <ul className="mt-4 flex list-none flex-col gap-2 p-0">
+          {locations.map((site) => {
+            const entry = picked.find((item) => item.locationId === site.id)
+            const on = Boolean(entry)
+            const expanded = Boolean(entry) && multi && openIds.includes(site.id)
+            const siteErrors = errorsFor(site.id)
+            const hasErrors = Object.keys(siteErrors).length > 0
+            return (
+              <li
+                key={site.id}
+                className={cn(
+                  'rounded-xl border transition-colors',
+                  hasErrors ? 'border-danger/50' : on ? 'border-primary/40 bg-primary-soft/15' : 'border-line',
+                )}
+              >
+                <div className="flex items-start gap-3 p-3">
+                  <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3">
+                    <Checkbox
+                      checked={on}
+                      onCheckedChange={(checked) => toggle(site.id, checked === true)}
+                      className="mt-0.5"
+                      aria-label={site.name}
                     />
-                    Different start times here
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
+                        {site.name}
+                        {site.isDefault ? (
+                          <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-medium text-muted">Default</span>
+                        ) : null}
+                      </span>
+                      <span className="block text-xs text-subtle">{locationAddress(site)}</span>
+                      {entry && multi ? (
+                        <span className={cn('mt-1 block text-xs', hasErrors ? 'font-medium text-danger' : 'text-muted')}>
+                          {hasErrors ? 'Needs attention' : describeSchedule(entry.schedule)}
+                        </span>
+                      ) : null}
+                    </span>
                   </label>
-                  {entry.ownTimes ? (
-                    <TimeChips
-                      className="mt-2.5"
-                      times={entry.startTimes}
-                      onChange={(startTimes) => patchSite(site.id, { startTimes })}
-                      error={siteError}
-                      label={`Start time at ${site.name}`}
-                    />
-                  ) : (
-                    <p className="mt-1.5 text-xs text-subtle">Runs at the usual times{usual ? `: ${usual}` : ''}.</p>
-                  )}
+                  {entry && multi ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      aria-expanded={expanded}
+                      aria-controls={`schedule-${site.id}`}
+                      onClick={() => toggleOpen(site.id)}
+                      rightIcon={<ChevronDown className={cn('transition-transform duration-200', expanded && 'rotate-180')} />}
+                    >
+                      {expanded ? 'Hide schedule' : 'Set schedule'}
+                    </Button>
+                  ) : null}
                 </div>
-              ) : null}
-            </li>
-          )
-        })}
-      </ul>
-      {errors?.locations ? <p className="mt-1.5 text-xs font-medium text-danger">{errors.locations}</p> : null}
-      {multi && schedule.mode !== 'times' ? (
-        <p className="mt-2 text-xs text-subtle">
-          {schedule.mode === 'hours' ? 'The opening hours apply at every location.' : 'The dates apply at every location.'}
-        </p>
-      ) : null}
-    </div>
-  )
-}
 
-/** Removable time chips with an input to add one: the per-location start times. */
-function TimeChips({
-  times,
-  onChange,
-  error,
-  label,
-  className,
-}: {
-  times: string[]
-  onChange: (times: string[]) => void
-  error?: string
-  label: string
-  className?: string
-}) {
-  const [timeDraft, setTimeDraft] = React.useState('11:00')
-
-  const add = () => {
-    if (!/^\d{2}:\d{2}$/.test(timeDraft)) {
-      toast.error('Pick a valid start time')
-      return
-    }
-    if (times.includes(timeDraft)) {
-      toast('That time is already on the list')
-      return
-    }
-    onChange([...times, timeDraft].sort())
-  }
-
-  return (
-    <div className={className}>
-      <div className="flex flex-wrap items-center gap-2">
-        {times.map((time) => (
-          <span
-            key={time}
-            className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface py-1 pr-1 pl-2.5 text-[0.8125rem] font-medium"
-          >
-            <Clock className="size-3.5 text-faint" aria-hidden="true" />
-            {formatClock(time)}
-            <button
-              type="button"
-              aria-label={`Remove ${formatClock(time)}`}
-              onClick={() => onChange(times.filter((value) => value !== time))}
-              className="grid size-5 place-items-center rounded-full text-faint transition-colors hover:bg-danger-soft hover:text-danger focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"
-            >
-              <X className="size-3" aria-hidden="true" />
-            </button>
-          </span>
-        ))}
-        <span className="flex items-center gap-1.5">
-          <Input
-            type="time"
-            size="sm"
-            className="w-32"
-            value={timeDraft}
-            aria-label={label}
-            onChange={(event) => setTimeDraft(event.target.value)}
-          />
-          <Button type="button" variant="secondary" size="sm" leftIcon={<Plus />} onClick={add}>
-            Add time
-          </Button>
-        </span>
+                {entry && expanded ? (
+                  <div id={`schedule-${site.id}`} className="border-t border-line-subtle px-3 pt-4 pb-4 sm:px-4">
+                    <ScheduleEditor
+                      schedule={entry.schedule}
+                      onChange={(next) => patchSite(site.id, next)}
+                      nowIso={nowIso}
+                      errors={siteErrors}
+                      showMode={false}
+                    />
+                  </div>
+                ) : null}
+              </li>
+            )
+          })}
+        </ul>
+        {errors?.locations ? <p className="mt-1.5 text-xs font-medium text-danger">{errors.locations}</p> : null}
       </div>
-      {error ? <p className="mt-1.5 text-xs font-medium text-danger">{error}</p> : null}
     </div>
   )
 }
