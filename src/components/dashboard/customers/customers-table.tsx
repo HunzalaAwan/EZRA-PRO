@@ -98,7 +98,7 @@ function SegmentChip({ segment }: { segment: CustomerRow['segment'] }) {
   const meta = SEGMENT_META[segment]
   const Icon = meta.icon
   return (
-    <span className="inline-flex items-center gap-1.5 text-[0.8125rem] text-muted">
+    <span className="inline-flex items-center gap-1.5 text-sm text-muted">
       <Icon className={cn('size-3.5', meta.text)} aria-hidden="true" />
       {meta.label}
     </span>
@@ -184,8 +184,8 @@ function BandHeader({ bandKey, rows, currency }: { bandKey: string; rows: Custom
   const quiet = bandKey === '3-older' || bandKey === NEVER_BAND.key
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className={cn('text-xs font-medium', quiet ? 'text-subtle' : 'text-muted')}>{bandLabel(bandKey)}</span>
-      <span className="hidden text-xs text-faint tabular-nums sm:inline">
+      <span className={cn('text-[0.8125rem] font-medium', quiet ? 'text-subtle' : 'text-muted')}>{bandLabel(bandKey)}</span>
+      <span className="hidden text-[0.8125rem] text-faint tabular-nums sm:inline">
         {formatNumber(rows.length)} · {formatCurrency(value, currency, { compact: true })}
       </span>
     </div>
@@ -293,7 +293,7 @@ export function CustomersTable({
           cell: (row) => (
             <div className="flex min-w-[11rem] max-w-[17rem] items-center gap-2.5">
               <Avatar name={row.name} src={row.avatarUrl} size="xs" />
-              <p className="min-w-0 truncate text-[0.875rem] text-foreground" title={row.email}>
+              <p className="min-w-0 truncate text-sm text-foreground" title={row.email}>
                 {row.name}
               </p>
             </div>
@@ -315,7 +315,7 @@ export function CustomersTable({
           numeric: true,
           defaultSortDir: 'desc',
           width: '3.5rem',
-          cell: (row) => <span className="text-[0.8125rem] text-foreground tabular-nums">{row.totalBookings}</span>,
+          cell: (row) => <span className="text-sm text-foreground tabular-nums">{row.totalBookings}</span>,
         },
         {
           id: 'value',
@@ -327,7 +327,7 @@ export function CustomersTable({
           width: '6.5rem',
           cellClassName: 'whitespace-nowrap',
           cell: (row) => (
-            <span className="text-[0.8125rem] text-foreground tabular-nums">{formatCurrency(row.lifetimeValue, currency)}</span>
+            <span className="text-sm text-foreground tabular-nums">{formatCurrency(row.lifetimeValue, currency)}</span>
           ),
         },
         {
@@ -340,9 +340,9 @@ export function CustomersTable({
           cellClassName: 'whitespace-nowrap',
           cell: (row) =>
             row.lastBookingAt ? (
-              <span className="text-[0.8125rem] text-muted">{formatRelative(row.lastBookingAt, NOW)}</span>
+              <span className="text-sm text-muted">{formatRelative(row.lastBookingAt, NOW)}</span>
             ) : (
-              <span className="text-[0.8125rem] text-faint">Never</span>
+              <span className="text-sm text-faint">Never</span>
             ),
         },
         {
@@ -413,7 +413,7 @@ export function CustomersTable({
           </div>
 
           <div className="flex shrink-0 items-center gap-3">
-            <p className="hidden text-xs text-subtle tabular-nums sm:block">
+            <p className="hidden text-[0.8125rem] text-subtle tabular-nums sm:block">
               {sorted.length === 0
                 ? 'No guests'
                 : `Showing ${formatNumber(from)}–${formatNumber(to)} of ${formatNumber(sorted.length)}`}
@@ -437,7 +437,7 @@ export function CustomersTable({
         {/* ---- bulk action bar ---- */}
         {selectedCount > 0 ? (
           <div className="flex flex-wrap items-center gap-2 border-b border-line-subtle bg-primary-soft/50 px-4 py-2.5 sm:px-5">
-            <span className="text-xs font-semibold text-primary tabular-nums">{formatNumber(selectedCount)} selected</span>
+            <span className="text-[0.8125rem] font-semibold text-primary tabular-nums">{formatNumber(selectedCount)} selected</span>
             <span className="h-4 w-px bg-line" aria-hidden="true" />
             <Button
               variant="ghost"
@@ -484,6 +484,7 @@ export function CustomersTable({
             stickyHeader
             rowHeight="compact"
             ariaLabel="Guests"
+            containerClassName="[&_th]:text-[0.8125rem]"
             groupBy={banded ? groupBy : undefined}
             renderGroupHeader={renderGroupHeader}
             empty={
@@ -531,7 +532,7 @@ export function CustomersTable({
                     <Avatar name={row.name} src={row.avatarUrl} size="md" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm text-foreground">{row.name}</p>
-                      <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-muted">
+                      <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[0.8125rem] text-muted">
                         <SegmentChip segment={row.segment} />
                         <span aria-hidden="true" className="text-faint">·</span>
                         <span>{row.lastBookingAt ? formatRelative(row.lastBookingAt, NOW) : 'Never booked'}</span>
@@ -559,7 +560,7 @@ export function CustomersTable({
             itemNoun="guest"
             size="sm"
           />
-          <p className="flex items-center gap-1.5 text-xs text-faint">
+          <p className="flex items-center gap-1.5 text-[0.8125rem] text-faint">
             <Users className="size-3" aria-hidden="true" />
             Working set: the {formatNumber(rows.length)} highest-value and most recently active guests of{' '}
             {formatNumber(totalCount)} on file.

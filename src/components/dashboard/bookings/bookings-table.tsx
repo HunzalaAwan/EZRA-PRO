@@ -95,7 +95,7 @@ const CHANNEL_SHORT: Record<BookingChannel, string> = {
 export function ChannelBadge({ channel, short = false }: { channel: BookingChannel; short?: boolean }) {
   return (
     <span
-      className="inline-flex items-center gap-1.5 text-xs font-medium whitespace-nowrap text-muted"
+      className="inline-flex items-center gap-1.5 text-[0.8125rem] font-medium whitespace-nowrap text-muted"
       title={CHANNEL_LABELS[channel]}
     >
       <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full" style={{ background: CHANNEL_TONE[channel] }} />
@@ -125,12 +125,12 @@ function PaymentCell({ row, currency }: { row: BookingRow; currency: CurrencyCod
 
   const quiet = booking.paymentStatus === 'paid' || closed
   return (
-    <span className="inline-flex items-center justify-end gap-1.5 whitespace-nowrap text-[0.8125rem] tabular-nums">
+    <span className="inline-flex items-center justify-end gap-1.5 whitespace-nowrap text-sm tabular-nums">
       <span className={cn('text-foreground', closed && 'line-through decoration-line-strong text-subtle')}>
         {formatCurrency(booking.total, currency)}
       </span>
       {!quiet ? (
-        <span className={cn('text-xs', note.tone)}>
+        <span className={cn('text-[0.8125rem]', note.tone)}>
           {due > 0 ? `${formatCurrency(due, currency)} due` : note.label}
         </span>
       ) : null}
@@ -158,7 +158,7 @@ function StatusDot({ status }: { status: string }) {
     tone: 'bg-line-strong',
   }
   return (
-    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-[0.8125rem] text-muted">
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-sm text-muted">
       <span aria-hidden="true" className={cn('size-1.5 shrink-0 rounded-full', meta.tone)} />
       {meta.label}
     </span>
@@ -211,14 +211,14 @@ function DayHeader({
 
   return (
     <div className="flex items-center justify-between gap-3">
-      <div className="flex min-w-0 items-center gap-2 text-xs">
+      <div className="flex min-w-0 items-center gap-2 text-[0.8125rem]">
         {relative ? <span className={cn('font-medium', relative === 'Today' ? 'text-primary' : 'text-muted')}>{relative}</span> : null}
         {relative ? <span className="text-faint">·</span> : null}
         <span className={cn('truncate', past ? 'text-subtle' : 'text-muted')}>
           {WEEKDAYS[date.getDay()]}, {formatDateShort(date)}
         </span>
       </div>
-      <span className="hidden shrink-0 text-xs text-faint tabular-nums sm:inline">
+      <span className="hidden shrink-0 text-[0.8125rem] text-faint tabular-nums sm:inline">
         {formatNumber(guests)} {guests === 1 ? 'guest' : 'guests'} · {formatCurrency(takings, currency)}
         {rows.length > live ? ` · ${rows.length - live} cancelled` : null}
       </span>
@@ -263,7 +263,7 @@ function BulkActionBar({ count, onClear, onAction }: BulkActionBarProps) {
             )}
           >
             <span className="ml-1 inline-flex shrink-0 items-center gap-2 pr-1 text-sm font-semibold text-foreground">
-              <span className="grid size-6 place-items-center rounded-full bg-primary text-xs font-bold text-on-primary tabular-nums">
+              <span className="grid size-6 place-items-center rounded-full bg-primary text-[0.8125rem] font-bold text-on-primary tabular-nums">
                 {count > 99 ? '99+' : count}
               </span>
               <span className="hidden sm:inline">selected</span>
@@ -404,7 +404,7 @@ function BookingCard({
 
       <div className="pointer-events-none relative min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs text-subtle tabular-nums">{booking.reference}</span>
+          <span className="text-[0.8125rem] text-subtle tabular-nums">{booking.reference}</span>
           <StatusDot status={booking.status} />
         </div>
 
@@ -412,16 +412,16 @@ function BookingCard({
           <Avatar name={name} src={customer.avatarUrl} size="sm" />
           <span className="min-w-0">
             <span className="block truncate text-sm text-foreground">{name}</span>
-            <span className="block truncate text-xs text-subtle">{customer.email}</span>
+            <span className="block truncate text-[0.8125rem] text-subtle">{customer.email}</span>
           </span>
         </div>
 
-        <p className="mt-2.5 flex items-center gap-2 truncate text-[0.8125rem] text-foreground">
+        <p className="mt-2.5 flex items-center gap-2 truncate text-sm text-foreground">
           <span aria-hidden="true" className="h-4 w-1 shrink-0 rounded-full" style={{ background: ACTIVITY_COLOR_VAR[activity.colorKey] }} />
           {activity.name}
         </p>
 
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-subtle">
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.8125rem] text-subtle">
           <span className="tabular-nums">
             {formatDateShort(departure.startsAt)} · {formatTime(departure.startsAt)}
           </span>
@@ -433,7 +433,7 @@ function BookingCard({
         </div>
 
         <div className="mt-3 flex items-center justify-between gap-2 border-t border-line-subtle pt-2.5">
-          <span className={cn('text-xs', PAYMENT_NOTE[booking.paymentStatus].tone)}>{PAYMENT_NOTE[booking.paymentStatus].label}</span>
+          <span className={cn('text-[0.8125rem]', PAYMENT_NOTE[booking.paymentStatus].tone)}>{PAYMENT_NOTE[booking.paymentStatus].label}</span>
           <span className="text-sm text-foreground tabular-nums">{formatCurrency(booking.total, currency)}</span>
         </div>
       </div>
@@ -509,7 +509,7 @@ export function BookingsDisplayMenu({
           Group by day
         </DropdownMenuCheckboxItem>
         {!canGroup ? (
-          <p className="px-2.5 pt-0.5 pb-1.5 text-xs text-faint">Sort by time to group by day.</p>
+          <p className="px-2.5 pt-0.5 pb-1.5 text-[0.8125rem] text-faint">Sort by time to group by day.</p>
         ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -601,9 +601,9 @@ export function BookingsTable({
             <span className="flex min-w-[8.5rem] max-w-[13rem] items-center gap-2.5">
               <Avatar name={name} src={customer.avatarUrl} size={density === 'compact' ? 'xs' : 'sm'} />
               <span className="flex min-w-0 items-center gap-1.5">
-                <span className="truncate text-[0.8125rem] text-foreground">{name}</span>
+                <span className="truncate text-sm text-foreground">{name}</span>
                 {customer.segment === 'vip' ? (
-                  <span className="shrink-0 text-xs tracking-[0.08em] text-subtle uppercase">VIP</span>
+                  <span className="shrink-0 text-[0.8125rem] tracking-[0.08em] text-subtle uppercase">VIP</span>
                 ) : null}
               </span>
             </span>
@@ -618,7 +618,7 @@ export function BookingsTable({
         width: '6.5rem',
         cellClassName: 'whitespace-nowrap',
         cell: ({ booking }) => (
-          <span className="text-[0.8125rem] text-muted tabular-nums">{booking.reference}</span>
+          <span className="text-sm text-muted tabular-nums">{booking.reference}</span>
         ),
       },
       {
@@ -626,7 +626,7 @@ export function BookingsTable({
         header: 'Email',
         hideBelow: 'wide',
         cell: ({ customer }) => (
-          <span className="block min-w-[8rem] max-w-[13rem] truncate text-[0.8125rem] text-muted" title={customer.email}>
+          <span className="block min-w-[8rem] max-w-[13rem] truncate text-sm text-muted" title={customer.email}>
             {customer.email}
           </span>
         ),
@@ -637,15 +637,15 @@ export function BookingsTable({
         sortable: true,
         hideBelow: 'lg',
         cell: ({ activity, departure }) => (
-          <span className="flex min-w-[9rem] max-w-[19rem] items-center gap-2.5">
+          <span className="flex min-w-[9rem] max-w-[15rem] items-center gap-2.5 2xl:max-w-[19rem]">
             <span
               aria-hidden="true"
               className="h-4 w-1 shrink-0 rounded-full"
               style={{ background: ACTIVITY_COLOR_VAR[activity.colorKey] }}
             />
-            <span className="truncate text-[0.8125rem] text-foreground">{activity.name}</span>
+            <span className="truncate text-sm text-foreground">{activity.name}</span>
             {activity.locations.length > 1 && departure.locationId ? (
-              <span className="hidden max-w-[8rem] shrink-0 truncate text-xs text-faint xl:inline">· {getLocationById(departure.locationId)?.name}</span>
+              <span className="hidden max-w-[8rem] shrink-0 truncate text-[0.8125rem] text-faint 2xl:inline">· {getLocationById(departure.locationId)?.name}</span>
             ) : null}
             {departure.status === 'cancelled' || departure.status === 'weather_hold' ? (
               <StatusBadge kind="departure" status={departure.status} size="sm" showIcon={false} className="shrink-0" />
@@ -661,7 +661,7 @@ export function BookingsTable({
         width: grouped ? '7rem' : '9rem',
         defaultSortDir: 'desc',
         cell: ({ departure, activity }) => (
-          <span className="whitespace-nowrap text-[0.8125rem] tabular-nums">
+          <span className="whitespace-nowrap text-sm tabular-nums">
             <span className="text-foreground">
               {grouped ? formatTime(departure.startsAt) : formatDateShort(departure.startsAt)}
             </span>
@@ -679,7 +679,7 @@ export function BookingsTable({
         defaultSortDir: 'desc',
         hideBelow: 'md',
         cell: ({ booking }) => (
-          <span className="text-[0.8125rem] text-foreground tabular-nums">{booking.partySize}</span>
+          <span className="text-sm text-foreground tabular-nums">{booking.partySize}</span>
         ),
       },
       {
@@ -749,7 +749,7 @@ export function BookingsTable({
           stickyHeader
           rowHeight={density}
           ariaLabel="Reservations"
-          containerClassName="rounded-2xl border border-line bg-surface"
+          containerClassName="rounded-2xl border border-line bg-surface [&_th]:text-[0.8125rem]"
           groupBy={grouped ? groupBy : undefined}
           renderGroupHeader={renderGroupHeader}
           getRowClassName={(row) =>

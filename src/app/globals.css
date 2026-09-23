@@ -942,3 +942,16 @@ html.lenis body {
 .dark .mesh[data-tab='checkout'] { --mesh-1: #3f6a1f; --mesh-2: #1c6b60; --mesh-3: #2f5c2a; --mesh-4: #1f4f80; --mesh-5: #6b5a1a; }
 .dark .mesh[data-tab='host']     { --mesh-1: #7a2f6a; --mesh-2: #4a3aa0; --mesh-3: #1f4f80; --mesh-4: #7a4a2a; --mesh-5: #5a3fa8; }
 .dark .mesh[data-tab='payouts']  { --mesh-1: #8a5a1f; --mesh-2: #8a3f2f; --mesh-3: #1f4f80; --mesh-4: #7a5a1f; --mesh-5: #5a3fa8; }
+
+/* ==========================================================================
+   DASHBOARD TYPE — Figtree instead of Inter, without Inter's crisp stylistic
+   alternates. Scoped with :has() so dialogs, sheets and popovers portalled to
+   <body> pick it up too. Revert: delete this block.
+   ========================================================================== */
+:root:has(.dash-type) {
+  --font-sans: var(--font-figtree), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+:root:has(.dash-type) body {
+  font-family: var(--font-sans);
+  font-feature-settings: normal;
+}

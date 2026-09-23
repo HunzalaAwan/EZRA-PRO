@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Geist, Instrument_Serif, Inter, Sora } from 'next/font/google'
+import { Figtree, Geist, Instrument_Serif, Inter, Sora } from 'next/font/google'
 import { ThemeProvider, themeInitScript } from '@/components/providers/theme-provider'
 import { Toaster } from '@/components/ui/toaster'
 import './globals.css'
@@ -11,6 +11,13 @@ const inter = Inter({
 })
 
 /** The marketing site's one grotesque, for headings and body alike. */
+/** The dashboard's text face: rounded, open and soft at small sizes. */
+const figtree = Figtree({
+  subsets: ['latin'],
+  variable: '--font-figtree',
+  display: 'swap',
+})
+
 const geist = Geist({
   subsets: ['latin'],
   variable: '--font-geist',
@@ -78,7 +85,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${geist.variable} ${sora.variable} ${instrumentSerif.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${inter.variable} ${figtree.variable} ${geist.variable} ${sora.variable} ${instrumentSerif.variable}`}>
       <head>
         {/* Applies the stored theme before first paint — prevents a flash of the wrong scheme. */}
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
