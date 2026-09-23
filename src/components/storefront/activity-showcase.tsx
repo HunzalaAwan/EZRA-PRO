@@ -4,7 +4,7 @@ import * as React from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { ArrowRight, Clock, Flame, SlidersHorizontal, Sparkles, Users } from 'lucide-react'
-import { kindChipLabel } from '@/lib/activity-kinds'
+import { kindCardFacts, kindChipLabel } from '@/lib/activity-kinds'
 
 import { cn, formatCurrency, formatDuration, formatNumber, pluralize } from '@/lib/utils'
 import type { Activity, CurrencyCode, DifficultyLevel } from '@/types'
@@ -400,17 +400,15 @@ function ActivityCard({
         </p>
 
         <div className={cn('mt-4 flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-subtle', small ? 'hidden sm:flex' : 'flex')}>
-          <span className="inline-flex items-center gap-1.5">
-            <Users className="size-3.5" aria-hidden="true" />
-            Up to {activity.maxCapacity}
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span
-              className={cn('size-1.5 rounded-full bg-current', DIFFICULTY_TONE[activity.difficulty])}
-            />
-            {DIFFICULTY_LABEL[activity.difficulty]}
-          </span>
-          <span className="inline-flex items-center gap-1.5">Ages {activity.minAge}+</span>
+          {kindCardFacts(activity).map((fact, index) => (
+            <span key={fact} className="inline-flex items-center gap-1.5">
+              {index === 0 ? <Users className="size-3.5" aria-hidden="true" /> : null}
+              {index === 1 && (activity.kind ?? 'trip') === 'trip' ? (
+                <span className={cn('size-1.5 rounded-full bg-current', DIFFICULTY_TONE[activity.difficulty])} />
+              ) : null}
+              {fact}
+            </span>
+          ))}
         </div>
 
         <div

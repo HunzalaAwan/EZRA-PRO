@@ -115,6 +115,8 @@ function AnswerField({
               ))}
             </SelectContent>
           </Select>
+        ) : question.kind === 'text' && question.short ? (
+          <Input {...control} value={value} autoComplete="off" onChange={(e) => onChange(e.target.value.slice(0, 60))} />
         ) : question.kind === 'text' ? (
           <Textarea {...control} rows={2} value={value} onChange={(e) => onChange(e.target.value.slice(0, 300))} />
         ) : (

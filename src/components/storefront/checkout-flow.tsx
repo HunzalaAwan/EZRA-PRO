@@ -29,7 +29,7 @@ import {
   formatTime,
   pluralize,
 } from '@/lib/utils'
-import type { Activity, PickupZone, Tenant, WaiverTemplate } from '@/types'
+import type { Activity, GuestQuestion, PickupZone, Tenant, WaiverTemplate } from '@/types'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { Button } from '@/components/ui/button'
 import { Field } from '@/components/ui/field'
@@ -70,6 +70,8 @@ export interface CheckoutDeparture {
   endsAt: string
   seatsLeft: number
   priceMultiplier: number
+  /** Day rentals: when the units come back. The span is startsAt to returnsAt. */
+  returnsAt?: string
   /** The location this run leaves from, when the business has more than one. */
   location?: { name: string; addressLine: string; meetingPoint: string }
 }
@@ -90,6 +92,10 @@ export interface CheckoutFlowProps {
   activity: Activity
   departure: CheckoutDeparture
   selection: QuoteSelection
+  /** Day rentals: days each unit is out. */
+  rentalDays?: number
+  /** Charters: the group size. */
+  party?: number
   basePath: string
   /** Deterministic confirmation code, generated on the server. */
   reference: string
@@ -251,6 +257,8 @@ export function CheckoutFlow({
   activity,
   departure,
   selection,
+  rentalDays = 1,
+  party,
   basePath,
   reference,
 }: CheckoutFlowProps) {
@@ -263,8 +271,8 @@ export function CheckoutFlow({
     [pricing.rules, activity.slug, departure.startsAt, nowIso, guestsSelected],
   )
   const quote = React.useMemo(
-    () => buildQuote(activity, tenant.slug, selection, departure.priceMultiplier * ruleResult.multiplier),
-    [activity, tenant.slug, selection, departure.priceMultiplier, ruleResult.multiplier],
+    () => buildQuote(activity, tenant.slug, selection, departure.priceMultiplier * ruleResult.multiplier, { days: rentalDays, party }),
+    [activity, tenant.slug, selection, departure.priceMultiplier, ruleResult.multiplier, rentalDays, party],
   )
 
   const [errors, setErrors] = React.useState<Errors>({})
@@ -295,8 +303,8 @@ export function CheckoutFlow({
 
   /* ---------- guests and waiver ---------- */
 
-  const questions = activity.guestQuestions ?? []
-  const [travellers, setTravellers] = React.useState<TravellerState[]>(() => makeTravellers(quote.headcount))
+  const questions = React.useMemo(() => [...(activity.guestQuestions ?? []), ...licenceQuestions(activity)], [activity])
+  const [travellers, setTravellers] = React.useState<TravellerState[]>(() => makeTravellers((activity.kind ?? 'trip') === 'rental' ? 1 : quote.party))
   const [bookingAnswers, setBookingAnswers] = React.useState<Record<string, string>>({})
   const [waiver, setWaiver] = React.useState<WaiverState>(EMPTY_WAIVER)
   const needsDetails = questions.length > 0 || Boolean(waiverTemplate) || travellers.length > 1
@@ -306,7 +314,7 @@ export function CheckoutFlow({
   const pickupRequired = Boolean(activity.pickup?.required)
   const [pickup, setPickup] = React.useState<PickupChoice>(() => ({ ...EMPTY_PICKUP, mode: pickupRequired ? 'pickup' : 'meet' }))
   const pickupZone = pickupZones.find((zone) => zone.id === pickup.zoneId)
-  const pickupFee = (pickup.mode === 'pickup' || pickupRequired) && pickupZone ? pickupZone.fee * quote.headcount : 0
+  const pickupFee = (pickup.mode === 'pickup' || pickupRequired) && pickupZone ? pickupZone.fee * quote.party : 0
   /** The quote with the pickup fee on it, for the summary and the pay button. */
   const withPickup = React.useMemo(
     () =>
@@ -315,7 +323,7 @@ export function CheckoutFlow({
             ...quote,
             addOnLines: [
               ...quote.addOnLines,
-              { id: 'pickup', label: `Hotel pickup · ${pickupZone.name}`, kind: 'addon' as const, quantity: quote.headcount, unitPrice: pickupZone.fee, total: pickupFee },
+              { id: 'pickup', label: `Hotel pickup · ${pickupZone.name}`, kind: 'addon' as const, quantity: quote.party, unitPrice: pickupZone.fee, total: pickupFee },
             ],
             subtotal: quote.subtotal + pickupFee,
             total: quote.total + pickupFee,
@@ -481,7 +489,7 @@ export function CheckoutFlow({
                   required={pickupRequired}
                   meetingPoint={departure.location?.meetingPoint ?? activity.meetingPoint}
                   startsAt={departure.startsAt}
-                  guests={quote.headcount}
+                  guests={quote.party}
                   currency={tenant.currency}
                   choice={pickup}
                   setChoice={setPickup}
@@ -983,7 +991,7 @@ function OrderSummary({
           <p className="mt-1 truncate text-xs text-subtle">{tenant.name}</p>
           <p className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-muted">
             <Clock className="size-3" aria-hidden="true" />
-            {formatDuration(activity.durationMinutes)}
+            {departure.returnsAt ? `${quote.days}-day rental` : formatDuration(activity.durationMinutes)}
           </p>
         </div>
       </div>
@@ -993,20 +1001,27 @@ function OrderSummary({
           <CalendarPlus className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
           <div className="min-w-0">
             <dt className="sr-only">Date and time</dt>
-            <dd className="font-medium text-foreground">{formatDateLong(departure.startsAt)}</dd>
-            <dd className="text-xs text-subtle tabular">
-              {formatTime(departure.startsAt)} – {formatTime(departure.endsAt)} ·{' '}
-              {tenant.timezone.split('/').pop()?.replace(/_/g, ' ')}
-            </dd>
+            {departure.returnsAt ? (
+              <>
+                <dd className="font-medium text-foreground">Pick up {formatDateLong(departure.startsAt)} · {formatTime(departure.startsAt)}</dd>
+                <dd className="font-medium text-foreground">Return {formatDateLong(departure.returnsAt)} · {formatTime(departure.returnsAt)}</dd>
+              </>
+            ) : (
+              <>
+                <dd className="font-medium text-foreground">{formatDateLong(departure.startsAt)}</dd>
+                <dd className="text-xs text-subtle tabular">
+                  {formatTime(departure.startsAt)} – {formatTime(departure.endsAt)} ·{' '}
+                  {tenant.timezone.split('/').pop()?.replace(/_/g, ' ')}
+                </dd>
+              </>
+            )}
           </div>
         </div>
         <div className="flex items-start gap-2.5">
           <Users className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
           <div className="min-w-0">
             <dt className="sr-only">Party</dt>
-            <dd className="text-muted">
-              {quote.headcount} {pluralize(quote.headcount, 'guest')}
-            </dd>
+            <dd className="text-muted">{quote.countLabel}</dd>
           </div>
         </div>
         <div className="flex items-start gap-2.5">
@@ -1219,7 +1234,7 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
 <div class="body"><h1>${activity.name}</h1>
 <p>${formatDateLong(departure.startsAt)} · ${formatTime(departure.startsAt)}–${formatTime(departure.endsAt)}</p>
 <p>${departure.location ? `${departure.location.name} — ` : ''}${meetingPointFor(activity, departure)}</p>
-<p>${quote.headcount} guest(s) · Lead guest: ${guest.firstName} ${guest.lastName}</p>
+<p>${quote.countLabel} · Lead guest: ${guest.firstName} ${guest.lastName}</p>
 <table>${rows}</table>
 <div class="total"><span>Total paid</span><span>${formatCurrency(quote.total, tenant.currency, { decimals: true })}</span></div>
 <p style="margin-top:20px">${activity.cancellationPolicy.summary}</p>
@@ -1334,7 +1349,7 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
               When
             </dt>
             <dd className="mt-1 text-sm font-medium tabular text-foreground">
-              {formatDateLong(departure.startsAt)} · {formatTime(departure.startsAt)}
+              {formatDateLong(departure.startsAt)} · {formatTime(departure.startsAt)}{departure.returnsAt ? ` to ${formatDateLong(departure.returnsAt)} · ${formatTime(departure.returnsAt)}` : ""}
             </dd>
           </div>
           <div>
@@ -1342,7 +1357,7 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
               Guests
             </dt>
             <dd className="mt-1 text-sm font-medium text-foreground">
-              {quote.headcount} {pluralize(quote.headcount, 'guest')}
+              {quote.countLabel}
             </dd>
           </div>
           <div>
@@ -1416,4 +1431,32 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
       </div>
     </div>
   )
+}
+
+/** A rental that needs a licence asks for it at checkout, whatever questions the operator added. */
+function licenceQuestions(activity: Activity): GuestQuestion[] {
+  const licence = (activity.kind ?? 'trip') === 'rental' ? activity.rental?.licence : undefined
+  if (!licence || licence === 'none') return []
+  const driver = licence === 'driver'
+  return [
+    {
+      id: 'q_licence_number',
+      label: driver ? "Main driver's licence number" : 'Boat licence or boater card number',
+      kind: 'text',
+      short: true,
+      scope: 'booking',
+      required: true,
+      help: 'Bring the licence itself to pick-up. We check it against this number.',
+    },
+    {
+      id: 'q_renter_age',
+      label: driver ? "Main driver's age" : "Operator's age",
+      kind: 'number',
+      scope: 'booking',
+      required: true,
+      unit: 'years',
+      min: activity.minAge || undefined,
+      limitMessage: activity.minAge ? `${driver ? 'Drivers' : 'Operators'} must be ${activity.minAge} or over.` : undefined,
+    },
+  ]
 }

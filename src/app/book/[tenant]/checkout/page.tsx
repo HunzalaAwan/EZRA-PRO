@@ -70,7 +70,7 @@ function resolveSelection(
   if (tiers.every((tier) => tier.qty === 0)) {
     const lead = activity.priceTiers[0]
     const fallback = clamp(
-      Math.max(lead.minQuantity, Math.min(2, activity.maxCapacity)),
+      Math.max(lead.minQuantity, Math.min((activity.kind ?? 'trip') === 'rental' ? 1 : 2, activity.maxCapacity)),
       1,
       Math.max(1, Math.min(lead.maxQuantity, seatsLeft)),
     )
@@ -134,13 +134,33 @@ export default async function CheckoutPage({
   const departureRow = valid ? requested : fallback
   if (!departureRow) notFound()
 
+  /* Day rentals run for n days from the pick-up; charters carry their group size. */
+  const dayRental = (activity.kind ?? 'trip') === 'rental' && activity.rental?.billing === 'day'
+  const minDays = Math.max(1, activity.rental?.minDays ?? 1)
+  const maxDays = Math.max(minDays, activity.rental?.maxDays ?? 14)
+  const rentalDays = dayRental ? clamp(Math.floor(Number(query.n) || minDays), minDays, maxDays) : 1
+  const party =
+    (activity.kind ?? 'trip') === 'charter'
+      ? clamp(Math.floor(Number(query.g) || 2), Math.max(1, activity.minParticipants), activity.charter?.maxGuests ?? activity.maxCapacity)
+      : undefined
+  const returnsAt = dayRental
+    ? (() => {
+        const back = new Date(`${departureRow.startsAt.slice(0, 10)}T12:00:00`)
+        back.setDate(back.getDate() + rentalDays)
+        const key = `${back.getFullYear()}-${String(back.getMonth() + 1).padStart(2, '0')}-${String(back.getDate()).padStart(2, '0')}`
+        return `${key}T${activity.rental?.returnTime ?? '17:00'}:00`
+      })()
+    : undefined
+  const pickupAt = dayRental ? `${departureRow.startsAt.slice(0, 10)}T${activity.rental?.pickupTime ?? '09:00'}:00` : undefined
+
   const site = departureRow.locationId ? getLocationById(departureRow.locationId) : undefined
   const siteMeeting = activity.locations.find((entry) => entry.locationId === departureRow.locationId)?.meetingPoint
 
   const departure: CheckoutDeparture = {
     id: departureRow.id,
-    startsAt: departureRow.startsAt,
-    endsAt: departureRow.endsAt,
+    startsAt: pickupAt ?? departureRow.startsAt,
+    endsAt: returnsAt ?? departureRow.endsAt,
+    returnsAt,
     seatsLeft: seatsRemaining(departureRow.capacity, departureRow.booked, departureRow.held),
     priceMultiplier: departureRow.priceMultiplier ?? 1,
     location: site
@@ -159,7 +179,7 @@ export default async function CheckoutPage({
 
   /* ---------- confirmation code (deterministic, seeded) ---------- */
 
-  const seed = `${departure.id}|${selection.tiers
+  const seed = `${departure.id}|${rentalDays}|${party ?? ''}|${selection.tiers
     .filter((tier) => tier.qty > 0)
     .map((tier) => `${tier.tierId}:${tier.qty}`)
     .join(',')}`
@@ -173,6 +193,8 @@ export default async function CheckoutPage({
       activity={activity}
       departure={departure}
       selection={selection}
+      rentalDays={rentalDays}
+      party={party}
       basePath={`/book/${tenant.slug}`}
       reference={reference}
       nowIso={`${NOW.getFullYear()}-${String(NOW.getMonth() + 1).padStart(2, '0')}-${String(NOW.getDate()).padStart(2, '0')}T${String(NOW.getHours()).padStart(2, '0')}:${String(NOW.getMinutes()).padStart(2, '0')}:00`}

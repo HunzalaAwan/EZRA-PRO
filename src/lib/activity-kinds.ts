@@ -1,4 +1,4 @@
-import type { Activity, ActivityFormat, ActivityKind } from '@/types'
+import type { Activity, ActivityFormat, ActivityKind, CharterConfig, RentalCategory, RentalConfig } from '@/types'
 import { formatDuration } from '@/lib/utils'
 
 /* ==========================================================================
@@ -53,8 +53,8 @@ export const ACTIVITY_KIND_META: Record<ActivityKind, ActivityKindMeta> = {
   rental: {
     label: 'Rental',
     short: 'Rental',
-    hint: 'Units by the hour, half day or day.',
-    examples: 'Jet skis, kayaks, SUPs, bikes, e-bikes, gear',
+    hint: 'By the hour, or by the day for cars and multi-day hire.',
+    examples: 'Jet skis, cars and jeeps, e-bikes, kayaks, SUPs, gear',
     icon: 'KeyRound',
     unit: 'start time',
     units: 'start times',
@@ -102,6 +102,63 @@ export const RENTAL_LENGTHS = [
   { minutes: 480, label: 'Full day (8 hours)' },
 ] as const
 
+/** What is rented, and what each one needs asked by default. */
+export const RENTAL_CATEGORIES: {
+  value: RentalCategory
+  label: string
+  hint: string
+  unit: string
+  units: string
+  licence: NonNullable<RentalConfig['licence']>
+  seatsPerUnit: number
+  billing: NonNullable<RentalConfig['billing']>
+  fuel: boolean
+  mileage: boolean
+}[] = [
+  { value: 'watercraft', label: 'Watercraft', hint: 'Jet skis, boats, pontoons', unit: 'craft', units: 'craft', licence: 'boat', seatsPerUnit: 2, billing: 'length', fuel: true, mileage: false },
+  { value: 'vehicle', label: 'Vehicle', hint: 'Cars, jeeps, scooters, ATVs', unit: 'vehicle', units: 'vehicles', licence: 'driver', seatsPerUnit: 5, billing: 'day', fuel: true, mileage: true },
+  { value: 'bike', label: 'Bike or e-bike', hint: 'Road, mountain, e-bikes', unit: 'bike', units: 'bikes', licence: 'none', seatsPerUnit: 1, billing: 'length', fuel: false, mileage: false },
+  { value: 'gear', label: 'Gear', hint: 'Kayaks, SUPs, surfboards, snorkel sets', unit: 'item', units: 'items', licence: 'none', seatsPerUnit: 1, billing: 'length', fuel: false, mileage: false },
+]
+
+export const rentalCategoryMeta = (category: RentalCategory | undefined) =>
+  RENTAL_CATEGORIES.find((entry) => entry.value === (category ?? 'gear')) ?? RENTAL_CATEGORIES[3]
+
+export const LICENCE_LABEL: Record<NonNullable<RentalConfig['licence']>, string> = {
+  none: 'No licence needed',
+  driver: "Driver's licence",
+  boat: 'Boat licence or boater card',
+}
+
+export const FUEL_LABEL: Record<NonNullable<RentalConfig['fuel']>, string> = {
+  included: 'Fuel included',
+  full_to_full: 'Full to full',
+  charged: 'Charged for what you use',
+}
+
+export const CHARTER_VESSELS: { value: NonNullable<CharterConfig['vessel']>; label: string; crew: string }[] = [
+  { value: 'boat', label: 'Boat', crew: 'Captain' },
+  { value: 'yacht', label: 'Yacht or catamaran', crew: 'Captain and crew' },
+  { value: 'vehicle', label: 'Vehicle', crew: 'Driver' },
+  { value: 'guide', label: 'Private guide', crew: 'Guide' },
+  { value: 'aircraft', label: 'Helicopter or plane', crew: 'Pilot' },
+]
+
+export const LANGUAGES = ['English', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Japanese', 'Mandarin', 'Korean', 'Hawaiian'] as const
+
+/** Day rentals sell by the day; everything else by the length on each tier. */
+export const isDayRental = (activity: Pick<Activity, 'kind' | 'rental'>) =>
+  (activity.kind ?? 'trip') === 'rental' && activity.rental?.billing === 'day'
+
+/** "2 jet skis", "6 guests", "1 vehicle": what a booking of this kind is counted in. */
+export function partyLabel(activity: Pick<Activity, 'kind' | 'rental'>, count: number): string {
+  if ((activity.kind ?? 'trip') === 'rental') {
+    const meta = rentalCategoryMeta(activity.rental?.category)
+    return `${count} ${count === 1 ? meta.unit : meta.units}`
+  }
+  return `${count} ${count === 1 ? 'guest' : 'guests'}`
+}
+
 export function rentalLengthLabel(minutes: number): string {
   return RENTAL_LENGTHS.find((option) => option.minutes === minutes)?.label ?? `${minutes} minutes`
 }
@@ -114,6 +171,7 @@ export function kindOf(activity: { kind?: ActivityKind }): ActivityKind {
 export function kindChipLabel(activity: Pick<Activity, 'kind' | 'durationMinutes' | 'maxCapacity' | 'rental' | 'charter' | 'lesson' | 'pass'>): string {
   switch (activity.kind ?? 'trip') {
     case 'rental': {
+      if (activity.rental?.billing === 'day') return 'Rental · by the day'
       const shortest = Math.min(...(activity.rental?.durations.map((entry) => entry.minutes) ?? [activity.durationMinutes]))
       return `Rental · from ${formatDuration(shortest)}`
     }
@@ -129,5 +187,81 @@ export function kindChipLabel(activity: Pick<Activity, 'kind' | 'durationMinutes
     }
     default:
       return formatDuration(activity.durationMinutes)
+  }
+}
+
+const DIFFICULTY_WORD: Record<Activity['difficulty'], string> = {
+  easy: 'Easy',
+  moderate: 'Moderate',
+  challenging: 'Challenging',
+  extreme: 'Extreme',
+}
+
+/** The badge on a listing: difficulty for a trip, what it is for everything else. */
+export function kindBadge(activity: Pick<Activity, 'kind' | 'difficulty' | 'rental' | 'lesson' | 'pass'>): string {
+  switch (activity.kind ?? 'trip') {
+    case 'rental':
+      return `${rentalCategoryMeta(activity.rental?.category).label} rental`
+    case 'charter':
+      return 'Private charter'
+    case 'lesson':
+      return LESSON_LEVELS.find((entry) => entry.value === activity.lesson?.level)?.label ?? 'Lesson'
+    case 'pass':
+      return (activity.pass?.validDays ?? 1) > 1 ? `${activity.pass?.validDays}-day pass` : 'Day pass'
+    default:
+      return DIFFICULTY_WORD[activity.difficulty]
+  }
+}
+
+/** Two or three short facts for a listing card, in the kind's own terms. */
+export function kindCardFacts(activity: Pick<Activity, 'kind' | 'difficulty' | 'maxCapacity' | 'minAge' | 'rental' | 'charter' | 'lesson' | 'pass'>): string[] {
+  const age = activity.minAge > 0 ? `Ages ${activity.minAge}+` : 'All ages'
+  switch (activity.kind ?? 'trip') {
+    case 'rental': {
+      const meta = rentalCategoryMeta(activity.rental?.category)
+      const licence = activity.rental?.licence && activity.rental.licence !== 'none' ? `Licence, ${activity.minAge}+` : age
+      return [activity.rental?.billing === 'day' ? 'By the day' : 'By the hour', `${activity.rental?.seatsPerUnit ?? 1} per ${meta.unit}`, licence]
+    }
+    case 'charter':
+      return [`Up to ${activity.charter?.maxGuests ?? activity.maxCapacity} guests`, activity.charter?.crewed === false ? 'Self-skippered' : 'Crew included', age]
+    case 'lesson':
+      return [`${activity.lesson?.ratio ?? 4} per instructor`, (activity.lesson?.sessions ?? 1) > 1 ? `${activity.lesson?.sessions} sessions` : 'Single lesson', age]
+    case 'pass':
+      return [activity.pass?.reentry ? 'Re-entry allowed' : 'Single entry', age]
+    default:
+      return [`Up to ${activity.maxCapacity}`, DIFFICULTY_WORD[activity.difficulty], age]
+  }
+}
+
+/** The "good to know" line on the detail page for kinds that have no difficulty. */
+export function kindNote(activity: Pick<Activity, 'kind' | 'minAge' | 'rental' | 'charter' | 'lesson' | 'pass'>): { title: string; body: string } | null {
+  const age = activity.minAge > 0 ? `Minimum age ${activity.minAge}.` : 'All ages welcome.'
+  switch (activity.kind ?? 'trip') {
+    case 'rental': {
+      const r = activity.rental
+      const meta = rentalCategoryMeta(r?.category)
+      const parts = [
+        r?.licence && r.licence !== 'none' ? `Bring your ${LICENCE_LABEL[r.licence].toLowerCase()}; the main ${r.licence === 'driver' ? 'driver' : 'operator'} must be ${activity.minAge} or over.` : age,
+        r?.billing === 'day' && r.pickupTime && r.returnTime ? `Pick up from ${r.pickupTime}, return by ${r.returnTime} on your last day.` : null,
+        meta.fuel && r?.fuel ? `${FUEL_LABEL[r.fuel]}.` : null,
+        meta.mileage ? (r?.kmPerDay ? `${r.kmPerDay} km a day included.` : 'Unlimited kilometres.') : null,
+      ]
+      return { title: `${meta.label} rental.`, body: parts.filter(Boolean).join(' ') }
+    }
+    case 'charter': {
+      const vessel = CHARTER_VESSELS.find((entry) => entry.value === activity.charter?.vessel)
+      return {
+        title: 'Private charter.',
+        body: `${activity.charter?.crewed === false ? 'Self-skippered: you need the right licence.' : `${vessel?.crew ?? 'Crew'} included.`} Only your group aboard. ${age}`,
+      }
+    }
+    case 'lesson': {
+      const level = LESSON_LEVELS.find((entry) => entry.value === activity.lesson?.level)?.label ?? 'All levels'
+      return { title: `${level}.`, body: `${activity.lesson?.ratio ?? 4} students per instructor${activity.lesson?.equipmentIncluded ? ', all equipment included' : ''}. ${age}` }
+    }
+    case 'pass':
+      return { title: 'Day pass.', body: `${activity.pass?.reentry ? 'Come and go as you like.' : 'Single entry.'} ${age}` }
+    default:
+      return null
   }
 }

@@ -211,9 +211,25 @@ export function previewDepartures(
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
+/**
+ * What each departure, day or date sells, when the activity already set it
+ * (seats on a trip, units on a rental, one group on a charter). The editor
+ * shows it and links back instead of asking again.
+ */
+export interface ScheduleSeats {
+  capacity: number
+  one: string
+  many: string
+  /** "18 seats per departure", "6 vehicles at a time". */
+  summary: string
+  onEdit?: () => void
+}
+
 /** One line for the review step. */
-export function describeSchedule(schedule: DraftSchedule): string {
-  const seats = schedule.capacity > 0 ? `${schedule.capacity} seats` : 'no seat limit'
+export function describeSchedule(schedule: DraftSchedule, nouns?: Pick<ScheduleSeats, 'one' | 'many'>): string {
+  const many = nouns?.many ?? 'seats'
+  const one = nouns?.one ?? 'seat'
+  const seats = schedule.capacity > 0 ? `${schedule.capacity} ${schedule.capacity === 1 ? one : many}` : `no ${one} limit`
   if (schedule.mode === 'hours') {
     const arrival = schedule.entryInterval > 0 ? `arrival slots every ${schedule.entryInterval} min` : 'arrive any time'
     return `Open ${formatClock(schedule.opensAt)}–${formatClock(schedule.closesAt)} on ${plural(schedule.weekdays.length, 'day')} a week · ${arrival} · ${seats} a day`
@@ -236,6 +252,8 @@ export interface ScheduleEditorProps {
   errors?: Record<string, string>
   /** Hide "How it goes on sale" when a parent shows it once for several locations. */
   showMode?: boolean
+  /** Set by the activity's own settings; the editor shows it instead of a slider. */
+  seats?: ScheduleSeats
   className?: string
 }
 
@@ -274,9 +292,11 @@ export function ModePicker({
   )
 }
 
-export function ScheduleEditor({ schedule, onChange, nowIso, errors, showMode = true, className }: ScheduleEditorProps) {
+export function ScheduleEditor({ schedule: given, onChange, nowIso, errors, showMode = true, seats, className }: ScheduleEditorProps) {
+  const schedule = seats ? { ...given, capacity: seats.capacity } : given
   const set = (patch: Partial<DraftSchedule>) => onChange({ ...schedule, ...patch })
   const unlimited = schedule.capacity === 0
+  const many = seats?.many ?? 'seats'
 
   const preview = React.useMemo(() => previewDepartures(schedule, nowIso), [schedule, nowIso])
   const totalDepartures = preview.reduce((acc, day) => acc + (day.open ? 1 : day.times.length), 0)
@@ -309,6 +329,22 @@ export function ScheduleEditor({ schedule, onChange, nowIso, errors, showMode = 
 
       {/* ---------- capacity + season ---------- */}
       <div className="grid gap-5 sm:grid-cols-2">
+        {seats ? (
+          <div className="flex items-start justify-between gap-3 self-start rounded-xl border border-line bg-surface-sunken/50 px-3.5 py-3">
+            <span className="min-w-0">
+              <span className="flex items-center gap-1.5 text-[0.8125rem] font-medium text-foreground">
+                <Users className="size-3.5 text-faint" aria-hidden="true" />
+                {seats.summary}
+              </span>
+              <span className="mt-0.5 block text-xs text-subtle">Set once in Basics, used at every time and location.</span>
+            </span>
+            {seats.onEdit ? (
+              <Button type="button" variant="ghost" size="xs" onClick={seats.onEdit}>
+                Change
+              </Button>
+            ) : null}
+          </div>
+        ) : (
         <div>
           <div className="flex items-baseline justify-between gap-3">
             <p className="text-[0.8125rem] font-medium">
@@ -357,6 +393,7 @@ export function ScheduleEditor({ schedule, onChange, nowIso, errors, showMode = 
           </div>
           {errors?.capacity ? <p className="mt-1.5 text-xs font-medium text-danger">{errors.capacity}</p> : null}
         </div>
+        )}
 
         {schedule.mode !== 'dates' ? (
           <div className="grid grid-cols-2 gap-3">
@@ -379,7 +416,7 @@ export function ScheduleEditor({ schedule, onChange, nowIso, errors, showMode = 
           </div>
         ) : (
           <div className="rounded-xl border border-dashed border-line p-4 text-xs leading-relaxed text-muted">
-            Listed dates need no start or end date. Each one sells until it starts, or until the seats run out.
+            Listed dates need no start or end date. Each one sells until it starts, or until the {many} run out.
           </div>
         )}
       </div>
@@ -398,7 +435,7 @@ export function ScheduleEditor({ schedule, onChange, nowIso, errors, showMode = 
             </Badge>
             <Badge size="sm" variant="primary">
               <Users className="size-3" aria-hidden="true" />
-              {unlimited ? 'No seat limit' : `${totalSeats} seats`}
+              {unlimited ? `No ${seats?.one ?? 'seat'} limit` : `${totalSeats} ${many}`}
             </Badge>
           </div>
         </div>
@@ -449,7 +486,7 @@ export function ScheduleEditor({ schedule, onChange, nowIso, errors, showMode = 
                   </span>
                 )}
                 <span className="ml-auto shrink-0 text-xs text-faint tabular">
-                  {day.seats > 0 ? `${day.seats} seats` : 'no limit'}
+                  {day.seats > 0 ? `${day.seats} ${day.seats === 1 ? (seats?.one ?? 'seat') : many}` : 'no limit'}
                 </span>
               </li>
             ))}
@@ -734,12 +771,14 @@ export interface LocationsEditorProps {
   /** The frozen demo clock, serialised from the server. */
   nowIso: string
   errors?: Record<string, string>
+  /** Passed to every location's schedule; seats are the activity's, not the location's. */
+  seats?: ScheduleSeats
   className?: string
 }
 
 const ownRule = (schedule: DraftSchedule): DraftSchedule => ({ ...schedule, locations: [] })
 
-export function LocationsEditor({ schedule, onChange, locations, nowIso, errors, className }: LocationsEditorProps) {
+export function LocationsEditor({ schedule, onChange, locations, nowIso, errors, seats, className }: LocationsEditorProps) {
   const picked = schedule.locations
   const multi = picked.length > 1
   const [openIds, setOpenIds] = React.useState<string[]>(() => (picked[0] ? [picked[0].locationId] : []))
@@ -810,7 +849,7 @@ export function LocationsEditor({ schedule, onChange, locations, nowIso, errors,
           <div>
             <p className="text-[0.8125rem] font-medium">Where it runs from</p>
             <p className="mt-0.5 text-xs text-muted">
-              Tick every location this runs from. With more than one, open each location to set its own days, times and seats.
+              Tick every location this runs from. With more than one, open each location to set its own days and times.
               Guests choose a location at checkout and only see its dates and times.
             </p>
           </div>
@@ -858,7 +897,7 @@ export function LocationsEditor({ schedule, onChange, locations, nowIso, errors,
                       <span className="block text-xs text-subtle">{locationAddress(site)}</span>
                       {entry && multi ? (
                         <span className={cn('mt-1 block text-xs', hasErrors ? 'font-medium text-danger' : 'text-muted')}>
-                          {hasErrors ? 'Needs attention' : describeSchedule(entry.schedule)}
+                          {hasErrors ? 'Needs attention' : describeSchedule(entry.schedule, seats)}
                         </span>
                       ) : null}
                     </span>
@@ -886,6 +925,7 @@ export function LocationsEditor({ schedule, onChange, locations, nowIso, errors,
                       nowIso={nowIso}
                       errors={siteErrors}
                       showMode={false}
+                      seats={seats}
                     />
                   </div>
                 ) : null}

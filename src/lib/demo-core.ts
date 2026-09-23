@@ -21,6 +21,8 @@
 
 import { presetQuestion } from '@/lib/guest-requirements'
 import type {
+  CharterConfig,
+  RentalConfig,
   Activity,
   ActivityFeedItem,
   ActivityFormat,
@@ -1443,9 +1445,12 @@ interface ActivitySpec {
   /** Scheduled trip unless said otherwise. */
   kind?: ActivityKind
   /** Rentals: units at once, buffer, deposit, and a length in minutes for each tier, in tier order. */
-  rental?: { units: number; bufferMinutes: number; damageDeposit: number; minutes: number[] }
-  charter?: { maxGuests: number; requestToBook: boolean; noticeHours: number }
-  lesson?: { level: 'all' | 'beginner' | 'intermediate' | 'advanced'; sessions: number; ratio: number; certification?: string }
+  rental?: { units: number; bufferMinutes: number; damageDeposit: number; minutes: number[] } & Omit<Partial<RentalConfig>, 'units' | 'bufferMinutes' | 'damageDeposit' | 'durations'>
+  /** Charters: optional length in minutes for each tier, in tier order. */
+  charter?: { maxGuests: number; requestToBook: boolean; noticeHours: number; minutes?: number[] } & Omit<Partial<CharterConfig>, 'maxGuests' | 'requestToBook' | 'noticeHours' | 'durations'>
+  lesson?: { level: 'all' | 'beginner' | 'intermediate' | 'advanced'; sessions: number; ratio: number; certification?: string; equipmentIncluded?: boolean }
+  /** Languages the guide or instructor speaks. */
+  languages?: string[]
   pass?: { validDays: number; reentry: boolean }
   slug: string
   name: string
@@ -1493,9 +1498,107 @@ interface ActivitySpec {
 
 const BLUE_HORIZON_SPECS: ActivitySpec[] = [
   {
+    slug: 'island-jeep-rental',
+    kind: 'rental',
+    rental: {
+      units: 8,
+      bufferMinutes: 0,
+      damageDeposit: 50000,
+      minutes: [1440, 1440, 1440],
+      category: 'vehicle',
+      billing: 'day',
+      minDays: 1,
+      maxDays: 14,
+      pickupTime: '08:00',
+      returnTime: '17:00',
+      seatsPerUnit: 4,
+      licence: 'driver',
+      fuel: 'full_to_full',
+      kmPerDay: 0,
+    },
+    name: 'Island Jeep Rental',
+    tagline: 'A soft-top Wrangler for the Road to Hana, by the day or the week.',
+    description:
+      'Pick up a Jeep Wrangler from the Kihei yard and take Maui at your own pace: the Road to Hana, the Haleakala summit, the back roads to the west side beaches. Every Jeep has a soft top that comes off, a cooler, beach chairs and a snorkel set in the back, and unlimited miles. Pick up at 8, bring it back by 5 on your last day.',
+    highlights: [
+      'Soft-top Wranglers, two-door or four-door',
+      'Unlimited miles on every rental',
+      'Cooler, beach chairs and snorkel set in the back',
+      'Road to Hana guide app included',
+    ],
+    included: ['Jeep Wrangler', 'Unlimited miles', 'Basic cover', 'Cooler and beach chairs', 'Roadside help 24 hours'],
+    excluded: ['Fuel (return it full)', 'Full cover (add-on)', 'Parking fines'],
+    requirements: [
+      'Main driver 21 or over with a full licence held two years',
+      'Credit card in the driver\'s name for the deposit',
+      'Return with a full tank',
+    ],
+    meetingPoint: 'Blue Horizon yard, 1847 S Kihei Rd — the keys are at the dive loft desk.',
+    difficulty: 'easy',
+    durationMinutes: 540,
+    minAge: 21,
+    maxCapacity: 8,
+    pricingModel: 'per_unit',
+    tiers: [
+      ['Wrangler 2-door', 11900, 0, 4, 'Seats 4 · soft top · automatic'],
+      ['Wrangler 4-door', 14900, 0, 4, 'Seats 5 · soft top · automatic'],
+      ['Wrangler 4xe hybrid', 17900, 0, 2, 'Seats 5 · plug-in hybrid · automatic'],
+    ],
+    addOns: [
+      ['Full cover, no excess', 3500, 'Per day. Nothing to pay if it is damaged.', 1, 'ShieldCheck'],
+      ['Child seat', 1200, 'Per seat, for the whole rental.', 3, 'Baby'],
+      ['Additional driver', 1500, 'A second named driver, 21 or over.', 2, 'UserPlus'],
+    ],
+    photos: ['photo-1533473359331-0135ef1b58bf', 'photo-1507525428034-b723cf961d3e', 'photo-1519046904884-53103b34b206'],
+    colorKey: 'coral',
+    rating: 4.8,
+    reviewCount: 143,
+    resources: [],
+    format: 'open',
+    times: ['08:00'],
+    locations: [{ location: 'kihei' }],
+    popularity: 0.35,
+    freeCancelHours: 48,
+  },
+  {
+    slug: 'e-bike-rental',
+    kind: 'rental',
+    rental: { units: 10, bufferMinutes: 15, damageDeposit: 10000, minutes: [120, 240, 480], category: 'bike', billing: 'length', seatsPerUnit: 1, licence: 'none' },
+    name: 'E-Bike Rental',
+    tagline: 'Pedal-assist cruisers along the Lahaina coast, helmet and lock included.',
+    description:
+      'Take a pedal-assist e-bike from the Lahaina shop and ride the coast road to the beaches, the banyan tree and the harbour without breaking a sweat. Every bike comes with a helmet, a lock, a phone mount and a route card with the flat, shaded rides marked.',
+    highlights: ['Pedal-assist, up to 45 miles a charge', 'Helmet, lock and phone mount included', 'Route card with the flat rides marked', 'Sizes for riders from 5 foot'],
+    included: ['E-bike', 'Helmet', 'Lock', 'Phone mount', 'Route card'],
+    excluded: ['Guide', 'Food and drinks'],
+    requirements: ['Riders 14 and over', 'Comfortable riding a bike in traffic'],
+    meetingPoint: 'Blue Horizon Lahaina shop, Front Street — bikes are racked out front.',
+    difficulty: 'easy',
+    durationMinutes: 120,
+    minAge: 14,
+    maxCapacity: 10,
+    pricingModel: 'per_unit',
+    tiers: [
+      ['2 hours', 4900, 0, 10, 'Per bike'],
+      ['Half day', 6900, 0, 10, 'Per bike, four hours'],
+      ['Full day', 8900, 0, 10, 'Per bike, eight hours'],
+    ],
+    addOns: [['Child trailer', 2000, 'Two-seat trailer for little ones.', 2, 'Baby']],
+    photos: ['photo-1485965120184-e220f721d03e', 'photo-1507525428034-b723cf961d3e', 'photo-1519046904884-53103b34b206'],
+    colorKey: 'success',
+    rating: 4.7,
+    reviewCount: 88,
+    resources: [],
+    format: 'open',
+    times: ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00'],
+    locations: [{ location: 'lahaina' }],
+    popularity: 0.3,
+    freeCancelHours: 24,
+  },
+  {
     slug: 'jet-ski-rental',
     kind: 'rental',
-    rental: { units: 6, bufferMinutes: 15, damageDeposit: 25000, minutes: [30, 60, 120] },
+    rental: { units: 6, bufferMinutes: 15, damageDeposit: 25000, minutes: [30, 60, 120], category: 'watercraft', billing: 'length', seatsPerUnit: 2, licence: 'boat', fuel: 'included' },
     name: 'Jet Ski Rental',
     tagline: 'Your own WaveRunner off Kaanapali, by the half hour or the hour.',
     description:
@@ -1539,7 +1642,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
   {
     slug: 'kayak-sup-rental',
     kind: 'rental',
-    rental: { units: 12, bufferMinutes: 10, damageDeposit: 0, minutes: [60, 120, 240] },
+    rental: { units: 12, bufferMinutes: 10, damageDeposit: 0, minutes: [60, 120, 240], category: 'gear', billing: 'length', seatsPerUnit: 1, licence: 'none' },
     name: 'Kayak & Paddleboard Rental',
     tagline: 'Sit-on-top kayaks and SUPs from the Kihei beach, with a reef map.',
     description:
@@ -1574,7 +1677,8 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
   {
     slug: 'private-catamaran-charter',
     kind: 'charter',
-    charter: { maxGuests: 24, requestToBook: true, noticeHours: 72 },
+    charter: { maxGuests: 24, requestToBook: true, noticeHours: 72, vessel: 'yacht', crewed: true, minutes: [180, 150] },
+    languages: ['English', 'Japanese'],
     name: 'Private Catamaran Charter',
     tagline: 'The whole catamaran for your group: proposals, birthdays, company days.',
     description:
@@ -1819,7 +1923,8 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
   {
     slug: 'private-sportfishing-charter',
     kind: 'charter',
-    charter: { maxGuests: 6, requestToBook: false, noticeHours: 24 },
+    charter: { maxGuests: 6, requestToBook: false, noticeHours: 24, vessel: 'boat', crewed: true, minutes: [480, 300] },
+    languages: ['English'],
     name: 'Private Sportfishing Charter',
     tagline: 'The whole boat, the whole crew, the whole day. Blue marlin country.',
     description:
@@ -1930,7 +2035,8 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
   {
     slug: 'beginner-surf-lesson',
     kind: 'lesson',
-    lesson: { level: 'beginner', sessions: 1, ratio: 3 },
+    lesson: { level: 'beginner', sessions: 1, ratio: 3, equipmentIncluded: true },
+    languages: ['English', 'Spanish'],
     name: 'Beginner Surf Lesson',
     tagline: 'Stand up in your first session or come back free. Almost everyone stands up.',
     description:
@@ -2093,7 +2199,8 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
   {
     slug: 'sunrise-sup-yoga',
     kind: 'lesson',
-    lesson: { level: 'all', sessions: 1, ratio: 8 },
+    lesson: { level: 'all', sessions: 1, ratio: 8, equipmentIncluded: true },
+    languages: ['English'],
     name: 'Sunrise SUP & Yoga',
     tagline: 'Sixty minutes of flow on glass water before the island wakes up.',
     description:
@@ -2375,7 +2482,8 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
   {
     slug: 'blue-water-freedive-course',
     kind: 'lesson',
-    lesson: { level: 'beginner', sessions: 2, ratio: 4, certification: 'AIDA 2 Freediver' },
+    lesson: { level: 'beginner', sessions: 2, ratio: 4, certification: 'AIDA 2 Freediver', equipmentIncluded: true },
+    languages: ['English', 'French'],
     name: 'Blue Water Freedive Course',
     tagline: 'Two days to a confident, safe sixty-foot dive on a single breath.',
     description:
@@ -3300,16 +3408,23 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     format: spec.format ?? 'departures',
     kind: spec.kind ?? 'trip',
     ...(spec.rental
-      ? {
-          rental: {
-            units: spec.rental.units,
-            bufferMinutes: spec.rental.bufferMinutes,
-            damageDeposit: spec.rental.damageDeposit,
-            durations: priceTiers.map((tier, index) => ({ tierId: tier.id, minutes: spec.rental!.minutes[index] ?? 60 })),
-          },
-        }
+      ? (() => {
+          const { minutes, ...rest } = spec.rental
+          return { rental: { ...rest, durations: priceTiers.map((tier, index) => ({ tierId: tier.id, minutes: minutes[index] ?? 60 })) } }
+        })()
       : {}),
-    ...(spec.charter ? { charter: { ...spec.charter } } : {}),
+    ...(spec.charter
+      ? (() => {
+          const { minutes, ...rest } = spec.charter
+          return {
+            charter: {
+              ...rest,
+              ...(minutes ? { durations: priceTiers.map((tier, index) => ({ tierId: tier.id, minutes: minutes[index] ?? spec.durationMinutes })) } : {}),
+            },
+          }
+        })()
+      : {}),
+    ...(spec.languages ? { languages: spec.languages } : {}),
     ...(spec.lesson ? { lesson: { ...spec.lesson } } : {}),
     ...(spec.pass ? { pass: { ...spec.pass } } : {}),
     difficulty: spec.difficulty,

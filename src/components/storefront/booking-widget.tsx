@@ -36,7 +36,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { LESSON_LEVELS } from '@/lib/activity-kinds'
+import { CHARTER_VESSELS, FUEL_LABEL, LESSON_LEVELS, LICENCE_LABEL, isDayRental, partyLabel, rentalCategoryMeta } from '@/lib/activity-kinds'
 import { applyRules } from '@/lib/pricing'
 import { usePricing } from '@/hooks/use-pricing'
 import { IconButton } from '@/components/ui/icon-button'
@@ -130,6 +130,19 @@ export interface Quote {
   seats: number
   /** Every ticket, including comp/ride-along tiers. */
   headcount: number
+  /** Day rentals: how many days each unit is out. 1 otherwise. */
+  days: number
+  /** People on the booking: the charter group, or the headcount. */
+  party: number
+  /** "2 jet skis", "6 guests": what the booking is counted in. */
+  countLabel: string
+}
+
+export interface QuoteOptions {
+  /** Day rentals: every tier is priced per day. */
+  days?: number
+  /** Charters: the group size, which the per-group price does not count. */
+  party?: number
 }
 
 /** Deterministic, integer-only money maths — minor units in, minor units out. */
@@ -138,7 +151,9 @@ export function buildQuote(
   tenantSlug: string,
   selection: QuoteSelection,
   priceMultiplier = 1,
+  options: QuoteOptions = {},
 ): Quote {
+  const days = Math.max(1, Math.floor(options.days ?? 1))
   const tax = TAX_BY_TENANT[tenantSlug] ?? PROCESSING_FEE
   const ticketLines: QuoteLine[] = []
   let seats = 0
@@ -148,11 +163,11 @@ export function buildQuote(
   for (const tier of activity.priceTiers) {
     const qty = selection.tiers.find((t) => t.tierId === tier.id)?.qty ?? 0
     if (qty <= 0) continue
-    const unitPrice = Math.round(tier.price * priceMultiplier)
+    const unitPrice = Math.round(tier.price * priceMultiplier) * days
     const total = unitPrice * qty
     ticketLines.push({
       id: tier.id,
-      label: tier.label,
+      label: days > 1 ? `${tier.label} · ${days} days` : tier.label,
       kind: 'ticket',
       quantity: qty,
       unitPrice,
@@ -193,6 +208,9 @@ export function buildQuote(
     total: subtotal + feeTotal + taxTotal,
     seats,
     headcount,
+    days,
+    party: (activity.kind ?? 'trip') === 'charter' ? Math.max(1, options.party ?? headcount) : headcount,
+    countLabel: partyLabel(activity, (activity.kind ?? 'trip') === 'charter' ? Math.max(1, options.party ?? headcount) : headcount),
   }
 }
 
@@ -202,6 +220,7 @@ export function checkoutHref(
   activitySlug: string,
   departureId: string,
   selection: QuoteSelection,
+  extra: Record<string, string | number | undefined> = {},
 ) {
   const params = new URLSearchParams()
   params.set('activity', activitySlug)
@@ -210,6 +229,7 @@ export function checkoutHref(
   if (tiers.length > 0) params.set('t', tiers.map((t) => `${t.tierId}:${t.qty}`).join('|'))
   const addOns = selection.addOns.filter((a) => a.qty > 0)
   if (addOns.length > 0) params.set('a', addOns.map((a) => `${a.addOnId}:${a.qty}`).join('|'))
+  for (const [key, value] of Object.entries(extra)) if (value !== undefined) params.set(key, String(value))
   return `${checkoutPath}?${params.toString()}`
 }
 
@@ -265,13 +285,18 @@ export function BookingWidget({
   /* ---------- kind ---------- */
 
   const kind = activity.kind ?? 'trip'
-  const showTime = kind !== 'pass'
+  const dayRental = isDayRental(activity)
+  const rentalMeta = rentalCategoryMeta(activity.rental?.category)
+  const minDays = Math.max(1, activity.rental?.minDays ?? 1)
+  const maxDays = Math.max(minDays, activity.rental?.maxDays ?? 14)
+  const [rentDays, setRentDays] = React.useState(minDays)
+  const showTime = kind !== 'pass' && !dayRental
   const stepList = [multiSite ? 'location' : null, 'date', showTime ? 'time' : null, 'guests', 'extras'].filter(
     (step): step is string => Boolean(step),
   )
   const stepOf = (id: string) => stepList.indexOf(id) + 1
   const requestMode = kind === 'charter' && Boolean(activity.charter?.requestToBook)
-  const [party, setParty] = React.useState(2)
+  const [party, setParty] = React.useState(() => Math.max(2, activity.minParticipants || 1))
   const [requestOpen, setRequestOpen] = React.useState(false)
   const [requestSent, setRequestSent] = React.useState(false)
   const [request, setRequest] = React.useState({ name: '', email: '', message: '' })
@@ -332,7 +357,7 @@ export function BookingWidget({
     const seed: Record<string, number> = {}
     activity.priceTiers.forEach((tier, index) => {
       if (index === 0) {
-        const wanted = initialGuests ?? Math.max(tier.minQuantity, 2)
+        const wanted = (activity.kind ?? 'trip') === 'rental' ? 1 : (initialGuests ?? Math.max(tier.minQuantity, 2))
         seed[tier.id] = clamp(wanted, Math.max(tier.minQuantity, 1), tier.maxQuantity)
       } else {
         seed[tier.id] = tier.minQuantity
@@ -352,7 +377,21 @@ export function BookingWidget({
     0,
   )
   const headcount = activity.priceTiers.reduce((total, tier) => total + (tierQty[tier.id] ?? 0), 0)
-  const seatsLeft = slot?.seatsLeft ?? 0
+  /** Day rentals: a unit is free only if it is free every day of the span. */
+  const spanLeft = React.useMemo(() => {
+    if (!dayRental || !slot) return slot?.seatsLeft ?? 0
+    const start = days.findIndex((entry) => entry.dateKey === dateKey)
+    if (start < 0) return 0
+    let least = Number.POSITIVE_INFINITY
+    for (let offset = 0; offset < rentDays; offset++) {
+      const entry = days[start + offset]
+      if (!entry) break
+      const open = entry.slots.filter((item) => !item.soldOut)
+      least = Math.min(least, open.length > 0 ? Math.max(...open.map((item) => item.seatsLeft)) : 0)
+    }
+    return Number.isFinite(least) ? least : 0
+  }, [dayRental, slot, days, dateKey, rentDays])
+  const seatsLeft = dayRental ? spanLeft : (slot?.seatsLeft ?? 0)
   const overCapacity = slot ? seatsUsed > seatsLeft : false
 
   const selection: QuoteSelection = React.useMemo(
@@ -378,16 +417,21 @@ export function BookingWidget({
   )
 
   const quote = React.useMemo(
-    () => buildQuote(activity, tenantSlug, selection, (slot?.priceMultiplier ?? 1) * ruleResult.multiplier),
-    [activity, tenantSlug, selection, slot, ruleResult.multiplier],
+    () => buildQuote(activity, tenantSlug, selection, (slot?.priceMultiplier ?? 1) * ruleResult.multiplier, { days: dayRental ? rentDays : 1, party }),
+    [activity, tenantSlug, selection, slot, ruleResult.multiplier, dayRental, rentDays, party],
   )
 
   const canReserve =
-    Boolean(slot) && !overCapacity && seatsUsed >= Math.max(1, activity.minParticipants)
+    Boolean(slot) && !overCapacity && seatsUsed >= (kind === 'charter' || kind === 'rental' ? 1 : Math.max(1, activity.minParticipants)) && (kind !== 'charter' || party >= Math.max(1, activity.minParticipants))
 
   const reserve = () => {
     if (!slot || !canReserve) return
-    router.push(checkoutHref(checkoutPath, activity.slug, slot.departureId, selection))
+    router.push(
+      checkoutHref(checkoutPath, activity.slug, slot.departureId, selection, {
+        n: dayRental ? rentDays : undefined,
+        g: kind === 'charter' ? party : undefined,
+      }),
+    )
   }
 
   const scrollStrip = (direction: 1 | -1) => {
@@ -409,6 +453,12 @@ export function BookingWidget({
     const date = fromDateKey(key)
     date.setDate(date.getDate() + offset)
     return new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(date)
+  }
+
+  const clock = (hhmm: string) => {
+    const [h, m] = hhmm.split(':').map(Number)
+    const hour = ((h + 11) % 12) + 1
+    return `${hour}:${String(m || 0).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`
   }
 
   const optionButton = (tierId: string, label: string, price: string, note: string | undefined) => {
@@ -449,26 +499,82 @@ export function BookingWidget({
 
   let kindBlock: React.ReactNode = null
   if (kind === 'rental') {
-    const units = activity.rental?.units ?? activity.maxCapacity
-    const deposit = activity.rental?.damageDeposit ?? 0
+    const rental = activity.rental
+    const units = rental?.units ?? activity.maxCapacity
+    const deposit = rental?.damageDeposit ?? 0
+    const lengthOf = (tierId: string) => rental?.durations.find((entry) => entry.tierId === tierId)?.minutes
+    const rules = [
+      rental?.licence && rental.licence !== 'none' ? `${LICENCE_LABEL[rental.licence]} needed${activity.minAge > 0 ? `, ${activity.minAge}+` : ''}` : null,
+      rental?.seatsPerUnit ? `${rental.seatsPerUnit} ${rental.seatsPerUnit === 1 ? 'person' : 'people'} per ${rentalMeta.unit}` : null,
+      rental?.fuel && rentalMeta.fuel ? FUEL_LABEL[rental.fuel] : null,
+      rentalMeta.mileage ? (rental?.kmPerDay ? `${rental.kmPerDay} km a day included` : 'Unlimited km') : null,
+    ].filter((entry): entry is string => Boolean(entry))
     kindBlock = (
       <div>
         <div className="flex items-baseline justify-between gap-3">
-          <h3 className="text-[0.8125rem] font-semibold tracking-tight text-foreground">{stepOf('guests')} · How long, and how many</h3>
-          {slot ? <span className={cn('text-xs font-medium tabular', seatsLeft <= 2 ? 'text-warning' : 'text-subtle')}>{seatsLeft} of {units} free</span> : null}
+          <h3 className="text-[0.8125rem] font-semibold tracking-tight text-foreground">
+            {stepOf('guests')} · {dayRental ? `Your ${rentalMeta.unit} and days` : 'How long, and how many'}
+          </h3>
+          {slot ? (
+            <span className={cn('text-xs font-medium tabular', seatsLeft <= 2 ? 'text-warning' : 'text-subtle')}>
+              {seatsLeft} of {units} free{dayRental && rentDays > 1 ? ' every day' : ''}
+            </span>
+          ) : null}
         </div>
-        <div className="mt-3 grid gap-2" role="radiogroup" aria-label="Rental length">
-          {activity.priceTiers.map((tier) => optionButton(tier.id, tier.label, formatCurrency(Math.round(tier.price * multiplier), currency), tier.description))}
+        <div className="mt-3 grid gap-2" role="radiogroup" aria-label={dayRental ? 'Model' : 'Rental length'}>
+          {activity.priceTiers.map((tier) => {
+            const minutes = lengthOf(tier.id)
+            const note = tier.description || (!dayRental && minutes ? `${Math.round((minutes / 60) * 10) / 10} hours` : undefined)
+            return optionButton(tier.id, tier.label, `${formatCurrency(Math.round(tier.price * multiplier), currency)}${dayRental ? ' a day' : ''}`, note || undefined)
+          })}
         </div>
+        {dayRental ? (
+          <div className="mt-3 rounded-xl border border-line">
+            <div className="flex items-center justify-between gap-3 px-3.5 py-3">
+              <span>
+                <span className="block text-sm font-medium text-foreground">How many days</span>
+                <span className="block text-xs text-subtle">{minDays === maxDays ? `${minDays} days` : `${minDays} to ${maxDays} days`}</span>
+              </span>
+              {stepper(rentDays, minDays, maxDays, setRentDays, 'days')}
+            </div>
+            {dateKey ? (
+              <dl className="grid grid-cols-2 gap-3 border-t border-line-subtle px-3.5 py-3 text-xs">
+                <div>
+                  <dt className="text-subtle">Pick up</dt>
+                  <dd className="mt-0.5 font-medium text-foreground">{shortDate(dateKey, 0)} · {clock(rental?.pickupTime ?? '09:00')}</dd>
+                </div>
+                <div>
+                  <dt className="text-subtle">Return</dt>
+                  <dd className="mt-0.5 font-medium text-foreground">{shortDate(dateKey, rentDays)} · {clock(rental?.returnTime ?? '17:00')}</dd>
+                </div>
+              </dl>
+            ) : null}
+          </div>
+        ) : null}
         <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-3">
           <span>
-            <span className="block text-sm font-medium text-foreground">How many</span>
-            <span className="block text-xs text-subtle">Priced per unit</span>
+            <span className="block text-sm font-medium text-foreground">How many {rentalMeta.units}</span>
+            <span className="block text-xs text-subtle">Priced per {rentalMeta.unit}{dayRental ? ', per day' : ''}</span>
           </span>
-          {stepper(Math.max(1, chosenQty), 1, Math.max(1, seatsLeft), (next) => chosenTier && pickTier(chosenTier.id, next), 'units')}
+          {stepper(Math.max(1, chosenQty), 1, Math.max(1, seatsLeft), (next) => chosenTier && pickTier(chosenTier.id, next), rentalMeta.units)}
         </div>
+        {overCapacity ? (
+          <p className="mt-2 flex items-center gap-2 text-xs font-medium text-danger">
+            <CircleAlert className="size-3.5 shrink-0" aria-hidden="true" />
+            Only {seatsLeft} free {dayRental && rentDays > 1 ? 'for all those days' : 'at this time'}.
+          </p>
+        ) : null}
+        {rules.length > 0 ? (
+          <ul className="mt-2 flex list-none flex-wrap gap-1.5 p-0">
+            {rules.map((rule) => (
+              <li key={rule} className="rounded-full bg-surface-sunken px-2.5 py-1 text-xs font-medium text-muted">
+                {rule}
+              </li>
+            ))}
+          </ul>
+        ) : null}
         {deposit > 0 ? (
-          <p className="mt-2 text-xs text-subtle">A refundable {formatCurrency(deposit, currency)} deposit per unit is held when you collect.</p>
+          <p className="mt-2 text-xs text-subtle">A refundable {formatCurrency(deposit, currency)} deposit per {rentalMeta.unit} is held when you collect.</p>
         ) : null}
       </div>
     )
@@ -481,18 +587,36 @@ export function BookingWidget({
           {slot ? <span className={cn('text-xs font-medium', seatsLeft > 0 ? 'text-success' : 'text-danger')}>{seatsLeft > 0 ? 'Available' : 'Booked'}</span> : null}
         </div>
         <div className="mt-3 grid gap-2" role="radiogroup" aria-label="Charter option">
-          {activity.priceTiers.map((tier) => optionButton(tier.id, tier.label, formatCurrency(Math.round(tier.price * multiplier), currency), tier.description))}
+          {activity.priceTiers.map((tier) => {
+            const minutes = activity.charter?.durations?.find((entry) => entry.tierId === tier.id)?.minutes
+            const note = [minutes ? (minutes >= 1440 ? 'Full day' : `${Math.round((minutes / 60) * 10) / 10} hours`) : null, tier.description].filter(Boolean).join(' · ')
+            return optionButton(tier.id, tier.label, formatCurrency(Math.round(tier.price * multiplier), currency), note || undefined)
+          })}
         </div>
         <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-3">
           <span>
             <span className="block text-sm font-medium text-foreground">Guests in your group</span>
-            <span className="block text-xs text-subtle">Up to {maxGuests}; the price is for the whole group</span>
+            <span className="block text-xs text-subtle">
+              {activity.minParticipants > 1 ? `${activity.minParticipants} to ${maxGuests}` : `Up to ${maxGuests}`}; the price is for the whole group
+            </span>
           </span>
-          {stepper(party, 1, maxGuests, setParty, 'guests')}
+          {stepper(party, Math.max(1, activity.minParticipants), maxGuests, setParty, 'guests')}
         </div>
-        {activity.charter?.noticeHours ? (
-          <p className="mt-2 text-xs text-subtle">Book at least {activity.charter.noticeHours} hours ahead.</p>
-        ) : null}
+        <ul className="mt-2 flex list-none flex-wrap gap-1.5 p-0">
+          {[
+            activity.charter?.crewed === false
+              ? 'Self-skippered'
+              : `${CHARTER_VESSELS.find((entry) => entry.value === activity.charter?.vessel)?.crew ?? 'Crew'} included`,
+            activity.charter?.noticeHours ? `Book ${activity.charter.noticeHours}h ahead` : null,
+            (activity.languages ?? []).length > 0 ? (activity.languages ?? []).join(', ') : null,
+          ]
+            .filter((entry): entry is string => Boolean(entry))
+            .map((entry) => (
+              <li key={entry} className="rounded-full bg-surface-sunken px-2.5 py-1 text-xs font-medium text-muted">
+                {entry}
+              </li>
+            ))}
+        </ul>
       </div>
     )
   }
@@ -511,6 +635,8 @@ export function BookingWidget({
             <p className="mt-1">Sessions {Array.from({ length: sessions }, (_, index) => shortDate(dateKey, index)).join(', ')}, same time each day.</p>
           ) : null}
           {certification ? <p className="mt-1">Leads to {certification}.</p> : null}
+          {activity.lesson.equipmentIncluded ? <p className="mt-1">All equipment included.</p> : null}
+          {(activity.languages ?? []).length > 0 ? <p className="mt-1">Taught in {(activity.languages ?? []).join(', ')}.</p> : null}
         </div>
       </div>
     )
@@ -551,7 +677,7 @@ export function BookingWidget({
           </p>
           <p className="mt-0.5 font-display text-2xl font-semibold tabular tracking-tight text-foreground">
             {formatCurrency(fromPrice, currency)}
-            <span className="ml-1.5 text-xs font-medium text-subtle">{kind === 'rental' ? 'per unit' : kind === 'charter' ? 'per group' : 'per person'}</span>
+            <span className="ml-1.5 text-xs font-medium text-subtle">{kind === 'rental' ? `per ${rentalMeta.unit}${dayRental ? ' a day' : ''}` : kind === 'charter' ? 'per group' : kind === 'pass' ? 'per ticket' : 'per person'}</span>
           </p>
         </div>
         {slot && slot.priceMultiplier > 1 ? (
@@ -613,7 +739,7 @@ export function BookingWidget({
         <div>
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-[0.8125rem] font-semibold tracking-tight text-foreground">
-              {stepOf('date')} · {kind === 'pass' ? 'Choose a day' : kind === 'lesson' && (activity.lesson?.sessions ?? 1) > 1 ? 'Choose a start date' : 'Choose a date'}
+              {stepOf('date')} · {dayRental ? 'Choose a pick-up day' : kind === 'pass' ? 'Choose a day' : kind === 'lesson' && (activity.lesson?.sessions ?? 1) > 1 ? 'Choose a start date' : 'Choose a date'}
             </h3>
             <div className="flex items-center gap-1">
               <IconButton
@@ -648,6 +774,7 @@ export function BookingWidget({
                 currency={currency}
                 selected={entry.dateKey === dateKey}
                 onSelect={() => setDateKey(entry.dateKey)}
+                emptyLabel={kind === 'trip' ? 'No trips' : kind === 'lesson' ? 'No class' : 'Closed'}
               />
             ))}
           </div>
@@ -676,6 +803,7 @@ export function BookingWidget({
                   key={entry.departureId}
                   slot={entry}
                   wholeGroup={kind === 'charter'}
+                  noun={kind === 'rental' ? rentalMeta.units : kind === 'lesson' ? 'places' : 'seats'}
                   selected={entry.departureId === departureId}
                   onSelect={() => setDepartureId(entry.departureId)}
                 />
@@ -916,7 +1044,7 @@ export function BookingWidget({
                 Total
               </p>
               <p className="text-xs text-subtle">
-                {kind === 'charter' ? `${party} ${pluralize(party, 'guest')}` : kind === 'rental' ? `${quote.headcount} ${pluralize(quote.headcount, 'unit')}` : `${quote.headcount} ${pluralize(quote.headcount, 'guest')}`} · all taxes included
+                {quote.countLabel}{dayRental ? ` · ${rentDays} ${pluralize(rentDays, 'day')}` : ''} · all taxes included
               </p>
             </div>
             <AnimatedTotal value={quote.total} currency={currency} reducedMotion={reducedMotion} />
@@ -1012,7 +1140,9 @@ function DateChip({
   currency,
   selected,
   onSelect,
+  emptyLabel = 'No trips',
 }: {
+  emptyLabel?: string
   day: AvailabilityDay
   currency: CurrencyCode
   selected: boolean
@@ -1068,7 +1198,7 @@ function DateChip({
         )}
       >
         {day.slots.length === 0
-          ? 'No trips'
+          ? emptyLabel
           : day.soldOut
             ? 'Sold out'
             : formatCurrency(day.fromPrice, currency, { compact: true })}
@@ -1079,12 +1209,15 @@ function DateChip({
 
 function TimeChip({
   slot,
+  noun = 'seats',
   wholeGroup = false,
   selected,
   onSelect,
 }: {
   /** A private charter sells once: say Available, not a seat count. */
   wholeGroup?: boolean
+  /** What the count is of: seats, bikes, places. */
+  noun?: string
   slot: AvailabilitySlot
   selected: boolean
   onSelect: () => void
@@ -1134,7 +1267,7 @@ function TimeChip({
           ? 'Sold out'
           : urgent
             ? wholeGroup ? 'Available' : `Only ${slot.seatsLeft} left`
-            : `${slot.seatsLeft} seats`}
+            : wholeGroup ? 'Available' : `${slot.seatsLeft} ${noun}`}
       </span>
     </button>
   )

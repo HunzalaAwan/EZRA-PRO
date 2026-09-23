@@ -46,6 +46,7 @@ export interface ActivityOverride {
   waiverId?: string | null
   /** null turns pickup off; undefined keeps the seeded setting. */
   pickup?: ActivityPickup | null
+  languages?: string[]
   updatedAt: string
 }
 

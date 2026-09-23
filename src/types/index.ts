@@ -267,6 +267,8 @@ export interface GuestQuestion {
   help?: string
   /** Counted on the gear prep list. */
   gear?: boolean
+  /** Text answers on one line: a licence or passport number. */
+  short?: boolean
   /** Library preset this came from. */
   preset?: string
 }
@@ -340,7 +342,31 @@ export interface CharterRequest {
 /** What is being sold: seats on a trip, a private charter, a rental, a lesson or a pass. */
 export type ActivityKind = 'trip' | 'charter' | 'rental' | 'lesson' | 'pass'
 
+/** What is rented: decides the requirements a rental asks for. */
+export type RentalCategory = 'watercraft' | 'vehicle' | 'bike' | 'gear'
+
 export interface RentalConfig {
+  /** Watercraft, vehicle, bike or gear. Defaults to gear. */
+  category?: RentalCategory
+  /**
+   * How it is charged. length: each price tier is a length (1 hour, half day).
+   * day: guests pick a pick-up day and how many days; each tier is a model priced per day.
+   */
+  billing?: 'length' | 'day'
+  /** Day rentals: the fewest and most days one booking can run. */
+  minDays?: number
+  maxDays?: number
+  /** Day rentals: "HH:mm" pick-up and return times. */
+  pickupTime?: string
+  returnTime?: string
+  /** People one unit carries (two riders on a jet ski, five seats in a car). */
+  seatsPerUnit?: number
+  /** Licence the renter shows at pick-up. */
+  licence?: 'none' | 'driver' | 'boat'
+  /** Watercraft and vehicles. */
+  fuel?: 'included' | 'full_to_full' | 'charged'
+  /** Vehicles: kilometres included per day; 0 or absent = unlimited. */
+  kmPerDay?: number
   /** Units available at once (jet skis, kayaks, bikes). Each departure sells up to this many. */
   units: number
   /** Minutes between rentals for cleaning, fuel or a hand-over. */
@@ -352,6 +378,12 @@ export interface RentalConfig {
 }
 
 export interface CharterConfig {
+  /** What is chartered. */
+  vessel?: 'boat' | 'yacht' | 'vehicle' | 'guide' | 'aircraft'
+  /** A captain, driver or guide comes with it. False is a bare-boat or self-drive hire. */
+  crewed?: boolean
+  /** Each price tier is a charter option; this is how long each one runs. */
+  durations?: { tierId: string; minutes: number }[]
   /** Most guests one charter carries. */
   maxGuests: number
   /** Guests send a request and get a quote instead of paying on the spot. */
@@ -368,6 +400,8 @@ export interface LessonConfig {
   ratio: number
   /** Certificate the course leads to, if any. */
   certification?: string
+  /** Board, wetsuit or gear is part of the price. */
+  equipmentIncluded?: boolean
 }
 
 export interface PassConfig {
@@ -408,6 +442,8 @@ export interface Activity {
   waiverId?: string
   /** Hotel pickup: the zones served, and whether it is the only way to join. */
   pickup?: ActivityPickup
+  /** Languages the guide or instructor speaks. */
+  languages?: string[]
   difficulty: DifficultyLevel
   /** Minutes. */
   durationMinutes: number

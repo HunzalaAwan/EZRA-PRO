@@ -34,7 +34,7 @@ import {
 } from '@/lib/utils'
 import type { Activity, DifficultyLevel, Location, Tenant } from '@/types'
 import { locationAddress } from '@/lib/locations'
-import { kindChipLabel } from '@/lib/activity-kinds'
+import { kindBadge, kindChipLabel, kindNote, rentalCategoryMeta } from '@/lib/activity-kinds'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
@@ -192,7 +192,7 @@ export function ActivityDetailView({
   const hero = media.find((m) => m.isPrimary) ?? media[0]
   const rest = media.filter((m) => m.id !== hero?.id).slice(0, 2)
 
-  const languages = LANGUAGES_BY_LOCALE[tenant.locale] ?? ['English']
+  const languages = activity.languages && activity.languages.length > 0 ? activity.languages : (LANGUAGES_BY_LOCALE[tenant.locale] ?? ['English'])
   const packing = PACKING_LIST[activity.category] ?? PACKING_LIST.tours
 
   const nextOpen = React.useMemo(() => {
@@ -247,7 +247,7 @@ export function ActivityDetailView({
             <div className="min-w-0 max-w-3xl">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-soft px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.1em] text-primary">
-                  {DIFFICULTY_LABEL[activity.difficulty]}
+                  {kindBadge(activity)}
                 </span>
                 {activity.featured ? (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.1em] text-accent">
@@ -308,7 +308,7 @@ export function ActivityDetailView({
             <Fact icon={Clock}>{kindChipLabel(activity)}</Fact>
             <Fact icon={Users}>
               {activity.kind === 'rental'
-                ? `${activity.rental?.units ?? activity.maxCapacity} available`
+                ? `${activity.rental?.seatsPerUnit ?? 1} per ${rentalCategoryMeta(activity.rental?.category).unit} · ${activity.rental?.units ?? activity.maxCapacity} in the fleet`
                 : activity.kind === 'lesson'
                   ? `${activity.lesson?.ratio ?? 4} students per instructor`
                   : activity.kind === 'charter'
@@ -427,9 +427,9 @@ export function ActivityDetailView({
                 <Info className="mt-0.5 size-4 shrink-0 text-info" aria-hidden="true" />
                 <p className="text-sm leading-relaxed text-muted">
                   <span className="font-semibold text-foreground">
-                    {DIFFICULTY_LABEL[activity.difficulty]}.
+                    {kindNote(activity)?.title ?? `${DIFFICULTY_LABEL[activity.difficulty]}.`}
                   </span>{' '}
-                  {DIFFICULTY_COPY[activity.difficulty]} {activity.minAge > 0 ? `Minimum age ${activity.minAge}.` : 'All ages welcome.'}
+                  {kindNote(activity)?.body ?? `${DIFFICULTY_COPY[activity.difficulty]} ${activity.minAge > 0 ? `Minimum age ${activity.minAge}.` : 'All ages welcome.'}`}
                 </p>
               </div>
             </Section>
