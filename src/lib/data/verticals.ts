@@ -126,3 +126,46 @@ const VERTICALS_BY_KEY: Record<VerticalKey, Vertical> = VERTICALS.reduce(
 export function getVertical(key: VerticalKey): Vertical {
   return VERTICALS_BY_KEY[key]
 }
+
+/* ==========================================================================
+   NICHES — how a business chooses what it is. Watersports, tours, adventure
+   and island operators are one niche, Tours & Activities: the same dashboard,
+   with activity kinds (trip, charter, rental, lesson, pass) doing the work
+   the separate verticals used to. Tenants keep their vertical key.
+   ========================================================================== */
+
+export const ACTIVITY_VERTICALS: VerticalKey[] = ['watersports', 'tours', 'adventure', 'island']
+
+export interface Niche {
+  /** The vertical stored when this niche is picked. */
+  key: VerticalKey
+  label: string
+  tagline: string
+  icon: string
+  sample: string
+  members: VerticalKey[]
+}
+
+export const NICHES: Niche[] = [
+  {
+    key: 'watersports',
+    label: 'Tours & Activities',
+    tagline: 'Trips, charters, rentals, lessons and passes, on water, land or air.',
+    icon: 'Compass',
+    sample: 'Boat trips, city tours, jet ski rental, surf school, zipline',
+    members: ACTIVITY_VERTICALS,
+  },
+  ...VERTICALS.filter((vertical) => !ACTIVITY_VERTICALS.includes(vertical.key)).map((vertical) => ({
+    key: vertical.key,
+    label: vertical.label,
+    tagline: vertical.tagline,
+    icon: vertical.icon,
+    sample: vertical.sampleActivities[0] ?? '',
+    members: [vertical.key],
+  })),
+]
+
+/** The niche a vertical belongs to. */
+export function nicheOf(vertical: VerticalKey): Niche {
+  return NICHES.find((niche) => niche.members.includes(vertical)) ?? NICHES[0]
+}

@@ -542,6 +542,12 @@ for (const [tenantId, specs] of SPEC_BY_TENANT) {
             capacity = Math.max(activity.minParticipants + 1, round(capacity * (0.7 + rng() * 0.2)))
           }
 
+          // A charter sells the whole boat once; a rental sells its units.
+
+          if (activity.kind === 'charter') capacity = 1
+
+          if (activity.kind === 'rental') capacity = activity.rental?.units ?? activity.maxCapacity
+
           const demand =
             spec.popularity *
             trendFactor(off) *

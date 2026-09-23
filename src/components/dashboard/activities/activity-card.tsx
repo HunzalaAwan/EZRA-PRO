@@ -6,14 +6,11 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   Archive,
-  CalendarRange,
   Copy,
-  DoorOpen,
   ExternalLink,
   Gauge,
   MapPin,
   PencilLine,
-  Route,
   Star,
   Timer,
   TrendingDown,
@@ -21,8 +18,9 @@ import {
   Users,
 } from 'lucide-react'
 
-import { ACTIVITY_FORMAT_META } from '@/lib/activity-format'
-import type { Activity, DifficultyLevel } from '@/types'
+import { ACTIVITY_KIND_META } from '@/lib/activity-kinds'
+import { KIND_ICONS } from './kind-fields'
+import type { Activity, ActivityKind, DifficultyLevel } from '@/types'
 import { cn, formatCurrency, formatDelta, formatDuration, formatNumber } from '@/lib/utils'
 import { Card } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/badge'
@@ -297,7 +295,7 @@ export function ActivityCard({ summary, tenantSlug, className }: ActivityCardPro
             <p className="font-display text-lg leading-tight font-semibold text-white">
               {formatCurrency(summary.fromPrice, activity.currency)}
               <span className="ml-1 text-xs font-medium text-white/70">
-                {activity.pricingModel === 'per_group' ? '/ group' : '/ guest'}
+                {activity.pricingModel === 'per_group' || activity.kind === 'charter' ? '/ group' : activity.kind === 'rental' || activity.pricingModel === 'per_unit' ? '/ unit' : '/ guest'}
               </span>
             </p>
           </div>
@@ -333,10 +331,7 @@ export function ActivityCard({ summary, tenantSlug, className }: ActivityCardPro
             {activity.maxCapacity} max
           </span>
           <DifficultyMeter difficulty={activity.difficulty} className="text-subtle" />
-          <span className="inline-flex items-center gap-1.5" title={ACTIVITY_FORMAT_META[activity.format].hint}>
-            {activity.format === 'open' ? <DoorOpen className="size-3.5 text-faint" aria-hidden="true" /> : activity.format === 'dates' ? <CalendarRange className="size-3.5 text-faint" aria-hidden="true" /> : <Route className="size-3.5 text-faint" aria-hidden="true" />}
-            {ACTIVITY_FORMAT_META[activity.format].label}
-          </span>
+          <KindChip kind={activity.kind ?? 'trip'} />
           {activity.locations.length > 1 ? (
             <span className="inline-flex items-center gap-1.5">
               <MapPin className="size-3.5 text-faint" aria-hidden="true" />
@@ -386,5 +381,15 @@ export function ActivityCard({ summary, tenantSlug, className }: ActivityCardPro
         </div>
       </div>
     </Card>
+  )
+}
+
+function KindChip({ kind }: { kind: ActivityKind }) {
+  const Icon = KIND_ICONS[kind]
+  return (
+    <span className="inline-flex items-center gap-1.5" title={ACTIVITY_KIND_META[kind].hint}>
+      <Icon className="size-3.5 text-faint" aria-hidden="true" />
+      {ACTIVITY_KIND_META[kind].label}
+    </span>
   )
 }

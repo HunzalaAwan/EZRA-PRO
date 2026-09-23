@@ -100,6 +100,8 @@ import {
 import type { ActivityDetailData } from './activity-data'
 import { DepartureSchedule } from './departure-schedule'
 import { ACTIVITY_FORMAT_META } from '@/lib/activity-format'
+import { ACTIVITY_KIND_META } from '@/lib/activity-kinds'
+import { KIND_ICONS } from './kind-fields'
 
 /* ==========================================================================
    SMALL PARTS
@@ -1119,9 +1121,9 @@ export function ActivityDetail({ detail, tenantSlug, nowIso }: ActivityDetailPro
                 {activity.minParticipants}–{activity.maxCapacity} guests
               </span>
               <DifficultyMeter difficulty={activity.difficulty} />
-              <span className="inline-flex items-center gap-1.5" title={ACTIVITY_FORMAT_META[activity.format].hint}>
-                {activity.format === 'open' ? <DoorOpen className="size-3.5" aria-hidden="true" /> : <CalendarClock className="size-3.5" aria-hidden="true" />}
-                {ACTIVITY_FORMAT_META[activity.format].label}
+              <span className="inline-flex items-center gap-1.5" title={ACTIVITY_KIND_META[activity.kind ?? 'trip'].hint}>
+                {React.createElement(KIND_ICONS[activity.kind ?? 'trip'], { className: 'size-3.5', 'aria-hidden': true })}
+                {ACTIVITY_KIND_META[activity.kind ?? 'trip'].label}
               </span>
               {activity.locations.length > 1 ? (
                 <span className="inline-flex items-center gap-1.5">

@@ -242,6 +242,46 @@ export interface CancellationPolicy {
   summary: string
 }
 
+/** What is being sold: seats on a trip, a private charter, a rental, a lesson or a pass. */
+export type ActivityKind = 'trip' | 'charter' | 'rental' | 'lesson' | 'pass'
+
+export interface RentalConfig {
+  /** Units available at once (jet skis, kayaks, bikes). Each departure sells up to this many. */
+  units: number
+  /** Minutes between rentals for cleaning, fuel or a hand-over. */
+  bufferMinutes: number
+  /** Refundable hold per unit, minor units. 0 = none. */
+  damageDeposit: number
+  /** Each price tier is a rental length. */
+  durations: { tierId: string; minutes: number }[]
+}
+
+export interface CharterConfig {
+  /** Most guests one charter carries. */
+  maxGuests: number
+  /** Guests send a request and get a quote instead of paying on the spot. */
+  requestToBook: boolean
+  /** Hours of notice needed before a charter can start. */
+  noticeHours: number
+}
+
+export interface LessonConfig {
+  level: 'all' | 'beginner' | 'intermediate' | 'advanced'
+  /** Sessions in the course; 1 for a single lesson. Sessions run on consecutive days. */
+  sessions: number
+  /** Students per instructor. */
+  ratio: number
+  /** Certificate the course leads to, if any. */
+  certification?: string
+}
+
+export interface PassConfig {
+  /** Days the ticket is valid from the chosen date. */
+  validDays: number
+  /** Guests can leave and come back on the same day. */
+  reentry: boolean
+}
+
 export interface Activity {
   id: string
   tenantId: string
@@ -261,6 +301,12 @@ export interface Activity {
   status: ActivityStatus
   /** Group departures, open entry or fixed dates. */
   format: ActivityFormat
+  /** What is being sold; decides the setup fields and the storefront widget. */
+  kind: ActivityKind
+  rental?: RentalConfig
+  charter?: CharterConfig
+  lesson?: LessonConfig
+  pass?: PassConfig
   difficulty: DifficultyLevel
   /** Minutes. */
   durationMinutes: number

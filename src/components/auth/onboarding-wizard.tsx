@@ -47,7 +47,7 @@ import {
 } from '@/lib/utils'
 import { DURATION, EASE_OUT_EXPO } from '@/lib/motion'
 import { NOW } from '@/lib/data/constants'
-import { VERTICALS } from '@/lib/data/verticals'
+import { NICHES, VERTICALS, nicheOf } from '@/lib/data/verticals'
 import type { CurrencyCode, VerticalKey } from '@/types'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { Button } from '@/components/ui/button'
@@ -686,21 +686,21 @@ function BusinessStep({ data, errors, onChange, touch }: StepProps) {
 
         <RadioGroup
           className="mt-3 grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3"
-          value={value.vertical}
+          value={value.vertical ? nicheOf(value.vertical as VerticalKey).key : value.vertical}
           aria-invalid={errors.vertical ? true : undefined}
           onValueChange={(next) => {
             set('vertical', next)
             touch('vertical')
           }}
         >
-          {VERTICALS.map((vertical) => {
+          {NICHES.map((vertical) => {
             const Icon = VERTICAL_ICONS[vertical.icon] ?? Sparkles
             return (
               <RadioGroupCard
                 key={vertical.key}
                 value={vertical.key}
                 label={vertical.label}
-                description={vertical.sampleActivities[0]}
+                description={vertical.sample}
                 icon={<Icon aria-hidden="true" />}
                 className="p-3.5"
               />

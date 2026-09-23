@@ -35,7 +35,7 @@ import {
 } from 'lucide-react'
 import { z } from 'zod'
 
-import type { Activity, CurrencyCode, DifficultyLevel, Location, VerticalKey } from '@/types'
+import type { Activity, ActivityKind, CurrencyCode, DifficultyLevel, Location, VerticalKey } from '@/types'
 import { saveActivityOverride } from '@/lib/activity-overrides'
 import {
   cn,
@@ -72,6 +72,8 @@ import {
   type DraftTier,
 } from './pricing-tier-editor'
 import { AddonEditor, type DraftAddOn } from './addon-editor'
+import { KindFields, KindPicker, defaultKindSettings, type DraftKindSettings } from './kind-fields'
+import { ACTIVITY_KIND_META } from '@/lib/activity-kinds'
 import {
   LocationsEditor,
   ScheduleEditor,
@@ -166,9 +168,12 @@ export interface ActivityDraft {
   crewIds: string[]
   /** Restaurant settings; only read while the category is Dining. */
   dining: DiningDraft
+  /** What is sold: trip, charter, rental, lesson or pass. Ignored for Dining. */
+  kind: ActivityKind
+  kindSettings: DraftKindSettings
 }
 
-const STORAGE_KEY = 'ezra:activity-wizard:v4'
+const STORAGE_KEY = 'ezra:activity-wizard:v5'
 
 /** Dining is the one category whose product is a table, not a departure. */
 export const isDining = (draft: Pick<ActivityDraft, 'category'>) => draft.category === 'restaurants'
@@ -204,6 +209,8 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
       ? { ...schedule, startTimes: serviceStartTimes(dining.services), capacity: DINING_BASICS.maxCapacity }
       : schedule,
     featured: false,
+    kind: 'trip',
+    kindSettings: defaultKindSettings(),
     freeCancellationHours: 24,
     crewIds: [],
     dining,
@@ -211,6 +218,29 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
 }
 
 /** The editor, filled in from an activity that already exists. */
+/** The kind-specific settings an edit saves, shaped like the domain model. */
+function kindOverride(draft: ActivityDraft) {
+  const kind = draft.kind ?? 'trip'
+  const settings = draft.kindSettings ?? defaultKindSettings()
+  if (kind === 'rental') {
+    return {
+      rental: {
+        units: settings.rental.units,
+        bufferMinutes: settings.rental.bufferMinutes,
+        damageDeposit: settings.rental.damageDeposit,
+        durations: draft.tiers.map((tier) => ({ tierId: tier.id, minutes: settings.rental.minutes[tier.id] ?? 60 })),
+      },
+    }
+  }
+  if (kind === 'charter') return { charter: { ...settings.charter } }
+  if (kind === 'lesson') {
+    const { certification, ...rest } = settings.lesson
+    return { lesson: { ...rest, ...(certification.trim() ? { certification: certification.trim() } : {}) } }
+  }
+  if (kind === 'pass') return { pass: { ...settings.pass } }
+  return {}
+}
+
 /** A draft that has not picked a location yet starts on the business's default one. */
 export function withHomeLocation(draft: ActivityDraft, locations: Location[]): ActivityDraft {
   const current = draft.schedule.locations ?? []
@@ -283,6 +313,22 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
     schedule: scheduleFromActivity(activity, base.schedule, homeTimes),
     featured: activity.featured,
     freeCancellationHours: activity.cancellationPolicy.freeCancellationHours,
+    kind: activity.kind ?? 'trip',
+    kindSettings: {
+      rental: activity.rental
+        ? {
+            units: activity.rental.units,
+            bufferMinutes: activity.rental.bufferMinutes,
+            damageDeposit: activity.rental.damageDeposit,
+            minutes: Object.fromEntries(activity.rental.durations.map((entry) => [entry.tierId, entry.minutes])),
+          }
+        : base.kindSettings.rental,
+      charter: activity.charter ? { ...activity.charter } : { ...base.kindSettings.charter, maxGuests: activity.maxCapacity },
+      lesson: activity.lesson
+        ? { ...activity.lesson, certification: activity.lesson.certification ?? '' }
+        : base.kindSettings.lesson,
+      pass: activity.pass ? { ...activity.pass } : base.kindSettings.pass,
+    },
   }
 }
 
@@ -629,7 +675,7 @@ const DINING_STEP_SCHEMAS = [
 
 type FieldErrors = Record<string, string>
 
-function validateStep(step: number, draft: ActivityDraft): FieldErrors {
+function validateSchemaStep(step: number, draft: ActivityDraft): FieldErrors {
   const schema = (isDining(draft) ? DINING_STEP_SCHEMAS : STEP_SCHEMAS)[step]
   if (!schema) return {}
   const result = schema.safeParse(draft)
@@ -642,6 +688,20 @@ function validateStep(step: number, draft: ActivityDraft): FieldErrors {
     const path = issue.path.map(String)
     const key = path[0] === 'schedule' ? path.slice(1).join('.') : path.join('.')
     if (!errors[key || 'form']) errors[key || 'form'] = issue.message
+  }
+  return errors
+}
+
+function validateStep(step: number, draft: ActivityDraft): FieldErrors {
+  const errors = validateSchemaStep(step, draft)
+  if (step !== 0 || isDining(draft)) return errors
+  const kind = draft.kind ?? 'trip'
+  const settings = draft.kindSettings ?? defaultKindSettings()
+  if (kind === 'rental' && settings.rental.units < 1) errors['rental.units'] = 'At least one unit has to be available'
+  if (kind === 'charter' && settings.charter.maxGuests < 1) errors['charter.maxGuests'] = 'A charter carries at least one guest'
+  if (kind === 'lesson') {
+    if (settings.lesson.sessions < 1) errors['lesson.sessions'] = 'A course has at least one session'
+    if (settings.lesson.ratio < 1) errors['lesson.ratio'] = 'At least one student per instructor'
   }
   return errors
 }
@@ -1182,6 +1242,8 @@ export function ActivityWizard({
           minAge: draft.minAge,
           minParticipants: draft.minParticipants,
           featured: draft.featured,
+          kind: draft.kind ?? 'trip',
+          ...kindOverride(draft),
           crewIds: draft.crewIds,
           locations: draft.schedule.locations.map((site) => {
             const rule = draft.schedule.locations.length > 1 ? site.schedule : draft.schedule
@@ -1262,7 +1324,7 @@ export function ActivityWizard({
                   className="min-w-0"
                 >
                   {step === 0 ? (
-                    <BasicsStep draft={draft} patch={patch} errors={errors} />
+                    <BasicsStep draft={draft} patch={patch} errors={errors} currency={currency} />
                   ) : null}
                   {step === 1 ? (
                     <DescriptionStep draft={draft} patch={patch} errors={errors} />
@@ -1491,12 +1553,45 @@ interface StepProps {
   draft: ActivityDraft
   patch: (changes: Partial<ActivityDraft>) => void
   errors: FieldErrors
+  currency?: CurrencyCode
 }
 
-function BasicsStep({ draft, patch, errors }: StepProps) {
+/** "$" for USD, "€" for EUR, and so on. */
+function currencySymbol(currency: CurrencyCode | undefined) {
+  try {
+    return (
+      new Intl.NumberFormat('en', { style: 'currency', currency: currency ?? 'USD' })
+        .formatToParts(0)
+        .find((part) => part.type === 'currency')?.value ?? '$'
+    )
+  } catch {
+    return '$'
+  }
+}
+
+function BasicsStep({ draft, patch, errors, currency }: StepProps) {
   const dining = isDining(draft)
+  const kind = draft.kind ?? 'trip'
+  const settings = draft.kindSettings ?? defaultKindSettings()
+  const pickKind = (next: ActivityKind) => {
+    const mode = ACTIVITY_KIND_META[next].defaultFormat === 'open' ? 'hours' : 'times'
+    patch({ kind: next, schedule: { ...draft.schedule, mode } })
+  }
   return (
     <div className="flex flex-col gap-5">
+      {dining ? null : (
+        <>
+          <KindPicker value={kind} onChange={pickKind} />
+          <KindFields
+            kind={kind}
+            settings={settings}
+            onChange={(kindSettings) => patch({ kindSettings })}
+            tiers={draft.tiers}
+            currencySymbol={currencySymbol(currency)}
+            errors={errors}
+          />
+        </>
+      )}
       <Field
         label={dining ? 'Experience name' : 'Activity name'}
         required
@@ -2004,6 +2099,7 @@ function ReviewStep({
       ]
     : [
         { label: 'Name', value: draft.name, step: 0 },
+        { label: 'Type', value: ACTIVITY_KIND_META[draft.kind ?? 'trip'].label, step: 0 },
         { label: 'Category', value: CATEGORY_OPTIONS.find((c) => c.value === draft.category)?.label, step: 0 },
         { label: 'Difficulty', value: draft.difficulty.charAt(0).toUpperCase() + draft.difficulty.slice(1), step: 0 },
         { label: 'Duration', value: draft.durationMinutes > 0 ? formatDuration(draft.durationMinutes) : 'Flexible', step: 0 },

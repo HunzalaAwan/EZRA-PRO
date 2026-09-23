@@ -4,16 +4,21 @@ import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'motion/react'
 import {
+  Anchor,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   CircleAlert,
   Clock,
+  GraduationCap,
   Info,
+  KeyRound,
   MapPin,
   Minus,
   Plus,
   ShieldCheck,
   Sparkles,
+  Ticket,
   Users,
 } from 'lucide-react'
 
@@ -29,6 +34,9 @@ import type { Activity, CurrencyCode, DepartureStatus, Location, VerticalKey } f
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { LESSON_LEVELS } from '@/lib/activity-kinds'
 import { IconButton } from '@/components/ui/icon-button'
 import { SimpleTooltip } from '@/components/ui/tooltip'
 import { TrustSeal } from '@/components/storefront/trust-bar'
@@ -249,7 +257,19 @@ export function BookingWidget({
   )
   const multiSite = sites.length > 1
   const [locationId, setLocationId] = React.useState<string>(() => sites[0]?.locationId ?? '')
-  const stepNo = (n: number) => (multiSite ? n + 1 : n)
+  /* ---------- kind ---------- */
+
+  const kind = activity.kind ?? 'trip'
+  const showTime = kind !== 'pass'
+  const stepList = [multiSite ? 'location' : null, 'date', showTime ? 'time' : null, 'guests', 'extras'].filter(
+    (step): step is string => Boolean(step),
+  )
+  const stepOf = (id: string) => stepList.indexOf(id) + 1
+  const requestMode = kind === 'charter' && Boolean(activity.charter?.requestToBook)
+  const [party, setParty] = React.useState(2)
+  const [requestOpen, setRequestOpen] = React.useState(false)
+  const [requestSent, setRequestSent] = React.useState(false)
+  const [request, setRequest] = React.useState({ name: '', email: '', message: '' })
 
   /* Only the chosen location's runs, with the day totals recomputed. */
   const days = React.useMemo(() => {
@@ -364,6 +384,135 @@ export function BookingWidget({
     ...[activity.basePrice, ...bookableDays.map((d) => d.fromPrice).filter((p) => p > 0)],
   )
 
+  /* ---------- per-kind blocks ---------- */
+
+  const multiplier = slot?.priceMultiplier ?? 1
+  const chosenTier = activity.priceTiers.find((tier) => (tierQty[tier.id] ?? 0) > 0) ?? activity.priceTiers[0]
+  const chosenQty = chosenTier ? (tierQty[chosenTier.id] ?? 0) : 0
+  const pickTier = (tierId: string, qty: number) =>
+    setTierQty(Object.fromEntries(activity.priceTiers.map((tier) => [tier.id, tier.id === tierId ? qty : 0])))
+  const shortDate = (key: string, offset: number) => {
+    const date = fromDateKey(key)
+    date.setDate(date.getDate() + offset)
+    return new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(date)
+  }
+
+  const optionButton = (tierId: string, label: string, price: string, note: string | undefined) => {
+    const on = chosenTier?.id === tierId
+    return (
+      <button
+        key={tierId}
+        type="button"
+        role="radio"
+        aria-checked={on}
+        onClick={() => pickTier(tierId, Math.max(1, kind === 'charter' ? 1 : chosenQty))}
+        className={cn(
+          'flex items-center justify-between gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors duration-200',
+          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+          on ? 'border-primary bg-primary-soft/30' : 'border-line hover:border-line-strong',
+        )}
+      >
+        <span className="min-w-0">
+          <span className="block text-sm font-medium text-foreground">{label}</span>
+          {note ? <span className="block truncate text-xs text-subtle">{note}</span> : null}
+        </span>
+        <span className="shrink-0 text-sm font-semibold text-foreground tabular">{price}</span>
+      </button>
+    )
+  }
+
+  const stepper = (value: number, min: number, max: number, onChange: (next: number) => void, label: string) => (
+    <div className="flex items-center gap-2">
+      <IconButton aria-label={`Fewer ${label}`} size="sm" variant="outline" disabled={value <= min} onClick={() => onChange(value - 1)}>
+        <Minus aria-hidden="true" />
+      </IconButton>
+      <span className="w-6 text-center text-sm font-semibold tabular" aria-live="polite">{value}</span>
+      <IconButton aria-label={`More ${label}`} size="sm" variant="outline" disabled={value >= max} onClick={() => onChange(value + 1)}>
+        <Plus aria-hidden="true" />
+      </IconButton>
+    </div>
+  )
+
+  let kindBlock: React.ReactNode = null
+  if (kind === 'rental') {
+    const units = activity.rental?.units ?? activity.maxCapacity
+    const deposit = activity.rental?.damageDeposit ?? 0
+    kindBlock = (
+      <div>
+        <div className="flex items-baseline justify-between gap-3">
+          <h3 className="text-[0.8125rem] font-semibold tracking-tight text-foreground">{stepOf('guests')} · How long, and how many</h3>
+          {slot ? <span className={cn('text-xs font-medium tabular', seatsLeft <= 2 ? 'text-warning' : 'text-subtle')}>{seatsLeft} of {units} free</span> : null}
+        </div>
+        <div className="mt-3 grid gap-2" role="radiogroup" aria-label="Rental length">
+          {activity.priceTiers.map((tier) => optionButton(tier.id, tier.label, formatCurrency(Math.round(tier.price * multiplier), currency), tier.description))}
+        </div>
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-3">
+          <span>
+            <span className="block text-sm font-medium text-foreground">How many</span>
+            <span className="block text-xs text-subtle">Priced per unit</span>
+          </span>
+          {stepper(Math.max(1, chosenQty), 1, Math.max(1, seatsLeft), (next) => chosenTier && pickTier(chosenTier.id, next), 'units')}
+        </div>
+        {deposit > 0 ? (
+          <p className="mt-2 text-xs text-subtle">A refundable {formatCurrency(deposit, currency)} deposit per unit is held when you collect.</p>
+        ) : null}
+      </div>
+    )
+  } else if (kind === 'charter') {
+    const maxGuests = activity.charter?.maxGuests ?? activity.maxCapacity
+    kindBlock = (
+      <div>
+        <div className="flex items-baseline justify-between gap-3">
+          <h3 className="text-[0.8125rem] font-semibold tracking-tight text-foreground">{stepOf('guests')} · Your charter</h3>
+          {slot ? <span className={cn('text-xs font-medium', seatsLeft > 0 ? 'text-success' : 'text-danger')}>{seatsLeft > 0 ? 'Available' : 'Booked'}</span> : null}
+        </div>
+        <div className="mt-3 grid gap-2" role="radiogroup" aria-label="Charter option">
+          {activity.priceTiers.map((tier) => optionButton(tier.id, tier.label, formatCurrency(Math.round(tier.price * multiplier), currency), tier.description))}
+        </div>
+        <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-3">
+          <span>
+            <span className="block text-sm font-medium text-foreground">Guests in your group</span>
+            <span className="block text-xs text-subtle">Up to {maxGuests}; the price is for the whole group</span>
+          </span>
+          {stepper(party, 1, maxGuests, setParty, 'guests')}
+        </div>
+        {activity.charter?.noticeHours ? (
+          <p className="mt-2 text-xs text-subtle">Book at least {activity.charter.noticeHours} hours ahead.</p>
+        ) : null}
+      </div>
+    )
+  }
+
+  let kindNote: React.ReactNode = null
+  if (kind === 'lesson' && activity.lesson) {
+    const { sessions, ratio, level, certification } = activity.lesson
+    kindNote = (
+      <div className="flex items-start gap-3 rounded-xl border border-line bg-surface-sunken/50 px-3.5 py-3">
+        <GraduationCap className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+        <div className="min-w-0 text-xs text-muted">
+          <p className="text-sm font-medium text-foreground">
+            {sessions > 1 ? `${sessions}-session course` : 'Single lesson'} · {LESSON_LEVELS.find((entry) => entry.value === level)?.label} · {ratio} per instructor
+          </p>
+          {sessions > 1 && dateKey ? (
+            <p className="mt-1">Sessions {Array.from({ length: sessions }, (_, index) => shortDate(dateKey, index)).join(', ')}, same time each day.</p>
+          ) : null}
+          {certification ? <p className="mt-1">Leads to {certification}.</p> : null}
+        </div>
+      </div>
+    )
+  } else if (kind === 'pass') {
+    const days = activity.pass?.validDays ?? 1
+    kindNote = (
+      <div className="flex items-start gap-3 rounded-xl border border-line bg-surface-sunken/50 px-3.5 py-3">
+        <Ticket className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+        <p className="text-xs text-muted">
+          <span className="block text-sm font-medium text-foreground">{days > 1 ? `Valid ${days} days` : 'Valid all day'}{dateKey ? ` from ${shortDate(dateKey, 0)}` : ''}</span>
+          {activity.pass?.reentry ? 'Come and go as you like.' : 'Single entry.'}
+        </p>
+      </div>
+    )
+  }
+
   const shell =
     variant === 'rail'
       ? 'rounded-2xl border border-line bg-surface shadow-xl'
@@ -388,7 +537,7 @@ export function BookingWidget({
           </p>
           <p className="mt-0.5 font-display text-2xl font-semibold tabular tracking-tight text-foreground">
             {formatCurrency(fromPrice, currency)}
-            <span className="ml-1.5 text-xs font-medium text-subtle">per person</span>
+            <span className="ml-1.5 text-xs font-medium text-subtle">{kind === 'rental' ? 'per unit' : kind === 'charter' ? 'per group' : 'per person'}</span>
           </p>
         </div>
         {slot && slot.priceMultiplier > 1 ? (
@@ -450,7 +599,7 @@ export function BookingWidget({
         <div>
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-[0.8125rem] font-semibold tracking-tight text-foreground">
-              {stepNo(1)} · Choose a date
+              {stepOf('date')} · {kind === 'pass' ? 'Choose a day' : kind === 'lesson' && (activity.lesson?.sessions ?? 1) > 1 ? 'Choose a start date' : 'Choose a date'}
             </h3>
             <div className="flex items-center gap-1">
               <IconButton
@@ -490,15 +639,18 @@ export function BookingWidget({
           </div>
         </div>
 
+        {kindNote}
+
         {/* ---------- time slots ---------- */}
+        {showTime ? (
         <div>
           <div className="flex items-baseline justify-between gap-3">
             <h3 className="text-[0.8125rem] font-semibold tracking-tight text-foreground">
-              {stepNo(2)} · {activity.format === 'open' ? 'Choose an arrival time' : 'Choose a time'}
+              {stepOf('time')} · {kind === 'rental' ? 'Choose a start time' : activity.format === 'open' ? 'Choose an arrival time' : 'Choose a time'}
             </h3>
             {day && day.slots.length > 0 ? (
               <span className="text-xs text-subtle">
-                {day.slots.length} {pluralize(day.slots.length, activity.format === 'open' ? 'arrival slot' : activity.format === 'dates' ? 'time' : 'departure')}
+                {day.slots.length} {pluralize(day.slots.length, kind === 'rental' ? 'start time' : kind === 'lesson' ? 'class' : kind === 'charter' ? 'charter' : activity.format === 'open' ? 'arrival slot' : activity.format === 'dates' ? 'time' : 'departure')}
               </span>
             ) : null}
           </div>
@@ -509,6 +661,7 @@ export function BookingWidget({
                 <TimeChip
                   key={entry.departureId}
                   slot={entry}
+                  wholeGroup={kind === 'charter'}
                   selected={entry.departureId === departureId}
                   onSelect={() => setDepartureId(entry.departureId)}
                 />
@@ -521,12 +674,14 @@ export function BookingWidget({
             </p>
           )}
         </div>
+        ) : null}
 
         {/* ---------- tickets ---------- */}
+        {kindBlock ?? (
         <div>
           <div className="flex items-baseline justify-between gap-3">
             <h3 className="text-[0.8125rem] font-semibold tracking-tight text-foreground">
-              {stepNo(3)} · Who is coming
+              {stepOf('guests')} · Who is coming
             </h3>
             {slot ? (
               <span
@@ -630,12 +785,13 @@ export function BookingWidget({
             </p>
           ) : null}
         </div>
+        )}
 
         {/* ---------- add-ons ---------- */}
         {activity.addOns.length > 0 ? (
           <div>
             <h3 className="text-[0.8125rem] font-semibold tracking-tight text-foreground">
-              {stepNo(4)} · Make it better
+              {stepOf('extras')} · Make it better
             </h3>
             <div className="mt-3 space-y-2">
               {activity.addOns.map((addOn) => {
@@ -746,7 +902,7 @@ export function BookingWidget({
                 Total
               </p>
               <p className="text-xs text-subtle">
-                {quote.headcount} {pluralize(quote.headcount, 'guest')} · all taxes included
+                {kind === 'charter' ? `${party} ${pluralize(party, 'guest')}` : kind === 'rental' ? `${quote.headcount} ${pluralize(quote.headcount, 'unit')}` : `${quote.headcount} ${pluralize(quote.headcount, 'guest')}`} · all taxes included
               </p>
             </div>
             <AnimatedTotal value={quote.total} currency={currency} reducedMotion={reducedMotion} />
@@ -755,15 +911,61 @@ export function BookingWidget({
 
         {/* ---------- reserve ---------- */}
         <div className="space-y-3">
+          {requestMode && requestSent ? (
+            <div role="status" className="rounded-xl border border-success/40 bg-success-soft px-4 py-3.5 text-sm">
+              <p className="flex items-center gap-2 font-semibold text-foreground">
+                <CheckCircle2 className="size-4 text-success" aria-hidden="true" />
+                Request sent
+              </p>
+              <p className="mt-1 text-muted">
+                We reply within a few hours with a quote and a payment link to {request.email || 'your email'}.
+              </p>
+            </div>
+          ) : requestMode && requestOpen ? (
+            <form
+              className="flex flex-col gap-2.5 rounded-xl border border-line p-3.5"
+              onSubmit={(event) => {
+                event.preventDefault()
+                if (!slot || request.name.trim().length < 2 || !/^\S+@\S+\.\S+$/.test(request.email)) return
+                try {
+                  const key = `ezra:charter-requests:${tenantSlug}`
+                  const list = JSON.parse(window.localStorage.getItem(key) ?? '[]') as unknown[]
+                  list.unshift({
+                    id: `req_${Date.now().toString(36)}`,
+                    activitySlug: activity.slug,
+                    departureId: slot.departureId,
+                    startsAt: slot.startsAt,
+                    tierId: selection.tiers.find((tier) => tier.qty > 0)?.tierId,
+                    party,
+                    ...request,
+                    createdAt: new Date().toISOString(),
+                  })
+                  window.localStorage.setItem(key, JSON.stringify(list.slice(0, 50)))
+                } catch {
+                  /* storage blocked: the request still shows as sent */
+                }
+                setRequestSent(true)
+              }}
+            >
+              <p className="text-sm font-semibold text-foreground">Tell us about your group</p>
+              <Input placeholder="Your name" aria-label="Your name" value={request.name} onChange={(e) => setRequest((r) => ({ ...r, name: e.target.value }))} />
+              <Input type="email" placeholder="Email" aria-label="Email" value={request.email} onChange={(e) => setRequest((r) => ({ ...r, email: e.target.value }))} />
+              <Textarea rows={3} placeholder="The occasion, the plan, catering or anything else" aria-label="Your plan" value={request.message} onChange={(e) => setRequest((r) => ({ ...r, message: e.target.value }))} />
+              <Button type="submit" size="lg" fullWidth disabled={!slot || request.name.trim().length < 2 || !/^\S+@\S+\.\S+$/.test(request.email)}>
+                Send request
+              </Button>
+            </form>
+          ) : (
           <Button
             size="lg"
             fullWidth
-            onClick={reserve}
+            onClick={requestMode ? () => setRequestOpen(true) : reserve}
             disabled={!canReserve}
             className="h-12 text-[0.9375rem]"
           >
-            {slot ? 'Reserve now' : 'Choose a departure'}
+            {!slot ? (kind === 'rental' ? 'Choose a start time' : 'Choose a departure') : requestMode ? 'Request a quote' : kind === 'rental' ? 'Rent now' : 'Reserve now'}
           </Button>
+          )}
           <TrustSeal freeCancellationHours={activity.cancellationPolicy.freeCancellationHours} />
           <p className="text-center text-xs text-faint">
             You will not be charged until the final step.
@@ -853,14 +1055,17 @@ function DateChip({
 
 function TimeChip({
   slot,
+  wholeGroup = false,
   selected,
   onSelect,
 }: {
+  /** A private charter sells once: say Available, not a seat count. */
+  wholeGroup?: boolean
   slot: AvailabilitySlot
   selected: boolean
   onSelect: () => void
 }) {
-  const urgent = !slot.soldOut && slot.seatsLeft <= 3
+  const urgent = !wholeGroup && !slot.soldOut && slot.seatsLeft <= 3
   const filling = !slot.soldOut && !urgent && slot.seatsLeft <= 6
 
   return (
@@ -904,7 +1109,7 @@ function TimeChip({
         {slot.soldOut
           ? 'Sold out'
           : urgent
-            ? `Only ${slot.seatsLeft} left`
+            ? wholeGroup ? 'Available' : `Only ${slot.seatsLeft} left`
             : `${slot.seatsLeft} seats`}
       </span>
     </button>

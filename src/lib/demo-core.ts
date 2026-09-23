@@ -22,6 +22,7 @@
 import type {
   Activity,
   ActivityFormat,
+  ActivityKind,
   ActivityLocation,
   ActivityFeedItem,
   ActivityMedia,
@@ -1285,6 +1286,13 @@ interface SpecLocation {
 }
 
 interface ActivitySpec {
+  /** Scheduled trip unless said otherwise. */
+  kind?: ActivityKind
+  /** Rentals: units at once, buffer, deposit, and a length in minutes for each tier, in tier order. */
+  rental?: { units: number; bufferMinutes: number; damageDeposit: number; minutes: number[] }
+  charter?: { maxGuests: number; requestToBook: boolean; noticeHours: number }
+  lesson?: { level: 'all' | 'beginner' | 'intermediate' | 'advanced'; sessions: number; ratio: number; certification?: string }
+  pass?: { validDays: number; reentry: boolean }
   slug: string
   name: string
   tagline: string
@@ -1330,6 +1338,151 @@ interface ActivitySpec {
 }
 
 const BLUE_HORIZON_SPECS: ActivitySpec[] = [
+  {
+    slug: 'jet-ski-rental',
+    kind: 'rental',
+    rental: { units: 6, bufferMinutes: 15, damageDeposit: 25000, minutes: [30, 60, 120] },
+    name: 'Jet Ski Rental',
+    tagline: 'Your own WaveRunner off Kaanapali, by the half hour or the hour.',
+    description:
+      'Take a Yamaha VX WaveRunner out on your own inside the marked Kaanapali riding zone. A ten-minute briefing on the sand, vests and fuel included, and a spotter on the beach the whole time. Ride solo or take a passenger; book as many skis as your group needs.',
+    highlights: [
+      'Yamaha VX WaveRunners, replaced every season',
+      'Marked riding zone with a beach spotter',
+      'Book by the half hour, hour or two hours',
+      'Up to two riders per ski',
+    ],
+    included: ['WaveRunner and fuel', 'Coast Guard-approved vests', 'Safety briefing', 'Beach spotter'],
+    excluded: ['GoPro rental', 'Damage beyond the deposit'],
+    requirements: [
+      'Drivers 16+ with a valid licence or state boater card',
+      'Passengers 8 and over',
+      'Refundable damage deposit held per ski',
+    ],
+    meetingPoint: 'Kaanapali Beach — the Blue Horizon shack by the Whalers Village steps.',
+    difficulty: 'easy',
+    durationMinutes: 60,
+    minAge: 16,
+    maxCapacity: 6,
+    pricingModel: 'per_unit',
+    tiers: [
+      ['30 minutes', 8900, 0, 6, 'Per ski, up to two riders'],
+      ['1 hour', 14900, 0, 6, 'Per ski, up to two riders'],
+      ['2 hours', 25900, 0, 6, 'Per ski, up to two riders'],
+    ],
+    addOns: [['GoPro rental', 3500, 'Chest-mounted, footage airdropped at the shack.', 6, 'Camera']],
+    photos: ['photo-1502680390469-be75c86b636f', 'photo-1519046904884-53103b34b206', 'photo-1505228395891-9a51e7e86bf6'],
+    colorKey: 'sunset',
+    rating: 4.7,
+    reviewCount: 412,
+    resources: ['res_bh_jetski_fleet'],
+    format: 'open',
+    times: ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00'],
+    locations: [{ location: 'kaanapali' }],
+    popularity: 0.55,
+    freeCancelHours: 24,
+  },
+  {
+    slug: 'kayak-sup-rental',
+    kind: 'rental',
+    rental: { units: 12, bufferMinutes: 10, damageDeposit: 0, minutes: [60, 120, 240] },
+    name: 'Kayak & Paddleboard Rental',
+    tagline: 'Sit-on-top kayaks and SUPs from the Kihei beach, with a reef map.',
+    description:
+      'Grab a single kayak, a double or a stand-up paddleboard and head out along the Kihei shoreline on your own schedule. Paddles, vests and a dry bag come with every rental, and the crew hands you a laminated reef map with the calm spots marked.',
+    highlights: ['Singles, doubles and SUPs', 'Paddle, vest and dry bag included', 'Reef map with the calm spots marked', 'Morning glass-off is the best time'],
+    included: ['Kayak or SUP', 'Paddle and vest', 'Dry bag', 'Reef map'],
+    excluded: ['Snorkel gear (add-on)', 'Guide'],
+    requirements: ['Ages 12 and over to paddle alone', 'Comfortable swimming in open water'],
+    meetingPoint: 'Kalepolepo Beach Park, Kihei — the Blue Horizon rental rack at the north end.',
+    difficulty: 'easy',
+    durationMinutes: 120,
+    minAge: 12,
+    maxCapacity: 12,
+    pricingModel: 'per_unit',
+    tiers: [
+      ['1 hour', 3500, 0, 12, 'Per kayak or board'],
+      ['2 hours', 5500, 0, 12, 'Per kayak or board'],
+      ['Half day', 7900, 0, 12, 'Per kayak or board'],
+    ],
+    addOns: [['Snorkel set', 1200, 'Mask, snorkel and fins in your size.', 12, 'Waves']],
+    photos: ['photo-1519046904884-53103b34b206', 'photo-1505228395891-9a51e7e86bf6', 'photo-1473116763249-2faaef81ccda'],
+    colorKey: 'reef',
+    rating: 4.8,
+    reviewCount: 268,
+    resources: ['res_bh_kayak_fleet', 'res_bh_sup_fleet'],
+    format: 'open',
+    times: ['07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00'],
+    locations: [{ location: 'kihei' }],
+    popularity: 0.5,
+    freeCancelHours: 24,
+  },
+  {
+    slug: 'private-catamaran-charter',
+    kind: 'charter',
+    charter: { maxGuests: 24, requestToBook: true, noticeHours: 72 },
+    name: 'Private Catamaran Charter',
+    tagline: 'The whole catamaran for your group: proposals, birthdays, company days.',
+    description:
+      'Take the Kaimana Sky out for your own group with a captain, two crew and a route built around what you want: a snorkel stop at Olowalu, a sunset sail, or a slow cruise with dinner catered aboard. Tell us your date, your group and the plan, and we will send a quote with a payment link.',
+    highlights: ['Up to 24 guests, the boat is yours', 'Route and timing built around your group', 'Catering and bar packages available', 'Captain and two crew'],
+    included: ['Captain and crew', 'Snorkel gear and vests', 'Soft drinks and water'],
+    excluded: ['Catering (quoted)', 'Crew gratuity'],
+    requirements: ['72 hours notice', 'Final guest count 48 hours before'],
+    meetingPoint: 'Maalaea Boat Harbor, Slip 61 — the crew meets your group at the gate.',
+    difficulty: 'easy',
+    durationMinutes: 180,
+    minAge: 0,
+    maxCapacity: 24,
+    pricingModel: 'per_group',
+    tiers: [
+      ['Three-hour charter', 245000, 1, 1, 'Boat and crew for up to 24 guests'],
+      ['Sunset charter', 285000, 0, 1, 'Two and a half hours at golden hour'],
+    ],
+    addOns: [['Catered dinner', 6500, 'Per guest, plated aboard.', 24, 'UtensilsCrossed']],
+    photos: ['photo-1505228395891-9a51e7e86bf6', 'photo-1507525428034-b723cf961d3e', 'photo-1473116763249-2faaef81ccda'],
+    colorKey: 'lagoon',
+    rating: 4.9,
+    reviewCount: 96,
+    resources: ['res_bh_kaimana_sky'],
+    times: ['10:00', '16:30'],
+    locations: [{ location: 'maalaea' }],
+    popularity: 0.3,
+    freeCancelHours: 168,
+  },
+  {
+    slug: 'kaanapali-beach-club-pass',
+    kind: 'pass',
+    pass: { validDays: 1, reentry: true },
+    name: 'Kaanapali Beach Club Day Pass',
+    tagline: 'A shaded lounger, towels, snorkel gear and the shack all day.',
+    description:
+      'Your base on Kaanapali Beach for the day: a lounger under the Blue Horizon shade sails, fresh towels, snorkel gear to borrow, lockers and freshwater showers. Come and go as you like between 9 and 5.',
+    highlights: ['Lounger under shade sails', 'Towels, lockers and showers', 'Snorkel gear to borrow', 'Come and go all day'],
+    included: ['Lounger and umbrella', 'Towels', 'Locker', 'Snorkel gear'],
+    excluded: ['Food and drinks', 'Motorised rentals'],
+    requirements: ['Children under 12 with an adult'],
+    meetingPoint: 'Kaanapali Beach — check in at the Blue Horizon shack for your wristband.',
+    difficulty: 'easy',
+    durationMinutes: 480,
+    minAge: 0,
+    maxCapacity: 60,
+    tiers: [
+      ['Adult', 4500, 0, 10, 'Ages 12 and over'],
+      ['Child', 2500, 0, 10, 'Ages 3 to 11'],
+    ],
+    addOns: [['Cabana upgrade', 12000, 'Private cabana for up to four.', 2, 'Sun']],
+    photos: ['photo-1473116763249-2faaef81ccda', 'photo-1507525428034-b723cf961d3e', 'photo-1519046904884-53103b34b206'],
+    colorKey: 'success',
+    rating: 4.6,
+    reviewCount: 184,
+    resources: [],
+    format: 'open',
+    times: ['09:00'],
+    locations: [{ location: 'kaanapali' }],
+    popularity: 0.6,
+    freeCancelHours: 24,
+  },
   {
     slug: 'sunset-catamaran-sail-snorkel',
     name: 'Sunset Catamaran Sail & Snorkel',
@@ -1511,6 +1664,8 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
   },
   {
     slug: 'private-sportfishing-charter',
+    kind: 'charter',
+    charter: { maxGuests: 6, requestToBook: false, noticeHours: 24 },
     name: 'Private Sportfishing Charter',
     tagline: 'The whole boat, the whole crew, the whole day. Blue marlin country.',
     description:
@@ -1620,6 +1775,8 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
   },
   {
     slug: 'beginner-surf-lesson',
+    kind: 'lesson',
+    lesson: { level: 'beginner', sessions: 1, ratio: 3 },
     name: 'Beginner Surf Lesson',
     tagline: 'Stand up in your first session or come back free. Almost everyone stands up.',
     description:
@@ -1781,6 +1938,8 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
   },
   {
     slug: 'sunrise-sup-yoga',
+    kind: 'lesson',
+    lesson: { level: 'all', sessions: 1, ratio: 8 },
     name: 'Sunrise SUP & Yoga',
     tagline: 'Sixty minutes of flow on glass water before the island wakes up.',
     description:
@@ -2061,6 +2220,8 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
   },
   {
     slug: 'blue-water-freedive-course',
+    kind: 'lesson',
+    lesson: { level: 'beginner', sessions: 2, ratio: 4, certification: 'AIDA 2 Freediver' },
     name: 'Blue Water Freedive Course',
     tagline: 'Two days to a confident, safe sixty-foot dive on a single breath.',
     description:
@@ -2980,6 +3141,20 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     category: tenant.vertical,
     status: spec.status ?? 'live',
     format: spec.format ?? 'departures',
+    kind: spec.kind ?? 'trip',
+    ...(spec.rental
+      ? {
+          rental: {
+            units: spec.rental.units,
+            bufferMinutes: spec.rental.bufferMinutes,
+            damageDeposit: spec.rental.damageDeposit,
+            durations: priceTiers.map((tier, index) => ({ tierId: tier.id, minutes: spec.rental!.minutes[index] ?? 60 })),
+          },
+        }
+      : {}),
+    ...(spec.charter ? { charter: { ...spec.charter } } : {}),
+    ...(spec.lesson ? { lesson: { ...spec.lesson } } : {}),
+    ...(spec.pass ? { pass: { ...spec.pass } } : {}),
     difficulty: spec.difficulty,
     durationMinutes: spec.durationMinutes,
     minAge: spec.minAge,

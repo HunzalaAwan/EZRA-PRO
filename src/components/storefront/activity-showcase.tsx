@@ -4,6 +4,7 @@ import * as React from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { ArrowRight, Clock, Flame, SlidersHorizontal, Sparkles, Users } from 'lucide-react'
+import { kindChipLabel } from '@/lib/activity-kinds'
 
 import { cn, formatCurrency, formatDuration, formatNumber, pluralize } from '@/lib/utils'
 import type { Activity, CurrencyCode, DifficultyLevel } from '@/types'
@@ -240,7 +241,7 @@ function FeatureCard({
         <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/12 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
             <Clock className="size-3" aria-hidden="true" />
-            {formatDuration(activity.durationMinutes)}
+            {kindChipLabel(activity)}
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full bg-accent px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-on-accent shadow-sm">
             <Flame className="size-3" aria-hidden="true" />
@@ -357,7 +358,7 @@ function ActivityCard({
           )}
         >
           <Clock className="size-3" aria-hidden="true" />
-          {formatDuration(activity.durationMinutes)}
+          {kindChipLabel(activity)}
         </span>
 
         {activity.featured ? (

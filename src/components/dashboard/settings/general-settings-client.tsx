@@ -47,7 +47,7 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { toast } from '@/components/ui/toaster'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
-import { VERTICALS } from '@/lib/data/verticals'
+import { NICHES, nicheOf } from '@/lib/data/verticals'
 import { cn, formatDateLong } from '@/lib/utils'
 import type { CurrencyCode, Tenant, VerticalKey } from '@/types'
 
@@ -266,14 +266,14 @@ export function GeneralSettingsClient({ tenant: CURRENT_TENANT, now: NOW }: Gene
               >
                 {({ id }) => (
                   <Select
-                    value={values.vertical}
+                    value={nicheOf(values.vertical as VerticalKey).key}
                     onValueChange={(v) => set('vertical', v as VerticalKey)}
                   >
                     <SelectTrigger id={id} name="vertical" error={errors.vertical}>
                       <SelectValue placeholder="Choose a category" />
                     </SelectTrigger>
                     <SelectContent>
-                      {VERTICALS.map((v) => (
+                      {NICHES.map((v) => (
                         <SelectItem key={v.key} value={v.key} description={v.tagline}>
                           {v.label}
                         </SelectItem>

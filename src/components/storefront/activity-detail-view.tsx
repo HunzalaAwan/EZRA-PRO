@@ -34,6 +34,7 @@ import {
 } from '@/lib/utils'
 import type { Activity, DifficultyLevel, Location, Tenant } from '@/types'
 import { locationAddress } from '@/lib/locations'
+import { kindChipLabel } from '@/lib/activity-kinds'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
@@ -301,8 +302,16 @@ export function ActivityDetailView({
                 ({formatNumber(activity.reviewCount)} {pluralize(activity.reviewCount, 'review')})
               </span>
             </span>
-            <Fact icon={Clock}>{formatDuration(activity.durationMinutes)}</Fact>
-            <Fact icon={Users}>Up to {activity.maxCapacity} guests</Fact>
+            <Fact icon={Clock}>{kindChipLabel(activity)}</Fact>
+            <Fact icon={Users}>
+              {activity.kind === 'rental'
+                ? `${activity.rental?.units ?? activity.maxCapacity} available`
+                : activity.kind === 'lesson'
+                  ? `${activity.lesson?.ratio ?? 4} students per instructor`
+                  : activity.kind === 'charter'
+                    ? `Whole group, up to ${activity.charter?.maxGuests ?? activity.maxCapacity}`
+                    : `Up to ${activity.maxCapacity} guests`}
+            </Fact>
             <Fact icon={Languages}>{languages.join(', ')}</Fact>
             <Fact icon={CalendarCheck}>
               Free cancellation · {activity.cancellationPolicy.freeCancellationHours}h
@@ -417,7 +426,7 @@ export function ActivityDetailView({
                   <span className="font-semibold text-foreground">
                     {DIFFICULTY_LABEL[activity.difficulty]}.
                   </span>{' '}
-                  {DIFFICULTY_COPY[activity.difficulty]} Minimum age {activity.minAge}.
+                  {DIFFICULTY_COPY[activity.difficulty]} {activity.minAge > 0 ? `Minimum age ${activity.minAge}.` : 'All ages welcome.'}
                 </p>
               </div>
             </Section>
@@ -680,7 +689,7 @@ export function ActivityDetailView({
           <div className="min-w-0 flex-1">
             <p className="font-display text-lg font-semibold leading-none tabular text-foreground">
               {formatCurrency(fromPrice, tenant.currency)}
-              <span className="ml-1 text-xs font-medium text-subtle">per person</span>
+              <span className="ml-1 text-xs font-medium text-subtle">{activity.kind === 'rental' ? 'per unit' : activity.kind === 'charter' ? 'per group' : 'per person'}</span>
             </p>
             <p className="mt-1 truncate text-xs text-subtle">
               {nextOpen

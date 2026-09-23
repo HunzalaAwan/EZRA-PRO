@@ -4,8 +4,8 @@ import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowDownWideNarrow, LayoutGrid, Plus, Rows3, SlidersHorizontal } from 'lucide-react'
 
-import type { ActivityFormat, ActivityStatus, DifficultyLevel, VerticalKey } from '@/types'
-import { ACTIVITY_FORMATS, ACTIVITY_FORMAT_META } from '@/lib/activity-format'
+import type { ActivityKind, ActivityStatus, DifficultyLevel, VerticalKey } from '@/types'
+import { ACTIVITY_KINDS, ACTIVITY_KIND_META } from '@/lib/activity-kinds'
 import { cn, formatNumber, titleCase } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Segmented, type SegmentedOption } from '@/components/ui/segmented'
@@ -64,7 +64,7 @@ export function ActivityGrid({ rows, tenantSlug, cascadeKey, className }: Activi
 type StatusFilter = 'all' | ActivityStatus
 type CategoryFilter = 'all' | VerticalKey
 type DifficultyFilter = 'all' | DifficultyLevel
-type FormatFilter = 'all' | ActivityFormat
+type FormatFilter = 'all' | ActivityKind
 type ViewMode = 'grid' | 'table'
 
 interface SortOption {
@@ -127,7 +127,7 @@ export function ActivityCatalog({ summaries, tenantSlug }: ActivityCatalogProps)
       if (status !== 'all' && activity.status !== status) return false
       if (category !== 'all' && activity.category !== category) return false
       if (difficulty !== 'all' && activity.difficulty !== difficulty) return false
-      if (format !== 'all' && activity.format !== format) return false
+      if (format !== 'all' && (activity.kind ?? 'trip') !== format) return false
       if (!needle) return true
       return (
         activity.name.toLowerCase().includes(needle) ||
@@ -217,14 +217,14 @@ export function ActivityCatalog({ summaries, tenantSlug }: ActivityCatalogProps)
           </Select>
 
           <Select value={format} onValueChange={(value) => setFormat(value as FormatFilter)}>
-            <SelectTrigger className="w-full sm:w-40" aria-label="Filter by how it runs">
-              <SelectValue placeholder="Runs as" />
+            <SelectTrigger className="w-full sm:w-44" aria-label="Filter by type">
+              <SelectValue placeholder="Type" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Any format</SelectItem>
-              {ACTIVITY_FORMATS.map((value) => (
-                <SelectItem key={value} value={value}>
-                  {ACTIVITY_FORMAT_META[value].label}
+              <SelectItem value="all">Any type</SelectItem>
+              {ACTIVITY_KINDS.map((value) => (
+                <SelectItem key={value} value={value} description={ACTIVITY_KIND_META[value].hint}>
+                  {ACTIVITY_KIND_META[value].label}
                 </SelectItem>
               ))}
             </SelectContent>
