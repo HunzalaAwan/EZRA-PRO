@@ -181,7 +181,6 @@ export const DASHBOARD_NAV: DashboardNavSection[] = [
       { label: 'Pickups', href: '/dashboard/pickups', icon: 'Bus' },
       { label: 'Check-in', href: '/dashboard/check-in', icon: 'ScanLine' },
       { label: 'Weather', href: '/dashboard/weather', icon: 'CloudSun' },
-      { label: 'Capacity', href: '/dashboard/capacity', icon: 'Gauge' },
       { label: 'My day', href: '/dashboard/my-day', icon: 'Sunrise' },
     ],
   },

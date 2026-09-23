@@ -1,12 +1,11 @@
 import { NOW, getStorefrontAvailability } from '@/lib/demo'
-import { getDayCapacity, sharedSeatsLeft, type DayCapacity } from '@/lib/capacity'
 import { addDays, toDateKey } from '@/lib/utils'
 import type { Activity } from '@/types'
 import type { AvailabilityDay, AvailabilitySlot } from '@/components/storefront/booking-widget'
 
 /* ==========================================================================
    Storefront availability — an activity's departures flattened into a day
-   strip, with shared fleets and boats counted. Used by the activity page
+   strip. Used by the activity page
    and by the guest's reschedule on the manage-booking page. Server-only.
    ========================================================================== */
 
@@ -14,22 +13,12 @@ export const STRIP_DAYS = 21
 
 export function buildDays(activity: Activity, STRIP_DAYS = 21): AvailabilityDay[] {
   const byDay = new Map<string, AvailabilitySlot[]>()
-  // Shared fleets and boats: seats are the lower of the departure's own and what the pool allows.
-  const days = new Map<string, DayCapacity>()
-  const capacityFor = (key: string) => {
-    let entry = days.get(key)
-    if (!entry) {
-      entry = getDayCapacity(activity.tenantId, new Date(`${key}T12:00:00`))
-      days.set(key, entry)
-    }
-    return entry
-  }
 
   for (const event of getStorefrontAvailability(activity.id, STRIP_DAYS + 14)) {
     const { departure } = event
     const key = departure.startsAt.slice(0, 10)
     const multiplier = departure.priceMultiplier ?? 1
-    const seatsLeft = activity.requiredResourceIds.length > 0 ? sharedSeatsLeft(capacityFor(key), activity, departure, event.seatsLeft) : event.seatsLeft
+    const seatsLeft = event.seatsLeft
     const slot: AvailabilitySlot = {
       departureId: departure.id,
       startsAt: departure.startsAt,
