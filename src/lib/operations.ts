@@ -4,10 +4,14 @@ import {
   getBookingsByDeparture,
   getDeparturesForDay,
   getCustomerById,
+  getLocationById,
   getPickupZonesByTenant,
+  getResourcesByTenant,
+  getUsersByTenant,
 } from '@/lib/demo'
+import { gearTally } from '@/lib/guest-requirements'
 import { addDays, hashSeed, toDateKey } from '@/lib/utils'
-import type { CharterRequest } from '@/types'
+import type { CharterRequest, WeatherSnapshot } from '@/types'
 
 /* ==========================================================================
    Day-of operations — the rentals board, the charter request inbox and the
@@ -250,4 +254,196 @@ export function getPickupRunSheet(tenantId: string, day: Date = NOW): PickupRunS
     zones: getPickupZonesByTenant(tenantId).map((zone) => ({ id: zone.id, name: zone.name, offsetMinutes: zone.offsetMinutes })),
     stops,
   }
+}
+
+/* --------------------------------------------------------------------------
+   WEATHER BOARD — the next week's departures with guests, their forecast
+   and who would need a message.
+   -------------------------------------------------------------------------- */
+
+export interface WeatherRun {
+  id: string
+  activityId: string
+  activityName: string
+  usualTimes: string[]
+  locationName?: string
+  startsAt: string
+  endsAt: string
+  status: string
+  booked: number
+  capacity: number
+  parties: number
+  revenue: number
+  weather: WeatherSnapshot | null
+}
+
+export function getWeatherBoard(tenantId: string, days = 7): { days: string[]; runs: WeatherRun[] } {
+  const activities = new Map(getActivitiesByTenant(tenantId).map((activity) => [activity.id, activity]))
+  const runs: WeatherRun[] = []
+  const keys: string[] = []
+  for (let offset = 0; offset < days; offset++) {
+    const day = addDays(NOW, offset)
+    keys.push(toDateKey(day))
+    for (const departure of getDeparturesForDay(tenantId, day)) {
+      if (departure.status === 'cancelled' || departure.status === 'completed') continue
+      const activity = activities.get(departure.activityId)
+      if (!activity) continue
+      const bookings = getBookingsByDeparture(departure.id).filter((booking) => booking.status !== 'cancelled' && booking.status !== 'refunded')
+      if (bookings.length === 0) continue
+      const site = activity.locations.find((entry) => entry.locationId === departure.locationId)
+      runs.push({
+        id: departure.id,
+        activityId: activity.id,
+        activityName: activity.name,
+        usualTimes: site?.times ?? activity.locations[0]?.times ?? [],
+        locationName: departure.locationId ? getLocationById(departure.locationId)?.name : undefined,
+        startsAt: departure.startsAt,
+        endsAt: departure.endsAt,
+        status: departure.status,
+        booked: bookings.reduce((sum, booking) => sum + booking.partySize, 0),
+        capacity: departure.capacity,
+        parties: bookings.length,
+        revenue: bookings.reduce((sum, booking) => sum + booking.total, 0),
+        weather: departure.weather ?? null,
+      })
+    }
+  }
+  return { days: keys, runs }
+}
+
+/* --------------------------------------------------------------------------
+   CHECK-IN — today's and tomorrow's tickets, for the scanner.
+   -------------------------------------------------------------------------- */
+
+export interface TicketRow {
+  id: string
+  reference: string
+  guestName: string
+  party: number
+  activityName: string
+  startsAt: string
+  status: string
+  waiversSigned: number
+  waiversTotal: number
+  balance: number
+  pickup?: string
+  notes: string[]
+}
+
+export function getTicketList(tenantId: string): TicketRow[] {
+  const activities = new Map(getActivitiesByTenant(tenantId).map((activity) => [activity.id, activity]))
+  const rows: TicketRow[] = []
+  for (const offset of [0, 1]) {
+    for (const departure of getDeparturesForDay(tenantId, addDays(NOW, offset))) {
+      if (departure.status === 'cancelled') continue
+      for (const booking of getBookingsByDeparture(departure.id)) {
+        if (booking.status === 'cancelled' || booking.status === 'refunded') continue
+        const customer = getCustomerById(booking.customerId)
+        rows.push({
+          id: booking.id,
+          reference: booking.reference,
+          guestName: customer ? `${customer.firstName} ${customer.lastName}` : 'Guest',
+          party: booking.partySize,
+          activityName: activities.get(departure.activityId)?.name ?? 'Departure',
+          startsAt: departure.startsAt,
+          status: booking.status,
+          waiversSigned: booking.participants.filter((participant) => participant.waiverSigned).length,
+          waiversTotal: booking.participants.length,
+          balance: Math.max(0, booking.total - booking.amountPaid),
+          pickup: booking.pickup ? booking.pickup.stop : undefined,
+          notes: booking.participants.filter((participant) => participant.notes).map((participant) => `${participant.firstName}: ${participant.notes}`),
+        })
+      }
+    }
+  }
+  return rows.sort((a, b) => (a.startsAt < b.startsAt ? -1 : 1))
+}
+
+/* --------------------------------------------------------------------------
+   MY DAY — one guide's departures today, with what they need to run them,
+   and the certifications they hold.
+   -------------------------------------------------------------------------- */
+
+export interface GuideRun {
+  id: string
+  activityName: string
+  startsAt: string
+  endsAt: string
+  status: string
+  meetingPoint: string
+  resources: string[]
+  booked: number
+  capacity: number
+  parties: number
+  waiversOutstanding: number
+  gear: { label: string; counts: { option: string; count: number }[] }[]
+  notes: string[]
+  weather: WeatherSnapshot | null
+  crew: string[]
+}
+
+export interface GuideDay {
+  id: string
+  name: string
+  title: string
+  avatarUrl: string
+  certifications: { name: string; expires: string }[]
+  runs: GuideRun[]
+}
+
+function certificationsFor(userId: string, title: string): { name: string; expires: string }[] {
+  const t = title.toLowerCase()
+  const names = ['CPR & First Aid']
+  if (t.includes('captain') || t.includes('skipper')) names.unshift('USCG Master licence')
+  if (t.includes('dive') || t.includes('padi')) names.unshift('PADI Divemaster', 'Oxygen provider')
+  if (t.includes('surf') || t.includes('sup')) names.unshift('ISA Surf Instructor')
+  if (t.includes('snorkel') || t.includes('guide')) names.push('Open-water lifeguard')
+  return names.map((name, index) => {
+    const days = 20 + (hashSeed(`cert:${userId}:${name}`) % 420) - (index === 0 ? 0 : 5)
+    return { name, expires: toDateKey(addDays(NOW, days)) }
+  })
+}
+
+export function getGuideDays(tenantId: string): GuideDay[] {
+  const users = getUsersByTenant(tenantId).filter((user) => user.isBookable && user.status === 'active')
+  const names = new Map(getUsersByTenant(tenantId).map((user) => [user.id, user.name]))
+  const resources = new Map(getResourcesByTenant(tenantId).map((resource) => [resource.id, resource.name.split(' (')[0]]))
+  const activities = new Map(getActivitiesByTenant(tenantId).map((activity) => [activity.id, activity]))
+  const departures = getDeparturesForDay(tenantId, NOW).filter((departure) => departure.status !== 'cancelled')
+
+  return users.map((user) => ({
+    id: user.id,
+    name: user.name,
+    title: user.title,
+    avatarUrl: user.avatarUrl,
+    certifications: certificationsFor(user.id, user.title),
+    runs: departures
+      .filter((departure) => departure.assignedStaffIds.includes(user.id))
+      .map((departure) => {
+        const activity = activities.get(departure.activityId)!
+        const bookings = getBookingsByDeparture(departure.id).filter((booking) => booking.status !== 'cancelled' && booking.status !== 'refunded')
+        const site = activity.locations.find((entry) => entry.locationId === departure.locationId)
+        return {
+          id: departure.id,
+          activityName: activity.name,
+          startsAt: departure.startsAt,
+          endsAt: departure.endsAt,
+          status: departure.status,
+          meetingPoint: site?.meetingPoint ?? activity.meetingPoint,
+          resources: departure.assignedResourceIds.map((id) => resources.get(id)).filter((name): name is string => Boolean(name)),
+          booked: bookings.reduce((sum, booking) => sum + booking.partySize, 0),
+          capacity: departure.capacity,
+          parties: bookings.length,
+          waiversOutstanding: bookings.reduce((sum, booking) => sum + booking.participants.filter((participant) => !participant.waiverSigned).length, 0),
+          gear: gearTally(activity.guestQuestions, bookings).map((line) => ({ label: line.label, counts: line.counts })),
+          notes: [
+            ...(departure.notes ? [departure.notes] : []),
+            ...bookings.flatMap((booking) => booking.participants.filter((participant) => participant.notes).map((participant) => `${participant.firstName} ${participant.lastName}: ${participant.notes}`)),
+          ],
+          weather: departure.weather ?? null,
+          crew: departure.assignedStaffIds.filter((id) => id !== user.id).map((id) => names.get(id) ?? 'Crew'),
+        }
+      })
+      .sort((a, b) => (a.startsAt < b.startsAt ? -1 : 1)),
+  }))
 }

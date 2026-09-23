@@ -39,6 +39,10 @@ import {
   Bus,
   Inbox,
   KeyRound,
+  ScanLine,
+  CloudSun,
+  Gauge,
+  Sunrise,
 } from 'lucide-react'
 
 import type { DashboardNavItem } from '@/lib/site-config'
@@ -81,6 +85,10 @@ type IconComponent = React.ComponentType<{ className?: string; 'aria-hidden'?: b
  * route. This map costs exactly the 14 icons the nav actually uses.
  */
 const REGISTRY: Record<string, IconComponent> = {
+  ScanLine,
+  CloudSun,
+  Gauge,
+  Sunrise,
   Bus,
   Inbox,
   KeyRound,

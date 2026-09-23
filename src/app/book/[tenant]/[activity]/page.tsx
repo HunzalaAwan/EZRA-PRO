@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 
 import { NOW, getBookingRows, getStorefront, getStorefrontAvailability, getLocationsByTenant } from '@/lib/demo'
+import { getDayCapacity, sharedSeatsLeft, type DayCapacity } from '@/lib/capacity'
 import { addDays, clamp, toDateKey } from '@/lib/utils'
 import type { Activity } from '@/types'
 import {
@@ -64,22 +65,33 @@ export async function generateMetadata({
 
 function buildDays(activity: Activity): AvailabilityDay[] {
   const byDay = new Map<string, AvailabilitySlot[]>()
+  // Shared fleets and boats: seats are the lower of the departure's own and what the pool allows.
+  const days = new Map<string, DayCapacity>()
+  const capacityFor = (key: string) => {
+    let entry = days.get(key)
+    if (!entry) {
+      entry = getDayCapacity(activity.tenantId, new Date(`${key}T12:00:00`))
+      days.set(key, entry)
+    }
+    return entry
+  }
 
   for (const event of getStorefrontAvailability(activity.id, STRIP_DAYS + 14)) {
     const { departure } = event
     const key = departure.startsAt.slice(0, 10)
     const multiplier = departure.priceMultiplier ?? 1
+    const seatsLeft = activity.requiredResourceIds.length > 0 ? sharedSeatsLeft(capacityFor(key), activity, departure, event.seatsLeft) : event.seatsLeft
     const slot: AvailabilitySlot = {
       departureId: departure.id,
       startsAt: departure.startsAt,
       endsAt: departure.endsAt,
       capacity: departure.capacity,
-      seatsLeft: event.seatsLeft,
+      seatsLeft,
       status: departure.status,
       priceMultiplier: multiplier,
       leadPrice: Math.round((departure.priceOverride ?? activity.basePrice) * multiplier),
       locationId: departure.locationId,
-      soldOut: event.seatsLeft <= 0 || departure.status === 'sold_out',
+      soldOut: seatsLeft <= 0 || departure.status === 'sold_out',
     }
     const list = byDay.get(key)
     if (list) list.push(slot)

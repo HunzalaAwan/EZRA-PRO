@@ -55,6 +55,7 @@ import {
   type WaiverState,
 } from '@/components/storefront/checkout-guest-details'
 import { CheckoutPickup, EMPTY_PICKUP, PICKUP_OTHER, validatePickup, type PickupChoice } from '@/components/storefront/checkout-pickup'
+import { TicketQr, ticketPayload } from '@/components/ui/ticket-qr'
 
 /* ==========================================================================
    TYPES
@@ -1250,8 +1251,9 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
         transition={{ duration: 0.5, delay: 0.28, ease: [0.16, 1, 0.3, 1] }}
         className="mt-8 rounded-2xl border border-line bg-surface p-5 shadow-lg sm:p-6"
       >
-        <div className="flex flex-col items-center gap-3 border-b border-dashed border-line pb-5 sm:flex-row sm:justify-between">
-          <div className="text-center sm:text-left">
+        <div className="flex flex-col items-center gap-4 border-b border-dashed border-line pb-5 sm:flex-row sm:justify-between">
+          <TicketQr value={ticketPayload(reference)} size={112} label={`Ticket QR code for ${reference}`} className="shrink-0 border border-line" />
+          <div className="flex-1 text-center sm:text-left">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-faint">
               Confirmation code
             </p>
