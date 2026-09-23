@@ -9,6 +9,8 @@ import type {
   LessonConfig,
   PassConfig,
   RentalConfig,
+  RideConfig,
+  RouteInfo,
 } from '@/types'
 
 /* ==========================================================================
@@ -47,6 +49,9 @@ export interface ActivityOverride {
   /** null turns pickup off; undefined keeps the seeded setting. */
   pickup?: ActivityPickup | null
   languages?: string[]
+  ride?: RideConfig
+  /** null clears the route. */
+  route?: RouteInfo | null
   updatedAt: string
 }
 

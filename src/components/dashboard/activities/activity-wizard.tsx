@@ -72,7 +72,7 @@ import {
   type DraftTier,
 } from './pricing-tier-editor'
 import { AddonEditor, type DraftAddOn } from './addon-editor'
-import { KindFields, KindPicker, LanguagePicker, defaultKindSettings, normalizeKindSettings, type DraftKindSettings, type SharedBasics } from './kind-fields'
+import { KindFields, KindPicker, LanguagePicker, RouteFields, defaultKindSettings, emptyRoute, normalizeKindSettings, type DraftKindSettings, type DraftRoute, type SharedBasics } from './kind-fields'
 import { DurationField, DURATION_UNITS, unitFor, type DurationUnit } from './duration-field'
 import { GuestQuestionsEditor, type WaiverOption } from './guest-questions-editor'
 import { PickupEditor, type DraftPickup, type PickupZoneOption } from './pickup-editor'
@@ -174,6 +174,8 @@ export interface ActivityDraft {
   pickup: DraftPickup
   /** Languages the guide or instructor speaks. */
   languages: string[]
+  /** Optional distance or track, for trips and activities. */
+  route: DraftRoute
 }
 
 const STORAGE_KEY = 'ezra:activity-wizard:v8'
@@ -218,6 +220,7 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
     waiverId: null,
     pickup: { enabled: false, zoneIds: [], required: false },
     languages: ['English'],
+    route: emptyRoute(),
     freeCancellationHours: 24,
     crewIds: [],
     dining,
@@ -257,7 +260,24 @@ function kindOverride(draft: ActivityDraft) {
     return { lesson: { ...rest, ...(certification.trim() ? { certification: certification.trim() } : {}) } }
   }
   if (kind === 'pass') return { pass: { ...settings.pass } }
+  if (kind === 'activity') {
+    const { minHeightCm, maxWeightKg } = settings.activity
+    return { ride: { ...(minHeightCm > 0 ? { minHeightCm } : {}), ...(maxWeightKg > 0 ? { maxWeightKg } : {}) } }
+  }
   return {}
+}
+
+/** The route an edit saves; null when the operator switched it off or the kind has none. */
+function routeOverride(draft: ActivityDraft) {
+  const kind = draft.kind ?? 'trip'
+  const route = draft.route ?? emptyRoute()
+  if ((kind !== 'trip' && kind !== 'activity') || !route.enabled || route.distance <= 0) return null
+  return {
+    distance: route.distance,
+    unit: route.unit,
+    ...(route.track.trim() ? { track: route.track.trim() } : {}),
+    ...(route.elevationM > 0 ? { elevationM: route.elevationM } : {}),
+  }
 }
 
 const LEVEL_DIFFICULTY: Record<DraftKindSettings['lesson']['level'], DifficultyLevel> = {
@@ -282,6 +302,7 @@ export function seatsFor(draft: ActivityDraft): ScheduleSeats {
   }
   if (kind === 'lesson') return { capacity: n, one: 'place', many: 'places', summary: `${n} ${pluralize(n, 'student')} per class` }
   if (kind === 'pass') return { capacity: n, one: 'ticket', many: 'tickets', summary: n > 0 ? `${n} tickets per day` : 'No ticket limit' }
+  if (kind === 'activity') return { capacity: n, one: 'place', many: 'places', summary: `${n} ${pluralize(n, 'rider')} per time slot` }
   return { capacity: n, one: 'seat', many: 'seats', summary: n > 0 ? `${n} seats per departure` : 'No seat limit' }
 }
 
@@ -313,7 +334,10 @@ export function deriveForKind(draft: ActivityDraft): ActivityDraft {
   } else if (kind === 'pass') {
     next.difficulty = 'easy'
     next.minParticipants = 1
+  } else if (kind === 'activity') {
+    next.minParticipants = 1
   }
+  next.route = draft.route ?? emptyRoute()
   const capacity = seatsFor(next).capacity
   const stale = next.schedule.capacity !== capacity || next.schedule.locations.some((site) => site.schedule.capacity !== capacity)
   if (stale) {
@@ -403,6 +427,9 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
     waiverId: activity.waiverId ?? null,
     pickup: activity.pickup ? { enabled: true, zoneIds: [...activity.pickup.zoneIds], required: activity.pickup.required } : { enabled: false, zoneIds: [], required: false },
     languages: [...(activity.languages ?? ['English'])],
+    route: activity.route
+      ? { enabled: true, distance: activity.route.distance, unit: activity.route.unit, track: activity.route.track ?? '', elevationM: activity.route.elevationM ?? 0 }
+      : emptyRoute(),
     kindSettings: (() => {
       const blank = defaultKindSettings()
       const rental = activity.rental
@@ -423,6 +450,7 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
           : { ...blank.charter, maxGuests: activity.maxCapacity },
         lesson: activity.lesson ? { ...blank.lesson, ...activity.lesson, certification: activity.lesson.certification ?? '' } : blank.lesson,
         pass: activity.pass ? { ...blank.pass, ...activity.pass } : blank.pass,
+        activity: { minHeightCm: activity.ride?.minHeightCm ?? 0, maxWeightKg: activity.ride?.maxWeightKg ?? 0 },
       }
     })(),
   }
@@ -796,6 +824,8 @@ function validateStep(step: number, draft: ActivityDraft): FieldErrors {
   if (kind === 'rental' && settings.rental.units < 1) errors['rental.units'] = 'At least one unit has to be available'
   if (kind === 'rental' && settings.rental.billing === 'day' && settings.rental.maxDays < settings.rental.minDays) errors['rental.maxDays'] = 'Most days cannot be fewer than the fewest'
   if (kind === 'lesson' && draft.maxCapacity < 1) errors.maxCapacity = 'A class needs at least one place'
+  if (kind === 'activity' && draft.maxCapacity < 1) errors.maxCapacity = 'A slot needs at least one rider'
+  if (kind === 'activity' && draft.durationMinutes < 5) errors.durationMinutes = 'Give each slot a length'
   if (kind === 'lesson' && draft.durationMinutes < 15) errors.durationMinutes = 'Give each session at least 15 minutes'
   if (kind === 'charter' && settings.charter.maxGuests < 1) errors['charter.maxGuests'] = 'A charter carries at least one guest'
   if (kind === 'lesson') {
@@ -1361,6 +1391,7 @@ export function ActivityWizard({
           minParticipants: draft.minParticipants,
           featured: draft.featured,
           languages: draft.languages ?? [],
+          route: routeOverride(draft),
           kind: draft.kind ?? 'trip',
           ...kindOverride(draft),
           crewIds: draft.crewIds,
@@ -1751,6 +1782,19 @@ function kindFacts(draft: ActivityDraft): string[] {
       ...(langs ? [langs] : []),
     ]
   }
+  const route = draft.route ?? emptyRoute()
+  const routeFact = route.enabled && route.distance > 0 ? [`${route.distance} ${route.unit}${route.track.trim() ? ` · ${route.track.trim()}` : ''}`] : []
+  if (kind === 'activity') {
+    return [
+      `${formatDuration(draft.durationMinutes)} slots`,
+      `${draft.maxCapacity} per slot`,
+      draft.difficulty.charAt(0).toUpperCase() + draft.difficulty.slice(1),
+      age,
+      ...(s.activity.minHeightCm > 0 ? [`${s.activity.minHeightCm} cm+`] : []),
+      ...(s.activity.maxWeightKg > 0 ? [`Up to ${s.activity.maxWeightKg} kg`] : []),
+      ...routeFact,
+    ]
+  }
   if (kind === 'pass') {
     return [
       s.pass.validDays > 1 ? `Valid ${s.pass.validDays} days` : 'Valid all day',
@@ -1764,6 +1808,7 @@ function kindFacts(draft: ActivityDraft): string[] {
     draft.durationMinutes > 0 ? formatDuration(draft.durationMinutes) : 'Flexible length',
     draft.maxCapacity > 0 ? `${draft.minParticipants}–${draft.maxCapacity} guests` : 'No seat limit',
     age,
+    ...routeFact,
     ...(langs ? [langs] : []),
   ]
 }
@@ -1771,6 +1816,7 @@ function kindFacts(draft: ActivityDraft): string[] {
 /** A tier nobody has renamed yet follows the kind, so a rental does not start with "Adult". */
 const STARTER_TIER: Record<ActivityKind, string> = {
   trip: 'Adult',
+  activity: 'Rider',
   charter: 'Half-day charter',
   rental: '1 hour',
   lesson: 'Student',
@@ -1789,6 +1835,13 @@ function BasicsStep({ draft, patch, errors, currency }: StepProps) {
       schedule: { ...draft.schedule, mode },
       ...(starter ? { tiers: [{ ...draft.tiers[0], label: STARTER_TIER[next] }] } : {}),
       ...(next === 'lesson' && draft.maxCapacity < 1 ? { maxCapacity: 8, durationMinutes: draft.durationMinutes || 120 } : {}),
+      ...(next === 'activity'
+        ? {
+            schedule: { ...draft.schedule, mode: 'hours' as const, entryInterval: draft.schedule.entryInterval || 30 },
+            ...(draft.maxCapacity < 1 ? { maxCapacity: 8 } : {}),
+            ...(draft.durationMinutes < 15 ? { durationMinutes: 30, durationUnit: 'minutes' as const } : {}),
+          }
+        : {}),
     })
   }
   const shared: SharedBasics = {
@@ -1798,6 +1851,8 @@ function BasicsStep({ draft, patch, errors, currency }: StepProps) {
     durationMinutes: draft.durationMinutes,
     durationUnit: draft.durationUnit,
     languages: draft.languages ?? [],
+    difficulty: draft.difficulty,
+    route: draft.route ?? emptyRoute(),
   }
   return (
     <div className="flex flex-col gap-5">
@@ -1813,7 +1868,7 @@ function BasicsStep({ draft, patch, errors, currency }: StepProps) {
         }
       >
         <Input
-          placeholder={dining ? 'Sunset Tasting Menu on the Terrace' : kind === 'rental' ? 'Island Jeep Rental' : kind === 'charter' ? 'Private Sportfishing Charter' : kind === 'lesson' ? 'Beginner Surf Lesson' : kind === 'pass' ? 'Beach Club Day Pass' : 'Molokini Crater Dawn Patrol'}
+          placeholder={dining ? 'Sunset Tasting Menu on the Terrace' : kind === 'rental' ? 'Island Jeep Rental' : kind === 'charter' ? 'Private Sportfishing Charter' : kind === 'lesson' ? 'Beginner Surf Lesson' : kind === 'pass' ? 'Beach Club Day Pass' : kind === 'activity' ? 'Upcountry Horseback Ride' : 'Molokini Crater Dawn Patrol'}
           value={draft.name}
           onChange={(event) => patch({ name: event.target.value })}
         />
@@ -1968,6 +2023,11 @@ function TourBasicsFields({ draft, patch, errors }: StepProps) {
         <p className="text-[0.8125rem] font-medium">Guided in</p>
         <p className="mt-0.5 mb-2 text-xs text-muted">Shown on the listing, so guests know they will follow along.</p>
         <LanguagePicker value={draft.languages ?? []} onChange={(languages) => patch({ languages })} />
+      </div>
+
+      <div>
+        <p className="mb-2 text-[0.8125rem] font-medium">Distance or track</p>
+        <RouteFields value={draft.route ?? emptyRoute()} onChange={(route) => patch({ route })} />
       </div>
     </div>
   )

@@ -16,6 +16,7 @@ import {
   Expand,
   Info,
   Languages,
+  Route as RouteIcon,
   MapPin,
   Navigation,
   ShieldCheck,
@@ -34,7 +35,7 @@ import {
 } from '@/lib/utils'
 import type { Activity, DifficultyLevel, Location, Tenant } from '@/types'
 import { locationAddress } from '@/lib/locations'
-import { kindBadge, kindChipLabel, kindNote, rentalCategoryMeta } from '@/lib/activity-kinds'
+import { kindBadge, kindChipLabel, kindNote, rentalCategoryMeta, routeLabel } from '@/lib/activity-kinds'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
@@ -307,7 +308,9 @@ export function ActivityDetailView({
             </span>
             <Fact icon={Clock}>{kindChipLabel(activity)}</Fact>
             <Fact icon={Users}>
-              {activity.kind === 'rental'
+              {activity.kind === 'activity'
+                ? `${activity.maxCapacity} per time slot`
+                : activity.kind === 'rental'
                 ? `${activity.rental?.seatsPerUnit ?? 1} per ${rentalCategoryMeta(activity.rental?.category).unit} · ${activity.rental?.units ?? activity.maxCapacity} in the fleet`
                 : activity.kind === 'lesson'
                   ? `${activity.lesson?.ratio ?? 4} students per instructor`
@@ -315,6 +318,7 @@ export function ActivityDetailView({
                     ? `Whole group, up to ${activity.charter?.maxGuests ?? activity.maxCapacity}`
                     : `Up to ${activity.maxCapacity} guests`}
             </Fact>
+            {activity.route ? <Fact icon={RouteIcon}>{routeLabel(activity.route)}{activity.route.elevationM ? ` · ${activity.route.elevationM} m climb` : ''}</Fact> : null}
             <Fact icon={Languages}>{languages.join(', ')}</Fact>
             <Fact icon={CalendarCheck}>
               Free cancellation · {activity.cancellationPolicy.freeCancellationHours}h

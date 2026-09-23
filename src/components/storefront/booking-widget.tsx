@@ -20,6 +20,8 @@ import {
   Sparkles,
   Ticket,
   Users,
+  Zap,
+  Route as RouteIcon,
 } from 'lucide-react'
 
 import {
@@ -36,7 +38,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { CHARTER_VESSELS, FUEL_LABEL, LESSON_LEVELS, LICENCE_LABEL, isDayRental, partyLabel, rentalCategoryMeta } from '@/lib/activity-kinds'
+import { CHARTER_VESSELS, FUEL_LABEL, LESSON_LEVELS, LICENCE_LABEL, isDayRental, partyLabel, rentalCategoryMeta, routeLabel } from '@/lib/activity-kinds'
 import { applyRules } from '@/lib/pricing'
 import { usePricing } from '@/hooks/use-pricing'
 import { IconButton } from '@/components/ui/icon-button'
@@ -622,7 +624,36 @@ export function BookingWidget({
   }
 
   let kindNote: React.ReactNode = null
-  if (kind === 'lesson' && activity.lesson) {
+  if (kind === 'activity') {
+    const limits = [
+      activity.minAge > 0 ? `Ages ${activity.minAge}+` : null,
+      activity.ride?.minHeightCm ? `at least ${activity.ride.minHeightCm} cm tall` : null,
+      activity.ride?.maxWeightKg ? `up to ${activity.ride.maxWeightKg} kg` : null,
+    ].filter(Boolean)
+    kindNote = (
+      <div className="flex items-start gap-3 rounded-xl border border-line bg-surface-sunken/50 px-3.5 py-3">
+        <Zap className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+        <div className="min-w-0 text-xs text-muted">
+          <p className="text-sm font-medium text-foreground">{formatDurationShort(activity.durationMinutes)} per slot · arrive 15 minutes early</p>
+          {limits.length > 0 ? <p className="mt-1">Every rider: {limits.join(', ')}.</p> : null}
+          {activity.route ? <p className="mt-1">{routeLabel(activity.route)}{activity.route.elevationM ? ` · ${activity.route.elevationM} m climb` : ''}</p> : null}
+        </div>
+      </div>
+    )
+  } else if (kind === 'trip' && activity.route) {
+    kindNote = (
+      <div className="flex items-start gap-3 rounded-xl border border-line bg-surface-sunken/50 px-3.5 py-3">
+        <RouteIcon className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+        <p className="text-sm font-medium text-foreground">
+          {routeLabel(activity.route)}
+          {activity.route.elevationM ? <span className="block text-xs font-normal text-muted">{activity.route.elevationM} m climb</span> : null}
+        </p>
+      </div>
+    )
+  }
+  if (kindNote) {
+    /* set above */
+  } else if (kind === 'lesson' && activity.lesson) {
     const { sessions, ratio, level, certification } = activity.lesson
     kindNote = (
       <div className="flex items-start gap-3 rounded-xl border border-line bg-surface-sunken/50 px-3.5 py-3">
@@ -774,7 +805,7 @@ export function BookingWidget({
                 currency={currency}
                 selected={entry.dateKey === dateKey}
                 onSelect={() => setDateKey(entry.dateKey)}
-                emptyLabel={kind === 'trip' ? 'No trips' : kind === 'lesson' ? 'No class' : 'Closed'}
+                emptyLabel={kind === 'trip' ? 'No trips' : kind === 'lesson' ? 'No class' : kind === 'activity' ? 'No slots' : 'Closed'}
               />
             ))}
           </div>
@@ -787,11 +818,11 @@ export function BookingWidget({
         <div>
           <div className="flex items-baseline justify-between gap-3">
             <h3 className="text-[0.8125rem] font-semibold tracking-tight text-foreground">
-              {stepOf('time')} · {kind === 'rental' ? 'Choose a start time' : activity.format === 'open' ? 'Choose an arrival time' : 'Choose a time'}
+              {stepOf('time')} · {kind === 'activity' ? 'Choose a time slot' : kind === 'rental' ? 'Choose a start time' : activity.format === 'open' ? 'Choose an arrival time' : 'Choose a time'}
             </h3>
             {day && day.slots.length > 0 ? (
               <span className="text-xs text-subtle">
-                {day.slots.length} {pluralize(day.slots.length, kind === 'rental' ? 'start time' : kind === 'lesson' ? 'class' : kind === 'charter' ? 'charter' : activity.format === 'open' ? 'arrival slot' : activity.format === 'dates' ? 'time' : 'departure')}
+                {day.slots.length} {pluralize(day.slots.length, kind === 'activity' ? 'time slot' : kind === 'rental' ? 'start time' : kind === 'lesson' ? 'class' : kind === 'charter' ? 'charter' : activity.format === 'open' ? 'arrival slot' : activity.format === 'dates' ? 'time' : 'departure')}
               </span>
             ) : null}
           </div>
@@ -803,7 +834,7 @@ export function BookingWidget({
                   key={entry.departureId}
                   slot={entry}
                   wholeGroup={kind === 'charter'}
-                  noun={kind === 'rental' ? rentalMeta.units : kind === 'lesson' ? 'places' : 'seats'}
+                  noun={kind === 'rental' ? rentalMeta.units : kind === 'lesson' || kind === 'activity' ? 'places' : 'seats'}
                   selected={entry.departureId === departureId}
                   onSelect={() => setDepartureId(entry.departureId)}
                 />
@@ -832,7 +863,7 @@ export function BookingWidget({
                   seatsLeft <= 4 ? 'text-warning' : 'text-subtle',
                 )}
               >
-                {seatsLeft} {pluralize(seatsLeft, 'seat')} left
+                {seatsLeft} {pluralize(seatsLeft, kind === 'activity' || kind === 'lesson' ? 'place' : 'seat')} left
               </span>
             ) : null}
           </div>
@@ -915,7 +946,7 @@ export function BookingWidget({
                 className="mt-2 flex items-center gap-2 overflow-hidden text-xs font-medium text-danger"
               >
                 <CircleAlert className="size-3.5 shrink-0" aria-hidden="true" />
-                Only {seatsLeft} {pluralize(seatsLeft, 'seat')} left on this departure.
+                Only {seatsLeft} {pluralize(seatsLeft, kind === 'activity' || kind === 'lesson' ? 'place' : 'seat')} left {kind === 'activity' ? 'in this time slot' : 'on this departure'}.
               </motion.p>
             ) : null}
           </AnimatePresence>
@@ -1298,4 +1329,12 @@ function AnimatedTotal({
       </AnimatePresence>
     </span>
   )
+}
+
+/** "90 min", "2h", "2h 30m". */
+function formatDurationShort(minutes: number) {
+  if (minutes < 60) return `${minutes} min`
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return m ? `${h}h ${m}m` : `${h}h`
 }

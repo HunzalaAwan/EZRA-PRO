@@ -23,6 +23,8 @@ import { presetQuestion } from '@/lib/guest-requirements'
 import type {
   CharterConfig,
   RentalConfig,
+  RideConfig,
+  RouteInfo,
   Activity,
   ActivityFeedItem,
   ActivityFormat,
@@ -1451,6 +1453,8 @@ interface ActivitySpec {
   lesson?: { level: 'all' | 'beginner' | 'intermediate' | 'advanced'; sessions: number; ratio: number; certification?: string; equipmentIncluded?: boolean }
   /** Languages the guide or instructor speaks. */
   languages?: string[]
+  ride?: RideConfig
+  route?: RouteInfo
   pass?: { validDays: number; reentry: boolean }
   slug: string
   name: string
@@ -1497,6 +1501,40 @@ interface ActivitySpec {
 }
 
 const BLUE_HORIZON_SPECS: ActivitySpec[] = [
+  {
+    slug: 'upcountry-horseback-ride',
+    kind: 'activity',
+    ride: { minHeightCm: 120, maxWeightKg: 110 },
+    route: { distance: 6.5, unit: 'km', track: 'Ranch loop through the eucalyptus', elevationM: 180 },
+    name: 'Upcountry Horseback Ride',
+    tagline: 'Ninety minutes on a ranch horse above the clouds, ocean views both ways.',
+    description:
+      'Ride a calm ranch horse along the eucalyptus loop on the slopes above Lahaina, with a wrangler at the front and one at the back. No experience needed: you get a helmet, a short lesson in the corral and a horse matched to you. Halfway round, the trail opens out on a ridge with the ocean on both sides of the island.',
+    highlights: ['Calm ranch horses matched to every rider', '6.5 km loop with a ridge-top view of both coasts', 'Two wranglers on every ride', 'No experience needed'],
+    included: ['Horse and tack', 'Helmet', 'Corral lesson', 'Two wranglers', 'Water'],
+    excluded: ['Transport to the ranch', 'Photos'],
+    requirements: ['Riders 8 and over, at least 120 cm tall', 'Up to 110 kg per rider', 'Closed-toe shoes and long trousers'],
+    meetingPoint: 'Blue Horizon ranch gate, Honoapiilani Hwy mile 22 — check in at the tack barn 15 minutes early.',
+    difficulty: 'easy',
+    durationMinutes: 90,
+    minAge: 8,
+    maxCapacity: 8,
+    tiers: [
+      ['Rider', 12900, 1, 8, 'Ages 13 and over'],
+      ['Young rider', 9900, 0, 6, 'Ages 8 to 12, with an adult'],
+    ],
+    addOns: [['Ride photos', 2900, 'A wrangler takes photos on the ridge.', 1, 'Camera']],
+    photos: ['photo-1553284965-83fd3e82fa5a', 'photo-1506744038136-46273834b3fb', 'photo-1507525428034-b723cf961d3e'],
+    colorKey: 'sunset',
+    rating: 4.9,
+    reviewCount: 207,
+    resources: [],
+    format: 'open',
+    times: ['08:00', '09:30', '11:00', '12:30', '14:00', '15:30'],
+    locations: [{ location: 'lahaina' }],
+    popularity: 0.5,
+    freeCancelHours: 24,
+  },
   {
     slug: 'island-jeep-rental',
     kind: 'rental',
@@ -1983,6 +2021,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
   },
   {
     slug: 'jet-ski-safari',
+    route: { distance: 14, unit: 'km', track: 'Kaanapali coast to Black Rock' },
     name: 'Jet Ski Safari',
     tagline: 'Thirty minutes of throttle down the Kaanapali coast, guide out front.',
     description:
@@ -2420,6 +2459,8 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
   },
   {
     slug: 'west-maui-parasail-flight',
+    kind: 'activity',
+    ride: { maxWeightKg: 136 },
     name: 'West Maui Parasail Flight',
     tagline: 'Eight hundred feet up, feet dry, the whole island in one frame.',
     description:
@@ -3425,6 +3466,8 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
         })()
       : {}),
     ...(spec.languages ? { languages: spec.languages } : {}),
+    ...(spec.ride ? { ride: spec.ride } : {}),
+    ...(spec.route ? { route: spec.route } : {}),
     ...(spec.lesson ? { lesson: { ...spec.lesson } } : {}),
     ...(spec.pass ? { pass: { ...spec.pass } } : {}),
     difficulty: spec.difficulty,

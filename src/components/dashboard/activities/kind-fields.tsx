@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Anchor, Bike, Car, GraduationCap, KeyRound, Package, Route, Ship, Ticket, type LucideIcon } from 'lucide-react'
+import { Anchor, Bike, Car, GraduationCap, KeyRound, Package, Route, Ship, Ticket, Zap, type LucideIcon } from 'lucide-react'
 
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -21,7 +21,7 @@ import {
   rentalCategoryMeta,
 } from '@/lib/activity-kinds'
 import { cn, formatDuration } from '@/lib/utils'
-import type { ActivityKind, CharterConfig, LessonConfig, RentalCategory, RentalConfig } from '@/types'
+import type { ActivityKind, CharterConfig, DifficultyLevel, LessonConfig, RentalCategory, RentalConfig } from '@/types'
 
 import { DurationField, type DurationUnit } from './duration-field'
 import type { DraftTier } from './pricing-tier-editor'
@@ -35,6 +35,7 @@ import type { DraftTier } from './pricing-tier-editor'
 
 export const KIND_ICONS: Record<ActivityKind, LucideIcon> = {
   trip: Route,
+  activity: Zap,
   charter: Anchor,
   rental: KeyRound,
   lesson: GraduationCap,
@@ -75,6 +76,7 @@ export interface DraftKindSettings {
   }
   lesson: { level: LessonConfig['level']; sessions: number; ratio: number; certification: string; equipmentIncluded: boolean }
   pass: { validDays: number; reentry: boolean }
+  activity: { minHeightCm: number; maxWeightKg: number }
 }
 
 export function defaultKindSettings(): DraftKindSettings {
@@ -98,6 +100,7 @@ export function defaultKindSettings(): DraftKindSettings {
     charter: { maxGuests: 6, requestToBook: false, noticeHours: 24, vessel: 'boat', crewed: true, minutes: {} },
     lesson: { level: 'beginner', sessions: 1, ratio: 4, certification: '', equipmentIncluded: true },
     pass: { validDays: 1, reentry: true },
+    activity: { minHeightCm: 0, maxWeightKg: 0 },
   }
 }
 
@@ -109,8 +112,20 @@ export function normalizeKindSettings(settings: Partial<DraftKindSettings> | und
     charter: { ...base.charter, ...settings?.charter },
     lesson: { ...base.lesson, ...settings?.lesson },
     pass: { ...base.pass, ...settings?.pass },
+    activity: { ...base.activity, ...settings?.activity },
   }
 }
+
+/** The distance or track, typed in the wizard. Off means the listing shows none. */
+export interface DraftRoute {
+  enabled: boolean
+  distance: number
+  unit: 'km' | 'mi'
+  track: string
+  elevationM: number
+}
+
+export const emptyRoute = (): DraftRoute => ({ enabled: false, distance: 0, unit: 'km', track: '', elevationM: 0 })
 
 /** The numbers every activity carries, edited from inside a kind's card. */
 export interface SharedBasics {
@@ -120,6 +135,8 @@ export interface SharedBasics {
   durationMinutes: number
   durationUnit: DurationUnit
   languages: string[]
+  difficulty: DifficultyLevel
+  route: DraftRoute
 }
 
 export function KindPicker({ value, onChange }: { value: ActivityKind; onChange: (kind: ActivityKind) => void }) {
@@ -291,6 +308,61 @@ const ageField = (shared: SharedBasics, onShared: (patch: Partial<SharedBasics>)
   </Field>
 )
 
+const INTENSITY: { value: DifficultyLevel; label: string }[] = [
+  { value: 'easy', label: 'Easy · anyone can do it' },
+  { value: 'moderate', label: 'Moderate · some fitness or balance' },
+  { value: 'challenging', label: 'Challenging · fit and confident' },
+  { value: 'extreme', label: 'Extreme · experience or a briefing needed' },
+]
+
+/** Optional distance or track, for hikes, rides, runs and routes. */
+export function RouteFields({ value, onChange }: { value: DraftRoute; onChange: (value: DraftRoute) => void }) {
+  const set = (patch: Partial<DraftRoute>) => onChange({ ...value, ...patch })
+  return (
+    <div className="flex flex-col gap-3">
+      <Toggle
+        label="Has a distance or track"
+        hint="For a hiking trail, a ride route or a circuit. Shown on the listing."
+        checked={value.enabled}
+        onChange={(enabled) => set({ enabled })}
+      />
+      {value.enabled ? (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.6fr)]">
+          <Field label="Distance">
+            <div className="flex gap-2">
+              <Input
+                type="number"
+                min={0}
+                step={0.5}
+                value={value.distance || ''}
+                placeholder="6.5"
+                aria-label="Distance"
+                className="flex-1"
+                onChange={(e) => set({ distance: Math.max(0, Number(e.target.value) || 0) })}
+              />
+              <Select value={value.unit} onValueChange={(unit) => set({ unit: unit as DraftRoute['unit'] })}>
+                <SelectTrigger className="w-20 shrink-0" aria-label="Distance unit">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="km">km</SelectItem>
+                  <SelectItem value="mi">mi</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </Field>
+          <Field label="Elevation gain" optional>
+            {(control) => <Input {...control} type="number" min={0} step={10} suffix="m" value={value.elevationM || ''} placeholder="0" onChange={(e) => set({ elevationM: num(e.target.value) })} />}
+          </Field>
+          <Field label="Track or route name" optional>
+            {(control) => <Input {...control} placeholder="Ranch loop, Red trail, Coast to Black Rock" value={value.track} onChange={(e) => set({ track: e.target.value.slice(0, 60) })} />}
+          </Field>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 /* ---------- the card ---------- */
 
 export function KindFields({
@@ -324,6 +396,61 @@ export function KindFields({
       {children}
     </div>
   )
+
+  /* ---------- activity: a time slot, no departure ---------- */
+  if (kind === 'activity') {
+    const ride = settings.activity
+    return shell(
+      <>
+        <Section title="Each time slot" hint="Guests pick a slot and turn up. How often slots start is set in the Schedule step.">
+          <DurationField
+            label="Each slot lasts"
+            error={errors.durationMinutes}
+            minutes={shared.durationMinutes}
+            unit={shared.durationUnit === 'days' ? 'minutes' : shared.durationUnit}
+            onChange={(durationMinutes, durationUnit) => onShared({ durationMinutes, durationUnit })}
+            presets={[15, 30, 45, 60, 90, 120]}
+            allowFlexible={false}
+          />
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label="Riders per slot" required error={errors.maxCapacity} description="Everyone who can go at once.">
+              {(control) => <Input {...control} type="number" min={1} value={shared.maxCapacity || ''} placeholder="8" onChange={(e) => onShared({ maxCapacity: num(e.target.value) })} />}
+            </Field>
+            <Field label="Intensity">
+              <Select value={shared.difficulty} onValueChange={(value) => onShared({ difficulty: value as DifficultyLevel })}>
+                <SelectTrigger aria-label="Intensity">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {INTENSITY.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            {ageField(shared, onShared, errors)}
+          </div>
+        </Section>
+
+        <Section title="Rider limits" hint="Optional. Each limit adds a question for every rider at checkout, and stops the booking if it is not met.">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Minimum height" description="0 for no limit.">
+              {(control) => <Input {...control} type="number" min={0} suffix="cm" value={ride.minHeightCm} onChange={(e) => set('activity', { minHeightCm: num(e.target.value) })} />}
+            </Field>
+            <Field label="Maximum weight" description="0 for no limit.">
+              {(control) => <Input {...control} type="number" min={0} suffix="kg" value={ride.maxWeightKg} onChange={(e) => set('activity', { maxWeightKg: num(e.target.value) })} />}
+            </Field>
+          </div>
+        </Section>
+
+        <Section title="Distance or track">
+          <RouteFields value={shared.route} onChange={(route) => onShared({ route })} />
+        </Section>
+      </>,
+    )
+  }
 
   /* ---------- rental ---------- */
   if (kind === 'rental') {

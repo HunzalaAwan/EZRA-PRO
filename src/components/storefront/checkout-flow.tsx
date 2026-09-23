@@ -303,7 +303,7 @@ export function CheckoutFlow({
 
   /* ---------- guests and waiver ---------- */
 
-  const questions = React.useMemo(() => [...(activity.guestQuestions ?? []), ...licenceQuestions(activity)], [activity])
+  const questions = React.useMemo(() => [...(activity.guestQuestions ?? []), ...licenceQuestions(activity), ...riderQuestions(activity)], [activity])
   const [travellers, setTravellers] = React.useState<TravellerState[]>(() => makeTravellers((activity.kind ?? 'trip') === 'rental' ? 1 : quote.party))
   const [bookingAnswers, setBookingAnswers] = React.useState<Record<string, string>>({})
   const [waiver, setWaiver] = React.useState<WaiverState>(EMPTY_WAIVER)
@@ -1459,4 +1459,37 @@ function licenceQuestions(activity: Activity): GuestQuestion[] {
       limitMessage: activity.minAge ? `${driver ? 'Drivers' : 'Operators'} must be ${activity.minAge} or over.` : undefined,
     },
   ]
+}
+
+/** An activity with a height or weight limit asks every rider, and stops the booking outside it. */
+function riderQuestions(activity: Activity): GuestQuestion[] {
+  if ((activity.kind ?? 'trip') !== 'activity' || !activity.ride) return []
+  const out: GuestQuestion[] = []
+  const known = new Set((activity.guestQuestions ?? []).map((question) => question.preset ?? question.id))
+  if (activity.ride.minHeightCm && !known.has('height')) {
+    out.push({
+      id: 'q_rider_height',
+      label: 'Height',
+      kind: 'number',
+      scope: 'guest',
+      required: true,
+      unit: 'cm',
+      min: activity.ride.minHeightCm,
+      limitMessage: `Riders must be at least ${activity.ride.minHeightCm} cm tall.`,
+    })
+  }
+  if (activity.ride.maxWeightKg && !known.has('weight')) {
+    out.push({
+      id: 'q_rider_weight',
+      label: 'Weight',
+      kind: 'number',
+      scope: 'guest',
+      required: true,
+      unit: 'kg',
+      max: activity.ride.maxWeightKg,
+      limitMessage: `The limit is ${activity.ride.maxWeightKg} kg per rider.`,
+      help: 'Only the crew sees this. It keeps the harness and the horse safe.',
+    })
+  }
+  return out
 }

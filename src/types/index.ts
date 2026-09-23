@@ -339,8 +339,29 @@ export interface CharterRequest {
   paidAt?: string
 }
 
-/** What is being sold: seats on a trip, a private charter, a rental, a lesson or a pass. */
-export type ActivityKind = 'trip' | 'charter' | 'rental' | 'lesson' | 'pass'
+/**
+ * What is being sold: seats on a trip, a slot on an activity (a ride, a
+ * zipline, a flight), a private charter, a rental, a lesson or a pass.
+ */
+export type ActivityKind = 'trip' | 'activity' | 'charter' | 'rental' | 'lesson' | 'pass'
+
+/** Activities: guests book a time slot, no departure. Limits are checked per rider. */
+export interface RideConfig {
+  /** Riders shorter than this cannot ride. 0 or absent = no limit. */
+  minHeightCm?: number
+  /** Riders heavier than this cannot ride. 0 or absent = no limit. */
+  maxWeightKg?: number
+}
+
+/** The distance or track a trip or activity covers. Optional. */
+export interface RouteInfo {
+  distance: number
+  unit: 'km' | 'mi'
+  /** "Kaanapali coast to Black Rock", "Red trail loop". */
+  track?: string
+  /** Metres climbed, for hikes and rides. */
+  elevationM?: number
+}
 
 /** What is rented: decides the requirements a rental asks for. */
 export type RentalCategory = 'watercraft' | 'vehicle' | 'bike' | 'gear'
@@ -436,6 +457,9 @@ export interface Activity {
   charter?: CharterConfig
   lesson?: LessonConfig
   pass?: PassConfig
+  ride?: RideConfig
+  /** Distance or track, when the trip or activity has one. */
+  route?: RouteInfo
   /** Asked at checkout; answers show on the booking, the manifest and the gear list. */
   guestQuestions?: GuestQuestion[]
   /** The waiver every guest signs at checkout. */

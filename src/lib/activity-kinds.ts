@@ -1,4 +1,4 @@
-import type { Activity, ActivityFormat, ActivityKind, CharterConfig, RentalCategory, RentalConfig } from '@/types'
+import type { Activity, ActivityFormat, ActivityKind, CharterConfig, RentalCategory, RentalConfig, RouteInfo } from '@/types'
 import { formatDuration } from '@/lib/utils'
 
 /* ==========================================================================
@@ -15,7 +15,7 @@ export interface ActivityKindMeta {
   /** One line for the wizard's picker. */
   hint: string
   examples: string
-  icon: 'Route' | 'Anchor' | 'KeyRound' | 'GraduationCap' | 'Ticket'
+  icon: 'Route' | 'Zap' | 'Anchor' | 'KeyRound' | 'GraduationCap' | 'Ticket'
   /** What a single bookable instance is called. */
   unit: string
   units: string
@@ -25,7 +25,7 @@ export interface ActivityKindMeta {
   defaultFormat: ActivityFormat
 }
 
-export const ACTIVITY_KINDS: ActivityKind[] = ['trip', 'charter', 'rental', 'lesson', 'pass']
+export const ACTIVITY_KINDS: ActivityKind[] = ['trip', 'activity', 'charter', 'rental', 'lesson', 'pass']
 
 export const ACTIVITY_KIND_META: Record<ActivityKind, ActivityKindMeta> = {
   trip: {
@@ -38,6 +38,17 @@ export const ACTIVITY_KIND_META: Record<ActivityKind, ActivityKindMeta> = {
     units: 'departures',
     booksBy: 'Seats per departure',
     defaultFormat: 'departures',
+  },
+  activity: {
+    label: 'Activity',
+    short: 'Activity',
+    hint: 'Guests book a time slot and turn up. No departure.',
+    examples: 'Horse rides, ATV rides, ziplines, parasailing, jet ski rides',
+    icon: 'Zap',
+    unit: 'time slot',
+    units: 'time slots',
+    booksBy: 'Places in a time slot',
+    defaultFormat: 'open',
   },
   charter: {
     label: 'Private charter',
@@ -175,6 +186,8 @@ export function kindChipLabel(activity: Pick<Activity, 'kind' | 'durationMinutes
       const shortest = Math.min(...(activity.rental?.durations.map((entry) => entry.minutes) ?? [activity.durationMinutes]))
       return `Rental · from ${formatDuration(shortest)}`
     }
+    case 'activity':
+      return `${formatDuration(activity.durationMinutes)} ride`
     case 'charter':
       return `Private · up to ${activity.charter?.maxGuests ?? activity.maxCapacity}`
     case 'lesson': {
@@ -202,6 +215,8 @@ export function kindBadge(activity: Pick<Activity, 'kind' | 'difficulty' | 'rent
   switch (activity.kind ?? 'trip') {
     case 'rental':
       return `${rentalCategoryMeta(activity.rental?.category).label} rental`
+    case 'activity':
+      return DIFFICULTY_WORD[activity.difficulty]
     case 'charter':
       return 'Private charter'
     case 'lesson':
@@ -214,9 +229,11 @@ export function kindBadge(activity: Pick<Activity, 'kind' | 'difficulty' | 'rent
 }
 
 /** Two or three short facts for a listing card, in the kind's own terms. */
-export function kindCardFacts(activity: Pick<Activity, 'kind' | 'difficulty' | 'maxCapacity' | 'minAge' | 'rental' | 'charter' | 'lesson' | 'pass'>): string[] {
+export function kindCardFacts(activity: Pick<Activity, 'kind' | 'difficulty' | 'maxCapacity' | 'minAge' | 'rental' | 'charter' | 'lesson' | 'pass' | 'route'>): string[] {
   const age = activity.minAge > 0 ? `Ages ${activity.minAge}+` : 'All ages'
   switch (activity.kind ?? 'trip') {
+    case 'activity':
+      return [`${activity.maxCapacity} per slot`, activity.route ? routeLabel(activity.route) : DIFFICULTY_WORD[activity.difficulty], age]
     case 'rental': {
       const meta = rentalCategoryMeta(activity.rental?.category)
       const licence = activity.rental?.licence && activity.rental.licence !== 'none' ? `Licence, ${activity.minAge}+` : age
@@ -229,14 +246,21 @@ export function kindCardFacts(activity: Pick<Activity, 'kind' | 'difficulty' | '
     case 'pass':
       return [activity.pass?.reentry ? 'Re-entry allowed' : 'Single entry', age]
     default:
-      return [`Up to ${activity.maxCapacity}`, DIFFICULTY_WORD[activity.difficulty], age]
+      return [`Up to ${activity.maxCapacity}`, activity.route ? routeLabel(activity.route) : DIFFICULTY_WORD[activity.difficulty], age]
   }
 }
 
 /** The "good to know" line on the detail page for kinds that have no difficulty. */
-export function kindNote(activity: Pick<Activity, 'kind' | 'minAge' | 'rental' | 'charter' | 'lesson' | 'pass'>): { title: string; body: string } | null {
+export function kindNote(activity: Pick<Activity, 'kind' | 'minAge' | 'rental' | 'charter' | 'lesson' | 'pass' | 'ride' | 'difficulty'>): { title: string; body: string } | null {
   const age = activity.minAge > 0 ? `Minimum age ${activity.minAge}.` : 'All ages welcome.'
   switch (activity.kind ?? 'trip') {
+    case 'activity': {
+      const limits = [
+        activity.ride?.minHeightCm ? `Riders at least ${activity.ride.minHeightCm} cm tall.` : null,
+        activity.ride?.maxWeightKg ? `Up to ${activity.ride.maxWeightKg} kg per rider.` : null,
+      ].filter(Boolean)
+      return { title: `${DIFFICULTY_WORD[activity.difficulty]}.`, body: [age, ...limits, 'Arrive 15 minutes before your time slot.'].join(' ') }
+    }
     case 'rental': {
       const r = activity.rental
       const meta = rentalCategoryMeta(r?.category)
@@ -264,4 +288,10 @@ export function kindNote(activity: Pick<Activity, 'kind' | 'minAge' | 'rental' |
     default:
       return null
   }
+}
+
+/** "6.5 km · Ranch loop", "12 mi". */
+export function routeLabel(route: RouteInfo): string {
+  const distance = `${Math.round(route.distance * 10) / 10} ${route.unit}`
+  return route.track ? `${distance} · ${route.track}` : distance
 }
