@@ -39,8 +39,9 @@ export function blankTier(label = '', price = 0): DraftTier {
     label,
     price,
     compareAtPrice: null,
-    minQuantity: 1,
-    maxQuantity: 8,
+    // How many can book is the seats set in Basics; tiers carry no limits of their own.
+    minQuantity: 0,
+    maxQuantity: 99,
     description: '',
     countsTowardCapacity: true,
   }
@@ -229,7 +230,7 @@ export function PricingTierEditor({
                 </p>
               ) : null}
 
-              <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+              <div className="mt-3 grid grid-cols-2 gap-2.5">
                 <Field label="Price" labelSize="sm">
                   <MoneyInput
                     value={tier.price}
@@ -250,20 +251,6 @@ export function PricingTierEditor({
                     allowEmpty
                     placeholder="Optional"
                     ariaLabel={`Compare-at price for ${tier.label || `tier ${index + 1}`}`}
-                  />
-                </Field>
-                <Field label="Min qty" labelSize="sm">
-                  <NumberField
-                    value={tier.minQuantity}
-                    onValueChange={(minQuantity) => update(index, { minQuantity })}
-                    ariaLabel={`Minimum quantity for ${tier.label || `tier ${index + 1}`}`}
-                  />
-                </Field>
-                <Field label="Max qty" labelSize="sm">
-                  <NumberField
-                    value={tier.maxQuantity}
-                    onValueChange={(maxQuantity) => update(index, { maxQuantity })}
-                    ariaLabel={`Maximum quantity for ${tier.label || `tier ${index + 1}`}`}
                   />
                 </Field>
               </div>

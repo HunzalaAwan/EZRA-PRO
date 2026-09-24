@@ -916,7 +916,7 @@ export function RentalRatesEditor({
   const setRate = (tier: DraftTier, patch: Partial<{ hour: number; day: number }>) =>
     onSettings({ ...settings, rental: { ...rental, rates: { ...rental.rates, [tier.id]: { ...rateOf(tier), ...patch } } } })
   const money = (value: string) => Math.max(0, Math.round(Number(value) * 100) || 0)
-  const cols = cn('grid gap-3 sm:items-center', hourly && daily ? 'sm:grid-cols-[minmax(0,1.6fr)_8rem_8rem_7rem_2rem] sm:items-end' : 'sm:grid-cols-[minmax(0,1.6fr)_9rem_7rem_2rem] sm:items-end')
+  const cols = cn('grid gap-3 sm:items-center', hourly && daily ? 'sm:grid-cols-[minmax(0,1.6fr)_9rem_9rem_2rem] sm:items-end' : 'sm:grid-cols-[minmax(0,1.6fr)_10rem_2rem] sm:items-end')
 
   return (
     <div className="flex flex-col gap-3">
@@ -938,9 +938,6 @@ export function RentalRatesEditor({
                   {(control) => <Input {...control} type="number" min={0} leftIcon={<span className="text-sm font-medium">{currencySymbol}</span>} value={rate.day / 100 || ''} onChange={(e) => setRate(tier, { day: money(e.target.value) })} />}
                 </Field>
               ) : null}
-              <Field label="Most per booking" labelSize="sm">
-                {(control) => <Input {...control} type="number" min={1} value={tier.maxQuantity} onChange={(e) => onTiers(tiers.map((entry) => (entry.id === tier.id ? { ...entry, maxQuantity: num(e.target.value, 1) } : entry)))} />}
-              </Field>
               <button
                 type="button"
                 aria-label={`Remove ${tier.label || 'this item'}`}
