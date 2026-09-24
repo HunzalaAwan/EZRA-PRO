@@ -254,6 +254,8 @@ export interface ScheduleEditorProps {
   showMode?: boolean
   /** Set by the activity's own settings; the editor shows it instead of a slider. */
   seats?: ScheduleSeats
+  /** A rental: opening hours read as pick-up and return, start times only for hourly. */
+  rental?: { hourly: boolean; daily: boolean }
   className?: string
 }
 
@@ -292,7 +294,7 @@ export function ModePicker({
   )
 }
 
-export function ScheduleEditor({ schedule: given, onChange, nowIso, errors, showMode = true, seats, className }: ScheduleEditorProps) {
+export function ScheduleEditor({ schedule: given, onChange, nowIso, errors, showMode = true, seats, rental, className }: ScheduleEditorProps) {
   const schedule = seats ? { ...given, capacity: seats.capacity } : given
   const set = (patch: Partial<DraftSchedule>) => onChange({ ...schedule, ...patch })
   const unlimited = schedule.capacity === 0
@@ -324,7 +326,7 @@ export function ScheduleEditor({ schedule: given, onChange, nowIso, errors, show
       ) : null}
 
       {schedule.mode === 'times' ? <StartTimes schedule={schedule} onChange={onChange} error={errors?.startTimes} /> : null}
-      {schedule.mode === 'hours' ? <OpenHours schedule={schedule} set={set} errors={errors} /> : null}
+      {schedule.mode === 'hours' ? <OpenHours schedule={schedule} set={set} errors={errors} rental={rental} /> : null}
       {schedule.mode === 'dates' ? <DateList schedule={schedule} set={set} error={errors?.dates} /> : null}
 
       {/* ---------- capacity + season ---------- */}
@@ -636,21 +638,24 @@ function OpenHours({
   schedule,
   set,
   errors,
+  rental,
 }: {
   schedule: DraftSchedule
   set: (patch: Partial<DraftSchedule>) => void
   errors?: Record<string, string>
+  rental?: { hourly: boolean; daily: boolean }
 }) {
   const slots = entrySlots(schedule)
   return (
     <div className="grid gap-5 sm:grid-cols-2">
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Opens" labelSize="sm" error={errors?.opensAt}>
+        <Field label={rental ? 'Pick up after' : 'Opens'} labelSize="sm" error={errors?.opensAt} description={rental ? 'The first rental can go out.' : undefined}>
           <Input type="time" size="sm" value={schedule.opensAt} onChange={(event) => set({ opensAt: event.target.value })} />
         </Field>
-        <Field label="Closes" labelSize="sm" error={errors?.closesAt}>
+        <Field label={rental ? 'Return before' : 'Closes'} labelSize="sm" error={errors?.closesAt} description={rental ? 'Everything is back by.' : undefined}>
           <Input type="time" size="sm" value={schedule.closesAt} onChange={(event) => set({ closesAt: event.target.value })} />
         </Field>
+        {rental ? null : (
         <div className="col-span-2">
           <p className="text-[0.8125rem] font-medium">Last entry before closing</p>
           <Segmented
@@ -662,11 +667,17 @@ function OpenHours({
             options={LAST_ENTRY_OPTIONS}
           />
         </div>
+        )}
       </div>
+      {rental && !rental.hourly ? (
+        <p className="self-center rounded-xl bg-surface-sunken/60 px-3.5 py-3 text-xs text-muted">
+          Day rentals go out any time after pick-up opens and come back before the return time on the last day.
+        </p>
+      ) : (
       <div>
-        <p className="text-[0.8125rem] font-medium">Arrival</p>
+        <p className="text-[0.8125rem] font-medium">{rental ? 'Hourly start times' : 'Arrival'}</p>
         <p className="mt-0.5 text-xs text-muted">
-          Any time suits a park or a rental. Slots suit anything with a briefing or a queue.
+          {rental ? 'When an hourly rental can start. The last start leaves time for the fewest hours before the return time.' : 'Any time suits a park or a rental. Slots suit anything with a briefing or a queue.'}
         </p>
         <Segmented
           className="mt-2"
@@ -678,11 +689,12 @@ function OpenHours({
         />
         {schedule.entryInterval > 0 ? (
           <p className="mt-2 text-xs text-muted">
-            {slots.length} arrival {slots.length === 1 ? 'slot' : 'slots'} a day
+            {slots.length} {rental ? 'start' : 'arrival'} {slots.length === 1 ? (rental ? 'time' : 'slot') : rental ? 'times' : 'slots'} a day
             {slots.length > 0 ? `, ${formatClock(slots[0])} to ${formatClock(slots[slots.length - 1])}` : ''}.
           </p>
         ) : null}
       </div>
+      )}
     </div>
   )
 }
@@ -773,12 +785,13 @@ export interface LocationsEditorProps {
   errors?: Record<string, string>
   /** Passed to every location's schedule; seats are the activity's, not the location's. */
   seats?: ScheduleSeats
+  rental?: { hourly: boolean; daily: boolean }
   className?: string
 }
 
 const ownRule = (schedule: DraftSchedule): DraftSchedule => ({ ...schedule, locations: [] })
 
-export function LocationsEditor({ schedule, onChange, locations, nowIso, errors, seats, className }: LocationsEditorProps) {
+export function LocationsEditor({ schedule, onChange, locations, nowIso, errors, seats, rental, className }: LocationsEditorProps) {
   const picked = schedule.locations
   const multi = picked.length > 1
   const [openIds, setOpenIds] = React.useState<string[]>(() => (picked[0] ? [picked[0].locationId] : []))
@@ -926,6 +939,7 @@ export function LocationsEditor({ schedule, onChange, locations, nowIso, errors,
                       errors={siteErrors}
                       showMode={false}
                       seats={seats}
+                      rental={rental}
                     />
                   </div>
                 ) : null}

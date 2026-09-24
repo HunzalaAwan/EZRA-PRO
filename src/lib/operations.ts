@@ -90,7 +90,7 @@ export function getRentalBoard(tenantId: string, day: Date = NOW): RentalBoard {
     const config = activity.rental
     const units = config?.units ?? activity.maxCapacity
     const buffer = config?.bufferMinutes ?? 0
-    const byDay = config?.billing === 'day'
+    const byDay = config?.modes ? config.modes.length === 1 && config.modes[0] === 'day' : config?.billing === 'day'
     const meta = rentalCategoryMeta(config?.category)
     fleets.push({
       id: activity.id,
@@ -124,6 +124,10 @@ export function getRentalBoard(tenantId: string, day: Date = NOW): RentalBoard {
 
     for (const { booking, departure } of mine) {
       const pick = lengths[hashSeed(`len:${booking.id}`) % lengths.length]
+      // Hourly rentals with rates: a plausible number of hours inside the allowed range.
+      const rated = !byDay && (config?.rates?.length ?? 0) > 0 && (config?.modes ?? []).includes('hour')
+      const least = Math.max(1, config?.minHours ?? 1)
+      const hoursTaken = rated ? least + (hashSeed(`hours:${booking.id}`) % (Math.max(least, config?.maxHours ?? least) - least + 1)) : 0
       const tier = activity.priceTiers.find((entry) => entry.id === pick.tierId)
       const dayKey = departure.startsAt.slice(0, 10)
       let start: Date
@@ -139,7 +143,7 @@ export function getRentalBoard(tenantId: string, day: Date = NOW): RentalBoard {
         if (toDateKey(end) < todayKey) continue
       } else {
         start = new Date(departure.startsAt)
-        end = new Date(start.getTime() + pick.minutes * 60_000)
+        end = new Date(start.getTime() + (rated ? hoursTaken * 60 : pick.minutes) * 60_000)
       }
       const count = Math.max(1, Math.min(units, byDay ? Math.ceil(booking.partySize / 3) : booking.partySize))
 
@@ -172,7 +176,7 @@ export function getRentalBoard(tenantId: string, day: Date = NOW): RentalBoard {
         startsAt: isoLocal(start),
         endsAt: isoLocal(end),
         minutes: Math.round((end.getTime() - start.getTime()) / 60_000),
-        lengthLabel: byDay ? `${days} ${days === 1 ? 'day' : 'days'}` : (tier?.label ?? `${pick.minutes} min`),
+        lengthLabel: byDay ? `${days} ${days === 1 ? 'day' : 'days'}` : rated ? `${hoursTaken} ${hoursTaken === 1 ? 'hour' : 'hours'}` : (tier?.label ?? `${pick.minutes} min`),
         itemLabel: tier?.label ?? activity.name,
         days,
         status,

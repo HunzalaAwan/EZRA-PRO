@@ -159,7 +159,7 @@ export const LANGUAGES = ['English', 'Spanish', 'French', 'German', 'Italian', '
 
 /** Day rentals sell by the day; everything else by the length on each tier. */
 export const isDayRental = (activity: Pick<Activity, 'kind' | 'rental'>) =>
-  (activity.kind ?? 'trip') === 'rental' && activity.rental?.billing === 'day'
+  (activity.kind ?? 'trip') === 'rental' && (activity.rental?.modes ? activity.rental.modes.length === 1 && activity.rental.modes[0] === 'day' : activity.rental?.billing === 'day')
 
 /** "2 jet skis", "6 guests", "1 vehicle": what a booking of this kind is counted in. */
 export function partyLabel(activity: Pick<Activity, 'kind' | 'rental'>, count: number): string {
@@ -182,7 +182,10 @@ export function kindOf(activity: { kind?: ActivityKind }): ActivityKind {
 export function kindChipLabel(activity: Pick<Activity, 'kind' | 'durationMinutes' | 'maxCapacity' | 'rental' | 'charter' | 'lesson' | 'pass'>): string {
   switch (activity.kind ?? 'trip') {
     case 'rental': {
-      if (activity.rental?.billing === 'day') return 'Rental · by the day'
+      const modes = activity.rental?.modes
+      if (modes && modes.length > 1) return 'Rental · by the hour or day'
+      if (modes?.[0] === 'hour') return `Rental · from ${activity.rental?.minHours ?? 1}h`
+      if (activity.rental?.billing === 'day' || modes?.[0] === 'day') return 'Rental · by the day'
       const shortest = Math.min(...(activity.rental?.durations.map((entry) => entry.minutes) ?? [activity.durationMinutes]))
       return `Rental · from ${formatDuration(shortest)}`
     }
@@ -237,7 +240,9 @@ export function kindCardFacts(activity: Pick<Activity, 'kind' | 'difficulty' | '
     case 'rental': {
       const meta = rentalCategoryMeta(activity.rental?.category)
       const licence = activity.rental?.licence && activity.rental.licence !== 'none' ? `Licence, ${activity.minAge}+` : age
-      return [activity.rental?.billing === 'day' ? 'By the day' : 'By the hour', `${activity.rental?.seatsPerUnit ?? 1} per ${meta.unit}`, licence]
+      const modes = activity.rental?.modes
+      const how = modes && modes.length > 1 ? 'Hour or day' : modes?.[0] === 'day' || activity.rental?.billing === 'day' ? 'By the day' : 'By the hour'
+      return [how, `${activity.rental?.seatsPerUnit ?? 1} per ${meta.unit}`, licence]
     }
     case 'charter':
       return [`Up to ${activity.charter?.maxGuests ?? activity.maxCapacity} guests`, activity.charter?.crewed === false ? 'Self-skippered' : 'Crew included', age]
@@ -266,7 +271,7 @@ export function kindNote(activity: Pick<Activity, 'kind' | 'minAge' | 'rental' |
       const meta = rentalCategoryMeta(r?.category)
       const parts = [
         r?.licence && r.licence !== 'none' ? `Bring your ${LICENCE_LABEL[r.licence].toLowerCase()}; the main ${r.licence === 'driver' ? 'driver' : 'operator'} must be ${activity.minAge} or over.` : age,
-        r?.billing === 'day' && r.pickupTime && r.returnTime ? `Pick up from ${r.pickupTime}, return by ${r.returnTime} on your last day.` : null,
+        (r?.modes?.includes('day') || r?.billing === 'day') && r?.pickupTime && r?.returnTime ? `Pick up after ${r.pickupTime}, return before ${r.returnTime}.` : null,
         meta.fuel && r?.fuel ? `${FUEL_LABEL[r.fuel]}.` : null,
         meta.mileage ? (r?.kmPerDay ? `${r.kmPerDay} km a day included.` : 'Unlimited kilometres.') : null,
       ]
@@ -397,4 +402,21 @@ export function vesselName(charter: Pick<CharterConfig, 'vessel' | 'vesselLabel'
 export function crewName(charter: Pick<CharterConfig, 'vessel' | 'crewLabel'> | undefined): string {
   if (charter?.vessel === 'other') return charter.crewLabel?.trim() || 'Crew'
   return CHARTER_VESSELS.find((entry) => entry.value === charter?.vessel)?.crew ?? 'Crew'
+}
+
+export type RentalMode = 'hour' | 'day'
+
+/** How a rental is sold. Empty for an older rental whose tiers are fixed lengths. */
+export function rentalModes(activity: Pick<Activity, 'kind' | 'rental'>): RentalMode[] {
+  if ((activity.kind ?? 'trip') !== 'rental') return []
+  if (activity.rental?.modes && activity.rental.modes.length > 0) return activity.rental.modes
+  return activity.rental?.billing === 'day' ? ['day'] : []
+}
+
+/** A tier's price per hour or per day; the tier price for an older day rental. */
+export function rateFor(activity: Pick<Activity, 'rental' | 'priceTiers'>, tierId: string, mode: RentalMode): number | undefined {
+  const rate = activity.rental?.rates?.find((entry) => entry.tierId === tierId)
+  if (rate) return mode === 'hour' ? rate.hour : rate.day
+  if (mode === 'day' && activity.rental?.billing === 'day') return activity.priceTiers.find((tier) => tier.id === tierId)?.price
+  return undefined
 }

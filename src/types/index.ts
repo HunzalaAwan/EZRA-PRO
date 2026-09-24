@@ -396,6 +396,16 @@ export interface RentalConfig {
   /** Watercraft, vehicle, bike or gear. Defaults to gear. */
   category?: RentalCategory
   /**
+   * How it is sold: by the hour, by the day, or both. When set, each price
+   * tier is something to rent (a model or type) with its own rates.
+   */
+  modes?: ('hour' | 'day')[]
+  /** Hourly rentals: the fewest and most hours one booking can run. */
+  minHours?: number
+  maxHours?: number
+  /** What each tier costs per hour and per day, minor units. */
+  rates?: { tierId: string; hour?: number; day?: number }[]
+  /**
    * How it is charged. length: each price tier is a length (1 hour, half day).
    * day: guests pick a pick-up day and how many days; each tier is a model priced per day.
    */

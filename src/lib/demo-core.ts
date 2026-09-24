@@ -1465,7 +1465,7 @@ interface ActivitySpec {
   /** Scheduled trip unless said otherwise. */
   kind?: ActivityKind
   /** Rentals: units at once, buffer, deposit, and a length in minutes for each tier, in tier order. */
-  rental?: { units: number; bufferMinutes: number; damageDeposit: number; minutes: number[] } & Omit<Partial<RentalConfig>, 'units' | 'bufferMinutes' | 'damageDeposit' | 'durations'>
+  rental?: { units: number; bufferMinutes: number; damageDeposit: number; minutes: number[]; rateList?: { hour?: number; day?: number }[] } & Omit<Partial<RentalConfig>, 'units' | 'bufferMinutes' | 'damageDeposit' | 'durations' | 'rates'>
   /** Charters: optional length in minutes for each tier, in tier order. */
   charter?: { maxGuests: number; requestToBook: boolean; noticeHours: number; minutes?: number[] } & Omit<Partial<CharterConfig>, 'maxGuests' | 'requestToBook' | 'noticeHours' | 'durations'>
   lesson?: { level: 'all' | 'beginner' | 'intermediate' | 'advanced'; sessions: number; ratio: number; certification?: string; equipmentIncluded?: boolean }
@@ -1563,6 +1563,8 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
       minutes: [1440, 1440, 1440],
       category: 'vehicle',
       billing: 'day',
+      modes: ['day'],
+      rateList: [{ day: 11900 }, { day: 14900 }, { day: 17900 }],
       minDays: 1,
       maxDays: 14,
       pickupTime: '08:00',
@@ -1619,7 +1621,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
   {
     slug: 'e-bike-rental',
     kind: 'rental',
-    rental: { units: 10, bufferMinutes: 15, damageDeposit: 10000, minutes: [120, 240, 480], category: 'bike', billing: 'length', seatsPerUnit: 1, licence: 'none' },
+    rental: { units: 10, bufferMinutes: 15, damageDeposit: 10000, minutes: [120, 120], category: 'bike', billing: 'length', modes: ['hour', 'day'], minHours: 2, maxHours: 8, minDays: 1, maxDays: 5, rateList: [{ hour: 2500, day: 8900 }, { hour: 3000, day: 10500 }], seatsPerUnit: 1, licence: 'none' },
     name: 'E-Bike Rental',
     tagline: 'Pedal-assist cruisers along the Lahaina coast, helmet and lock included.',
     description:
@@ -1635,9 +1637,8 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     maxCapacity: 10,
     pricingModel: 'per_unit',
     tiers: [
-      ['2 hours', 4900, 0, 10, 'Per bike'],
-      ['Half day', 6900, 0, 10, 'Per bike, four hours'],
-      ['Full day', 8900, 0, 10, 'Per bike, eight hours'],
+      ['E-bike', 2500, 0, 6, 'Pedal-assist cruiser'],
+      ['E-bike with child seat', 3000, 0, 2, 'Rear seat for kids under 20 kg'],
     ],
     addOns: [['Child trailer', 2000, 'Two-seat trailer for little ones.', 2, 'Baby']],
     photos: ['photo-1485965120184-e220f721d03e', 'photo-1507525428034-b723cf961d3e', 'photo-1519046904884-53103b34b206'],
@@ -1654,7 +1655,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
   {
     slug: 'jet-ski-rental',
     kind: 'rental',
-    rental: { units: 6, bufferMinutes: 15, damageDeposit: 25000, minutes: [30, 60, 120], category: 'watercraft', billing: 'length', seatsPerUnit: 2, licence: 'boat', fuel: 'included' },
+    rental: { units: 6, bufferMinutes: 15, damageDeposit: 25000, minutes: [60, 60], category: 'watercraft', billing: 'length', modes: ['hour'], minHours: 1, maxHours: 3, rateList: [{ hour: 14900 }, { hour: 17900 }], seatsPerUnit: 2, licence: 'boat', fuel: 'included' },
     name: 'Jet Ski Rental',
     tagline: 'Your own WaveRunner off Kaanapali, by the half hour or the hour.',
     description:
@@ -1679,9 +1680,8 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     maxCapacity: 6,
     pricingModel: 'per_unit',
     tiers: [
-      ['30 minutes', 8900, 0, 6, 'Per ski, up to two riders'],
-      ['1 hour', 14900, 0, 6, 'Per ski, up to two riders'],
-      ['2 hours', 25900, 0, 6, 'Per ski, up to two riders'],
+      ['WaveRunner VX', 14900, 0, 6, 'One or two riders'],
+      ['WaveRunner FX Cruiser', 17900, 0, 2, 'Up to three riders, more power'],
     ],
     addOns: [['GoPro rental', 3500, 'Chest-mounted, footage airdropped at the shack.', 6, 'Camera']],
     photos: ['photo-1502680390469-be75c86b636f', 'photo-1519046904884-53103b34b206', 'photo-1505228395891-9a51e7e86bf6'],
@@ -1698,7 +1698,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
   {
     slug: 'kayak-sup-rental',
     kind: 'rental',
-    rental: { units: 12, bufferMinutes: 10, damageDeposit: 0, minutes: [60, 120, 240], category: 'gear', billing: 'length', seatsPerUnit: 1, licence: 'none' },
+    rental: { units: 12, bufferMinutes: 10, damageDeposit: 0, minutes: [60, 60, 60], category: 'gear', billing: 'length', modes: ['hour', 'day'], minHours: 1, maxHours: 4, minDays: 1, maxDays: 7, rateList: [{ hour: 2500, day: 6500 }, { hour: 3500, day: 8900 }, { hour: 3000, day: 7500 }], seatsPerUnit: 1, licence: 'none' },
     name: 'Kayak & Paddleboard Rental',
     tagline: 'Sit-on-top kayaks and SUPs from the Kihei beach, with a reef map.',
     description:
@@ -1714,9 +1714,9 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     maxCapacity: 12,
     pricingModel: 'per_unit',
     tiers: [
-      ['1 hour', 3500, 0, 12, 'Per kayak or board'],
-      ['2 hours', 5500, 0, 12, 'Per kayak or board'],
-      ['Half day', 7900, 0, 12, 'Per kayak or board'],
+      ['Single kayak', 2500, 0, 6, 'Sit-on-top, one paddler'],
+      ['Double kayak', 3500, 0, 4, 'Two paddlers'],
+      ['Stand-up paddleboard', 3000, 0, 6, 'All-round board, leash included'],
     ],
     addOns: [['Snorkel set', 1200, 'Mask, snorkel and fins in your size.', 12, 'Waves']],
     photos: ['photo-1519046904884-53103b34b206', 'photo-1505228395891-9a51e7e86bf6', 'photo-1473116763249-2faaef81ccda'],
@@ -3272,7 +3272,7 @@ const RIDGELINE_SPECS: ActivitySpec[] = [
   {
     slug: 'queenstown-e-bike-hire',
     kind: 'rental',
-    rental: { units: 12, bufferMinutes: 15, damageDeposit: 15000, minutes: [240, 480], category: 'bike', billing: 'length', seatsPerUnit: 1, licence: 'none' },
+    rental: { units: 12, bufferMinutes: 15, damageDeposit: 15000, minutes: [120], category: 'bike', billing: 'length', modes: ['hour', 'day'], minHours: 2, maxHours: 8, minDays: 1, maxDays: 5, rateList: [{ hour: 3500, day: 12900 }], seatsPerUnit: 1, licence: 'none' },
     name: 'Queenstown E-Bike Hire',
     tagline: 'A full-suspension e-bike, a trail map and the whole Wakatipu basin to yourself.',
     description:
@@ -3287,10 +3287,7 @@ const RIDGELINE_SPECS: ActivitySpec[] = [
     minAge: 14,
     maxCapacity: 12,
     pricingModel: 'per_unit',
-    tiers: [
-      ['Half day', 8900, 0, 12, 'Per bike, four hours'],
-      ['Full day', 12900, 0, 12, 'Per bike, eight hours'],
-    ],
+    tiers: [['Full-suspension e-bike', 3500, 0, 6, 'Trail-ready, 90 km range']],
     addOns: [['Child seat', 2000, 'For riders under 20 kg.', 2, 'Baby']],
     photos: ['photo-1485965120184-e220f721d03e', 'photo-1501785888041-af3ef285b470', 'photo-1506905925346-21bda4d32df4'],
     colorKey: 'reef',
@@ -3506,8 +3503,14 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     kind: spec.kind ?? 'trip',
     ...(spec.rental
       ? (() => {
-          const { minutes, ...rest } = spec.rental
-          return { rental: { ...rest, durations: priceTiers.map((tier, index) => ({ tierId: tier.id, minutes: minutes[index] ?? 60 })) } }
+          const { minutes, rateList, ...rest } = spec.rental
+          return {
+            rental: {
+              ...rest,
+              durations: priceTiers.map((tier, index) => ({ tierId: tier.id, minutes: minutes[index] ?? 60 })),
+              ...(rateList ? { rates: priceTiers.map((tier, index) => ({ tierId: tier.id, ...rateList[index] })) } : {}),
+            },
+          }
         })()
       : {}),
     ...(spec.charter

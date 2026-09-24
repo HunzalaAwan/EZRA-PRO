@@ -65,6 +65,12 @@ export interface DraftKindSettings {
     pickupTime: string
     returnTime: string
     seatsPerUnit: number
+    /** By the hour, by the day, or both. */
+    modes: ('hour' | 'day')[]
+    minHours: number
+    maxHours: number
+    /** Per tier: price per hour and per day, minor units. */
+    rates: Record<string, { hour: number; day: number }>
     licence: NonNullable<RentalConfig['licence']>
     fuel: NonNullable<RentalConfig['fuel']>
     kmPerDay: number
@@ -98,6 +104,10 @@ export function defaultKindSettings(): DraftKindSettings {
       pickupTime: '09:00',
       returnTime: '17:00',
       seatsPerUnit: 1,
+      modes: ['hour'],
+      minHours: 1,
+      maxHours: 4,
+      rates: {},
       licence: 'none',
       fuel: 'included',
       kmPerDay: 0,
@@ -466,7 +476,16 @@ export function KindFields({
   if (kind === 'rental') {
     const rental = settings.rental
     const meta = rentalCategoryMeta(rental.category)
-    const byDay = rental.billing === 'day'
+    const hourly = rental.modes.includes('hour')
+    const daily = rental.modes.includes('day')
+    const byDay = daily && !hourly
+    const toggleMode = (mode: 'hour' | 'day') => {
+      const on = rental.modes.includes(mode)
+      // One way of charging has to stay on.
+      if (on && rental.modes.length === 1) return
+      const modes = on ? rental.modes.filter((entry) => entry !== mode) : (['hour', 'day'] as const).filter((entry) => entry === mode || rental.modes.includes(entry))
+      set('rental', { modes: [...modes], billing: modes.length === 1 && modes[0] === 'day' ? 'day' : 'length' })
+    }
     const pickCategory = (category: RentalCategory) => {
       const next = rentalCategoryMeta(category)
       set('rental', {
@@ -474,6 +493,7 @@ export function KindFields({
         licence: next.licence,
         seatsPerUnit: next.seatsPerUnit,
         billing: next.billing,
+        modes: category === 'vehicle' ? ['day'] : ['hour'],
         fuel: category === 'vehicle' ? 'full_to_full' : 'included',
       })
       if (next.licence !== 'none' && shared.minAge < 16) onShared({ minAge: category === 'vehicle' ? 21 : 16 })
@@ -509,44 +529,61 @@ export function KindFields({
           </div>
         </Section>
 
-        <Section title="How it is charged">
-          <Segmented
-            label="How it is charged"
-            value={rental.billing}
-            onChange={(billing) => set('rental', { billing })}
-            options={[
-              { value: 'length', label: 'By length', hint: 'Guests pick 1 hour, 2 hours, a half day. Each price tier is one length.' },
-              { value: 'day', label: 'By the day', hint: 'Guests pick a pick-up day and how many days. Each price tier is a model, priced per day.' },
-            ]}
-          />
-          {byDay ? (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <Field label="Pick-up time">
-                {(control) => <Input {...control} type="time" value={rental.pickupTime} onChange={(e) => set('rental', { pickupTime: e.target.value })} />}
-              </Field>
-              <Field label="Return time">
-                {(control) => <Input {...control} type="time" value={rental.returnTime} onChange={(e) => set('rental', { returnTime: e.target.value })} />}
-              </Field>
-              <Field label="Fewest days" error={errors['rental.minDays']}>
-                {(control) => <Input {...control} type="number" min={1} suffix="days" value={rental.minDays} onChange={(e) => set('rental', { minDays: num(e.target.value, 1) })} />}
-              </Field>
-              <Field label="Most days" error={errors['rental.maxDays']}>
-                {(control) => <Input {...control} type="number" min={1} max={30} suffix="days" value={rental.maxDays} onChange={(e) => set('rental', { maxDays: num(e.target.value, 1) })} />}
-              </Field>
-            </div>
-          ) : (
-            <>
-              <p className="text-xs text-subtle">Match each price tier from the Pricing step to its length.</p>
-              <TierLengths
-                tiers={tiers}
-                minutes={rental.minutes}
-                options={RENTAL_LENGTHS.map((entry) => entry.minutes)}
-                fallback={60}
-                onChange={(minutes) => set('rental', { minutes })}
-                labelFor={(minutes) => RENTAL_LENGTHS.find((entry) => entry.minutes === minutes)?.label ?? formatDuration(minutes)}
-              />
-            </>
-          )}
+        <Section title="How it is charged" hint="Pick one or both. Guests then choose at checkout. You set the prices per hour and per day in the Pricing step.">
+          <div role="group" aria-label="How it is charged" className="grid gap-2 sm:grid-cols-2">
+            {([
+              ['hour', 'By the hour', 'Guests pick a start time and how many hours.'],
+              ['day', 'By the day', 'Guests pick up after your opening time and return before closing, for one day or more.'],
+            ] as const).map(([mode, label, hint]) => {
+              const on = rental.modes.includes(mode)
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => toggleMode(mode)}
+                  className={cn(
+                    'flex items-start gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors duration-200',
+                    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+                    on ? 'border-primary bg-primary-soft/30' : 'border-line bg-surface hover:border-line-strong',
+                  )}
+                >
+                  <span className={cn('mt-0.5 grid size-4 shrink-0 place-items-center rounded border', on ? 'border-primary bg-primary text-on-primary' : 'border-line-strong')} aria-hidden="true">
+                    {on ? <svg viewBox="0 0 12 12" className="size-3"><path d="M2.5 6.2 5 8.5l4.5-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg> : null}
+                  </span>
+                  <span>
+                    <span className="block text-sm font-medium text-foreground">{label}</span>
+                    <span className="block text-xs text-subtle">{hint}</span>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            {hourly ? (
+              <>
+                <Field label="Fewest hours" error={errors['rental.minHours']}>
+                  {(control) => <Input {...control} type="number" min={1} max={12} suffix="hours" value={rental.minHours} onChange={(e) => set('rental', { minHours: num(e.target.value, 1) })} />}
+                </Field>
+                <Field label="Most hours" error={errors['rental.maxHours']}>
+                  {(control) => <Input {...control} type="number" min={1} max={24} suffix="hours" value={rental.maxHours} onChange={(e) => set('rental', { maxHours: num(e.target.value, 1) })} />}
+                </Field>
+              </>
+            ) : null}
+            {daily ? (
+              <>
+                <Field label="Fewest days" error={errors['rental.minDays']}>
+                  {(control) => <Input {...control} type="number" min={1} suffix="days" value={rental.minDays} onChange={(e) => set('rental', { minDays: num(e.target.value, 1) })} />}
+                </Field>
+                <Field label="Most days" error={errors['rental.maxDays']}>
+                  {(control) => <Input {...control} type="number" min={1} max={30} suffix="days" value={rental.maxDays} onChange={(e) => set('rental', { maxDays: num(e.target.value, 1) })} />}
+                </Field>
+              </>
+            ) : null}
+          </div>
+          <p className="text-xs text-subtle">
+            {daily ? 'Pick-up and return times are your opening hours, set once in the Schedule step.' : 'Start times follow your opening hours in the Schedule step.'}
+          </p>
         </Section>
 
         <Section title="Fleet" hint="How many go out at once. This is the only capacity a rental has.">
@@ -845,5 +882,85 @@ export function KindFields({
         <Toggle label="Re-entry allowed" hint="Guests can leave and come back the same day." checked={pass.reentry} onChange={(reentry) => set('pass', { reentry })} />
       </div>
     </div>,
+  )
+}
+
+/* ==========================================================================
+   RENTAL RATES — the Pricing step for a rental: what can be rented, and
+   what each costs per hour and per day. Replaces price tiers.
+   ========================================================================== */
+
+export function RentalRatesEditor({
+  tiers,
+  onTiers,
+  settings: raw,
+  onSettings,
+  currencySymbol,
+  errors,
+  newTier,
+}: {
+  tiers: DraftTier[]
+  onTiers: (tiers: DraftTier[]) => void
+  settings: DraftKindSettings
+  onSettings: (settings: DraftKindSettings) => void
+  currencySymbol: string
+  errors: Record<string, string>
+  newTier: (label: string) => DraftTier
+}) {
+  const settings = normalizeKindSettings(raw)
+  const rental = settings.rental
+  const meta = rentalCategoryMeta(rental.category)
+  const hourly = rental.modes.includes('hour')
+  const daily = rental.modes.includes('day')
+  const rateOf = (tier: DraftTier) => rental.rates[tier.id] ?? { hour: tier.price, day: Math.round((tier.price * 4) / 500) * 500 }
+  const setRate = (tier: DraftTier, patch: Partial<{ hour: number; day: number }>) =>
+    onSettings({ ...settings, rental: { ...rental, rates: { ...rental.rates, [tier.id]: { ...rateOf(tier), ...patch } } } })
+  const money = (value: string) => Math.max(0, Math.round(Number(value) * 100) || 0)
+  const cols = cn('grid gap-3 sm:items-center', hourly && daily ? 'sm:grid-cols-[minmax(0,1.6fr)_8rem_8rem_7rem_2rem] sm:items-end' : 'sm:grid-cols-[minmax(0,1.6fr)_9rem_7rem_2rem] sm:items-end')
+
+  return (
+    <div className="flex flex-col gap-3">
+      <ul className="flex list-none flex-col gap-2 p-0">
+        {tiers.map((tier, index) => {
+          const rate = rateOf(tier)
+          return (
+            <li key={tier.id} className={cn(cols, 'rounded-xl border border-line bg-surface p-3')}>
+              <Field label="What you rent" labelSize="sm" error={errors[`tiers.${index}.label`]}>
+                {(control) => <Input {...control} value={tier.label} placeholder={meta.value === 'vehicle' ? 'Jeep Wrangler 4-door' : meta.value === 'watercraft' ? 'WaveRunner VX' : meta.value === 'bike' ? 'E-bike' : 'Single kayak'} onChange={(e) => onTiers(tiers.map((entry) => (entry.id === tier.id ? { ...entry, label: e.target.value } : entry)))} />}
+              </Field>
+              {hourly ? (
+                <Field label="Per hour" labelSize="sm" error={errors[`rate.${tier.id}.hour`]}>
+                  {(control) => <Input {...control} type="number" min={0} leftIcon={<span className="text-sm font-medium">{currencySymbol}</span>} value={rate.hour / 100 || ''} onChange={(e) => setRate(tier, { hour: money(e.target.value) })} />}
+                </Field>
+              ) : null}
+              {daily ? (
+                <Field label="Per day" labelSize="sm" error={errors[`rate.${tier.id}.day`]}>
+                  {(control) => <Input {...control} type="number" min={0} leftIcon={<span className="text-sm font-medium">{currencySymbol}</span>} value={rate.day / 100 || ''} onChange={(e) => setRate(tier, { day: money(e.target.value) })} />}
+                </Field>
+              ) : null}
+              <Field label="Most per booking" labelSize="sm">
+                {(control) => <Input {...control} type="number" min={1} value={tier.maxQuantity} onChange={(e) => onTiers(tiers.map((entry) => (entry.id === tier.id ? { ...entry, maxQuantity: num(e.target.value, 1) } : entry)))} />}
+              </Field>
+              <button
+                type="button"
+                aria-label={`Remove ${tier.label || 'this item'}`}
+                disabled={tiers.length === 1}
+                onClick={() => onTiers(tiers.filter((entry) => entry.id !== tier.id))}
+                className="grid size-8 place-items-center justify-self-end rounded-lg text-faint hover:bg-surface-sunken hover:text-danger disabled:opacity-30"
+              >
+                ×
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+      <Button type="button" variant="secondary" size="sm" className="self-start" onClick={() => onTiers([...tiers, newTier('')])}>
+        + Add another {meta.unit}
+      </Button>
+      <p className="text-xs text-subtle">
+        Guests pick what to rent, then {hourly && daily ? 'hours or days' : hourly ? 'how many hours' : 'how many days'}. The price is per {meta.unit}
+        {hourly && daily ? ', and the day rate shows as the better deal for long rentals.' : '.'}
+      </p>
+    </div>
   )
 }

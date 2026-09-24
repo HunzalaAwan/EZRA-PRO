@@ -38,7 +38,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { crewName, FUEL_LABEL, LESSON_LEVELS, LICENCE_LABEL, isDayRental, partyLabel, rentalCategoryMeta, routeLabel } from '@/lib/activity-kinds'
+import { crewName, FUEL_LABEL, LESSON_LEVELS, LICENCE_LABEL, isDayRental, partyLabel, rateFor, rentalCategoryMeta, rentalModes, routeLabel, type RentalMode } from '@/lib/activity-kinds'
 import { applyRules } from '@/lib/pricing'
 import { usePricing } from '@/hooks/use-pricing'
 import { IconButton } from '@/components/ui/icon-button'
@@ -134,6 +134,8 @@ export interface Quote {
   headcount: number
   /** Day rentals: how many days each unit is out. 1 otherwise. */
   days: number
+  /** Hourly rentals: how many hours. */
+  hours?: number
   /** People on the booking: the charter group, or the headcount. */
   party: number
   /** "2 jet skis", "6 guests": what the booking is counted in. */
@@ -145,6 +147,9 @@ export interface QuoteOptions {
   days?: number
   /** Charters: the group size, which the per-group price does not count. */
   party?: number
+  /** Rentals with rates: priced per hour or per day. */
+  rentalMode?: RentalMode
+  hours?: number
 }
 
 /** Deterministic, integer-only money maths — minor units in, minor units out. */
@@ -165,11 +170,21 @@ export function buildQuote(
   for (const tier of activity.priceTiers) {
     const qty = selection.tiers.find((t) => t.tierId === tier.id)?.qty ?? 0
     if (qty <= 0) continue
-    const unitPrice = Math.round(tier.price * priceMultiplier) * days
+    // A rental with rates prices each item per hour or per day; everything else uses the tier price.
+    const rated = (activity.kind ?? 'trip') === 'rental' && options.rentalMode && (activity.rental?.rates?.length ?? 0) > 0
+    const hours = Math.max(1, Math.floor(options.hours ?? 1))
+    const base = rated ? (rateFor(activity, tier.id, options.rentalMode!) ?? tier.price) : tier.price
+    const span = rated && options.rentalMode === 'hour' ? hours : days
+    const unitPrice = Math.round(base * priceMultiplier) * span
     const total = unitPrice * qty
     ticketLines.push({
       id: tier.id,
-      label: days > 1 ? `${tier.label} · ${days} days` : tier.label,
+      label:
+        rated && options.rentalMode === 'hour'
+          ? `${tier.label} · ${hours} ${hours === 1 ? 'hour' : 'hours'}`
+          : days > 1
+            ? `${tier.label} · ${days} days`
+            : tier.label,
       kind: 'ticket',
       quantity: qty,
       unitPrice,
@@ -211,6 +226,7 @@ export function buildQuote(
     seats,
     headcount,
     days,
+    ...(options.rentalMode === 'hour' ? { hours: Math.max(1, Math.floor(options.hours ?? 1)) } : {}),
     party: (activity.kind ?? 'trip') === 'charter' ? Math.max(1, options.party ?? headcount) : headcount,
     countLabel: partyLabel(activity, (activity.kind ?? 'trip') === 'charter' ? Math.max(1, options.party ?? headcount) : headcount),
   }
@@ -287,7 +303,14 @@ export function BookingWidget({
   /* ---------- kind ---------- */
 
   const kind = activity.kind ?? 'trip'
-  const dayRental = isDayRental(activity)
+  const modes = rentalModes(activity)
+  const rated = modes.length > 0 && (activity.rental?.rates?.length ?? 0) > 0
+  const [rentalMode, setRentalMode] = React.useState<RentalMode>(() => modes[0] ?? (isDayRental(activity) ? 'day' : 'hour'))
+  const dayRental = kind === 'rental' && (modes.length > 0 ? rentalMode === 'day' : isDayRental(activity))
+  const hourRental = kind === 'rental' && rated && rentalMode === 'hour'
+  const minHours = Math.max(1, activity.rental?.minHours ?? 1)
+  const maxHours = Math.max(minHours, activity.rental?.maxHours ?? 4)
+  const [rentHours, setRentHours] = React.useState(minHours)
   const rentalMeta = rentalCategoryMeta(activity.rental?.category)
   const minDays = Math.max(1, activity.rental?.minDays ?? 1)
   const maxDays = Math.max(minDays, activity.rental?.maxDays ?? 14)
@@ -419,8 +442,13 @@ export function BookingWidget({
   )
 
   const quote = React.useMemo(
-    () => buildQuote(activity, tenantSlug, selection, (slot?.priceMultiplier ?? 1) * ruleResult.multiplier, { days: dayRental ? rentDays : 1, party }),
-    [activity, tenantSlug, selection, slot, ruleResult.multiplier, dayRental, rentDays, party],
+    () =>
+      buildQuote(activity, tenantSlug, selection, (slot?.priceMultiplier ?? 1) * ruleResult.multiplier, {
+        days: dayRental ? rentDays : 1,
+        party,
+        ...(rated ? { rentalMode, hours: rentHours } : {}),
+      }),
+    [activity, tenantSlug, selection, slot, ruleResult.multiplier, dayRental, rentDays, party, rated, rentalMode, rentHours],
   )
 
   const canReserve =
@@ -431,6 +459,8 @@ export function BookingWidget({
     router.push(
       checkoutHref(checkoutPath, activity.slug, slot.departureId, selection, {
         n: dayRental ? rentDays : undefined,
+        m: rated ? rentalMode : undefined,
+        h: hourRental ? rentHours : undefined,
         g: kind === 'charter' ? party : undefined,
       }),
     )
@@ -457,6 +487,11 @@ export function BookingWidget({
     return new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).format(date)
   }
 
+  const addMinutes = (hhmm: string, minutes: number) => {
+    const [h, m] = hhmm.split(':').map(Number)
+    const total = h * 60 + (m || 0) + minutes
+    return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+  }
   const clock = (hhmm: string) => {
     const [h, m] = hhmm.split(':').map(Number)
     const hour = ((h + 11) % 12) + 1
@@ -515,7 +550,7 @@ export function BookingWidget({
       <div>
         <div className="flex items-baseline justify-between gap-3">
           <h3 className="text-[0.8125rem] font-semibold tracking-tight text-foreground">
-            {stepOf('guests')} · {dayRental ? `Your ${rentalMeta.unit} and days` : 'How long, and how many'}
+            {stepOf('guests')} · {dayRental ? `Your ${rentalMeta.unit} and days` : rated ? `Your ${rentalMeta.unit} and hours` : 'How long, and how many'}
           </h3>
           {slot ? (
             <span className={cn('text-xs font-medium tabular', seatsLeft <= 2 ? 'text-warning' : 'text-subtle')}>
@@ -523,13 +558,53 @@ export function BookingWidget({
             </span>
           ) : null}
         </div>
-        <div className="mt-3 grid gap-2" role="radiogroup" aria-label={dayRental ? 'Model' : 'Rental length'}>
-          {activity.priceTiers.map((tier) => {
-            const minutes = lengthOf(tier.id)
-            const note = tier.description || (!dayRental && minutes ? `${Math.round((minutes / 60) * 10) / 10} hours` : undefined)
-            return optionButton(tier.id, tier.label, `${formatCurrency(Math.round(tier.price * multiplier), currency)}${dayRental ? ' a day' : ''}`, note || undefined)
-          })}
+        {modes.length > 1 ? (
+          <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl bg-surface-sunken p-1" role="radiogroup" aria-label="Rent by">
+            {modes.map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                role="radio"
+                aria-checked={rentalMode === mode}
+                onClick={() => {
+                  setRentalMode(mode)
+                  // Keep a choice that has a price in the new mode.
+                  if (chosenTier && rateFor(activity, chosenTier.id, mode) === undefined) {
+                    const first = activity.priceTiers.find((tier) => rateFor(activity, tier.id, mode) !== undefined)
+                    if (first) pickTier(first.id, Math.max(1, chosenQty))
+                  }
+                }}
+                className={cn(
+                  'rounded-lg px-3 py-2 text-sm font-semibold transition-colors',
+                  rentalMode === mode ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground',
+                )}
+              >
+                By the {mode}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <div className="mt-3 grid gap-2" role="radiogroup" aria-label={rated ? `What to rent` : dayRental ? 'Model' : 'Rental length'}>
+          {activity.priceTiers
+            .filter((tier) => !rated || rateFor(activity, tier.id, rentalMode) !== undefined)
+            .map((tier) => {
+              const minutes = lengthOf(tier.id)
+              const price = rated ? (rateFor(activity, tier.id, rentalMode) ?? tier.price) : tier.price
+              const note = tier.description || (!rated && !dayRental && minutes ? `${Math.round((minutes / 60) * 10) / 10} hours` : undefined)
+              return optionButton(tier.id, tier.label, `${formatCurrency(Math.round(price * multiplier), currency)}${dayRental ? ' a day' : hourRental ? ' an hour' : ''}`, note || undefined)
+            })}
         </div>
+        {hourRental ? (
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-3">
+            <span>
+              <span className="block text-sm font-medium text-foreground">How many hours</span>
+              <span className="block text-xs text-subtle">
+                {slot ? `${formatTime(slot.startsAt)} to ${clock(addMinutes(slot.startsAt.slice(11, 16), rentHours * 60))}` : `${minHours} to ${maxHours} hours`}
+              </span>
+            </span>
+            {stepper(rentHours, minHours, maxHours, setRentHours, 'hours')}
+          </div>
+        ) : null}
         {dayRental ? (
           <div className="mt-3 rounded-xl border border-line">
             <div className="flex items-center justify-between gap-3 px-3.5 py-3">
@@ -542,11 +617,11 @@ export function BookingWidget({
             {dateKey ? (
               <dl className="grid grid-cols-2 gap-3 border-t border-line-subtle px-3.5 py-3 text-xs">
                 <div>
-                  <dt className="text-subtle">Pick up</dt>
+                  <dt className="text-subtle">Pick up after</dt>
                   <dd className="mt-0.5 font-medium text-foreground">{shortDate(dateKey, 0)} · {clock(rental?.pickupTime ?? '09:00')}</dd>
                 </div>
                 <div>
-                  <dt className="text-subtle">Return</dt>
+                  <dt className="text-subtle">Return before</dt>
                   <dd className="mt-0.5 font-medium text-foreground">{shortDate(dateKey, rentDays)} · {clock(rental?.returnTime ?? '17:00')}</dd>
                 </div>
               </dl>
@@ -556,7 +631,7 @@ export function BookingWidget({
         <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-3">
           <span>
             <span className="block text-sm font-medium text-foreground">How many {rentalMeta.units}</span>
-            <span className="block text-xs text-subtle">Priced per {rentalMeta.unit}{dayRental ? ', per day' : ''}</span>
+            <span className="block text-xs text-subtle">Priced per {rentalMeta.unit}{dayRental ? ', per day' : hourRental ? ', per hour' : ''}</span>
           </span>
           {stepper(Math.max(1, chosenQty), 1, Math.max(1, seatsLeft), (next) => chosenTier && pickTier(chosenTier.id, next), rentalMeta.units)}
         </div>
@@ -708,7 +783,7 @@ export function BookingWidget({
           </p>
           <p className="mt-0.5 font-display text-2xl font-semibold tabular tracking-tight text-foreground">
             {formatCurrency(fromPrice, currency)}
-            <span className="ml-1.5 text-xs font-medium text-subtle">{kind === 'rental' ? `per ${rentalMeta.unit}${dayRental ? ' a day' : ''}` : kind === 'charter' ? 'per group' : kind === 'pass' ? 'per ticket' : 'per person'}</span>
+            <span className="ml-1.5 text-xs font-medium text-subtle">{kind === 'rental' ? `per ${rentalMeta.unit}${dayRental ? ' a day' : rated ? ' an hour' : ''}` : kind === 'charter' ? 'per group' : kind === 'pass' ? 'per ticket' : 'per person'}</span>
           </p>
         </div>
         {slot && slot.priceMultiplier > 1 ? (
@@ -1075,7 +1150,7 @@ export function BookingWidget({
                 Total
               </p>
               <p className="text-xs text-subtle">
-                {quote.countLabel}{dayRental ? ` · ${rentDays} ${pluralize(rentDays, 'day')}` : ''} · all taxes included
+                {quote.countLabel}{dayRental ? ` · ${rentDays} ${pluralize(rentDays, 'day')}` : hourRental ? ` · ${rentHours} ${pluralize(rentHours, 'hour')}` : ''} · all taxes included
               </p>
             </div>
             <AnimatedTotal value={quote.total} currency={currency} reducedMotion={reducedMotion} />

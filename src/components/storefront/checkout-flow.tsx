@@ -94,6 +94,9 @@ export interface CheckoutFlowProps {
   selection: QuoteSelection
   /** Day rentals: days each unit is out. */
   rentalDays?: number
+  /** Rentals with rates: by the hour or by the day, and the hours. */
+  rentalMode?: 'hour' | 'day'
+  rentalHours?: number
   /** Charters: the group size. */
   party?: number
   basePath: string
@@ -258,6 +261,8 @@ export function CheckoutFlow({
   departure,
   selection,
   rentalDays = 1,
+  rentalMode,
+  rentalHours,
   party,
   basePath,
   reference,
@@ -271,8 +276,12 @@ export function CheckoutFlow({
     [pricing.rules, activity.slug, departure.startsAt, nowIso, guestsSelected],
   )
   const quote = React.useMemo(
-    () => buildQuote(activity, tenant.slug, selection, departure.priceMultiplier * ruleResult.multiplier, { days: rentalDays, party }),
-    [activity, tenant.slug, selection, departure.priceMultiplier, ruleResult.multiplier, rentalDays, party],
+    () => buildQuote(activity, tenant.slug, selection, departure.priceMultiplier * ruleResult.multiplier, {
+      days: rentalDays,
+      party,
+      ...(rentalMode ? { rentalMode, hours: rentalHours } : {}),
+    }),
+    [activity, tenant.slug, selection, departure.priceMultiplier, ruleResult.multiplier, rentalDays, party, rentalMode, rentalHours],
   )
 
   const [errors, setErrors] = React.useState<Errors>({})
@@ -992,7 +1001,7 @@ function OrderSummary({
           <p className="mt-1 truncate text-xs text-subtle">{tenant.name}</p>
           <p className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-muted">
             <Clock className="size-3" aria-hidden="true" />
-            {departure.returnsAt ? `${quote.days}-day rental` : formatDuration(activity.durationMinutes)}
+            {departure.returnsAt ? `${quote.days}-day rental` : quote.hours ? `${quote.hours}-hour rental` : formatDuration(activity.durationMinutes)}
           </p>
         </div>
       </div>

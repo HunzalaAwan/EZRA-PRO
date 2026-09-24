@@ -5,6 +5,15 @@ import { NOW, getDepartureById, getStorefront, getStorefrontAvailability, getLoc
 import { locationAddress } from '@/lib/locations'
 import { bookingReference, clamp, seatsRemaining } from '@/lib/utils'
 import type { Activity } from '@/types'
+import { rentalModes, type RentalMode } from '@/lib/activity-kinds'
+
+/** A local ISO plus some minutes, still local. */
+function plusMinutes(iso: string, minutes: number) {
+  const date = new Date(iso)
+  date.setMinutes(date.getMinutes() + minutes)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:00`
+}
 import {
   CheckoutFlow,
   type CheckoutDeparture,
@@ -135,7 +144,11 @@ export default async function CheckoutPage({
   if (!departureRow) notFound()
 
   /* Day rentals run for n days from the pick-up; charters carry their group size. */
-  const dayRental = (activity.kind ?? 'trip') === 'rental' && activity.rental?.billing === 'day'
+  const modes = rentalModes(activity)
+  const rentalMode = modes.length > 0 ? (modes.includes(query.m as RentalMode) ? (query.m as RentalMode) : modes[0]) : undefined
+  const dayRental = (activity.kind ?? 'trip') === 'rental' && (rentalMode ? rentalMode === 'day' : activity.rental?.billing === 'day')
+  const minHours = Math.max(1, activity.rental?.minHours ?? 1)
+  const rentalHours = rentalMode === 'hour' ? clamp(Math.floor(Number(query.h) || minHours), minHours, Math.max(minHours, activity.rental?.maxHours ?? 4)) : undefined
   const minDays = Math.max(1, activity.rental?.minDays ?? 1)
   const maxDays = Math.max(minDays, activity.rental?.maxDays ?? 14)
   const rentalDays = dayRental ? clamp(Math.floor(Number(query.n) || minDays), minDays, maxDays) : 1
@@ -159,7 +172,7 @@ export default async function CheckoutPage({
   const departure: CheckoutDeparture = {
     id: departureRow.id,
     startsAt: pickupAt ?? departureRow.startsAt,
-    endsAt: returnsAt ?? departureRow.endsAt,
+    endsAt: returnsAt ?? (rentalHours ? plusMinutes(departureRow.startsAt, rentalHours * 60) : departureRow.endsAt),
     returnsAt,
     seatsLeft: seatsRemaining(departureRow.capacity, departureRow.booked, departureRow.held),
     priceMultiplier: departureRow.priceMultiplier ?? 1,
@@ -179,7 +192,7 @@ export default async function CheckoutPage({
 
   /* ---------- confirmation code (deterministic, seeded) ---------- */
 
-  const seed = `${departure.id}|${rentalDays}|${party ?? ''}|${selection.tiers
+  const seed = `${departure.id}|${rentalMode ?? ''}${rentalHours ?? ''}|${rentalDays}|${party ?? ''}|${selection.tiers
     .filter((tier) => tier.qty > 0)
     .map((tier) => `${tier.tierId}:${tier.qty}`)
     .join(',')}`
@@ -199,6 +212,8 @@ export default async function CheckoutPage({
       departure={departure}
       selection={selection}
       rentalDays={rentalDays}
+      rentalMode={rentalMode}
+      rentalHours={rentalHours}
       party={party}
       basePath={`/book/${tenant.slug}`}
       reference={reference}

@@ -75,7 +75,7 @@ import {
   type DraftTier,
 } from './pricing-tier-editor'
 import { AddonEditor, type DraftAddOn } from './addon-editor'
-import { KindFields, KindPicker, LanguagePicker, RouteFields, defaultKindSettings, emptyRoute, normalizeKindSettings, type DraftKindSettings, type DraftRoute, type SharedBasics } from './kind-fields'
+import { KindFields, KindPicker, LanguagePicker, RentalRatesEditor, RouteFields, defaultKindSettings, emptyRoute, normalizeKindSettings, type DraftKindSettings, type DraftRoute, type SharedBasics } from './kind-fields'
 import { DurationField, DURATION_UNITS, unitFor, type DurationUnit } from './duration-field'
 import { useCustomCategories } from '@/hooks/use-custom-categories'
 import { GuestQuestionsEditor, type WaiverOption } from './guest-questions-editor'
@@ -264,19 +264,29 @@ function kindOverride(draft: ActivityDraft) {
   if (kind === 'rental') {
     const r = settings.rental
     const meta = rentalCategoryMeta(r.category)
+    const hourly = r.modes.includes('hour')
+    const daily = r.modes.includes('day')
+    const rate = (tierId: string) => r.rates[tierId] ?? { hour: 0, day: 0 }
+    // With one location the opening hours are the pick-up and return window; several locations use the first.
+    const hours = draft.schedule.locations.length > 1 ? (draft.schedule.locations[0]?.schedule ?? draft.schedule) : draft.schedule
     return {
       rental: {
         category: r.category,
-        billing: r.billing,
+        modes: r.modes,
+        billing: daily && !hourly ? ('day' as const) : ('length' as const),
         units: r.units,
         bufferMinutes: r.bufferMinutes,
         damageDeposit: r.damageDeposit,
-        durations: draft.tiers.map((tier) => ({ tierId: tier.id, minutes: r.billing === 'day' ? 1440 : (r.minutes[tier.id] ?? 60) })),
+        durations: draft.tiers.map((tier) => ({ tierId: tier.id, minutes: hourly ? r.minHours * 60 : 1440 })),
+        rates: draft.tiers.map((tier) => ({ tierId: tier.id, ...(hourly ? { hour: rate(tier.id).hour } : {}), ...(daily ? { day: rate(tier.id).day } : {}) })),
         seatsPerUnit: r.seatsPerUnit,
         licence: r.licence,
         ...(meta.fuel ? { fuel: r.fuel } : {}),
         ...(meta.mileage ? { kmPerDay: r.kmPerDay } : {}),
-        ...(r.billing === 'day' ? { minDays: r.minDays, maxDays: r.maxDays, pickupTime: r.pickupTime, returnTime: r.returnTime } : {}),
+        ...(hourly ? { minHours: r.minHours, maxHours: r.maxHours } : {}),
+        ...(daily ? { minDays: r.minDays, maxDays: r.maxDays } : {}),
+        pickupTime: hours.opensAt,
+        returnTime: hours.closesAt,
       },
     }
   }
@@ -321,6 +331,13 @@ const LEVEL_DIFFICULTY: Record<DraftKindSettings['lesson']['level'], DifficultyL
   advanced: 'challenging',
 }
 
+/** For a rental, how the opening hours read in Schedule: pick-up and return, and whether start times matter. */
+function rentalHoursFor(draft: ActivityDraft): { hourly: boolean; daily: boolean } | undefined {
+  if (isDining(draft) || (draft.kind ?? 'trip') !== 'rental') return undefined
+  const modes = normalizeKindSettings(draft.kindSettings).rental.modes
+  return { hourly: modes.includes('hour'), daily: modes.includes('day') }
+}
+
 /** What one departure, day or date sells, in the kind's own words. Set once, in Basics. */
 export function seatsFor(draft: ActivityDraft): ScheduleSeats {
   const kind = draft.kind ?? 'trip'
@@ -354,11 +371,23 @@ export function deriveForKind(draft: ActivityDraft): ActivityDraft {
   if ((next.arrivalMode as string) === 'none') next.arrivalMode = 'pickup'
   if (kind === 'rental') {
     const r = settings.rental
-    const lengths = draft.tiers.map((tier) => r.minutes[tier.id] ?? 60)
+    const hourly = r.modes.includes('hour')
     next.maxCapacity = r.units
     next.minParticipants = 1
     next.difficulty = 'easy'
-    next.durationMinutes = r.billing === 'day' ? 1440 : lengths.length > 0 ? Math.min(...lengths) : 60
+    next.durationMinutes = hourly ? r.minHours * 60 : 1440
+    // A rental's tiers are what can be rented; the headline price is the hourly rate, or the daily one.
+    next.tiers = draft.tiers.map((tier) => {
+      const rate = r.rates[tier.id]
+      if (!rate) return tier
+      const price = hourly ? rate.hour : rate.day
+      return price === tier.price ? tier : { ...tier, price, minQuantity: 0 }
+    })
+    // Hourly: the last start leaves room for the fewest hours before the return time.
+    const last = hourly ? r.minHours * 60 : 0
+    if (next.schedule.lastEntryMinutes !== last) {
+      next.schedule = { ...next.schedule, lastEntryMinutes: last, locations: next.schedule.locations.map((site) => ({ ...site, schedule: { ...site.schedule, lastEntryMinutes: last } })) }
+    }
   } else if (kind === 'charter') {
     next.maxCapacity = settings.charter.maxGuests
     next.difficulty = 'easy'
@@ -477,8 +506,19 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
       return {
         rental: rental
           ? (() => {
-              const { durations, ...rest } = rental
-              return { ...blank.rental, ...rest, minutes: Object.fromEntries(durations.map((entry) => [entry.tierId, entry.minutes])) }
+              const { durations, rates, modes, ...rest } = rental
+              return {
+                ...blank.rental,
+                ...rest,
+                minutes: Object.fromEntries(durations.map((entry) => [entry.tierId, entry.minutes])),
+                modes: modes && modes.length > 0 ? [...modes] : rental.billing === 'day' ? ['day' as const] : ['hour' as const],
+                rates: Object.fromEntries(
+                  activity.priceTiers.map((tier) => {
+                    const rate = rates?.find((entry) => entry.tierId === tier.id)
+                    return [tier.id, { hour: rate?.hour ?? (rental.billing === 'day' ? 0 : tier.price), day: rate?.day ?? (rental.billing === 'day' ? tier.price : tier.price * 4) }]
+                  }),
+                ),
+              }
             })()
           : blank.rental,
         charter: charter
@@ -858,13 +898,23 @@ function validateSchemaStep(step: number, draft: ActivityDraft): FieldErrors {
 
 function validateStep(step: number, draft: ActivityDraft): FieldErrors {
   const errors = validateSchemaStep(step, draft)
+  // A rental prices each item per hour and/or per day; every rate that is on needs a price.
+  if (step === 3 && !isDining(draft) && (draft.kind ?? 'trip') === 'rental') {
+    const r = normalizeKindSettings(draft.kindSettings).rental
+    for (const tier of draft.tiers) {
+      const rate = r.rates[tier.id] ?? { hour: tier.price, day: tier.price * 4 }
+      if (r.modes.includes('hour') && rate.hour <= 0) errors[`rate.${tier.id}.hour`] = 'Set an hourly price'
+      if (r.modes.includes('day') && rate.day <= 0) errors[`rate.${tier.id}.day`] = 'Set a daily price'
+    }
+  }
   // With a location on the activity, its address is the meeting place; the note is optional.
   if (step === 1 && !isDining(draft) && draft.schedule.locations.length > 0) delete errors.meetingPoint
   if (step !== 0 || isDining(draft)) return errors
   const kind = draft.kind ?? 'trip'
   const settings = normalizeKindSettings(draft.kindSettings)
   if (kind === 'rental' && settings.rental.units < 1) errors['rental.units'] = 'At least one unit has to be available'
-  if (kind === 'rental' && settings.rental.billing === 'day' && settings.rental.maxDays < settings.rental.minDays) errors['rental.maxDays'] = 'Most days cannot be fewer than the fewest'
+  if (kind === 'rental' && settings.rental.modes.includes('day') && settings.rental.maxDays < settings.rental.minDays) errors['rental.maxDays'] = 'Most days cannot be fewer than the fewest'
+  if (kind === 'rental' && settings.rental.modes.includes('hour') && settings.rental.maxHours < settings.rental.minHours) errors['rental.maxHours'] = 'Most hours cannot be fewer than the fewest'
   if (kind === 'lesson' && draft.maxCapacity < 1) errors.maxCapacity = 'A class needs at least one place'
   if (kind === 'activity' && draft.maxCapacity < 1) errors.maxCapacity = 'A slot needs at least one rider'
   if (kind === 'activity' && draft.durationMinutes < 5) errors.durationMinutes = 'Give each slot a length'
@@ -1595,6 +1645,21 @@ export function ActivityWizard({
                         </>
                       ) : null}
 
+                      {!dining && (draft.kind ?? 'trip') === 'rental' ? (
+                      <section>
+                        <h3 className="text-sm font-semibold">Rates</h3>
+                        <p className="mt-0.5 mb-3 text-xs text-muted">Everything you rent out, with its price per hour and per day. The cheapest sets the “from” price.</p>
+                        <RentalRatesEditor
+                          tiers={draft.tiers}
+                          onTiers={(tiers) => patch({ tiers })}
+                          settings={draft.kindSettings}
+                          onSettings={(kindSettings) => patch({ kindSettings })}
+                          currencySymbol={currencySymbol(currency)}
+                          errors={errors}
+                          newTier={(label) => ({ ...blankTier(label, 0), minQuantity: 0 })}
+                        />
+                      </section>
+                      ) : (
                       <section>
                         <h3 className="text-sm font-semibold">{dining ? 'Menu prices per guest' : 'Price tiers'}</h3>
                         <p className="mt-0.5 mb-3 text-xs text-muted">
@@ -1618,6 +1683,7 @@ export function ActivityWizard({
                           </p>
                         ) : null}
                       </section>
+                      )}
 
                       <Separator />
 
@@ -1637,11 +1703,11 @@ export function ActivityWizard({
                         />
                       </section>
 
-                      <GuestPricePreview
+                      {(draft.kind ?? 'trip') === 'rental' && !dining ? null : <GuestPricePreview
                         tiers={draft.tiers}
                         addOns={draft.addOns}
                         currency={currency}
-                      />
+                      />}
                     </div>
                   ) : null}
                   {step === 4 ? (
@@ -1658,6 +1724,7 @@ export function ActivityWizard({
                       <div className="flex flex-col gap-6">
                         {locations.length > 0 ? (
                           <LocationsEditor
+                            rental={rentalHoursFor(draft)}
                             seats={{ ...seatsFor(draft), onEdit: () => goTo(0, -1) }}
                             schedule={draft.schedule}
                             onChange={(schedule) => patch({ schedule })}
@@ -1668,6 +1735,7 @@ export function ActivityWizard({
                         ) : null}
                         {draft.schedule.locations.length > 1 ? null : (
                           <ScheduleEditor
+                            rental={rentalHoursFor(draft)}
                             seats={{ ...seatsFor(draft), onEdit: () => goTo(0, -1) }}
                             schedule={draft.schedule}
                             onChange={(schedule) => patch({ schedule })}
@@ -1819,7 +1887,7 @@ function kindFacts(draft: ActivityDraft): string[] {
     const r = s.rental
     const meta = rentalCategoryMeta(r.category)
     return [
-      r.billing === 'day' ? `By the day · ${r.minDays}–${r.maxDays} days` : 'By the hour',
+      [r.modes.includes('hour') ? `By the hour · ${r.minHours}–${r.maxHours} h` : null, r.modes.includes('day') ? `By the day · ${r.minDays}–${r.maxDays} days` : null].filter(Boolean).join(' or '),
       `${r.units} ${r.units === 1 ? meta.unit : meta.units} · ${r.seatsPerUnit} per ${meta.unit}`,
       r.licence === 'none' ? age : `${LICENCE_LABEL[r.licence]} · ${age.toLowerCase()}`,
       ...(meta.fuel ? [FUEL_LABEL[r.fuel]] : []),
@@ -1886,7 +1954,7 @@ const STARTER_TIER: Record<ActivityKind, string> = {
   trip: 'Adult',
   activity: 'Rider',
   charter: 'Half-day charter',
-  rental: '1 hour',
+  rental: 'Standard',
   lesson: 'Student',
   pass: 'Day ticket',
 }
