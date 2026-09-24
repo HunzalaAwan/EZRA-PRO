@@ -425,7 +425,9 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
     kind: activity.kind ?? 'trip',
     guestQuestions: (activity.guestQuestions ?? []).map((question) => ({ ...question })),
     waiverId: activity.waiverId ?? null,
-    pickup: activity.pickup ? { enabled: true, zoneIds: [...activity.pickup.zoneIds], required: activity.pickup.required } : { enabled: false, zoneIds: [], required: false },
+    pickup: activity.pickup
+      ? { enabled: true, zoneIds: [...activity.pickup.zoneIds], required: activity.pickup.required, prices: { ...activity.pickup.prices } }
+      : { enabled: false, zoneIds: [], required: false },
     languages: [...(activity.languages ?? ['English'])],
     route: activity.route
       ? { enabled: true, distance: activity.route.distance, unit: activity.route.unit, track: activity.route.track ?? '', elevationM: activity.route.elevationM ?? 0 }
@@ -1397,7 +1399,20 @@ export function ActivityWizard({
           crewIds: draft.crewIds,
           guestQuestions: (draft.guestQuestions ?? []).filter((question) => question.label.trim().length > 0),
           waiverId: draft.waiverId ?? null,
-          pickup: draft.pickup?.enabled && draft.pickup.zoneIds.length > 0 ? { zoneIds: draft.pickup.zoneIds, required: draft.pickup.required } : null,
+          pickup:
+            draft.pickup?.enabled && draft.pickup.zoneIds.length > 0
+              ? {
+                  zoneIds: draft.pickup.zoneIds,
+                  required: draft.pickup.required,
+                  // Every chosen zone gets a price on save, so a later change to the zone's own fee does not move it.
+                  prices: Object.fromEntries(
+                    draft.pickup.zoneIds.map((id) => {
+                      const zone = pickupZones.find((entry) => entry.id === id)
+                      return [id, draft.pickup.prices?.[id] ?? { fee: zone?.fee ?? 0, per: 'guest' as const }]
+                    }),
+                  ),
+                }
+              : null,
           locations: draft.schedule.locations.map((site) => {
             const rule = draft.schedule.locations.length > 1 ? site.schedule : draft.schedule
             return { locationId: site.locationId, times: rule.startTimes, weekdays: rule.weekdays }
@@ -1496,6 +1511,7 @@ export function ActivityWizard({
                       value={draft.pickup ?? { enabled: false, zoneIds: [], required: false }}
                       onChange={(pickup) => patch({ pickup })}
                       zones={pickupZones}
+                      currencySymbol={currencySymbol(currency)}
                     />
                   ) : null}
                   {step === 2 ? (

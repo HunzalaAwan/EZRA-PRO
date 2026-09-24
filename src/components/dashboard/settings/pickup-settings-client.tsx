@@ -98,7 +98,7 @@ export function PickupSettingsClient({ tenant, seeded, usage }: { tenant: Tenant
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-foreground">{zone.name}</p>
                       <p className="mt-0.5 text-xs text-subtle">
-                        Collects {zone.offsetMinutes} min before the start · {zone.fee > 0 ? `${formatCurrency(zone.fee, tenant.currency)} per guest` : 'included'}
+                        Collects {zone.offsetMinutes} min before the start · {zone.fee > 0 ? `${formatCurrency(zone.fee, tenant.currency)} per guest by default` : 'free by default'}
                         {used.length > 0 ? ` · ${used.length} ${pluralize(used.length, 'activity', 'activities')}` : ' · not on any activity'}
                       </p>
                       {zone.stops.length > 0 ? <p className="mt-1 text-sm text-muted">{zone.stops.join(' · ')}</p> : null}
@@ -137,7 +137,7 @@ export function PickupSettingsClient({ tenant, seeded, usage }: { tenant: Tenant
               <Field label="Collect before the start" description="Minutes.">
                 {(control) => <Input {...control} type="number" min={0} step={5} value={form.offsetMinutes} onChange={(e) => setForm((f) => ({ ...f, offsetMinutes: Math.max(0, Number(e.target.value) || 0) }))} />}
               </Field>
-              <Field label="Fee per guest" description="0 if included.">
+              <Field label="Default fee per guest" description="0 for free. Each activity can set its own price for this zone.">
                 {(control) => <Input {...control} type="number" min={0} value={form.fee / 100 || ''} onChange={(e) => setForm((f) => ({ ...f, fee: Math.max(0, Math.round(Number(e.target.value) * 100) || 0) }))} />}
               </Field>
             </div>

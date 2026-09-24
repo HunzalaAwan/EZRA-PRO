@@ -314,7 +314,8 @@ export function CheckoutFlow({
   const pickupRequired = Boolean(activity.pickup?.required)
   const [pickup, setPickup] = React.useState<PickupChoice>(() => ({ ...EMPTY_PICKUP, mode: pickupRequired ? 'pickup' : 'meet' }))
   const pickupZone = pickupZones.find((zone) => zone.id === pickup.zoneId)
-  const pickupFee = (pickup.mode === 'pickup' || pickupRequired) && pickupZone ? pickupZone.fee * quote.party : 0
+  const pickupPerBooking = pickupZone?.feePer === 'booking'
+  const pickupFee = (pickup.mode === 'pickup' || pickupRequired) && pickupZone ? pickupZone.fee * (pickupPerBooking ? 1 : quote.party) : 0
   /** The quote with the pickup fee on it, for the summary and the pay button. */
   const withPickup = React.useMemo(
     () =>
@@ -323,13 +324,13 @@ export function CheckoutFlow({
             ...quote,
             addOnLines: [
               ...quote.addOnLines,
-              { id: 'pickup', label: `Hotel pickup · ${pickupZone.name}`, kind: 'addon' as const, quantity: quote.party, unitPrice: pickupZone.fee, total: pickupFee },
+              { id: 'pickup', label: `Hotel pickup · ${pickupZone.name}`, kind: 'addon' as const, quantity: pickupPerBooking ? 1 : quote.party, unitPrice: pickupZone.fee, total: pickupFee },
             ],
             subtotal: quote.subtotal + pickupFee,
             total: quote.total + pickupFee,
           }
         : quote,
-    [quote, pickupFee, pickupZone],
+    [quote, pickupFee, pickupZone, pickupPerBooking],
   )
 
   /* ---------- promo code and gift card ---------- */

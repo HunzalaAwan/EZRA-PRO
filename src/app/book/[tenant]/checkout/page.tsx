@@ -188,7 +188,12 @@ export default async function CheckoutPage({
   return (
     <CheckoutFlow
       waiver={getWaiverById(activity.waiverId)}
-      pickupZones={getPickupZonesByTenant(tenant.id).filter((zone) => zone.active && (activity.pickup?.zoneIds ?? []).includes(zone.id))}
+      pickupZones={getPickupZonesByTenant(tenant.id)
+        .filter((zone) => zone.active && (activity.pickup?.zoneIds ?? []).includes(zone.id))
+        .map((zone) => {
+          const price = activity.pickup?.prices?.[zone.id]
+          return price ? { ...zone, fee: price.fee, feePer: price.per } : zone
+        })}
       tenant={tenant}
       activity={activity}
       departure={departure}

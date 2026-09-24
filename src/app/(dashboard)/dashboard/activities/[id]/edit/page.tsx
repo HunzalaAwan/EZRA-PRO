@@ -60,7 +60,7 @@ export default async function EditActivityPage({ params }: EditActivityPageProps
         crew={crew}
         locations={getLocationsByTenant(tenant.id)}
         waivers={getWaiversByTenant(tenant.id).map((waiver) => ({ id: waiver.id, title: waiver.title }))}
-        pickupZones={getPickupZonesByTenant(tenant.id).map((zone) => ({ id: zone.id, name: zone.name, detail: `${zone.offsetMinutes} min before · ${zone.stops.length} stops` }))}
+        pickupZones={getPickupZonesByTenant(tenant.id).map((zone) => ({ id: zone.id, name: zone.name, detail: `${zone.offsetMinutes} min before · ${zone.stops.length} stops`, fee: zone.fee }))}
         currency={tenant.currency}
         tenantName={tenant.name}
         tenantSlug={tenant.slug}

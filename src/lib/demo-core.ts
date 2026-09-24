@@ -450,11 +450,29 @@ export function getPickupZonesByTenant(tenantId: string): PickupZone[] {
 
 const ALL_BH_ZONES = ['pz_bh_kaanapali', 'pz_bh_lahaina', 'pz_bh_kihei', 'pz_bh_maalaea']
 const PICKUP_BY_SLUG: Record<string, ActivityPickup> = {
-  'molokini-crater-dawn-patrol': { zoneIds: ALL_BH_ZONES, required: false },
+  'molokini-crater-dawn-patrol': {
+    zoneIds: ALL_BH_ZONES,
+    required: false,
+    prices: {
+      pz_bh_kaanapali: { fee: 2000, per: 'guest' },
+      pz_bh_lahaina: { fee: 1500, per: 'guest' },
+      pz_bh_kihei: { fee: 0, per: 'guest' },
+      pz_bh_maalaea: { fee: 0, per: 'guest' },
+    },
+  },
   'family-reef-snorkel': { zoneIds: ALL_BH_ZONES, required: false },
   'turtle-town-kayak-snorkel': { zoneIds: ['pz_bh_kihei', 'pz_bh_maalaea'], required: false },
   'whale-watch-eco-cruise': { zoneIds: ALL_BH_ZONES, required: false },
-  'sunset-catamaran-sail-snorkel': { zoneIds: ALL_BH_ZONES, required: false },
+  'sunset-catamaran-sail-snorkel': {
+    zoneIds: ALL_BH_ZONES,
+    required: false,
+    prices: {
+      pz_bh_kaanapali: { fee: 0, per: 'guest' },
+      pz_bh_lahaina: { fee: 0, per: 'guest' },
+      pz_bh_kihei: { fee: 4500, per: 'booking' },
+      pz_bh_maalaea: { fee: 0, per: 'guest' },
+    },
+  },
   'night-manta-ray-dive': { zoneIds: ['pz_bh_kihei'], required: false },
 }
 

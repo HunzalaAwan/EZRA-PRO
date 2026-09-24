@@ -110,7 +110,7 @@ export function CheckoutPickup({
                 </SelectTrigger>
                 <SelectContent>
                   {zones.map((entry) => (
-                    <SelectItem key={entry.id} value={entry.id} description={entry.fee > 0 ? `${formatCurrency(entry.fee, currency)} per guest` : 'Included'}>
+                    <SelectItem key={entry.id} value={entry.id} description={entry.fee > 0 ? `${formatCurrency(entry.fee, currency)} per ${entry.feePer === 'booking' ? 'booking' : 'guest'}` : 'Free pickup'}>
                       {entry.name}
                     </SelectItem>
                   ))}
@@ -144,7 +144,9 @@ export function CheckoutPickup({
             <p className="rounded-xl bg-surface-sunken px-3.5 py-2.5 text-sm text-foreground sm:col-span-2">
               Pickup at <span className="font-semibold tabular-nums">{formatTime(time)}</span> from the lobby
               {zone.fee > 0 ? (
-                <span className="text-muted"> · {formatCurrency(zone.fee * guests, currency)} for {guests} {guests === 1 ? 'guest' : 'guests'}, added to your total</span>
+                <span className="text-muted">
+                  {' '}· {zone.feePer === 'booking' ? `${formatCurrency(zone.fee, currency)} for your group` : `${formatCurrency(zone.fee * guests, currency)} for ${guests} ${guests === 1 ? 'guest' : 'guests'}`}, added to your total
+                </span>
               ) : (
                 <span className="text-muted"> · included</span>
               )}

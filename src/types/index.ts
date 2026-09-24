@@ -303,13 +303,23 @@ export interface PickupZone {
   offsetMinutes: number
   /** Per guest, minor units. 0 = included. */
   fee: number
+  /** How the fee is counted. Guest unless an activity says per booking. */
+  feePer?: 'guest' | 'booking'
   active: boolean
+}
+
+/** What pickup from one zone costs on one activity. fee 0 = free. */
+export interface PickupPrice {
+  fee: number
+  per: 'guest' | 'booking'
 }
 
 export interface ActivityPickup {
   zoneIds: string[]
   /** Every guest is collected; there is no meet-there option. */
   required: boolean
+  /** Price per zone for this activity; a zone without one uses its own fee per guest. */
+  prices?: Record<string, PickupPrice>
 }
 
 export type CharterRequestStatus = 'new' | 'quoted' | 'paid' | 'declined'
