@@ -35,7 +35,7 @@ import {
 } from 'lucide-react'
 import { z } from 'zod'
 
-import type { Activity, ActivityKind, CurrencyCode, DifficultyLevel, GuestQuestion, Location, VerticalKey } from '@/types'
+import type { Activity, ActivityKind, ActivityTheme, CurrencyCode, DifficultyLevel, GuestQuestion, Location, VerticalKey } from '@/types'
 import { saveActivityOverride } from '@/lib/activity-overrides'
 import {
   cn,
@@ -76,7 +76,19 @@ import { KindFields, KindPicker, LanguagePicker, RouteFields, defaultKindSetting
 import { DurationField, DURATION_UNITS, unitFor, type DurationUnit } from './duration-field'
 import { GuestQuestionsEditor, type WaiverOption } from './guest-questions-editor'
 import { PickupEditor, type DraftPickup, type PickupZoneOption } from './pickup-editor'
-import { ACTIVITY_KIND_META, CHARTER_VESSELS, FUEL_LABEL, LESSON_LEVELS, LICENCE_LABEL, rentalCategoryMeta } from '@/lib/activity-kinds'
+import {
+  ACCESSIBILITY_OPTIONS,
+  ACTIVITY_KIND_META,
+  ACTIVITY_THEMES,
+  CHARTER_VESSELS,
+  FUEL_LABEL,
+  LESSON_LEVELS,
+  LICENCE_LABEL,
+  defaultTheme,
+  rentalCategoryMeta,
+  themeLabel,
+  themeOf,
+} from '@/lib/activity-kinds'
 import {
   LocationsEditor,
   ScheduleEditor,
@@ -117,7 +129,7 @@ export type ArrivalMode = 'meet' | 'venue' | 'none'
 
 export const ARRIVAL_OPTIONS: { value: ArrivalMode; label: string; description: string; icon: typeof MapPin }[] = [
   { value: 'meet', label: 'Meeting point', description: 'A guide or skipper meets guests at a set place.', icon: MapPin },
-  { value: 'venue', label: 'Venue address', description: 'Guests come to you during opening hours. Parks, studios, restaurants.', icon: DoorOpen },
+  { value: 'venue', label: 'Guests come to you', description: 'They arrive at your shop, ranch, park or rental desk during opening hours.', icon: DoorOpen },
   { value: 'none', label: 'No fixed place', description: 'Pickup only, mobile, or the location is confirmed after booking.', icon: Route },
 ]
 
@@ -176,6 +188,12 @@ export interface ActivityDraft {
   languages: string[]
   /** Optional distance or track, for trips and activities. */
   route: DraftRoute
+  /** The storefront category. */
+  theme: ActivityTheme
+  /** Accessibility and suitability facts. */
+  accessibility: string[]
+  /** What guests should bring. */
+  bring: string[]
 }
 
 const STORAGE_KEY = 'ezra:activity-wizard:v8'
@@ -221,6 +239,9 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
     pickup: { enabled: false, zoneIds: [], required: false },
     languages: ['English'],
     route: emptyRoute(),
+    theme: defaultTheme(category),
+    accessibility: [],
+    bring: [],
     freeCancellationHours: 24,
     crewIds: [],
     dining,
@@ -429,6 +450,9 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
       ? { enabled: true, zoneIds: [...activity.pickup.zoneIds], required: activity.pickup.required, prices: { ...activity.pickup.prices } }
       : { enabled: false, zoneIds: [], required: false },
     languages: [...(activity.languages ?? ['English'])],
+    theme: themeOf(activity),
+    accessibility: [...(activity.accessibility ?? [])],
+    bring: [...(activity.bring ?? [])],
     route: activity.route
       ? { enabled: true, distance: activity.route.distance, unit: activity.route.unit, track: activity.route.track ?? '', elevationM: activity.route.elevationM ?? 0 }
       : emptyRoute(),
@@ -596,8 +620,8 @@ const STEP_SCHEMAS = [
       .string()
       .trim()
       .min(80, 'Describe the experience in at least 80 characters — this is the storefront copy'),
-    highlights: nonEmptyList(3, 'Add at least three highlights'),
-    included: nonEmptyList(1, 'List at least one thing that is included'),
+    highlights: z.array(z.string()),
+    included: z.array(z.string()),
     meetingPoint: z.string().trim(),
     arrivalMode: z.enum(['meet', 'venue', 'none']),
   }).superRefine((draft, ctx) => {
@@ -820,6 +844,8 @@ function validateSchemaStep(step: number, draft: ActivityDraft): FieldErrors {
 
 function validateStep(step: number, draft: ActivityDraft): FieldErrors {
   const errors = validateSchemaStep(step, draft)
+  // With a location on the activity, its address is the meeting place; the note is optional.
+  if (step === 1 && !isDining(draft) && draft.schedule.locations.length > 0) delete errors.meetingPoint
   if (step !== 0 || isDining(draft)) return errors
   const kind = draft.kind ?? 'trip'
   const settings = normalizeKindSettings(draft.kindSettings)
@@ -1393,6 +1419,9 @@ export function ActivityWizard({
           minParticipants: draft.minParticipants,
           featured: draft.featured,
           languages: draft.languages ?? [],
+          theme: draft.theme ?? defaultTheme(draft.category),
+          accessibility: draft.accessibility ?? [],
+          bring: (draft.bring ?? []).map((item) => item.trim()).filter(Boolean),
           route: routeOverride(draft),
           kind: draft.kind ?? 'trip',
           ...kindOverride(draft),
@@ -1495,7 +1524,7 @@ export function ActivityWizard({
                     <BasicsStep draft={draft} patch={patch} errors={errors} currency={currency} />
                   ) : null}
                   {step === 1 ? (
-                    <DescriptionStep draft={draft} patch={patch} errors={errors} />
+                    <DescriptionStep draft={draft} patch={patch} errors={errors} locationNames={locations.filter((site) => draft.schedule.locations.some((entry) => entry.locationId === site.id)).map((site) => site.name)} />
                   ) : null}
                   {step === 1 && !dining ? (
                     <GuestQuestionsEditor
@@ -1846,9 +1875,11 @@ function BasicsStep({ draft, patch, errors, currency }: StepProps) {
   const pickKind = (next: ActivityKind) => {
     const mode = ACTIVITY_KIND_META[next].defaultFormat === 'open' ? 'hours' : 'times'
     const starter = draft.tiers.length === 1 && Object.values(STARTER_TIER).includes(draft.tiers[0].label)
+    const arrival: ArrivalMode = next === 'pass' || next === 'rental' || next === 'activity' ? 'venue' : 'meet'
     patch({
       kind: next,
       schedule: { ...draft.schedule, mode },
+      ...(draft.meetingPoint.trim() ? {} : { arrivalMode: arrival }),
       ...(starter ? { tiers: [{ ...draft.tiers[0], label: STARTER_TIER[next] }] } : {}),
       ...(next === 'lesson' && draft.maxCapacity < 1 ? { maxCapacity: 8, durationMinutes: draft.durationMinutes || 120 } : {}),
       ...(next === 'activity'
@@ -1905,30 +1936,22 @@ function BasicsStep({ draft, patch, errors, currency }: StepProps) {
         />
       </Field>
 
-      <Field
-        label="Category"
-        description={
-          dining
-            ? 'Dining switches the wizard to tables, covers, menus and services.'
-            : 'Drives storefront filters and the reporting rollup. Pick Dining for restaurant fields.'
-        }
-      >
-        <Select
-          value={draft.category}
-          onValueChange={(value) => patch(withCategory(draft, value as VerticalKey))}
-        >
-          <SelectTrigger aria-label="Category">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {CATEGORY_OPTIONS.map((option) => (
-              <SelectItem key={option.value} value={option.value} description={option.hint}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </Field>
+      {dining ? null : (
+        <Field label="Category" description="Where guests find it on your storefront and in search. You can change it any time.">
+          <Select value={draft.theme ?? defaultTheme(draft.category)} onValueChange={(value) => patch({ theme: value as ActivityTheme })}>
+            <SelectTrigger aria-label="Category">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ACTIVITY_THEMES.map((option) => (
+                <SelectItem key={option.value} value={option.value} description={option.hint}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+      )}
 
       {dining ? (
         <DiningBasicsFields
@@ -2137,9 +2160,11 @@ const DESCRIPTION_COPY = {
   },
 } as const
 
-function DescriptionStep({ draft, patch, errors }: StepProps) {
+function DescriptionStep({ draft, patch, errors, locationNames = [] }: StepProps & { locationNames?: string[] }) {
   const dining = isDining(draft)
   const copy = dining ? DESCRIPTION_COPY.dining : DESCRIPTION_COPY.tour
+  // The location already carries the address; here the operator only adds where exactly to meet.
+  const located = !dining && locationNames.length > 0
   return (
     <div className="flex flex-col gap-5">
       <Field
@@ -2159,7 +2184,7 @@ function DescriptionStep({ draft, patch, errors }: StepProps) {
 
       <ListEditor
         legend="Highlights"
-        description="Three to five bullets, shown directly under the price."
+        description="Optional. Three to five short bullets work best, shown right under the price."
         items={draft.highlights}
         onChange={(highlights) => patch({ highlights })}
         placeholder={copy.highlightPlaceholder}
@@ -2169,6 +2194,7 @@ function DescriptionStep({ draft, patch, errors }: StepProps) {
       <div className="grid gap-5 sm:grid-cols-2">
         <ListEditor
           legend={copy.included}
+          description={dining ? undefined : 'Optional, but guests compare on this.'}
           items={draft.included}
           onChange={(included) => patch({ included })}
           placeholder={copy.includedPlaceholder}
@@ -2188,11 +2214,48 @@ function DescriptionStep({ draft, patch, errors }: StepProps) {
       <ListEditor
         legend={copy.requirements}
         tone="warning"
-        description={copy.requirementsHelp}
+        description={dining ? copy.requirementsHelp : 'Optional. Anything not already covered by the age, licence and rider limits you set in Basics.'}
         items={draft.requirements}
         onChange={(requirements) => patch({ requirements })}
         placeholder={copy.requirementsPlaceholder}
       />
+
+      {dining ? null : (
+        <>
+          <ListEditor
+            legend="What to bring"
+            description="Optional. Leave it empty and guests see a sensible list for the category."
+            items={draft.bring ?? []}
+            onChange={(bring) => patch({ bring })}
+            placeholder="Reef-safe sunscreen"
+          />
+          <fieldset>
+            <legend className="text-[0.8125rem] font-medium">Good to know</legend>
+            <p className="mt-0.5 mb-2.5 text-xs text-muted">Optional. Tick what applies; guests filter by these on booking sites.</p>
+            <div className="flex flex-wrap gap-1.5">
+              {ACCESSIBILITY_OPTIONS.map((option) => {
+                const on = (draft.accessibility ?? []).includes(option)
+                return (
+                  <button
+                    key={option}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() =>
+                      patch({ accessibility: on ? (draft.accessibility ?? []).filter((entry) => entry !== option) : [...(draft.accessibility ?? []), option] })
+                    }
+                    className={cn(
+                      'rounded-full border px-3 py-1 text-xs font-medium transition-colors duration-200',
+                      on ? 'border-primary/50 bg-primary-soft text-primary' : 'border-line bg-surface text-muted hover:text-foreground',
+                    )}
+                  >
+                    {option}
+                  </button>
+                )
+              })}
+            </div>
+          </fieldset>
+        </>
+      )}
 
       {dining ? (
         <Field label={copy.venue} required error={errors.meetingPoint} description={copy.venueHelp}>
@@ -2208,7 +2271,7 @@ function DescriptionStep({ draft, patch, errors }: StepProps) {
           <fieldset>
             <legend className="text-[0.8125rem] font-medium">Where guests go</legend>
             <p className="mt-0.5 mb-2.5 text-xs text-muted">
-              A guided trip needs a meeting point. A park, a studio or a walk-in activity only needs an
+              A guided trip needs a meeting point. A rental desk, a park or a time-slot activity only needs an
               address. A pickup or mobile service needs neither.
             </p>
             <RadioGroup
@@ -2228,7 +2291,21 @@ function DescriptionStep({ draft, patch, errors }: StepProps) {
             </RadioGroup>
           </fieldset>
 
-          {draft.arrivalMode === 'meet' ? (
+          {located && draft.arrivalMode !== 'none' ? (
+            <Field
+              label={draft.arrivalMode === 'meet' ? 'Where exactly to meet' : 'Arrival notes'}
+              optional
+              error={errors.meetingPoint}
+              description={`The address comes from ${locationNames.join(', ')}, set in Schedule. Add the exact spot: a slip, a sign, a desk or where to park.`}
+            >
+              <Textarea
+                rows={2}
+                value={draft.meetingPoint}
+                placeholder={draft.arrivalMode === 'meet' ? 'Slip 61, by the blue Blue Horizon flag. Check in 20 minutes early.' : 'Main gate, free parking by the entrance.'}
+                onChange={(event) => patch({ meetingPoint: event.target.value })}
+              />
+            </Field>
+          ) : draft.arrivalMode === 'meet' ? (
             <Field label="Meeting point" required error={errors.meetingPoint} description={copy.venueHelp}>
               <Textarea
                 rows={3}
@@ -2349,7 +2426,8 @@ function ReviewStep({
           value: `${(draft.guestQuestions ?? []).length} ${pluralize((draft.guestQuestions ?? []).length, 'question')} · ${waivers.find((waiver) => waiver.id === draft.waiverId)?.title ?? 'no waiver'}`,
           step: 1,
         },
-        { label: 'Category', value: CATEGORY_OPTIONS.find((c) => c.value === draft.category)?.label, step: 0 },
+        { label: 'Category', value: themeLabel(draft.theme ?? defaultTheme(draft.category)), step: 0 },
+        ...((draft.accessibility ?? []).length > 0 ? [{ label: 'Good to know', value: (draft.accessibility ?? []).join(', '), step: 1 }] : []),
         { label: 'Setup', value: kindFacts(draft).join(' · '), step: 0 },
         { label: 'Highlights', value: `${draft.highlights.filter(Boolean).length} bullets`, step: 1 },
         {

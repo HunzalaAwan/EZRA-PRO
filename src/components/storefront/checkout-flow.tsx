@@ -78,7 +78,7 @@ export interface CheckoutDeparture {
 
 /** Where to meet for this run: the location's own note, or the activity's. */
 function meetingPointFor(activity: Activity, departure: CheckoutDeparture) {
-  return departure.location?.meetingPoint ?? activity.meetingPoint
+  return departure.location?.meetingPoint || activity.meetingPoint || departure.location?.addressLine || ''
 }
 
 export interface CheckoutFlowProps {

@@ -4,7 +4,8 @@ import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowDownWideNarrow, LayoutGrid, Plus, Rows3, SlidersHorizontal } from 'lucide-react'
 
-import type { ActivityKind, ActivityStatus, DifficultyLevel, VerticalKey } from '@/types'
+import type { ActivityKind, ActivityStatus, ActivityTheme, DifficultyLevel, VerticalKey } from '@/types'
+import { themeLabel, themeOf } from '@/lib/activity-kinds'
 import { ACTIVITY_KINDS, ACTIVITY_KIND_META } from '@/lib/activity-kinds'
 import { cn, formatNumber, titleCase } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -62,7 +63,7 @@ export function ActivityGrid({ rows, tenantSlug, cascadeKey, className }: Activi
    ========================================================================== */
 
 type StatusFilter = 'all' | ActivityStatus
-type CategoryFilter = 'all' | VerticalKey
+type CategoryFilter = 'all' | ActivityTheme
 type DifficultyFilter = 'all' | DifficultyLevel
 type FormatFilter = 'all' | ActivityKind
 type ViewMode = 'grid' | 'table'
@@ -109,7 +110,7 @@ export function ActivityCatalog({ summaries, tenantSlug }: ActivityCatalogProps)
   const [view, setView] = React.useState<ViewMode>('grid')
 
   const categories = React.useMemo(
-    () => Array.from(new Set(summaries.map((s) => s.activity.category))).sort(),
+    () => Array.from(new Set(summaries.map((s) => themeOf(s.activity)))).sort((a, b) => themeLabel(a).localeCompare(themeLabel(b))),
     [summaries],
   )
 
@@ -125,7 +126,7 @@ export function ActivityCatalog({ summaries, tenantSlug }: ActivityCatalogProps)
     const needle = query.trim().toLowerCase()
     const rows = summaries.filter(({ activity }) => {
       if (status !== 'all' && activity.status !== status) return false
-      if (category !== 'all' && activity.category !== category) return false
+      if (category !== 'all' && themeOf(activity) !== category) return false
       if (difficulty !== 'all' && activity.difficulty !== difficulty) return false
       if (format !== 'all' && (activity.kind ?? 'trip') !== format) return false
       if (!needle) return true
@@ -193,7 +194,7 @@ export function ActivityCatalog({ summaries, tenantSlug }: ActivityCatalogProps)
               <SelectItem value="all">All categories</SelectItem>
               {categories.map((value) => (
                 <SelectItem key={value} value={value}>
-                  {titleCase(value)}
+                  {themeLabel(value)}
                 </SelectItem>
               ))}
             </SelectContent>

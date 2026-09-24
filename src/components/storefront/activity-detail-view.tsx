@@ -35,7 +35,7 @@ import {
 } from '@/lib/utils'
 import type { Activity, DifficultyLevel, Location, Tenant } from '@/types'
 import { locationAddress } from '@/lib/locations'
-import { kindBadge, kindChipLabel, kindNote, rentalCategoryMeta, routeLabel } from '@/lib/activity-kinds'
+import { kindBadge, kindChipLabel, kindNote, rentalCategoryMeta, routeLabel, themeLabel, themeOf } from '@/lib/activity-kinds'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
@@ -194,7 +194,7 @@ export function ActivityDetailView({
   const rest = media.filter((m) => m.id !== hero?.id).slice(0, 2)
 
   const languages = activity.languages && activity.languages.length > 0 ? activity.languages : (LANGUAGES_BY_LOCALE[tenant.locale] ?? ['English'])
-  const packing = PACKING_LIST[activity.category] ?? PACKING_LIST.tours
+  const packing = activity.bring && activity.bring.length > 0 ? activity.bring : (PACKING_LIST[activity.category] ?? PACKING_LIST.tours)
 
   const nextOpen = React.useMemo(() => {
     for (const day of days) {
@@ -249,6 +249,9 @@ export function ActivityDetailView({
               <div className="flex flex-wrap items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-soft px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.1em] text-primary">
                   {kindBadge(activity)}
+                </span>
+                <span className="inline-flex items-center rounded-full bg-surface-sunken px-2.5 py-1 text-xs font-semibold text-muted">
+                  {themeLabel(themeOf(activity))}
                 </span>
                 {activity.featured ? (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.1em] text-accent">
@@ -450,6 +453,9 @@ export function ActivityDetailView({
                   </li>
                 ))}
               </ul>
+              {activity.included.length === 0 ? (
+                <p className="text-sm leading-relaxed text-muted">Ask us what comes with it: call {tenant.contact.phone}.</p>
+              ) : null}
               {activity.excluded.length > 0 ? (
                 <p className="mt-4 text-sm leading-relaxed text-subtle">
                   <span className="font-medium text-muted">Not included:</span>{' '}
@@ -475,6 +481,7 @@ export function ActivityDetailView({
 
             {/* ---------- requirements ---------- */}
             <Section id="requirements" title="Requirements">
+              {activity.requirements.length === 0 ? <p className="text-sm leading-relaxed text-muted">No special requirements beyond the age and limits shown above.</p> : null}
               <ul className="space-y-2.5">
                 {activity.requirements.map((item) => (
                   <li key={item} className="flex items-start gap-2.5">
@@ -483,6 +490,15 @@ export function ActivityDetailView({
                   </li>
                 ))}
               </ul>
+              {activity.accessibility && activity.accessibility.length > 0 ? (
+                <ul className="mt-4 flex flex-wrap gap-2">
+                  {activity.accessibility.map((item) => (
+                    <li key={item} className="rounded-full border border-line bg-surface px-3 py-1.5 text-[0.8125rem] text-foreground">
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
               <p className="mt-4 text-sm leading-relaxed text-subtle">
                 Not sure whether this suits your group? Call {tenant.contact.phone} and one of the
                 team will tell you honestly.

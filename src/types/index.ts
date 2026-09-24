@@ -355,6 +355,22 @@ export interface CharterRequest {
  */
 export type ActivityKind = 'trip' | 'activity' | 'charter' | 'rental' | 'lesson' | 'pass'
 
+/** What the experience is about, as guests search for it. */
+export type ActivityTheme =
+  | 'water'
+  | 'boat'
+  | 'wildlife'
+  | 'sightseeing'
+  | 'food'
+  | 'adventure'
+  | 'cycling'
+  | 'offroad'
+  | 'air'
+  | 'horse'
+  | 'snow'
+  | 'attractions'
+  | 'transfers'
+
 /** Activities: guests book a time slot, no departure. Limits are checked per rider. */
 export interface RideConfig {
   /** Riders shorter than this cannot ride. 0 or absent = no limit. */
@@ -478,6 +494,12 @@ export interface Activity {
   pickup?: ActivityPickup
   /** Languages the guide or instructor speaks. */
   languages?: string[]
+  /** The storefront category; guessed from the activity when absent. */
+  theme?: ActivityTheme
+  /** Accessibility and suitability facts, from ACCESSIBILITY_OPTIONS. */
+  accessibility?: string[]
+  /** What guests should bring; a sensible list is shown when empty. */
+  bring?: string[]
   difficulty: DifficultyLevel
   /** Minutes. */
   durationMinutes: number

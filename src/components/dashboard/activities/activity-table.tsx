@@ -1,5 +1,6 @@
 'use client'
 
+import { themeLabel, themeOf } from '@/lib/activity-kinds'
 import * as React from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
@@ -178,7 +179,7 @@ export function ActivityTable({
                   {activity.name}
                 </span>
                 <span className="block truncate text-xs text-subtle">
-                  {titleCase(activity.category)} · {DIFFICULTY_LABEL[activity.difficulty]}
+                  {themeLabel(themeOf(activity))} · {DIFFICULTY_LABEL[activity.difficulty]}
                   {activity.featured ? ' · Featured' : ''}
                 </span>
               </span>

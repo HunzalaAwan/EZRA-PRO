@@ -1,4 +1,4 @@
-import type { Activity, ActivityFormat, ActivityKind, CharterConfig, RentalCategory, RentalConfig, RouteInfo } from '@/types'
+import type { Activity, ActivityFormat, ActivityKind, ActivityTheme, CharterConfig, RentalCategory, RentalConfig, RouteInfo } from '@/types'
 import { formatDuration } from '@/lib/utils'
 
 /* ==========================================================================
@@ -319,3 +319,67 @@ export function priceUnit(activity: Pick<Activity, 'kind' | 'rental'>): string {
       return 'per person'
   }
 }
+
+/* ==========================================================================
+   CATEGORIES — what the experience is about, in the terms guests search by
+   on Viator, GetYourGuide and Google. Separate from the kind (how it is
+   sold) and from the business's vertical (which dashboard it gets).
+   ========================================================================== */
+
+export const ACTIVITY_THEMES: { value: ActivityTheme; label: string; hint: string }[] = [
+  { value: 'water', label: 'Water activities', hint: 'Snorkel, dive, surf, paddle, jet ski' },
+  { value: 'boat', label: 'Boat trips & cruises', hint: 'Sailing, sunset cruises, fishing, island hops' },
+  { value: 'wildlife', label: 'Wildlife & nature', hint: 'Whale watching, eco tours, safaris, birding' },
+  { value: 'sightseeing', label: 'Sightseeing & city tours', hint: 'Walking, bus, cultural, historical' },
+  { value: 'food', label: 'Food & drink tours', hint: 'Tastings, winery, brewery, market tours' },
+  { value: 'adventure', label: 'Adventure & outdoors', hint: 'Hiking, climbing, canyoning, zipline, bungee' },
+  { value: 'cycling', label: 'Bike & e-bike', hint: 'Guided rides, trails, downhill' },
+  { value: 'offroad', label: 'Off-road & motorsport', hint: 'ATV, buggy, jeep safari, 4x4, snowmobile' },
+  { value: 'air', label: 'Air & sky', hint: 'Helicopter, skydive, paraglide, balloon, parasail' },
+  { value: 'horse', label: 'Horse riding', hint: 'Trail rides, beach rides, ranch days' },
+  { value: 'snow', label: 'Snow & mountain', hint: 'Ski, snowboard, snowshoe, dog sled' },
+  { value: 'attractions', label: 'Attractions & tickets', hint: 'Parks, beach clubs, museums, aquariums' },
+  { value: 'transfers', label: 'Transfers & transport', hint: 'Shuttles, ferries, airport runs' },
+]
+
+export const themeLabel = (theme: ActivityTheme) => ACTIVITY_THEMES.find((entry) => entry.value === theme)?.label ?? 'Tours & activities'
+
+/** The category a new activity starts in, from the business's vertical. */
+export function defaultTheme(vertical: string): ActivityTheme {
+  if (vertical === 'watersports') return 'water'
+  if (vertical === 'island') return 'boat'
+  if (vertical === 'adventure') return 'adventure'
+  return 'sightseeing'
+}
+
+/** An activity's category: the one it was given, or the best guess from what it is. */
+export function themeOf(activity: Pick<Activity, 'theme' | 'slug' | 'kind' | 'rental' | 'category'>): ActivityTheme {
+  if (activity.theme) return activity.theme
+  const slug = activity.slug
+  if (activity.kind === 'pass') return 'attractions'
+  if (activity.kind === 'rental') {
+    const category = activity.rental?.category
+    return category === 'vehicle' ? 'offroad' : category === 'bike' ? 'cycling' : 'water'
+  }
+  if (/horse|ranch/.test(slug)) return 'horse'
+  if (/heli|parasail|skydiv|balloon|paraglid/.test(slug)) return 'air'
+  if (/whale|manta|turtle|eco|safari-wild|bird/.test(slug)) return 'wildlife'
+  if (/e-bike|bike|cycle/.test(slug)) return 'cycling'
+  if (/atv|buggy|jeep|4x4|off-road/.test(slug)) return 'offroad'
+  if (/food|tasting|wine|brew/.test(slug)) return 'food'
+  if (/hike|ascent|climb|canyon|swing|bungee|zip/.test(slug)) return 'adventure'
+  if (/charter|cruise|sail|catamaran|crossing|reef-day|liveaboard|fishing/.test(slug)) return 'boat'
+  if (/snorkel|dive|surf|sup|kayak|jet|paddle|freedive/.test(slug)) return 'water'
+  return defaultTheme(activity.category)
+}
+
+/** "Good to know" facts guests filter by. Optional on every activity. */
+export const ACCESSIBILITY_OPTIONS = [
+  'Wheelchair accessible',
+  'Stroller or pram friendly',
+  'Infants can sit on laps',
+  'Service animals welcome',
+  'Near public transport',
+  'Not suitable for pregnant travellers',
+  'Not suitable with back or neck problems',
+] as const
