@@ -10,6 +10,7 @@ import {
   ChevronRight,
   CreditCard,
   FileSignature,
+  Globe,
   MapPin,
   MessagesSquare,
   Plug,
@@ -66,6 +67,12 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     label: 'Messages',
     description: 'Emails and texts each booking sends',
     icon: MessagesSquare,
+  },
+  {
+    href: '/dashboard/settings/channels',
+    label: 'Domains & numbers',
+    description: 'Email domain, storefront domain, texting number',
+    icon: Globe,
   },
   {
     href: '/dashboard/settings/booking',

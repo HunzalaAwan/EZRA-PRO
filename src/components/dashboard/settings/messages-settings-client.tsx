@@ -13,7 +13,10 @@ import { Sheet, SheetBody, SheetContent, SheetDescription, SheetFooter, SheetHea
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
+import Link from 'next/link'
 import { useMessageTemplates } from '@/hooks/use-message-templates'
+import { useChannels } from '@/hooks/use-channels'
+import { formatPhone, fromAddress, storefrontHost, textingNumber } from '@/lib/channels'
 import {
   CHANNEL_LABEL,
   PLACEHOLDERS,
@@ -33,8 +36,39 @@ import type { Tenant } from '@/types'
    fill in per guest. The preview uses a real booking.
    ========================================================================== */
 
-export function MessagesSettingsClient({ tenant, sample }: { tenant: Tenant; sample: MessageContext }) {
+export function MessagesSettingsClient({ tenant, sample: seededSample }: { tenant: Tenant; sample: MessageContext }) {
   const { templates, update, reset, hasEdits } = useMessageTemplates(tenant.id)
+  const { settings: channels } = useChannels(tenant)
+  const host = storefrontHost(channels, tenant.slug)
+  // Links in the preview use the storefront's own domain once it is connected.
+  const sample = React.useMemo(
+    () => ({ ...seededSample, manage_link: String(seededSample.manage_link ?? '').replace(`${tenant.slug}.ezrapro.com`, host) }),
+    [seededSample, host, tenant.slug],
+  )
+  const texting = textingNumber(channels)
+  const sendingFrom = [
+    {
+      icon: Mail,
+      label: 'Emails from',
+      value: fromAddress(channels, tenant.slug),
+      ok: channels.email.status === 'verified',
+      todo: 'Using our shared address',
+    },
+    {
+      icon: MessageSquareText,
+      label: 'Texts from',
+      value: texting ? formatPhone(texting) : 'Our shared number',
+      ok: Boolean(texting),
+      todo: channels.phone.status === 'verified' ? 'Waiting for US texting registration' : 'No business number yet',
+    },
+    {
+      icon: Check,
+      label: 'Links go to',
+      value: host,
+      ok: channels.storefront.status === 'verified',
+      todo: 'Free ezrapro.com address',
+    },
+  ]
   const [editing, setEditing] = React.useState<MessageTemplate | null>(null)
   const [draft, setDraft] = React.useState<MessageTemplate | null>(null)
   const bodyRef = React.useRef<HTMLTextAreaElement>(null)
@@ -67,6 +101,32 @@ export function MessagesSettingsClient({ tenant, sample }: { tenant: Tenant; sam
 
   return (
     <div className="flex flex-col gap-6">
+      <Card>
+        <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle>Sending from</CardTitle>
+            <CardDescription>The address, number and links every message below uses.</CardDescription>
+          </div>
+          <Button asChild variant="secondary" size="sm">
+            <Link href="/dashboard/settings/channels">Domains & numbers</Link>
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <ul className="grid list-none gap-2 p-0 md:grid-cols-3">
+            {sendingFrom.map((item) => (
+              <li key={item.label} className="rounded-xl border border-line px-3.5 py-3">
+                <p className="flex items-center gap-1.5 text-xs text-subtle">
+                  <item.icon className="size-3.5" aria-hidden="true" />
+                  {item.label}
+                </p>
+                <p className="mt-0.5 truncate text-sm font-medium text-foreground">{item.value}</p>
+                <p className={cn('mt-0.5 text-xs', item.ok ? 'text-success' : 'text-warning')}>{item.ok ? 'Your own' : item.todo}</p>
+              </li>
+            ))}
+          </ul>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>

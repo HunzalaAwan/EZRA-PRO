@@ -1,5 +1,8 @@
 'use client'
 
+import { useChannels } from '@/hooks/use-channels'
+import { storefrontHost } from '@/lib/channels'
+
 import * as React from 'react'
 import Link from 'next/link'
 import { motion } from 'motion/react'
@@ -148,7 +151,8 @@ export function StorefrontAdminClient({
   const { settings, update, reset, isDefault } = useStorefrontSettings(tenant.slug, tenant.vertical)
   const [device, setDevice] = React.useState<'desktop' | 'mobile'>('desktop')
   const [embed, setEmbed] = React.useState<EmbedKey>('inline')
-  const [domain, setDomain] = React.useState(CUSTOM_DOMAIN)
+  const { settings: channelSettings } = useChannels(tenant)
+  const domain = storefrontHost(channelSettings, tenant.slug)
 
   /* ---------- brand: the operator's look over the tenant record ---------- */
   const brand = React.useMemo(() => resolveBrand(tenant, settings.brand), [tenant, settings.brand])
@@ -224,7 +228,7 @@ export function StorefrontAdminClient({
 
           <div className="grid gap-2 sm:grid-cols-2">
             <CopyRow label="EZRA Pro address" value={PUBLIC_URL} />
-            <CopyRow label="Custom domain" value={`https://${domain}`} />
+            <CopyRow label={channelSettings.storefront.status === 'verified' ? 'Your domain' : 'Storefront address'} value={`https://${domain}`} />
           </div>
         </CardContent>
       </Card>
@@ -598,95 +602,7 @@ export function StorefrontAdminClient({
           </Card>
 
           {/* ---------------- Domain ---------------- */}
-          <Card>
-            <CardHeader>
-              <div className="min-w-0">
-                <CardTitle className="flex items-center gap-2">
-                  <Share2 className="size-4 text-primary" aria-hidden="true" />
-                  Domain
-                </CardTitle>
-                <CardDescription>
-                  Guests trust a booking page on your own domain. SSL is issued and renewed for
-                  you.
-                </CardDescription>
-              </div>
-              <CardToolbar>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  leftIcon={<RefreshCw />}
-                  onClick={() =>
-                    toast.success('DNS re-checked', {
-                      description: 'Two of three records verified. CAA is still propagating.',
-                    })
-                  }
-                >
-                  Re-check DNS
-                </Button>
-              </CardToolbar>
-            </CardHeader>
-
-            <CardContent className="flex flex-col gap-4 pt-0">
-              <Field
-                label="Custom domain"
-                description="A subdomain such as book.yourdomain.com is the fastest to verify."
-              >
-                <Input
-                  value={domain}
-                  onChange={(e) => setDomain(e.target.value.trim().toLowerCase())}
-                  leftIcon={<Globe className="size-4" />}
-                  suffix={
-                    <span className="inline-flex items-center gap-1 text-success">
-                      <Lock className="size-3" aria-hidden="true" />
-                      SSL
-                    </span>
-                  }
-                />
-              </Field>
-
-              <div className="overflow-hidden rounded-xl border border-line">
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[34rem] text-sm">
-                    <thead>
-                      <tr className="border-b border-line bg-surface-sunken">
-                        <Th>Type</Th>
-                        <Th>Host</Th>
-                        <Th>Points to</Th>
-                        <Th align="right">Status</Th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {DNS_RECORDS.map((record) => (
-                        <tr key={`${record.type}-${record.host}`} className="border-b border-line-subtle last:border-0">
-                          <Td>
-                            <Badge variant="outline" size="sm" className="font-mono">
-                              {record.type}
-                            </Badge>
-                          </Td>
-                          <Td className="font-mono text-xs">{record.host}</Td>
-                          <Td className="font-mono text-xs text-muted">{record.value}</Td>
-                          <Td align="right">
-                            <Badge
-                              variant={record.status === 'verified' ? 'success' : 'warning'}
-                              size="sm"
-                              dot
-                            >
-                              {record.status === 'verified' ? 'Verified' : 'Propagating'}
-                            </Badge>
-                          </Td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <p className="text-xs text-subtle">
-                Records are checked every 15 minutes. Full propagation can take up to 48 hours
-                depending on your registrar.
-              </p>
-            </CardContent>
-          </Card>
+          <StorefrontDomainCard tenant={tenant} />
         </div>
 
         {/* ---------------- Live preview ---------------- */}
@@ -1022,5 +938,47 @@ function StorefrontFrame({
           </div>
         ))}
     </div>
+  )
+}
+
+/** The storefront's web address, read from Settings → Domains & numbers. */
+function StorefrontDomainCard({ tenant }: { tenant: Parameters<typeof useChannels>[0] }) {
+  const { settings } = useChannels(tenant)
+  const site = settings.storefront
+  return (
+    <Card>
+      <CardHeader>
+        <div className="min-w-0">
+          <CardTitle className="flex items-center gap-2">
+            <Share2 className="size-4 text-primary" aria-hidden="true" />
+            Domain
+          </CardTitle>
+          <CardDescription>Guests trust a booking page on your own domain. SSL is issued and renewed for you.</CardDescription>
+        </div>
+        <CardToolbar>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/dashboard/settings/channels#storefront">{site.status === 'none' ? 'Connect a domain' : 'Manage'}</Link>
+          </Button>
+        </CardToolbar>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2 pt-0 text-sm">
+        <p className="flex items-center gap-2">
+          <Globe className="size-4 text-faint" aria-hidden="true" />
+          <span className="font-medium">{site.status === 'verified' ? site.domain : `${tenant.slug}.ezrapro.com`}</span>
+          {site.status === 'verified' ? (
+            <Badge variant="success" size="sm" dot>
+              {site.ssl === 'active' ? 'Connected · SSL' : 'Connected · issuing SSL'}
+            </Badge>
+          ) : site.status === 'pending' ? (
+            <Badge variant="warning" size="sm" dot>
+              Waiting for DNS on {site.domain}
+            </Badge>
+          ) : (
+            <Badge variant="neutral" size="sm">Free address</Badge>
+          )}
+        </p>
+        <p className="text-xs text-subtle">Set it up once in Settings, Domains & numbers. Emails and texts use the same address.</p>
+      </CardContent>
+    </Card>
   )
 }

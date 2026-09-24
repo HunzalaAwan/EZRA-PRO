@@ -47,6 +47,7 @@ const NAV_LABEL_BY_HREF: Record<string, string> = Object.fromEntries(
 )
 
 const EXTRA_SEGMENT_LABEL: Record<string, string> = {
+  channels: 'Domains & numbers',
   new: 'New',
   edit: 'Edit',
   billing: 'Billing',
