@@ -8,6 +8,7 @@ import {
   getPickupZonesByTenant,
 } from '@/lib/demo'
 import { addDays, hashSeed, toDateKey } from '@/lib/utils'
+import { rentalCategoryMeta } from '@/lib/activity-kinds'
 import type { CharterRequest, WeatherSnapshot } from '@/types'
 
 /* ==========================================================================
@@ -41,6 +42,10 @@ export interface RentalRow {
   endsAt: string
   minutes: number
   lengthLabel: string
+  /** What was rented: the tier (a length or a model). */
+  itemLabel: string
+  /** Day rentals: picked up on one day, back on a later one. */
+  days: number
   status: RentalStatus
   /** Minor units held per unit at hand-out. */
   deposit: number
@@ -54,6 +59,11 @@ export interface RentalFleet {
   colorKey: string
   units: number
   unitNoun: string
+  /** "jet skis", "vehicles": for sentences. */
+  unitsWord: string
+  unitWord: string
+  /** Rented by the day rather than by the hour. */
+  byDay: boolean
   bufferMinutes: number
   damageDeposit: number
 }
@@ -66,11 +76,13 @@ export interface RentalBoard {
 }
 
 const UNIT_NOUN: Record<string, string> = { 'jet-ski-rental': 'Ski', 'kayak-sup-rental': 'Board' }
+const UNIT_WORDS: Record<string, [string, string]> = { 'jet-ski-rental': ['jet ski', 'jet skis'], 'kayak-sup-rental': ['kayak or board', 'kayaks and boards'] }
 
 export function getRentalBoard(tenantId: string, day: Date = NOW): RentalBoard {
   const activities = getActivitiesByTenant(tenantId).filter((activity) => activity.kind === 'rental' && activity.status === 'live')
-  const departures = getDeparturesForDay(tenantId, day)
+  const today = getDeparturesForDay(tenantId, day)
   const nowMs = NOW.getTime()
+  const todayKey = toDateKey(day)
   const fleets: RentalFleet[] = []
   const rentals: RentalRow[] = []
 
@@ -78,21 +90,31 @@ export function getRentalBoard(tenantId: string, day: Date = NOW): RentalBoard {
     const config = activity.rental
     const units = config?.units ?? activity.maxCapacity
     const buffer = config?.bufferMinutes ?? 0
+    const byDay = config?.billing === 'day'
+    const meta = rentalCategoryMeta(config?.category)
     fleets.push({
       id: activity.id,
       name: activity.name,
       slug: activity.slug,
       colorKey: activity.colorKey,
       units,
-      unitNoun: UNIT_NOUN[activity.slug] ?? 'Unit',
+      unitNoun: UNIT_NOUN[activity.slug] ?? meta.unit.charAt(0).toUpperCase() + meta.unit.slice(1),
+      unitsWord: UNIT_WORDS[activity.slug]?.[1] ?? meta.units,
+      unitWord: UNIT_WORDS[activity.slug]?.[0] ?? meta.unit,
+      byDay,
       bufferMinutes: buffer,
       damageDeposit: config?.damageDeposit ?? 0,
     })
 
+    // A day rental picked up earlier in the week can still be out today.
+    const lookBack = byDay ? Math.min(7, config?.maxDays ?? 7) : 0
+    const departures = Array.from({ length: lookBack + 1 }, (_, index) => addDays(day, index - lookBack)).flatMap((date) =>
+      (toDateKey(date) === todayKey ? today : getDeparturesForDay(tenantId, date)).filter((departure) => departure.activityId === activity.id),
+    )
+
     const lengths = config?.durations ?? [{ tierId: activity.priceTiers[0]?.id ?? '', minutes: activity.durationMinutes }]
     const freeAt = Array.from({ length: units }, () => 0)
     const mine = departures
-      .filter((departure) => departure.activityId === activity.id)
       .flatMap((departure) =>
         getBookingsByDeparture(departure.id)
           .filter((booking) => booking.status !== 'cancelled' && booking.status !== 'refunded')
@@ -103,17 +125,33 @@ export function getRentalBoard(tenantId: string, day: Date = NOW): RentalBoard {
     for (const { booking, departure } of mine) {
       const pick = lengths[hashSeed(`len:${booking.id}`) % lengths.length]
       const tier = activity.priceTiers.find((entry) => entry.id === pick.tierId)
-      const start = new Date(departure.startsAt)
-      const end = new Date(start.getTime() + pick.minutes * 60_000)
-      const count = Math.max(1, Math.min(units, booking.partySize))
+      const dayKey = departure.startsAt.slice(0, 10)
+      let start: Date
+      let end: Date
+      let days = 1
+      if (byDay) {
+        const least = Math.max(1, config?.minDays ?? 1)
+        const most = Math.max(least, Math.min(config?.maxDays ?? 5, 5))
+        days = least + (hashSeed(`days:${booking.id}`) % (most - least + 1))
+        start = new Date(`${dayKey}T${config?.pickupTime ?? '08:00'}:00`)
+        end = addDays(new Date(`${dayKey}T${config?.returnTime ?? '17:00'}:00`), days)
+        // Only what touches today: picked up today, out today or due back today.
+        if (toDateKey(end) < todayKey) continue
+      } else {
+        start = new Date(departure.startsAt)
+        end = new Date(start.getTime() + pick.minutes * 60_000)
+      }
+      const count = Math.max(1, Math.min(units, byDay ? Math.ceil(booking.partySize / 3) : booking.partySize))
 
-      // Earliest-free units first, so the board reads like the shack runs it.
+      // Earliest-free units first, so the list reads like the shack runs it.
       const order = freeAt
         .map((at, index) => ({ at, index }))
         .filter((entry) => entry.at <= start.getTime())
         .sort((a, b) => a.index - b.index)
       const chosen = order.slice(0, count).map((entry) => entry.index)
       for (const index of chosen) freeAt[index] = end.getTime() + buffer * 60_000
+      // Seeded demand can run past the fleet; a booking that finds nothing free at all was never taken.
+      if (chosen.length === 0) continue
 
       const roll = unitHash(`status:${booking.id}`)
       let status: RentalStatus
@@ -131,10 +169,12 @@ export function getRentalBoard(tenantId: string, day: Date = NOW): RentalBoard {
         phone: customer?.phone ?? '',
         units: chosen.map((index) => index + 1).sort((a, b) => a - b),
         short: count - chosen.length,
-        startsAt: departure.startsAt,
+        startsAt: isoLocal(start),
         endsAt: isoLocal(end),
-        minutes: pick.minutes,
-        lengthLabel: tier?.label ?? `${pick.minutes} min`,
+        minutes: Math.round((end.getTime() - start.getTime()) / 60_000),
+        lengthLabel: byDay ? `${days} ${days === 1 ? 'day' : 'days'}` : (tier?.label ?? `${pick.minutes} min`),
+        itemLabel: tier?.label ?? activity.name,
+        days,
         status,
         deposit: config?.damageDeposit ?? 0,
         balance: Math.max(0, booking.total - booking.amountPaid),
@@ -142,7 +182,7 @@ export function getRentalBoard(tenantId: string, day: Date = NOW): RentalBoard {
     }
   }
 
-  return { dayKey: toDateKey(day), nowIso: isoLocal(NOW), fleets, rentals }
+  return { dayKey: todayKey, nowIso: isoLocal(NOW), fleets, rentals }
 }
 
 /* --------------------------------------------------------------------------

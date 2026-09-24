@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'Rentals',
-  description: 'Every unit on a timeline: what is out, what is due back and what is late.',
+  description: 'What to hand out, what is out and what is due back, in time order.',
 }
 
 export default async function RentalsPage() {
@@ -19,7 +19,7 @@ export default async function RentalsPage() {
       <PageHeader
         className="mb-0"
         title="Rentals"
-        description="Today's units, one row each. Click a rental to hand it out or take it back."
+        description="What to hand out next, what is out, and what is due back. One button per rental."
       />
       <RentalsBoard board={getRentalBoard(tenant.id)} currency={tenant.currency} />
     </div>
