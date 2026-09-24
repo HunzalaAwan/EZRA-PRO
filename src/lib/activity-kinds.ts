@@ -383,3 +383,7 @@ export const ACCESSIBILITY_OPTIONS = [
   'Not suitable for pregnant travellers',
   'Not suitable with back or neck problems',
 ] as const
+
+/** The category guests see: the business's own one if set, otherwise the built-in theme. */
+export const categoryLabel = (activity: Pick<Activity, 'theme' | 'customCategory' | 'slug' | 'kind' | 'rental' | 'category'>) =>
+  activity.customCategory?.trim() || themeLabel(themeOf(activity))

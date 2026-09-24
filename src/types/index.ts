@@ -496,6 +496,8 @@ export interface Activity {
   languages?: string[]
   /** The storefront category; guessed from the activity when absent. */
   theme?: ActivityTheme
+  /** A category the business made itself; shown instead of the theme when set. */
+  customCategory?: string
   /** Accessibility and suitability facts, from ACCESSIBILITY_OPTIONS. */
   accessibility?: string[]
   /** What guests should bring; a sensible list is shown when empty. */

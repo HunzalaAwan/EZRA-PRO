@@ -1,6 +1,6 @@
 'use client'
 
-import { themeLabel, themeOf } from '@/lib/activity-kinds'
+import { categoryLabel, themeLabel, themeOf } from '@/lib/activity-kinds'
 import * as React from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -1092,7 +1092,7 @@ export function ActivityDetail({ detail, tenantSlug, nowIso }: ActivityDetailPro
                 className="glass-strong border-white/20"
               />
               <Badge size="sm" variant="neutral" className="glass-strong border-white/20 text-white">
-                {themeLabel(themeOf(activity))}
+                {categoryLabel(activity)}
               </Badge>
               {activity.featured ? (
                 <Badge size="sm" variant="warning" className="border-transparent">

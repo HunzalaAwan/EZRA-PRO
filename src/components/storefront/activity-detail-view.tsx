@@ -35,7 +35,7 @@ import {
 } from '@/lib/utils'
 import type { Activity, DifficultyLevel, Location, Tenant } from '@/types'
 import { locationAddress } from '@/lib/locations'
-import { kindBadge, kindChipLabel, kindNote, rentalCategoryMeta, routeLabel, themeLabel, themeOf } from '@/lib/activity-kinds'
+import { kindBadge, kindChipLabel, kindNote, rentalCategoryMeta, routeLabel, categoryLabel, themeLabel, themeOf } from '@/lib/activity-kinds'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
@@ -251,7 +251,7 @@ export function ActivityDetailView({
                   {kindBadge(activity)}
                 </span>
                 <span className="inline-flex items-center rounded-full bg-surface-sunken px-2.5 py-1 text-xs font-semibold text-muted">
-                  {themeLabel(themeOf(activity))}
+                  {categoryLabel(activity)}
                 </span>
                 {activity.featured ? (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.1em] text-accent">

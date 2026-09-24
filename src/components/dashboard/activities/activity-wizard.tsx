@@ -59,7 +59,10 @@ import { RadioGroup, RadioGroupCard } from '@/components/ui/radio-group'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
@@ -74,6 +77,7 @@ import {
 import { AddonEditor, type DraftAddOn } from './addon-editor'
 import { KindFields, KindPicker, LanguagePicker, RouteFields, defaultKindSettings, emptyRoute, normalizeKindSettings, type DraftKindSettings, type DraftRoute, type SharedBasics } from './kind-fields'
 import { DurationField, DURATION_UNITS, unitFor, type DurationUnit } from './duration-field'
+import { useCustomCategories } from '@/hooks/use-custom-categories'
 import { GuestQuestionsEditor, type WaiverOption } from './guest-questions-editor'
 import { PickupEditor, type DraftPickup, type PickupZoneOption } from './pickup-editor'
 import {
@@ -190,6 +194,8 @@ export interface ActivityDraft {
   route: DraftRoute
   /** The storefront category. */
   theme: ActivityTheme
+  /** A category the business made itself; wins over the theme when set. */
+  customCategory: string | null
   /** Accessibility and suitability facts. */
   accessibility: string[]
   /** What guests should bring. */
@@ -240,6 +246,7 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
     languages: ['English'],
     route: emptyRoute(),
     theme: defaultTheme(category),
+    customCategory: null,
     accessibility: [],
     bring: [],
     freeCancellationHours: 24,
@@ -451,6 +458,7 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
       : { enabled: false, zoneIds: [], required: false },
     languages: [...(activity.languages ?? ['English'])],
     theme: themeOf(activity),
+    customCategory: activity.customCategory ?? null,
     accessibility: [...(activity.accessibility ?? [])],
     bring: [...(activity.bring ?? [])],
     route: activity.route
@@ -1420,6 +1428,7 @@ export function ActivityWizard({
           featured: draft.featured,
           languages: draft.languages ?? [],
           theme: draft.theme ?? defaultTheme(draft.category),
+          customCategory: draft.customCategory?.trim() || null,
           accessibility: draft.accessibility ?? [],
           bring: (draft.bring ?? []).map((item) => item.trim()).filter(Boolean),
           route: routeOverride(draft),
@@ -1521,7 +1530,7 @@ export function ActivityWizard({
                   className="min-w-0"
                 >
                   {step === 0 ? (
-                    <BasicsStep draft={draft} patch={patch} errors={errors} currency={currency} />
+                    <BasicsStep draft={draft} patch={patch} errors={errors} currency={currency} tenantSlug={tenantSlug} />
                   ) : null}
                   {step === 1 ? (
                     <DescriptionStep draft={draft} patch={patch} errors={errors} locationNames={locations.filter((site) => draft.schedule.locations.some((entry) => entry.locationId === site.id)).map((site) => site.name)} />
@@ -1868,7 +1877,132 @@ const STARTER_TIER: Record<ActivityKind, string> = {
   pass: 'Day ticket',
 }
 
-function BasicsStep({ draft, patch, errors, currency }: StepProps) {
+const NEW_CATEGORY = '__new'
+
+/** Built-in categories, the business's own, and a way to add one without leaving the form. */
+function CategoryField({ draft, patch, tenantSlug }: { draft: ActivityDraft; patch: StepProps['patch']; tenantSlug: string }) {
+  const custom = useCustomCategories(tenantSlug)
+  const [creating, setCreating] = React.useState(false)
+  const [name, setName] = React.useState('')
+  const [hint, setHint] = React.useState('')
+  const taken = (label: string) =>
+    [...ACTIVITY_THEMES.map((entry) => entry.label), ...custom.categories.map((entry) => entry.label)].some((entry) => entry.toLowerCase() === label.trim().toLowerCase())
+  const problem = name.trim().length < 2 ? 'Give it a name of at least two letters' : name.trim().length > 40 ? 'Keep it under 40 characters' : taken(name) ? 'There is already a category with that name' : null
+  const value = draft.customCategory ? `custom:${draft.customCategory}` : (draft.theme ?? defaultTheme(draft.category))
+
+  const add = () => {
+    if (problem) return
+    const label = name.trim()
+    custom.add({ label, hint: hint.trim() })
+    patch({ customCategory: label })
+    setCreating(false)
+    setName('')
+    setHint('')
+    toast.success(`${label} added`, { description: 'It is saved for your business and shows in every activity form.' })
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <Field label="Category" description="Where guests find it on your storefront and in search. Pick one of ours or make your own.">
+        <Select
+          value={value}
+          onValueChange={(next) => {
+            if (next === NEW_CATEGORY) return setCreating(true)
+            if (next.startsWith('custom:')) return patch({ customCategory: next.slice(7) })
+            patch({ theme: next as ActivityTheme, customCategory: null })
+          }}
+        >
+          <SelectTrigger aria-label="Category">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {custom.categories.length > 0 || (draft.customCategory && !custom.categories.some((entry) => entry.label === draft.customCategory)) ? (
+              <>
+                <SelectGroup>
+                  <SelectLabel>Your categories</SelectLabel>
+                  {custom.categories.map((entry) => (
+                    <SelectItem key={entry.label} value={`custom:${entry.label}`} description={entry.hint || undefined}>
+                      {entry.label}
+                    </SelectItem>
+                  ))}
+                  {draft.customCategory && !custom.categories.some((entry) => entry.label === draft.customCategory) ? (
+                    <SelectItem value={`custom:${draft.customCategory}`}>{draft.customCategory}</SelectItem>
+                  ) : null}
+                </SelectGroup>
+                <SelectSeparator />
+              </>
+            ) : null}
+            <SelectGroup>
+              <SelectLabel>Standard categories</SelectLabel>
+              {ACTIVITY_THEMES.map((option) => (
+                <SelectItem key={option.value} value={option.value} description={option.hint}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+            <SelectSeparator />
+            <SelectItem value={NEW_CATEGORY} description="A name that fits how you sell">
+              + Create a category
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
+
+      {creating ? (
+        <form
+          className="flex flex-col gap-3 rounded-xl border border-primary/30 bg-primary-soft/20 p-4"
+          onSubmit={(event) => {
+            event.preventDefault()
+            add()
+          }}
+        >
+          <p className="text-[0.8125rem] font-semibold">New category</p>
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+            <Field label="Name" required error={name && problem ? problem : undefined}>
+              {(control) => <Input {...control} autoFocus value={name} placeholder="Sunset specials" onChange={(event) => setName(event.target.value)} />}
+            </Field>
+            <Field label="Short description" optional>
+              {(control) => <Input {...control} value={hint} placeholder="Golden-hour sails, sunset paddles" onChange={(event) => setHint(event.target.value.slice(0, 60))} />}
+            </Field>
+          </div>
+          <div className="flex gap-2">
+            <Button type="submit" size="sm" disabled={Boolean(problem)}>
+              Add category
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => { setCreating(false); setName(''); setHint('') }}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      ) : null}
+
+      {custom.categories.length > 0 && !creating ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-subtle">Your categories:</span>
+          {custom.categories.map((entry) => (
+            <span key={entry.label} className="inline-flex items-center gap-1 rounded-full border border-line bg-surface py-0.5 pr-1 pl-2.5 text-xs font-medium text-muted">
+              {entry.label}
+              <button
+                type="button"
+                aria-label={`Remove ${entry.label}`}
+                className="grid size-4 place-items-center rounded-full text-faint hover:bg-surface-sunken hover:text-danger"
+                onClick={() => {
+                  custom.remove(entry.label)
+                  if (draft.customCategory === entry.label) patch({ customCategory: null })
+                  toast(`${entry.label} removed`, { description: 'Activities already in it keep the name until you change them.' })
+                }}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function BasicsStep({ draft, patch, errors, currency, tenantSlug = '' }: StepProps & { tenantSlug?: string }) {
   const dining = isDining(draft)
   const kind = draft.kind ?? 'trip'
   const settings = normalizeKindSettings(draft.kindSettings)
@@ -1936,22 +2070,7 @@ function BasicsStep({ draft, patch, errors, currency }: StepProps) {
         />
       </Field>
 
-      {dining ? null : (
-        <Field label="Category" description="Where guests find it on your storefront and in search. You can change it any time.">
-          <Select value={draft.theme ?? defaultTheme(draft.category)} onValueChange={(value) => patch({ theme: value as ActivityTheme })}>
-            <SelectTrigger aria-label="Category">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {ACTIVITY_THEMES.map((option) => (
-                <SelectItem key={option.value} value={option.value} description={option.hint}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-      )}
+      {dining ? null : <CategoryField draft={draft} patch={patch} tenantSlug={tenantSlug} />}
 
       {dining ? (
         <DiningBasicsFields
@@ -2426,7 +2545,7 @@ function ReviewStep({
           value: `${(draft.guestQuestions ?? []).length} ${pluralize((draft.guestQuestions ?? []).length, 'question')} · ${waivers.find((waiver) => waiver.id === draft.waiverId)?.title ?? 'no waiver'}`,
           step: 1,
         },
-        { label: 'Category', value: themeLabel(draft.theme ?? defaultTheme(draft.category)), step: 0 },
+        { label: 'Category', value: draft.customCategory || themeLabel(draft.theme ?? defaultTheme(draft.category)), step: 0 },
         ...((draft.accessibility ?? []).length > 0 ? [{ label: 'Good to know', value: (draft.accessibility ?? []).join(', '), step: 1 }] : []),
         { label: 'Setup', value: kindFacts(draft).join(' · '), step: 0 },
         { label: 'Highlights', value: `${draft.highlights.filter(Boolean).length} bullets`, step: 1 },

@@ -51,6 +51,8 @@ export interface ActivityOverride {
   pickup?: ActivityPickup | null
   languages?: string[]
   theme?: ActivityTheme
+  /** null clears a custom category. */
+  customCategory?: string | null
   accessibility?: string[]
   bring?: string[]
   ride?: RideConfig
