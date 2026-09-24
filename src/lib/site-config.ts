@@ -175,7 +175,7 @@ export const DASHBOARD_NAV: DashboardNavSection[] = [
   {
     heading: 'Operations',
     items: [
-      { label: 'Walk-in sale', href: '/dashboard/walk-in', icon: 'Banknote' },
+      { label: 'Walk-ins', href: '/dashboard/walk-in', icon: 'Banknote' },
       { label: 'Rentals', href: '/dashboard/rentals', icon: 'KeyRound' },
       { label: 'Charter requests', href: '/dashboard/requests', icon: 'Inbox' },
       { label: 'Pickups', href: '/dashboard/pickups', icon: 'Bus' },
