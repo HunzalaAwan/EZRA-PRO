@@ -67,8 +67,10 @@ function resolveSelection(
   const requestedAddOns = parsePairs(rawAddOns)
 
   let seatsUsed = 0
+  const perPerson = (activity.kind ?? 'trip') !== 'charter' && (activity.kind ?? 'trip') !== 'rental'
   const tiers = activity.priceTiers.map((tier) => {
-    const wanted = requestedTiers.get(tier.id) ?? 0
+    // The minimum per booking is required; a link without it gets it added.
+    const wanted = Math.max(requestedTiers.get(tier.id) ?? 0, perPerson ? tier.minQuantity : 0)
     const room = tier.countsTowardCapacity ? Math.max(0, seatsLeft - seatsUsed) : tier.maxQuantity
     const qty = clamp(wanted, 0, Math.min(tier.maxQuantity, room))
     if (tier.countsTowardCapacity) seatsUsed += qty

@@ -37,7 +37,7 @@ export default async function WalkInPage() {
       name: activity.name,
       kind: activity.kind ?? 'trip',
       image: activity.media.find((media) => media.isPrimary)?.url ?? activity.media[0]?.url ?? '',
-      tiers: activity.priceTiers.map((tier) => ({ id: tier.id, label: tier.label, price: tier.price, max: tier.maxQuantity, seat: tier.countsTowardCapacity })),
+      tiers: activity.priceTiers.map((tier) => ({ id: tier.id, label: tier.label, price: tier.price, min: tier.minQuantity, max: tier.maxQuantity, seat: tier.countsTowardCapacity })),
       addOns: activity.addOns.map((addOn) => ({ id: addOn.id, label: addOn.label, price: addOn.price })),
       slots: buildDays(activity, 2).flatMap((day) =>
         day.slots

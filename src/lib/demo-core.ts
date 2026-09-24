@@ -2068,7 +2068,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     minAge: 8,
     maxCapacity: 10,
     tiers: [
-      ['Single rider ski', 12900, 1, 6, 'One WaveRunner, one rider'],
+      ['Single rider ski', 12900, 0, 6, 'One WaveRunner, one rider'],
       ['Tandem ski (2 riders)', 16900, 0, 5, 'One WaveRunner, driver plus passenger'],
     ],
     addOns: [
@@ -2123,7 +2123,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     minAge: 6,
     maxCapacity: 12,
     tiers: [
-      ['Group lesson', 9900, 1, 8, '3:1 student to instructor'],
+      ['Group lesson', 9900, 0, 8, '3:1 student to instructor'],
       ['Semi-private (2 students)', 16900, 0, 2, 'You and one other, one instructor'],
       ['Private lesson', 24900, 0, 1, 'One-on-one, video review included'],
     ],
@@ -2176,7 +2176,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     minAge: 10,
     maxCapacity: 18,
     tiers: [
-      ['Certified diver', 22900, 1, 8, 'Two-tank night dive, C-card required'],
+      ['Certified diver', 22900, 0, 8, 'Two-tank night dive, C-card required'],
       ['Snorkel (lit float board)', 15900, 0, 10, 'Ages 10 and over'],
       ['Child snorkel (10-14)', 11900, 0, 4],
     ],
@@ -2286,7 +2286,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     minAge: 12,
     maxCapacity: 14,
     tiers: [
-      ['Drop-in', 8900, 1, 6],
+      ['Drop-in', 8900, 0, 6],
       ['Five-class card', 37900, 0, 2, 'Five sessions, valid twelve months'],
     ],
     addOns: [
@@ -2398,7 +2398,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     minAge: 18,
     maxCapacity: 12,
     tiers: [
-      ['Paddler seat', 49500, 1, 4, 'Escorted crossing, your own craft'],
+      ['Paddler seat', 49500, 0, 4, 'Escorted crossing, your own craft'],
       ['Support crew seat', 19500, 0, 4, 'Ride the escort vessel'],
     ],
     addOns: [
@@ -2507,7 +2507,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     minAge: 6,
     maxCapacity: 12,
     tiers: [
-      ['Single flyer', 11900, 1, 6],
+      ['Single flyer', 11900, 0, 6],
       ['Tandem flight (2)', 19900, 0, 4],
       ['Triple flight (3)', 26900, 0, 2],
       ['Ride-along seat', 3900, 0, 6, 'Boat seat only, no flight'],
@@ -2572,7 +2572,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     minAge: 16,
     maxCapacity: 4,
     tiers: [
-      ['Level 1 course seat', 54900, 1, 2, 'Two days, certification included'],
+      ['Level 1 course seat', 54900, 0, 2, 'Two days, certification included'],
       ['Refresher session', 18900, 0, 2, 'One day, certified freedivers only'],
     ],
     addOns: [
@@ -2681,7 +2681,7 @@ const CORAL_CAY_SPECS: ActivitySpec[] = [
     minAge: 15,
     maxCapacity: 28,
     tiers: [
-      ['Twin-share berth', 129500, 1, 6],
+      ['Twin-share berth', 129500, 0, 6],
       ['Private cabin (2 guests)', 219500, 0, 3],
     ],
     addOns: [
@@ -3051,7 +3051,7 @@ const RIDGELINE_SPECS: ActivitySpec[] = [
     minAge: 10,
     maxCapacity: 12,
     tiers: [
-      ['Single swing', 26900, 1, 8],
+      ['Single swing', 26900, 0, 8],
       ['Tandem swing', 44900, 0, 4, 'Two people, one harness rig'],
       ['Extra swing (same day)', 5900, 0, 6],
     ],
@@ -3105,7 +3105,7 @@ const RIDGELINE_SPECS: ActivitySpec[] = [
     minAge: 12,
     maxCapacity: 6,
     tiers: [
-      ['Heli-hike seat', 74900, 1, 4],
+      ['Heli-hike seat', 74900, 0, 4],
       ['Private charter (up to 5)', 329500, 0, 1, 'Exclusive helicopter and guide'],
     ],
     addOns: [
@@ -3205,7 +3205,7 @@ const RIDGELINE_SPECS: ActivitySpec[] = [
     minAge: 16,
     maxCapacity: 8,
     tiers: [
-      ['Guided ascent seat', 59900, 1, 4],
+      ['Guided ascent seat', 59900, 0, 4],
       ['Private guiding (1:1)', 129500, 0, 1],
     ],
     addOns: [

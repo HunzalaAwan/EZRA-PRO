@@ -55,7 +55,7 @@ export interface WalkInActivity {
   name: string
   kind: ActivityKind
   image: string
-  tiers: { id: string; label: string; price: number; max: number; seat: boolean }[]
+  tiers: { id: string; label: string; price: number; min: number; max: number; seat: boolean }[]
   addOns: { id: string; label: string; price: number }[]
   slots: { id: string; startsAt: string; seatsLeft: number }[]
 }
@@ -203,7 +203,7 @@ function WalkInTill({
 
   React.useEffect(() => {
     setSlotId('')
-    setQty(activity ? { [activity.tiers[0]?.id ?? '']: 1 } : {})
+    setQty(activity ? seedQty(activity) : {})
     setExtras({})
   }, [slug]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -246,7 +246,9 @@ function WalkInTill({
   const overSeats = slot ? seatsUsed > slot.seatsLeft : false
   const nameMissing = guest.name.trim().length < 2
   const emailBad = guest.email.trim().length > 0 && !/^\S+@\S+\.\S+$/.test(guest.email.trim())
-  const canPay = Boolean(activity && slot && guests > 0 && !overSeats && !nameMissing && !emailBad && (method === 'card' || total === 0 || change >= 0))
+  const perPerson = activity ? activity.kind !== 'charter' && activity.kind !== 'rental' : false
+  const shortTier = perPerson && activity ? activity.tiers.find((tier) => (qty[tier.id] ?? 0) < tier.min) : undefined
+  const canPay = Boolean(activity && slot && guests > 0 && !overSeats && !shortTier && !nameMissing && !emailBad && (method === 'card' || total === 0 || change >= 0))
 
   const applyCode = () => {
     const value = code.trim().toUpperCase()
@@ -313,7 +315,7 @@ function WalkInTill({
     setPromoCode(null)
     setGiftCode(null)
     setTendered('')
-    setQty(activity ? { [activity.tiers[0]?.id ?? '']: 1 } : {})
+    setQty(activity ? seedQty(activity) : {})
     setExtras({})
   }
 
@@ -387,7 +389,7 @@ function WalkInTill({
                         <span className="block text-xs text-subtle tabular-nums">{formatCurrency(Math.round(tier.price * rules.multiplier), currency)}</span>
                       </span>
                       <span className="flex items-center gap-2">
-                        <IconButton aria-label={`Fewer ${tier.label}`} size="sm" variant="outline" disabled={value <= 0} onClick={() => setQty((q) => ({ ...q, [tier.id]: value - 1 }))}><Minus aria-hidden="true" /></IconButton>
+                        <IconButton aria-label={`Fewer ${tier.label}`} size="sm" variant="outline" disabled={value <= (perPerson ? tier.min : 0)} onClick={() => setQty((q) => ({ ...q, [tier.id]: value - 1 }))}><Minus aria-hidden="true" /></IconButton>
                         <span className="w-6 text-center text-base font-semibold tabular-nums">{value}</span>
                         <IconButton aria-label={`More ${tier.label}`} size="sm" variant="outline" disabled={value >= tier.max || (tier.seat && slot ? seatsUsed >= slot.seatsLeft : false)} onClick={() => setQty((q) => ({ ...q, [tier.id]: value + 1 }))}><Plus aria-hidden="true" /></IconButton>
                       </span>
@@ -580,7 +582,7 @@ function WalkInTill({
           </Button>
           {touched && !canPay ? (
             <p className="mt-2 text-xs font-medium text-danger">
-              {nameMissing ? 'Add the lead guest name first.' : emailBad ? 'Fix the email, or leave it empty.' : overSeats ? 'Too many for the places left.' : method === 'cash' && change < 0 ? 'Not enough cash handed over.' : 'Pick a time and at least one guest.'}
+              {shortTier ? `Every booking needs at least ${shortTier.min} ${shortTier.label}.` : nameMissing ? 'Add the lead guest name first.' : emailBad ? 'Fix the email, or leave it empty.' : overSeats ? 'Too many for the places left.' : method === 'cash' && change < 0 ? 'Not enough cash handed over.' : 'Pick a time and at least one guest.'}
             </p>
           ) : null}
         </div>
@@ -638,4 +640,10 @@ export function WalkInTicket({
       ) : null}
     </div>
   )
+}
+
+/** Starting quantities at the desk: each tier's minimum, and at least one of the first. */
+function seedQty(activity: WalkInActivity): Record<string, number> {
+  const perPerson = activity.kind !== 'charter' && activity.kind !== 'rental'
+  return Object.fromEntries(activity.tiers.map((tier, index) => [tier.id, Math.max(perPerson ? tier.min : 0, index === 0 ? 1 : 0)]))
 }

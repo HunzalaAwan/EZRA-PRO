@@ -451,7 +451,11 @@ export function BookingWidget({
     [activity, tenantSlug, selection, slot, ruleResult.multiplier, dayRental, rentDays, party, rated, rentalMode, rentHours],
   )
 
+  // Per-person kinds: every tier's minimum per booking has to be met. Charters and rentals pick one option.
+  const perPerson = kind !== 'charter' && kind !== 'rental'
+  const shortTiers = perPerson ? activity.priceTiers.filter((tier) => (tierQty[tier.id] ?? 0) < tier.minQuantity) : []
   const canReserve =
+    shortTiers.length === 0 &&
     Boolean(slot) && !overCapacity && seatsUsed >= (kind === 'charter' || kind === 'rental' ? 1 : Math.max(1, activity.minParticipants)) && (kind !== 'charter' || party >= Math.max(1, activity.minParticipants))
 
   const reserve = () => {
@@ -1026,6 +1030,12 @@ export function BookingWidget({
             ) : null}
           </AnimatePresence>
 
+          {activity.priceTiers.some((tier) => tier.minQuantity > 0) ? (
+            <p className="mt-2 flex items-center gap-2 text-xs text-subtle">
+              <Info className="size-3.5 shrink-0" aria-hidden="true" />
+              Every booking includes at least {activity.priceTiers.filter((tier) => tier.minQuantity > 0).map((tier) => `${tier.minQuantity} ${tier.label}`).join(' and ')}.
+            </p>
+          ) : null}
           {activity.minParticipants > 1 ? (
             <p className="mt-2 flex items-center gap-2 text-xs text-subtle">
               <Users className="size-3.5 shrink-0" aria-hidden="true" />

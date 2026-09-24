@@ -233,7 +233,7 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
     meetingPoint: '',
     arrivalMode: defaultArrival(category),
     media: [],
-    tiers: [restaurant ? blankTier('Tasting menu', 8500) : blankTier('Adult', 14900)],
+    tiers: [restaurant ? blankTier('Tasting menu', 8500) : { ...blankTier('Adult', 14900), minQuantity: 1 }],
     addOns: [],
     schedule: restaurant
       ? { ...schedule, startTimes: serviceStartTimes(dining.services), capacity: DINING_BASICS.maxCapacity }
@@ -562,7 +562,7 @@ export function withCategory(draft: ActivityDraft, category: VerticalKey): Activ
       next.tiers = [blankTier('Tasting menu', 8500)]
     }
   } else if (draft.tiers.length === 1 && draft.tiers[0].label === 'Tasting menu' && draft.tiers[0].price === 8500) {
-    next.tiers = [blankTier('Adult', 14900)]
+    next.tiers = [{ ...blankTier('Adult', 14900), minQuantity: 1 }]
   }
   return next
 }
