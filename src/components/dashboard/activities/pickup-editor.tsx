@@ -43,12 +43,21 @@ export function PickupEditor({
   onChange,
   zones,
   currencySymbol = '$',
+  variant = 'card',
 }: {
   value: DraftPickup
   onChange: (value: DraftPickup) => void
   zones: PickupZoneOption[]
   currencySymbol?: string
+  /**
+   * card: the standalone card. only: pickup is how guests join, so the zones
+   * show straight away. optional: guests meet you, with pickup as an extra.
+   */
+  variant?: 'card' | 'only' | 'optional'
 }) {
+  const inline = variant !== 'card'
+  const Shell = inline ? 'div' : Card
+  const Body = inline ? 'div' : CardContent
   const setPrice = (zone: PickupZoneOption, patch: Partial<PickupPrice>) =>
     onChange({ ...value, prices: { ...value.prices, [zone.id]: { ...priceFor(value, zone), ...patch } } })
   const chosen = zones.filter((zone) => value.zoneIds.includes(zone.id))
@@ -57,16 +66,24 @@ export function PickupEditor({
     return `${zone.name} ${price.fee > 0 ? `${money(price.fee, currencySymbol)} per ${price.per}` : 'free'}`
   })
   return (
-    <Card>
-      <CardHeader className="flex flex-col items-start gap-1">
-        <CardTitle>Hotel pickup</CardTitle>
-        <CardDescription>Guests pick their hotel at checkout and get a pickup time; the driver gets a run sheet.</CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+    <Shell>
+      {inline ? null : (
+        <CardHeader className="flex flex-col items-start gap-1">
+          <CardTitle>Hotel pickup</CardTitle>
+          <CardDescription>Guests pick their hotel at checkout and get a pickup time; the driver gets a run sheet.</CardDescription>
+        </CardHeader>
+      )}
+      <Body className="flex flex-col gap-4">
+        {variant === 'only' ? (
+          <div>
+            <p className="text-[0.8125rem] font-medium">Pickup zones</p>
+            <p className="mt-0.5 text-xs text-muted">Guests pick their hotel at checkout and get a pickup time; the driver gets a run sheet. Set a price for each zone, or keep it free.</p>
+          </div>
+        ) : (
         <label className="flex items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-3">
           <span>
-            <span className="block text-sm font-medium">Offer pickup</span>
-            <span className="block text-xs text-subtle">Guests can still meet you there unless pickup is the only way.</span>
+            <span className="block text-sm font-medium">{variant === 'optional' ? 'Also offer hotel pickup' : 'Offer pickup'}</span>
+            <span className="block text-xs text-subtle">{variant === 'optional' ? 'Guests choose at checkout: meet you there, or be collected.' : 'Guests can still meet you there unless pickup is the only way.'}</span>
           </span>
           <Switch
             checked={value.enabled}
@@ -74,7 +91,8 @@ export function PickupEditor({
             aria-label="Offer pickup"
           />
         </label>
-        {value.enabled ? (
+        )}
+        {value.enabled || variant === 'only' ? (
           <>
             {zones.length === 0 ? (
               <p className="text-sm text-subtle">
@@ -169,16 +187,18 @@ export function PickupEditor({
               ) : null}
               </>
             )}
-            <label className="inline-flex items-center gap-2 text-sm text-muted">
-              <Switch size="sm" checked={value.required} onCheckedChange={(checked) => onChange({ ...value, required: checked })} />
-              Pickup is the only way to join
-            </label>
+            {variant === 'card' ? (
+              <label className="inline-flex items-center gap-2 text-sm text-muted">
+                <Switch size="sm" checked={value.required} onCheckedChange={(checked) => onChange({ ...value, required: checked })} />
+                Pickup is the only way to join
+              </label>
+            ) : null}
             <Link href="/dashboard/settings/pickup" className="text-xs font-medium text-primary hover:underline">
               Manage pickup zones
             </Link>
           </>
         ) : null}
-      </CardContent>
-    </Card>
+      </Body>
+    </Shell>
   )
 }

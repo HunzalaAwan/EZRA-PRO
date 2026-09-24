@@ -147,7 +147,7 @@ export const FUEL_LABEL: Record<NonNullable<RentalConfig['fuel']>, string> = {
   charged: 'Charged for what you use',
 }
 
-export const CHARTER_VESSELS: { value: NonNullable<CharterConfig['vessel']>; label: string; crew: string }[] = [
+export const CHARTER_VESSELS: { value: Exclude<NonNullable<CharterConfig['vessel']>, 'other'>; label: string; crew: string }[] = [
   { value: 'boat', label: 'Boat', crew: 'Captain' },
   { value: 'yacht', label: 'Yacht or catamaran', crew: 'Captain and crew' },
   { value: 'vehicle', label: 'Vehicle', crew: 'Driver' },
@@ -273,10 +273,9 @@ export function kindNote(activity: Pick<Activity, 'kind' | 'minAge' | 'rental' |
       return { title: `${meta.label} rental.`, body: parts.filter(Boolean).join(' ') }
     }
     case 'charter': {
-      const vessel = CHARTER_VESSELS.find((entry) => entry.value === activity.charter?.vessel)
       return {
-        title: 'Private charter.',
-        body: `${activity.charter?.crewed === false ? 'Self-skippered: you need the right licence.' : `${vessel?.crew ?? 'Crew'} included.`} Only your group aboard. ${age}`,
+        title: `Private ${vesselName(activity.charter).toLowerCase()} charter.`,
+        body: `${activity.charter?.crewed === false ? 'Self-skippered: you need the right licence.' : `${crewName(activity.charter)} included.`} Only your group aboard. ${age}`,
       }
     }
     case 'lesson': {
@@ -387,3 +386,15 @@ export const ACCESSIBILITY_OPTIONS = [
 /** The category guests see: the business's own one if set, otherwise the built-in theme. */
 export const categoryLabel = (activity: Pick<Activity, 'theme' | 'customCategory' | 'slug' | 'kind' | 'rental' | 'category'>) =>
   activity.customCategory?.trim() || themeLabel(themeOf(activity))
+
+/** What is chartered, in words: a standard vessel or the business's own. */
+export function vesselName(charter: Pick<CharterConfig, 'vessel' | 'vesselLabel'> | undefined): string {
+  if (charter?.vessel === 'other') return charter.vesselLabel?.trim() || 'Charter'
+  return CHARTER_VESSELS.find((entry) => entry.value === charter?.vessel)?.label ?? 'Charter'
+}
+
+/** Who comes with it: "Captain", "Driver", or the business's own words. */
+export function crewName(charter: Pick<CharterConfig, 'vessel' | 'crewLabel'> | undefined): string {
+  if (charter?.vessel === 'other') return charter.crewLabel?.trim() || 'Crew'
+  return CHARTER_VESSELS.find((entry) => entry.value === charter?.vessel)?.crew ?? 'Crew'
+}

@@ -84,7 +84,8 @@ import {
   ACCESSIBILITY_OPTIONS,
   ACTIVITY_KIND_META,
   ACTIVITY_THEMES,
-  CHARTER_VESSELS,
+  crewName,
+  vesselName,
   FUEL_LABEL,
   LESSON_LEVELS,
   LICENCE_LABEL,
@@ -129,12 +130,12 @@ import {
    ========================================================================== */
 
 /** Where guests go: a guide meets them, they come to a venue, or there is no fixed place. */
-export type ArrivalMode = 'meet' | 'venue' | 'none'
+export type ArrivalMode = 'meet' | 'venue' | 'pickup'
 
 export const ARRIVAL_OPTIONS: { value: ArrivalMode; label: string; description: string; icon: typeof MapPin }[] = [
   { value: 'meet', label: 'Meeting point', description: 'A guide or skipper meets guests at a set place.', icon: MapPin },
   { value: 'venue', label: 'Guests come to you', description: 'They arrive at your shop, ranch, park or rental desk during opening hours.', icon: DoorOpen },
-  { value: 'none', label: 'No fixed place', description: 'Pickup only, mobile, or the location is confirmed after booking.', icon: Route },
+  { value: 'pickup', label: 'Pick up', description: 'You collect guests from their hotel or a stop. Set the zones and prices below.', icon: Route },
 ]
 
 const defaultArrival = (category: VerticalKey): ArrivalMode =>
@@ -280,8 +281,13 @@ function kindOverride(draft: ActivityDraft) {
     }
   }
   if (kind === 'charter') {
-    const { minutes, ...rest } = settings.charter
-    return { charter: { ...rest, durations: draft.tiers.map((tier) => ({ tierId: tier.id, minutes: minutes[tier.id] ?? 180 })) } }
+    const { minutes: _minutes, vesselLabel, crewLabel, ...rest } = settings.charter
+    return {
+      charter: {
+        ...rest,
+        ...(rest.vessel === 'other' ? { vesselLabel: vesselLabel.trim() || 'Charter', crewLabel: crewLabel.trim() || 'Crew' } : {}),
+      },
+    }
   }
   if (kind === 'lesson') {
     const { certification, ...rest } = settings.lesson
@@ -344,6 +350,8 @@ export function deriveForKind(draft: ActivityDraft): ActivityDraft {
   const kind = draft.kind ?? 'trip'
   const settings = normalizeKindSettings(draft.kindSettings)
   const next: ActivityDraft = { ...draft, kindSettings: settings, languages: draft.languages ?? [] }
+  // Drafts saved before Pick up replaced No fixed place.
+  if ((next.arrivalMode as string) === 'none') next.arrivalMode = 'pickup'
   if (kind === 'rental') {
     const r = settings.rental
     const lengths = draft.tiers.map((tier) => r.minutes[tier.id] ?? 60)
@@ -352,10 +360,8 @@ export function deriveForKind(draft: ActivityDraft): ActivityDraft {
     next.difficulty = 'easy'
     next.durationMinutes = r.billing === 'day' ? 1440 : lengths.length > 0 ? Math.min(...lengths) : 60
   } else if (kind === 'charter') {
-    const lengths = draft.tiers.map((tier) => settings.charter.minutes[tier.id] ?? 180)
     next.maxCapacity = settings.charter.maxGuests
     next.difficulty = 'easy'
-    next.durationMinutes = lengths.length > 0 ? Math.min(...lengths) : 180
     if (next.minParticipants > next.maxCapacity) next.minParticipants = next.maxCapacity
   } else if (kind === 'lesson') {
     next.difficulty = LEVEL_DIFFICULTY[settings.lesson.level]
@@ -427,7 +433,7 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
     excluded: [...activity.excluded],
     requirements: [...activity.requirements],
     meetingPoint: activity.meetingPoint,
-    arrivalMode: activity.meetingPoint ? (restaurant || activity.category === 'wellness' ? 'venue' : 'meet') : 'none',
+    arrivalMode: activity.pickup?.required ? 'pickup' : restaurant || activity.category === 'wellness' ? 'venue' : 'meet',
     media: activity.media.map((item) => ({ id: item.id, url: item.url, alt: item.alt, isPrimary: item.isPrimary })),
     tiers: activity.priceTiers.map((tier) => ({
       id: tier.id,
@@ -631,9 +637,9 @@ const STEP_SCHEMAS = [
     highlights: z.array(z.string()),
     included: z.array(z.string()),
     meetingPoint: z.string().trim(),
-    arrivalMode: z.enum(['meet', 'venue', 'none']),
+    arrivalMode: z.enum(['meet', 'venue', 'pickup']),
   }).superRefine((draft, ctx) => {
-    if (draft.arrivalMode !== 'none' && draft.meetingPoint.length < 10) {
+    if (draft.arrivalMode !== 'pickup' && draft.meetingPoint.length < 10) {
       ctx.addIssue({
         code: 'custom',
         path: ['meetingPoint'],
@@ -1419,7 +1425,7 @@ export function ActivityWizard({
           included: draft.included,
           excluded: draft.excluded,
           requirements: draft.requirements,
-          meetingPoint: draft.arrivalMode === 'none' ? '' : draft.meetingPoint,
+          meetingPoint: draft.meetingPoint,
           difficulty: draft.difficulty,
           durationMinutes: draft.durationMinutes,
           maxCapacity: draft.maxCapacity,
@@ -1438,10 +1444,10 @@ export function ActivityWizard({
           guestQuestions: (draft.guestQuestions ?? []).filter((question) => question.label.trim().length > 0),
           waiverId: draft.waiverId ?? null,
           pickup:
-            draft.pickup?.enabled && draft.pickup.zoneIds.length > 0
+            (draft.pickup?.enabled || draft.arrivalMode === 'pickup') && draft.pickup.zoneIds.length > 0
               ? {
                   zoneIds: draft.pickup.zoneIds,
-                  required: draft.pickup.required,
+                  required: draft.arrivalMode === 'pickup',
                   // Every chosen zone gets a price on save, so a later change to the zone's own fee does not move it.
                   prices: Object.fromEntries(
                     draft.pickup.zoneIds.map((id) => {
@@ -1533,7 +1539,22 @@ export function ActivityWizard({
                     <BasicsStep draft={draft} patch={patch} errors={errors} currency={currency} tenantSlug={tenantSlug} />
                   ) : null}
                   {step === 1 ? (
-                    <DescriptionStep draft={draft} patch={patch} errors={errors} locationNames={locations.filter((site) => draft.schedule.locations.some((entry) => entry.locationId === site.id)).map((site) => site.name)} />
+                    <DescriptionStep
+                      draft={draft}
+                      patch={patch}
+                      errors={errors}
+                      locationNames={locations.filter((site) => draft.schedule.locations.some((entry) => entry.locationId === site.id)).map((site) => site.name)}
+                      pickupEditor={
+                        <PickupEditor
+                          variant={draft.arrivalMode === 'pickup' ? 'only' : 'optional'}
+                          value={draft.pickup ?? { enabled: false, zoneIds: [], required: false }}
+                          onChange={(pickup) => patch({ pickup })}
+                          zones={pickupZones}
+                          currencySymbol={currencySymbol(currency)}
+                        />
+                      }
+                      allZoneIds={pickupZones.map((zone) => zone.id)}
+                    />
                   ) : null}
                   {step === 1 && !dining ? (
                     <GuestQuestionsEditor
@@ -1544,14 +1565,7 @@ export function ActivityWizard({
                       waivers={waivers}
                     />
                   ) : null}
-                  {step === 1 && !dining ? (
-                    <PickupEditor
-                      value={draft.pickup ?? { enabled: false, zoneIds: [], required: false }}
-                      onChange={(pickup) => patch({ pickup })}
-                      zones={pickupZones}
-                      currencySymbol={currencySymbol(currency)}
-                    />
-                  ) : null}
+
                   {step === 2 ? (
                     <div className="flex flex-col gap-3">
                       <MediaManager
@@ -1815,9 +1829,9 @@ function kindFacts(draft: ActivityDraft): string[] {
   }
   if (kind === 'charter') {
     const c = s.charter
-    const vessel = CHARTER_VESSELS.find((entry) => entry.value === c.vessel)
     return [
-      `${vessel?.label ?? 'Charter'} · ${c.crewed ? `${vessel?.crew ?? 'Crew'} included` : 'Self-skippered'}`,
+      `${vesselName(c)} · ${c.crewed ? `${crewName(c)} included` : 'Self-skippered'}`,
+      draft.durationMinutes > 0 ? formatDuration(draft.durationMinutes) : 'Length to agree',
       `${draft.minParticipants}–${c.maxGuests} guests`,
       `${c.noticeHours}h notice`,
       c.requestToBook ? 'Request to book' : 'Instant booking',
@@ -2016,6 +2030,7 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '' }: StepPro
       ...(draft.meetingPoint.trim() ? {} : { arrivalMode: arrival }),
       ...(starter ? { tiers: [{ ...draft.tiers[0], label: STARTER_TIER[next] }] } : {}),
       ...(next === 'lesson' && draft.maxCapacity < 1 ? { maxCapacity: 8, durationMinutes: draft.durationMinutes || 120 } : {}),
+      ...(next === 'charter' && draft.durationMinutes < 60 ? { durationMinutes: 240, durationUnit: 'hours' as const } : {}),
       ...(next === 'activity'
         ? {
             schedule: { ...draft.schedule, mode: 'hours' as const, entryInterval: draft.schedule.entryInterval || 30 },
@@ -2094,6 +2109,7 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '' }: StepPro
           errors={errors}
           shared={shared}
           onShared={(changes) => patch(changes)}
+          tenantSlug={tenantSlug}
         />
       )}
     </div>
@@ -2279,7 +2295,14 @@ const DESCRIPTION_COPY = {
   },
 } as const
 
-function DescriptionStep({ draft, patch, errors, locationNames = [] }: StepProps & { locationNames?: string[] }) {
+function DescriptionStep({
+  draft,
+  patch,
+  errors,
+  locationNames = [],
+  pickupEditor,
+  allZoneIds = [],
+}: StepProps & { locationNames?: string[]; pickupEditor?: React.ReactNode; allZoneIds?: string[] }) {
   const dining = isDining(draft)
   const copy = dining ? DESCRIPTION_COPY.dining : DESCRIPTION_COPY.tour
   // The location already carries the address; here the operator only adds where exactly to meet.
@@ -2390,12 +2413,23 @@ function DescriptionStep({ draft, patch, errors, locationNames = [] }: StepProps
           <fieldset>
             <legend className="text-[0.8125rem] font-medium">Where guests go</legend>
             <p className="mt-0.5 mb-2.5 text-xs text-muted">
-              A guided trip needs a meeting point. A rental desk, a park or a time-slot activity only needs an
-              address. A pickup or mobile service needs neither.
+              A guided trip has a meeting point. A rental desk, a park or a time-slot activity has guests come to you. Pick up
+              collects them from their hotel.
             </p>
             <RadioGroup
               value={draft.arrivalMode}
-              onValueChange={(value) => patch({ arrivalMode: value as ArrivalMode })}
+              onValueChange={(value) => {
+                const mode = value as ArrivalMode
+                const pickup = draft.pickup ?? { enabled: false, zoneIds: [], required: false }
+                patch({
+                  arrivalMode: mode,
+                  // Pick up turns the zones on; leaving it keeps pickup only if it was an extra already.
+                  pickup:
+                    mode === 'pickup'
+                      ? { ...pickup, enabled: true, required: true, zoneIds: pickup.zoneIds.length > 0 ? pickup.zoneIds : allZoneIds }
+                      : { ...pickup, required: false, enabled: draft.arrivalMode === 'pickup' ? false : pickup.enabled },
+                })
+              }}
               className="grid gap-2.5 lg:grid-cols-3"
             >
               {ARRIVAL_OPTIONS.map((option) => (
@@ -2410,7 +2444,7 @@ function DescriptionStep({ draft, patch, errors, locationNames = [] }: StepProps
             </RadioGroup>
           </fieldset>
 
-          {located && draft.arrivalMode !== 'none' ? (
+          {located && draft.arrivalMode !== 'pickup' ? (
             <Field
               label={draft.arrivalMode === 'meet' ? 'Where exactly to meet' : 'Arrival notes'}
               optional
@@ -2449,9 +2483,10 @@ function DescriptionStep({ draft, patch, errors, locationNames = [] }: StepProps
             </Field>
           ) : (
             <Field
-              label="How guests find you"
+              label="Pickup notes"
+              optional
               error={errors.meetingPoint}
-              description="Optional. Pickup arrangements, a number to call on the day, or a note that the spot is confirmed after booking."
+              description="Where the driver waits and how they reach guests on the day."
             >
               <Textarea
                 rows={2}
@@ -2461,6 +2496,9 @@ function DescriptionStep({ draft, patch, errors, locationNames = [] }: StepProps
               />
             </Field>
           )}
+          {pickupEditor ? (
+            <div className={cn(draft.arrivalMode === 'pickup' && 'rounded-xl border border-primary/30 bg-primary-soft/10 p-4')}>{pickupEditor}</div>
+          ) : null}
         </>
       )}
     </div>

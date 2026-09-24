@@ -425,8 +425,12 @@ export interface RentalConfig {
 }
 
 export interface CharterConfig {
-  /** What is chartered. */
-  vessel?: 'boat' | 'yacht' | 'vehicle' | 'guide' | 'aircraft'
+  /** What is chartered; 'other' uses vesselLabel. */
+  vessel?: 'boat' | 'yacht' | 'vehicle' | 'guide' | 'aircraft' | 'other'
+  /** The business's own name for it: "Glass-bottom boat", "Vintage bus". */
+  vesselLabel?: string
+  /** Who comes with it, for a custom vessel: "Skipper", "Driver and host". */
+  crewLabel?: string
   /** A captain, driver or guide comes with it. False is a bare-boat or self-drive hire. */
   crewed?: boolean
   /** Each price tier is a charter option; this is how long each one runs. */

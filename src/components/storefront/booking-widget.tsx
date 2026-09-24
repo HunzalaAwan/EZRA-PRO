@@ -38,7 +38,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { CHARTER_VESSELS, FUEL_LABEL, LESSON_LEVELS, LICENCE_LABEL, isDayRental, partyLabel, rentalCategoryMeta, routeLabel } from '@/lib/activity-kinds'
+import { crewName, FUEL_LABEL, LESSON_LEVELS, LICENCE_LABEL, isDayRental, partyLabel, rentalCategoryMeta, routeLabel } from '@/lib/activity-kinds'
 import { applyRules } from '@/lib/pricing'
 import { usePricing } from '@/hooks/use-pricing'
 import { IconButton } from '@/components/ui/icon-button'
@@ -608,7 +608,7 @@ export function BookingWidget({
           {[
             activity.charter?.crewed === false
               ? 'Self-skippered'
-              : `${CHARTER_VESSELS.find((entry) => entry.value === activity.charter?.vessel)?.crew ?? 'Crew'} included`,
+              : `${crewName(activity.charter)} included`,
             activity.charter?.noticeHours ? `Book ${activity.charter.noticeHours}h ahead` : null,
             (activity.languages ?? []).length > 0 ? (activity.languages ?? []).join(', ') : null,
           ]

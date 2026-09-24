@@ -13,37 +13,38 @@ export interface CustomCategory {
   hint: string
 }
 
-const keyFor = (slug: string) => `ezra:custom-categories:${slug}`
-const EVENT = 'ezra:custom-categories'
+const keyFor = (slug: string, list: string) => `ezra:custom-${list}:${slug}`
+const EVENT = 'ezra:custom-lists'
 
-function read(slug: string): CustomCategory[] {
+function read(slug: string, list: string): CustomCategory[] {
   try {
-    const raw = window.localStorage.getItem(keyFor(slug))
-    const list = raw ? (JSON.parse(raw) as CustomCategory[]) : []
-    return Array.isArray(list) ? list.filter((entry) => entry && typeof entry.label === 'string') : []
+    const raw = window.localStorage.getItem(keyFor(slug, list))
+    const items = raw ? (JSON.parse(raw) as CustomCategory[]) : []
+    return Array.isArray(items) ? items.filter((entry) => entry && typeof entry.label === 'string') : []
   } catch {
     return []
   }
 }
 
-export function useCustomCategories(tenantSlug: string) {
+/** A business's own entries for a pick list; "categories" by default, "charter-vessels" for charters. */
+export function useCustomCategories(tenantSlug: string, list = 'categories') {
   const [categories, setCategories] = React.useState<CustomCategory[]>([])
 
   React.useEffect(() => {
-    setCategories(read(tenantSlug))
-    const sync = () => setCategories(read(tenantSlug))
+    setCategories(read(tenantSlug, list))
+    const sync = () => setCategories(read(tenantSlug, list))
     window.addEventListener(EVENT, sync)
     window.addEventListener('storage', sync)
     return () => {
       window.removeEventListener(EVENT, sync)
       window.removeEventListener('storage', sync)
     }
-  }, [tenantSlug])
+  }, [tenantSlug, list])
 
   const write = (next: CustomCategory[]) => {
     setCategories(next)
     try {
-      window.localStorage.setItem(keyFor(tenantSlug), JSON.stringify(next))
+      window.localStorage.setItem(keyFor(tenantSlug, list), JSON.stringify(next))
       window.setTimeout(() => window.dispatchEvent(new Event(EVENT)), 0)
     } catch {
       /* storage blocked: lives until reload */

@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input'
 import { RadioGroup, RadioGroupCard } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import { Button } from '@/components/ui/button'
+import { useCustomCategories } from '@/hooks/use-custom-categories'
 import {
   ACTIVITY_KINDS,
   ACTIVITY_KIND_META,
@@ -18,6 +20,7 @@ import {
   LICENCE_LABEL,
   RENTAL_CATEGORIES,
   RENTAL_LENGTHS,
+  crewName,
   rentalCategoryMeta,
 } from '@/lib/activity-kinds'
 import { cn, formatDuration } from '@/lib/utils'
@@ -71,6 +74,8 @@ export interface DraftKindSettings {
     requestToBook: boolean
     noticeHours: number
     vessel: NonNullable<CharterConfig['vessel']>
+    vesselLabel: string
+    crewLabel: string
     crewed: boolean
     minutes: Record<string, number>
   }
@@ -97,7 +102,7 @@ export function defaultKindSettings(): DraftKindSettings {
       fuel: 'included',
       kmPerDay: 0,
     },
-    charter: { maxGuests: 6, requestToBook: false, noticeHours: 24, vessel: 'boat', crewed: true, minutes: {} },
+    charter: { maxGuests: 6, requestToBook: false, noticeHours: 24, vessel: 'boat', vesselLabel: '', crewLabel: '', crewed: true, minutes: {} },
     lesson: { level: 'beginner', sessions: 1, ratio: 4, certification: '', equipmentIncluded: true },
     pass: { validDays: 1, reentry: true },
     activity: { minHeightCm: 0, maxWeightKg: 0 },
@@ -172,7 +177,6 @@ export function KindPicker({ value, onChange }: { value: ActivityKind; onChange:
 
 const num = (value: string, min = 0) => Math.max(min, Math.round(Number(value) || 0))
 
-const CHARTER_LENGTHS = [60, 120, 150, 180, 240, 360, 480, 1440]
 
 /* ---------- small pieces ---------- */
 
@@ -374,7 +378,10 @@ export function KindFields({
   errors,
   shared,
   onShared,
+  tenantSlug = '',
 }: {
+  /** For the business's own charter types. */
+  tenantSlug?: string
   kind: ActivityKind
   settings: DraftKindSettings
   onChange: (settings: DraftKindSettings) => void
@@ -385,6 +392,9 @@ export function KindFields({
   onShared: (patch: Partial<SharedBasics>) => void
 }) {
   const settings = normalizeKindSettings(raw)
+  const ownVessels = useCustomCategories(tenantSlug, 'charter-vessels')
+  const [addingVessel, setAddingVessel] = React.useState(false)
+  const [vesselDraft, setVesselDraft] = React.useState({ name: '', crew: '' })
   const set = <K extends keyof DraftKindSettings>(key: K, patch: Partial<DraftKindSettings[K]>) =>
     onChange({ ...settings, [key]: { ...settings[key], ...patch } })
 
@@ -611,22 +621,57 @@ export function KindFields({
   /* ---------- charter ---------- */
   if (kind === 'charter') {
     const charter = settings.charter
-    const crew = CHARTER_VESSELS.find((entry) => entry.value === charter.vessel)?.crew ?? 'Crew'
+    const crew = crewName(charter)
+    const vesselValue = charter.vessel === 'other' ? `own:${charter.vesselLabel}` : charter.vessel
+    const vesselTaken = (name: string) =>
+      [...CHARTER_VESSELS.map((entry) => entry.label), ...ownVessels.categories.map((entry) => entry.label)].some((entry) => entry.toLowerCase() === name.trim().toLowerCase())
+    const vesselProblem = vesselDraft.name.trim().length < 2 ? 'Give it a name' : vesselTaken(vesselDraft.name) ? 'That one is already on the list' : null
+    const addVessel = () => {
+      if (vesselProblem) return
+      const label = vesselDraft.name.trim()
+      const crewWord = vesselDraft.crew.trim() || 'Crew'
+      ownVessels.add({ label, hint: crewWord })
+      set('charter', { vessel: 'other', vesselLabel: label, crewLabel: crewWord })
+      setAddingVessel(false)
+      setVesselDraft({ name: '', crew: '' })
+    }
     return shell(
       <>
         <Section title="What is chartered">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Chartered">
-              <Select value={charter.vessel} onValueChange={(value) => set('charter', { vessel: value as DraftKindSettings['charter']['vessel'] })}>
+              <Select
+                value={vesselValue}
+                onValueChange={(value) => {
+                  if (value === '__new') return setAddingVessel(true)
+                  if (value.startsWith('own:')) {
+                    const label = value.slice(4)
+                    const entry = ownVessels.categories.find((item) => item.label === label)
+                    return set('charter', { vessel: 'other', vesselLabel: label, crewLabel: entry?.hint || charter.crewLabel || 'Crew' })
+                  }
+                  set('charter', { vessel: value as DraftKindSettings['charter']['vessel'], vesselLabel: '', crewLabel: '' })
+                }}
+              >
                 <SelectTrigger aria-label="What is chartered">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {CHARTER_VESSELS.map((entry) => (
-                    <SelectItem key={entry.value} value={entry.value}>
+                    <SelectItem key={entry.value} value={entry.value} description={`${entry.crew} included`}>
                       {entry.label}
                     </SelectItem>
                   ))}
+                  {ownVessels.categories.map((entry) => (
+                    <SelectItem key={entry.label} value={`own:${entry.label}`} description={`Yours · ${entry.hint || 'Crew'} included`}>
+                      {entry.label}
+                    </SelectItem>
+                  ))}
+                  {charter.vessel === 'other' && charter.vesselLabel && !ownVessels.categories.some((entry) => entry.label === charter.vesselLabel) ? (
+                    <SelectItem value={`own:${charter.vesselLabel}`}>{charter.vesselLabel}</SelectItem>
+                  ) : null}
+                  <SelectItem value="__new" description="A boat, vehicle or service not listed">
+                    + Add your own
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </Field>
@@ -639,6 +684,26 @@ export function KindFields({
               />
             </div>
           </div>
+          {addingVessel ? (
+            <div className="flex flex-col gap-3 rounded-xl border border-primary/30 bg-primary-soft/20 p-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="What you charter" required error={vesselDraft.name && vesselProblem ? vesselProblem : undefined}>
+                  {(control) => <Input {...control} autoFocus value={vesselDraft.name} placeholder="Glass-bottom boat" onChange={(e) => setVesselDraft((d) => ({ ...d, name: e.target.value.slice(0, 40) }))} />}
+                </Field>
+                <Field label="Who comes with it" optional description="Shown as “… included”.">
+                  {(control) => <Input {...control} value={vesselDraft.crew} placeholder="Skipper and deckhand" onChange={(e) => setVesselDraft((d) => ({ ...d, crew: e.target.value.slice(0, 40) }))} />}
+                </Field>
+              </div>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" disabled={Boolean(vesselProblem)} onClick={addVessel}>
+                  Add
+                </Button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => { setAddingVessel(false); setVesselDraft({ name: '', crew: '' }) }}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </Section>
 
         <Section title="The group" hint="One group per charter. The price is for the whole group.">
@@ -656,14 +721,16 @@ export function KindFields({
           </div>
         </Section>
 
-        <Section title="Charter options" hint="Each price tier from the Pricing step is one option. Set how long each runs.">
-          <TierLengths
-            tiers={tiers}
-            minutes={charter.minutes}
-            options={CHARTER_LENGTHS}
-            fallback={180}
-            onChange={(minutes) => set('charter', { minutes })}
-            labelFor={(minutes) => (minutes === 1440 ? 'Full day' : formatDuration(minutes))}
+        <Section title="How long it runs">
+          <DurationField
+            label="Charter length"
+            error={errors.durationMinutes}
+            description="The usual length. Say in the description if guests can book longer."
+            minutes={shared.durationMinutes}
+            unit={shared.durationUnit === 'minutes' ? 'hours' : shared.durationUnit}
+            onChange={(durationMinutes, durationUnit) => onShared({ durationMinutes, durationUnit })}
+            presets={[120, 180, 240, 360, 480, 1440]}
+            allowFlexible={false}
           />
         </Section>
 
