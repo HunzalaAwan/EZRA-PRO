@@ -9,9 +9,9 @@ import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { answerProblem } from '@/lib/guest-requirements'
+import { DEFAULT_GUEST_FIELDS, answerProblem } from '@/lib/guest-requirements'
 import { cn } from '@/lib/utils'
-import type { GuestQuestion, WaiverTemplate } from '@/types'
+import type { GuestDetailsConfig, GuestFieldKey, GuestQuestion, WaiverTemplate } from '@/types'
 
 /* ==========================================================================
    Checkout — who is coming and the waiver.
@@ -26,6 +26,14 @@ export interface TravellerState {
   lastName: string
   minor: boolean
   answers: Record<string, string>
+  /** Email, mobile, date of birth and country, when the activity asks for them. */
+  fields?: Partial<Record<GuestFieldKey, string>>
+}
+
+/** Another guest's own signature, when each guest signs. */
+export interface WaiverSigner {
+  name?: string
+  drawn: boolean
 }
 
 export interface WaiverState {
@@ -33,12 +41,34 @@ export interface WaiverState {
   signedName: string
   drawn: boolean
   guardianName: string
+  /** Guests 2 and on, when each guest signs. */
+  signers?: WaiverSigner[]
 }
 
-export const EMPTY_WAIVER: WaiverState = { agree: false, signedName: '', drawn: false, guardianName: '' }
+export const EMPTY_WAIVER: WaiverState = { agree: false, signedName: '', drawn: false, guardianName: '', signers: [] }
 
 export function makeTravellers(count: number): TravellerState[] {
-  return Array.from({ length: Math.max(1, count) }, () => ({ firstName: '', lastName: '', minor: false, answers: {} }))
+  return Array.from({ length: Math.max(1, count) }, () => ({ firstName: '', lastName: '', minor: false, answers: {}, fields: {} }))
+}
+
+/** Who signs for guest 2 and on: their own name, or empty for a guardian to fill. */
+export function signerDefaults(travellers: TravellerState[], count: number): { label: string; name: string; minor: boolean }[] {
+  return Array.from({ length: Math.max(0, count - 1) }, (_, i) => {
+    const traveller = travellers[i + 1]
+    const minor = Boolean(traveller?.minor)
+    return { label: `Guest ${i + 2}`, name: minor ? '' : `${traveller?.firstName ?? ''} ${traveller?.lastName ?? ''}`.trim(), minor }
+  })
+}
+
+/** Age in whole years on a date, from a yyyy-mm-dd birth date. */
+function ageOn(dob: string, onDate: string): number | null {
+  const birth = new Date(`${dob}T12:00:00`)
+  const day = new Date(onDate)
+  if (Number.isNaN(birth.getTime()) || Number.isNaN(day.getTime())) return null
+  let age = day.getFullYear() - birth.getFullYear()
+  const beforeBirthday = day.getMonth() < birth.getMonth() || (day.getMonth() === birth.getMonth() && day.getDate() < birth.getDate())
+  if (beforeBirthday) age -= 1
+  return age
 }
 
 type Errors = Record<string, string>
@@ -49,19 +79,34 @@ export function validateGuestDetails({
   bookingAnswers,
   waiver,
   template,
+  fields = DEFAULT_GUEST_FIELDS,
+  signing = 'booker',
+  signers = [],
 }: {
   questions: GuestQuestion[]
   travellers: TravellerState[]
   bookingAnswers: Record<string, string>
   waiver: WaiverState
   template?: WaiverTemplate
+  fields?: GuestDetailsConfig['fields']
+  signing?: 'booker' | 'each'
+  signers?: { name: string }[]
 }): Errors {
   const errors: Errors = {}
+  const field = (key: GuestFieldKey) => fields.find((entry) => entry.key === key)
   travellers.forEach((traveller, index) => {
+    const values = traveller.fields ?? {}
     if (index > 0) {
-      if (traveller.firstName.trim().length < 1) errors[`t${index}.firstName`] = 'First name'
-      if (traveller.lastName.trim().length < 1) errors[`t${index}.lastName`] = 'Last name'
+      const name = field('name')
+      if (name?.required && traveller.firstName.trim().length < 1) errors[`t${index}.firstName`] = 'First name'
+      if (name?.required && traveller.lastName.trim().length < 1) errors[`t${index}.lastName`] = 'Last name'
+      const email = (values.email ?? '').trim()
+      if (field('email') && (email ? !/^\S+@\S+\.\S+$/.test(email) : field('email')?.required)) errors[`t${index}.email`] = email ? 'Check the email' : 'Email'
+      const phone = (values.phone ?? '').replace(/[^\d+]/g, '')
+      if (field('phone') && (phone ? phone.length < 7 : field('phone')?.required)) errors[`t${index}.phone`] = phone ? 'Check the number' : 'Mobile'
     }
+    if (field('dateOfBirth')?.required && !values.dateOfBirth) errors[`t${index}.dateOfBirth`] = 'Date of birth'
+    if (field('country')?.required && !(values.country ?? '').trim()) errors[`t${index}.country`] = 'Country'
     for (const question of questions.filter((entry) => entry.scope === 'guest')) {
       const problem = answerProblem(question, traveller.answers[question.id])
       if (problem) errors[`t${index}.q.${question.id}`] = problem
@@ -75,8 +120,15 @@ export function validateGuestDetails({
     if (!waiver.agree) errors['waiver.agree'] = 'Tick to confirm you have read the waiver'
     if (waiver.signedName.trim().length < 3) errors['waiver.name'] = 'Type your full name to sign'
     if (!waiver.drawn) errors['waiver.drawn'] = 'Add your signature'
-    if (template.minorsNeedGuardian && travellers.some((traveller) => traveller.minor) && waiver.guardianName.trim().length < 3) {
+    if (signing === 'booker' && template.minorsNeedGuardian && travellers.some((traveller) => traveller.minor) && waiver.guardianName.trim().length < 3) {
       errors['waiver.guardian'] = 'Name the parent or guardian signing for the minors'
+    }
+    if (signing === 'each') {
+      signers.forEach((fallback, i) => {
+        const signer = waiver.signers?.[i]
+        if ((signer?.name ?? fallback.name).trim().length < 3) errors[`waiver.s${i}.name`] = 'Type the full name to sign'
+        if (!signer?.drawn) errors[`waiver.s${i}.drawn`] = 'Add a signature'
+      })
     }
   }
   return errors
@@ -148,6 +200,10 @@ export function GuestDetailsStep({
   leadName,
   minorAge,
   errors,
+  fields = DEFAULT_GUEST_FIELDS,
+  showGuests = true,
+  showMinor = true,
+  onDate,
 }: {
   questions: GuestQuestion[]
   travellers: TravellerState[]
@@ -157,9 +213,31 @@ export function GuestDetailsStep({
   leadName: string
   minorAge: number
   errors: Errors
+  /** What each guest is asked, beyond the questions. */
+  fields?: GuestDetailsConfig['fields']
+  /** Off when the activity only asks the person booking. */
+  showGuests?: boolean
+  /** The under-age tick, for the waiver's guardian. Hidden when a birth date answers it. */
+  showMinor?: boolean
+  /** The departure, to work out ages from a birth date. */
+  onDate?: string
 }) {
   const guestQs = questions.filter((question) => question.scope === 'guest')
   const bookingQs = questions.filter((question) => question.scope === 'booking')
+  const field = (key: GuestFieldKey) => fields.find((entry) => entry.key === key)
+  const setField = (index: number, key: GuestFieldKey, value: string) =>
+    setTravellers((list) =>
+      list.map((traveller, i) => {
+        if (i !== index) return traveller
+        const next = { ...traveller, fields: { ...traveller.fields, [key]: value } }
+        if (key === 'dateOfBirth' && onDate) {
+          const age = value ? ageOn(value, onDate) : null
+          if (age !== null) next.minor = age < minorAge
+        }
+        return next
+      }),
+    )
+  if (!showGuests && bookingQs.length === 0) return null
 
   const patch = (index: number, change: Partial<TravellerState>) =>
     setTravellers((list) => list.map((traveller, i) => (i === index ? { ...traveller, ...change } : traveller)))
@@ -170,13 +248,16 @@ export function GuestDetailsStep({
     <section aria-labelledby="step-travellers" className="space-y-5">
       <div>
         <h2 id="step-travellers" className="font-display text-xl font-semibold tracking-tight">
-          Who is coming?
+          {showGuests ? 'Who is coming?' : 'A few questions'}
         </h2>
         <p className="mt-1.5 text-sm text-muted">
-          The crew uses this to prep gear and keep everyone safe. It takes a minute and saves time at check-in.
+          {showGuests
+            ? 'The crew uses this to prep gear and keep everyone safe. It takes a minute and saves time at check-in.'
+            : 'The crew uses this to get ready for your group.'}
         </p>
       </div>
 
+      {showGuests ? (
       <ol className="flex list-none flex-col gap-4 p-0">
         {travellers.map((traveller, index) => (
           <li key={index} className="rounded-2xl border border-line bg-surface p-4 sm:p-5">
@@ -185,21 +266,45 @@ export function GuestDetailsStep({
                 Guest {index + 1}
                 {index === 0 ? <span className="font-normal text-subtle"> · {leadName.trim() || 'you'}</span> : null}
               </p>
-              <label className="inline-flex items-center gap-2 text-xs font-medium text-muted">
-                <Checkbox checked={traveller.minor} onCheckedChange={(checked) => patch(index, { minor: checked === true })} />
-                Under {minorAge}
-              </label>
+              {showMinor && !field('dateOfBirth') ? (
+                <label className="inline-flex items-center gap-2 text-xs font-medium text-muted">
+                  <Checkbox checked={traveller.minor} onCheckedChange={(checked) => patch(index, { minor: checked === true })} />
+                  Under {minorAge}
+                </label>
+              ) : field('dateOfBirth') && traveller.minor ? (
+                <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-medium text-muted">Under {minorAge}</span>
+              ) : null}
             </div>
             <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {index > 0 ? (
+              {index > 0 && field('name') ? (
                 <>
-                  <Field label="First name" required error={errors[`t${index}.firstName`]}>
+                  <Field label="First name" required={field('name')?.required} optional={!field('name')?.required} error={errors[`t${index}.firstName`]}>
                     {(control) => <Input {...control} value={traveller.firstName} onChange={(e) => patch(index, { firstName: e.target.value })} />}
                   </Field>
-                  <Field label="Last name" required error={errors[`t${index}.lastName`]}>
+                  <Field label="Last name" required={field('name')?.required} optional={!field('name')?.required} error={errors[`t${index}.lastName`]}>
                     {(control) => <Input {...control} value={traveller.lastName} onChange={(e) => patch(index, { lastName: e.target.value })} />}
                   </Field>
                 </>
+              ) : null}
+              {index > 0 && field('email') ? (
+                <Field label="Email" required={field('email')?.required} optional={!field('email')?.required} error={errors[`t${index}.email`]}>
+                  {(control) => <Input {...control} type="email" autoComplete="off" value={traveller.fields?.email ?? ''} onChange={(e) => setField(index, 'email', e.target.value)} />}
+                </Field>
+              ) : null}
+              {index > 0 && field('phone') ? (
+                <Field label="Mobile" required={field('phone')?.required} optional={!field('phone')?.required} error={errors[`t${index}.phone`]}>
+                  {(control) => <Input {...control} type="tel" autoComplete="off" value={traveller.fields?.phone ?? ''} onChange={(e) => setField(index, 'phone', e.target.value)} />}
+                </Field>
+              ) : null}
+              {field('dateOfBirth') ? (
+                <Field label="Date of birth" required={field('dateOfBirth')?.required} optional={!field('dateOfBirth')?.required} error={errors[`t${index}.dateOfBirth`]}>
+                  {(control) => <Input {...control} type="date" value={traveller.fields?.dateOfBirth ?? ''} onChange={(e) => setField(index, 'dateOfBirth', e.target.value)} />}
+                </Field>
+              ) : null}
+              {field('country') ? (
+                <Field label="Country" required={field('country')?.required} optional={!field('country')?.required} error={errors[`t${index}.country`]}>
+                  {(control) => <Input {...control} autoComplete="off" value={traveller.fields?.country ?? ''} onChange={(e) => setField(index, 'country', e.target.value)} />}
+                </Field>
               ) : null}
               {guestQs.map((question) => (
                 <AnswerField
@@ -214,6 +319,7 @@ export function GuestDetailsStep({
           </li>
         ))}
       </ol>
+      ) : null}
 
       {bookingQs.length > 0 ? (
         <div className="grid grid-cols-1 gap-4 rounded-2xl border border-line bg-surface p-4 sm:grid-cols-2 sm:p-5">
@@ -322,13 +428,25 @@ export function WaiverStep({
   setWaiver,
   hasMinors,
   errors,
+  signing = 'booker',
+  signers = [],
 }: {
   template: WaiverTemplate
   waiver: WaiverState
   setWaiver: React.Dispatch<React.SetStateAction<WaiverState>>
   hasMinors: boolean
   errors: Errors
+  signing?: 'booker' | 'each'
+  /** Guests 2 and on, when each guest signs. */
+  signers?: { label: string; name: string; minor: boolean }[]
 }) {
+  const each = signing === 'each' && signers.length > 0
+  const setSigner = (index: number, change: Partial<WaiverSigner>) =>
+    setWaiver((current) => {
+      const list = [...(current.signers ?? [])]
+      list[index] = { ...{ drawn: false }, ...list[index], ...change }
+      return { ...current, signers: list }
+    })
   return (
     <section aria-labelledby="step-waiver" className="space-y-5">
       <div>
@@ -337,7 +455,9 @@ export function WaiverStep({
           Sign the waiver
         </h2>
         <p className="mt-1.5 text-sm text-muted">
-          One signature covers your whole group. A copy comes with your confirmation.
+          {each
+            ? `Everyone in your booking signs: you first, then each guest below. Guests under ${template.minorAge} are signed for by a parent or guardian.`
+            : 'One signature covers your whole group. A copy comes with your confirmation.'}
         </p>
       </div>
 
@@ -361,7 +481,7 @@ export function WaiverStep({
           className="mt-0.5"
         />
         <span className="text-sm text-foreground">
-          I have read this waiver and agree to it for myself and everyone in my booking.
+          {each ? 'I have read this waiver, and everyone signing below has read it too.' : 'I have read this waiver and agree to it for myself and everyone in my booking.'}
           {errors['waiver.agree'] ? <span className="mt-1 block text-xs font-medium text-danger">{errors['waiver.agree']}</span> : null}
         </span>
       </label>
@@ -372,7 +492,7 @@ export function WaiverStep({
             <Input {...control} value={waiver.signedName} autoComplete="name" onChange={(e) => setWaiver((current) => ({ ...current, signedName: e.target.value }))} />
           )}
         </Field>
-        {template.minorsNeedGuardian && hasMinors ? (
+        {!each && template.minorsNeedGuardian && hasMinors ? (
           <Field label="Parent or guardian" required error={errors['waiver.guardian']} description={`Signs for the guests under ${template.minorAge}.`}>
             {(control) => (
               <Input {...control} value={waiver.guardianName} onChange={(e) => setWaiver((current) => ({ ...current, guardianName: e.target.value }))} />
@@ -388,6 +508,31 @@ export function WaiverStep({
         <SignaturePad invalid={Boolean(errors['waiver.drawn'])} onChange={(drawn) => setWaiver((current) => ({ ...current, drawn }))} />
         {errors['waiver.drawn'] ? <p className="mt-1 text-xs font-medium text-danger">{errors['waiver.drawn']}</p> : null}
       </div>
+
+      {each ? (
+        <ol className="flex list-none flex-col gap-4 p-0">
+          {signers.map((signer, index) => (
+            <li key={index} className="space-y-4 rounded-2xl border border-line bg-surface p-4 sm:p-5">
+              <p className="text-sm font-semibold text-foreground">
+                {signer.label}
+                {signer.minor ? <span className="font-normal text-subtle"> · under {template.minorAge}, signed by a parent or guardian</span> : null}
+              </p>
+              <Field label={signer.minor ? 'Parent or guardian' : 'Full name'} required error={errors[`waiver.s${index}.name`]} description="Typed as their signature.">
+                {(control) => (
+                  <Input {...control} value={waiver.signers?.[index]?.name ?? signer.name} onChange={(e) => setSigner(index, { name: e.target.value })} />
+                )}
+              </Field>
+              <div>
+                <p className="mb-1.5 text-[0.8125rem] font-medium text-foreground">
+                  Signature <span className="text-danger">*</span>
+                </p>
+                <SignaturePad invalid={Boolean(errors[`waiver.s${index}.drawn`])} onChange={(drawn) => setSigner(index, { drawn })} />
+                {errors[`waiver.s${index}.drawn`] ? <p className="mt-1 text-xs font-medium text-danger">{errors[`waiver.s${index}.drawn`]}</p> : null}
+              </div>
+            </li>
+          ))}
+        </ol>
+      ) : null}
     </section>
   )
 }

@@ -50,6 +50,7 @@ import {
   GuestDetailsStep,
   WaiverStep,
   makeTravellers,
+  signerDefaults,
   validateGuestDetails,
   type TravellerState,
   type WaiverState,
@@ -58,6 +59,7 @@ import { CheckoutPickup, EMPTY_PICKUP, PICKUP_OTHER, validatePickup, type Pickup
 import { TicketQr, ticketPayload } from '@/components/ui/ticket-qr'
 import { CheckoutDiscounts } from '@/components/storefront/checkout-discounts'
 import { applyRules, giftProblem, promoDiscount, promoProblem } from '@/lib/pricing'
+import { guestDetailsOf } from '@/lib/guest-requirements'
 import { usePricing } from '@/hooks/use-pricing'
 
 /* ==========================================================================
@@ -312,11 +314,24 @@ export function CheckoutFlow({
 
   /* ---------- guests and waiver ---------- */
 
-  const questions = React.useMemo(() => [...(activity.guestQuestions ?? []), ...licenceQuestions(activity), ...riderQuestions(activity)], [activity])
-  const [travellers, setTravellers] = React.useState<TravellerState[]>(() => makeTravellers((activity.kind ?? 'trip') === 'rental' ? 1 : quote.party))
+  const details = React.useMemo(() => guestDetailsOf(activity), [activity])
+  const signing = activity.waiverSigning ?? 'booker'
+  // With guest details off, each-guest questions are asked once, of the person booking.
+  const questions = React.useMemo(() => {
+    const all = [...(activity.guestQuestions ?? []), ...licenceQuestions(activity), ...riderQuestions(activity)]
+    return details.enabled ? all : all.map((question) => (question.scope === 'guest' ? { ...question, scope: 'booking' as const } : question))
+  }, [activity, details.enabled])
+  const [travellers, setTravellers] = React.useState<TravellerState[]>(() =>
+    makeTravellers(details.enabled && (activity.kind ?? 'trip') !== 'rental' ? quote.party : 1),
+  )
   const [bookingAnswers, setBookingAnswers] = React.useState<Record<string, string>>({})
   const [waiver, setWaiver] = React.useState<WaiverState>(EMPTY_WAIVER)
-  const needsDetails = questions.length > 0 || Boolean(waiverTemplate) || travellers.length > 1
+  const signers = waiverTemplate && signing === 'each' ? signerDefaults(travellers, Math.max(1, quote.party)) : []
+  /** Guest cards only when there is something to ask beyond the booker's own contact details. */
+  const showGuests =
+    details.enabled &&
+    (travellers.length > 1 || questions.some((question) => question.scope === 'guest') || details.fields.some((field) => field.key === 'dateOfBirth' || field.key === 'country'))
+  const needsDetails = questions.length > 0 || Boolean(waiverTemplate) || showGuests
 
   /* ---------- pickup ---------- */
 
@@ -380,7 +395,19 @@ export function CheckoutFlow({
     const next: Errors = {}
     const guestResult = guestSchema.safeParse(guest)
     if (!guestResult.success) Object.assign(next, collectErrors(guestResult.error.issues))
-    Object.assign(next, validateGuestDetails({ questions, travellers, bookingAnswers, waiver, template: waiverTemplate }))
+    Object.assign(
+      next,
+      validateGuestDetails({
+        questions,
+        travellers: showGuests ? travellers : travellers.slice(0, 1),
+        bookingAnswers,
+        waiver,
+        template: waiverTemplate,
+        fields: details.fields,
+        signing,
+        signers,
+      }),
+    )
     if (pickupZones.length > 0) Object.assign(next, validatePickup(pickup, pickupRequired))
     if (scope === 'all' && displayQuote.total > 0) {
       const paymentResult = paymentSchema.safeParse(payment)
@@ -518,6 +545,10 @@ export function CheckoutFlow({
                   leadName={`${guest.firstName} ${guest.lastName}`}
                   minorAge={waiverTemplate?.minorAge ?? 18}
                   errors={errors}
+                  fields={details.fields}
+                  showGuests={showGuests}
+                  showMinor={Boolean(waiverTemplate)}
+                  onDate={departure.startsAt}
                 />
                 {waiverTemplate ? (
                   <WaiverStep
@@ -526,6 +557,8 @@ export function CheckoutFlow({
                     setWaiver={setWaiver}
                     hasMinors={travellers.some((traveller) => traveller.minor)}
                     errors={errors}
+                    signing={signing}
+                    signers={signers}
                   />
                 ) : null}
               </div>

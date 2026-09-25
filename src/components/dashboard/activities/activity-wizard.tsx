@@ -35,7 +35,8 @@ import {
 } from 'lucide-react'
 import { z } from 'zod'
 
-import type { Activity, ActivityKind, ActivityTheme, CurrencyCode, DifficultyLevel, GuestQuestion, Location, VerticalKey } from '@/types'
+import type { Activity, ActivityKind, ActivityTheme, CurrencyCode, DifficultyLevel, GuestDetailsConfig, GuestQuestion, Location, VerticalKey } from '@/types'
+import { DEFAULT_GUEST_FIELDS, guestDetailsOf } from '@/lib/guest-requirements'
 import { saveActivityOverride } from '@/lib/activity-overrides'
 import {
   cn,
@@ -188,6 +189,10 @@ export interface ActivityDraft {
   /** Asked at checkout. */
   guestQuestions: GuestQuestion[]
   waiverId: string | null
+  /** Who signs the waiver. */
+  waiverSigning: 'booker' | 'each'
+  /** What checkout asks of each guest. */
+  guestDetails: GuestDetailsConfig
   pickup: DraftPickup
   /** Languages the guide or instructor speaks. */
   languages: string[]
@@ -205,7 +210,7 @@ export interface ActivityDraft {
   bring: string[]
 }
 
-const STORAGE_KEY = 'ezra:activity-wizard:v8'
+const STORAGE_KEY = 'ezra:activity-wizard:v9'
 
 /** Dining is the one category whose product is a table, not a departure. */
 export const isDining = (draft: Pick<ActivityDraft, 'category'>) => draft.category === 'restaurants'
@@ -245,6 +250,8 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
     kindSettings: defaultKindSettings(),
     guestQuestions: [],
     waiverId: null,
+    waiverSigning: 'booker',
+    guestDetails: { enabled: false, fields: DEFAULT_GUEST_FIELDS },
     pickup: { enabled: false, zoneIds: [], required: false },
     languages: ['English'],
     route: emptyRoute(),
@@ -493,6 +500,8 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
     kind: activity.kind ?? 'trip',
     guestQuestions: (activity.guestQuestions ?? []).map((question) => ({ ...question })),
     waiverId: activity.waiverId ?? null,
+    waiverSigning: activity.waiverSigning ?? 'booker',
+    guestDetails: guestDetailsOf(activity),
     pickup: activity.pickup
       ? { enabled: true, zoneIds: [...activity.pickup.zoneIds], required: activity.pickup.required, prices: { ...activity.pickup.prices } }
       : { enabled: false, zoneIds: [], required: false },
@@ -1500,6 +1509,8 @@ export function ActivityWizard({
           crewIds: draft.crewIds,
           guestQuestions: (draft.guestQuestions ?? []).filter((question) => question.label.trim().length > 0),
           waiverId: draft.waiverId ?? null,
+          waiverSigning: draft.waiverSigning ?? 'booker',
+          guestDetails: draft.guestDetails ?? { enabled: false, fields: DEFAULT_GUEST_FIELDS },
           pickup:
             (draft.pickup?.enabled || draft.arrivalMode === 'pickup') && draft.pickup.zoneIds.length > 0
               ? {
@@ -1625,6 +1636,15 @@ export function ActivityWizard({
                       onChange={(guestQuestions) => patch({ guestQuestions })}
                       waiverId={draft.waiverId ?? null}
                       onWaiverChange={(waiverId) => patch({ waiverId })}
+                      waiverSigning={draft.waiverSigning ?? 'booker'}
+                      onWaiverSigningChange={(waiverSigning) => patch({ waiverSigning })}
+                      guestDetails={draft.guestDetails ?? { enabled: false, fields: DEFAULT_GUEST_FIELDS }}
+                      onGuestDetailsChange={(guestDetails) => patch({ guestDetails })}
+                      forcedReason={
+                        (draft.kind ?? 'trip') === 'activity' && (draft.kindSettings.activity.minHeightCm > 0 || draft.kindSettings.activity.maxWeightKg > 0)
+                          ? 'On because of the height or weight limit in Basics: every rider is asked.'
+                          : undefined
+                      }
                       waivers={waivers}
                     />
                   ) : null}
@@ -2673,7 +2693,13 @@ function ReviewStep({
         { label: 'Type', value: ACTIVITY_KIND_META[draft.kind ?? 'trip'].label, step: 0 },
         {
           label: 'Guest details',
-          value: `${(draft.guestQuestions ?? []).length} ${pluralize((draft.guestQuestions ?? []).length, 'question')} · ${waivers.find((waiver) => waiver.id === draft.waiverId)?.title ?? 'no waiver'}`,
+          value: [
+            draft.guestDetails?.enabled ? 'Details from each guest' : 'Booker only',
+            `${(draft.guestQuestions ?? []).length} ${pluralize((draft.guestQuestions ?? []).length, 'question')}`,
+            draft.waiverId
+              ? `${waivers.find((waiver) => waiver.id === draft.waiverId)?.title ?? 'Waiver'}, signed by ${draft.waiverSigning === 'each' ? 'each guest' : 'the booker'}`
+              : 'no waiver',
+          ].join(' · '),
           step: 1,
         },
         { label: 'Category', value: draft.customCategory || themeLabel(draft.theme ?? defaultTheme(draft.category)), step: 0 },

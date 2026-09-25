@@ -6,6 +6,7 @@ import type {
   ActivityLocation,
   CharterConfig,
   DifficultyLevel,
+  GuestDetailsConfig,
   GuestQuestion,
   LessonConfig,
   PassConfig,
@@ -47,6 +48,8 @@ export interface ActivityOverride {
   guestQuestions?: GuestQuestion[]
   /** null clears the waiver; undefined keeps the seeded one. */
   waiverId?: string | null
+  waiverSigning?: 'booker' | 'each'
+  guestDetails?: GuestDetailsConfig
   /** null turns pickup off; undefined keeps the seeded setting. */
   pickup?: ActivityPickup | null
   languages?: string[]
@@ -134,6 +137,16 @@ export function applyActivityOverride<T extends Activity>(activity: T, override?
     guestQuestions: override.guestQuestions ?? activity.guestQuestions,
     waiverId: override.waiverId === undefined ? activity.waiverId : (override.waiverId ?? undefined),
     pickup: override.pickup === undefined ? activity.pickup : (override.pickup ?? undefined),
+    waiverSigning: override.waiverSigning ?? activity.waiverSigning,
+    guestDetails: override.guestDetails ?? activity.guestDetails,
+    languages: override.languages ?? activity.languages,
+    customRequests: override.customRequests ?? activity.customRequests,
+    theme: override.theme ?? activity.theme,
+    customCategory: override.customCategory === undefined ? activity.customCategory : (override.customCategory ?? undefined),
+    accessibility: override.accessibility ?? activity.accessibility,
+    bring: override.bring ?? activity.bring,
+    ride: override.ride ?? activity.ride,
+    route: override.route === undefined ? activity.route : (override.route ?? undefined),
     updatedAt: override.updatedAt,
   }
 }

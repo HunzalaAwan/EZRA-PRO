@@ -280,6 +280,19 @@ export interface GuestQuestion {
   preset?: string
 }
 
+/** A detail asked of every guest when an activity collects guest details. */
+export type GuestFieldKey = 'name' | 'email' | 'phone' | 'dateOfBirth' | 'country'
+
+/**
+ * Whether checkout asks for each guest in the booking, and what. Off: only
+ * the person booking gives their details. On: every guest fills a card with
+ * these fields plus the activity's per-guest questions.
+ */
+export interface GuestDetailsConfig {
+  enabled: boolean
+  fields: { key: GuestFieldKey; required: boolean }[]
+}
+
 export interface WaiverTemplate {
   id: string
   tenantId: string
@@ -518,6 +531,10 @@ export interface Activity {
   guestQuestions?: GuestQuestion[]
   /** The waiver every guest signs at checkout. */
   waiverId?: string
+  /** Who signs the waiver: the booker for everyone, or each guest. Defaults to the booker. */
+  waiverSigning?: 'booker' | 'each'
+  /** Details asked of each guest at checkout. Absent: worked out from the questions. */
+  guestDetails?: GuestDetailsConfig
   /** Hotel pickup: the zones served, and whether it is the only way to join. */
   pickup?: ActivityPickup
   /** Languages the guide or instructor speaks. */

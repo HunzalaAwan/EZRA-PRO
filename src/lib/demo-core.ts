@@ -485,6 +485,16 @@ const CUSTOM_REQUEST_SLUGS = new Set(['sunset-catamaran-sail-snorkel', 'molokini
 
 const MOTOR_ACTIVITIES = new Set(['jet-ski-safari', 'jet-ski-rental'])
 
+/** Activities whose guests each sign the waiver. */
+const EACH_SIGNS = new Set(['upcountry-horseback-ride', 'west-maui-parasail-flight', 'night-manta-ray-dive', 'shotover-canyon-swing'])
+
+/** Activities that collect details from each guest, beyond the questions. */
+const GUEST_DETAILS: Record<string, { enabled: boolean; fields: { key: 'name' | 'email' | 'phone' | 'dateOfBirth' | 'country'; required: boolean }[] }> = {
+  'upcountry-horseback-ride': { enabled: true, fields: [{ key: 'name', required: true }, { key: 'dateOfBirth', required: true }] },
+  'night-manta-ray-dive': { enabled: true, fields: [{ key: 'name', required: true }, { key: 'dateOfBirth', required: true }, { key: 'email', required: false }] },
+  'molokai-channel-crossing': { enabled: true, fields: [{ key: 'name', required: true }, { key: 'country', required: true }, { key: 'phone', required: false }] },
+}
+
 const GUEST_QUESTIONS: Record<string, GuestQuestion[]> = {
   'molokini-crater-dawn-patrol': [presetQuestion('swim'), presetQuestion('wetsuit'), presetQuestion('fins')],
   'turtle-town-kayak-snorkel': [presetQuestion('swim'), presetQuestion('fins')],
@@ -3508,6 +3518,9 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     guestQuestions: GUEST_QUESTIONS[spec.slug] ?? [],
     ...(PICKUP_BY_SLUG[spec.slug] ? { pickup: PICKUP_BY_SLUG[spec.slug] } : {}),
     waiverId: MOTOR_ACTIVITIES.has(spec.slug) ? 'wvr_bluehorizon_motor' : `wvr_${tenant.id.replace(/^tnt_/, '')}_general`,
+    // Motorised and animal activities: every guest signs their own waiver.
+    ...(MOTOR_ACTIVITIES.has(spec.slug) || EACH_SIGNS.has(spec.slug) ? { waiverSigning: 'each' as const } : {}),
+    ...(GUEST_DETAILS[spec.slug] ? { guestDetails: GUEST_DETAILS[spec.slug] } : {}),
     category: tenant.vertical,
     status: spec.status ?? 'live',
     format: spec.format ?? 'departures',

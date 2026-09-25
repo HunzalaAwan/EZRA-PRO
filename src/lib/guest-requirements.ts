@@ -1,4 +1,4 @@
-import type { Booking, GuestQuestion, GuestQuestionKind } from '@/types'
+import type { Activity, Booking, GuestDetailsConfig, GuestFieldKey, GuestQuestion, GuestQuestionKind } from '@/types'
 
 /* ==========================================================================
    Guest requirements — the questions an activity asks each guest (or once
@@ -183,4 +183,39 @@ export function gearTally(questions: GuestQuestion[] | undefined, bookings: Pick
 /** "S" from "S (EU 37–39)", so gear chips stay short. */
 export function shortOption(option: string): string {
   return option.split(' (')[0]
+}
+
+/* --------------------------------------------------------------------------
+   Guest details — what checkout asks of each guest, when the activity asks
+   -------------------------------------------------------------------------- */
+
+export const GUEST_FIELD_ORDER: GuestFieldKey[] = ['name', 'email', 'phone', 'dateOfBirth', 'country']
+
+export const GUEST_FIELDS: Record<GuestFieldKey, { label: string; hint: string }> = {
+  name: { label: 'Full name', hint: 'First and last name, for the manifest and check-in.' },
+  email: { label: 'Email', hint: 'Each guest gets their own ticket and reminders.' },
+  phone: { label: 'Mobile', hint: 'For day-of updates and emergencies.' },
+  dateOfBirth: { label: 'Date of birth', hint: 'Works out who is under age for the waiver.' },
+  country: { label: 'Country', hint: 'For park fees, permits and insurance.' },
+}
+
+export const DEFAULT_GUEST_FIELDS: GuestDetailsConfig['fields'] = [{ key: 'name', required: true }]
+
+/** An activity with a height or weight limit has to ask every rider. */
+export function riderLimited(activity: Pick<Activity, 'kind' | 'ride'>): boolean {
+  return (activity.kind ?? 'trip') === 'activity' && Boolean(activity.ride?.minHeightCm || activity.ride?.maxWeightKg)
+}
+
+/**
+ * The activity's guest details. Older activities without a setting ask each
+ * guest when they have per-guest questions; a rider limit always does.
+ */
+export function guestDetailsOf(activity: Pick<Activity, 'guestDetails' | 'guestQuestions' | 'kind' | 'ride'>): GuestDetailsConfig {
+  const forced = riderLimited(activity)
+  if (activity.guestDetails) {
+    const fields = activity.guestDetails.fields.length > 0 ? activity.guestDetails.fields : DEFAULT_GUEST_FIELDS
+    return { enabled: activity.guestDetails.enabled || forced, fields }
+  }
+  const perGuest = (activity.guestQuestions ?? []).some((question) => question.scope === 'guest')
+  return { enabled: perGuest || forced, fields: DEFAULT_GUEST_FIELDS }
 }
