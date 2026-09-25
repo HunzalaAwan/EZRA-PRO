@@ -125,6 +125,8 @@ export interface ActivityLocation {
   weekdays?: number[]
   /** Where to meet at this place; the activity's own meeting point applies when omitted. */
   meetingPoint?: string
+  /** Seats on particular weekdays (0=Sun … 6=Sat) when they differ from the activity's usual number. */
+  dayCapacity?: Record<number, number>
 }
 
 export type Role = 'owner' | 'admin' | 'manager' | 'staff' | 'guide' | 'viewer'

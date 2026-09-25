@@ -584,7 +584,7 @@ for (const [tenantId, specs] of SPEC_BY_TENANT) {
           const hour = startsAt.getHours()
           const isPast = startMs < NOW_MS
 
-          let capacity = activity.maxCapacity
+          let capacity = site.dayCapacity?.[day.getDay()] ?? activity.maxCapacity
           if (rng() < 0.08) {
             capacity = Math.max(activity.minParticipants + 1, round(capacity * (0.7 + rng() * 0.2)))
           }

@@ -68,6 +68,8 @@ export interface DraftSchedule {
   startTimes: string[]
   /** Seats per departure, per day or per date. 0 = no limit. */
   capacity: number
+  /** Weekdays (0=Sun … 6=Sat) that sell a different number than `capacity`: more at the weekend, fewer midweek. */
+  dayCapacity?: Record<number, number>
   seasonStart: string
   seasonEnd: string
   /** `hours` only. */
@@ -156,6 +158,12 @@ export interface GeneratedDeparture {
 }
 
 /** Exactly what the rule would put on the calendar for the next `days` days. Listed dates ignore the window. */
+/** What one departure (or open day) sells on this weekday. */
+export function capacityOn(schedule: Pick<DraftSchedule, 'capacity' | 'dayCapacity'>, weekday: number): number {
+  const override = schedule.dayCapacity?.[weekday]
+  return override !== undefined && override > 0 ? override : schedule.capacity
+}
+
 export function previewDepartures(
   schedule: DraftSchedule,
   nowIso: string,
@@ -197,14 +205,14 @@ export function previewDepartures(
         dateKey: key,
         weekday: day.getDay(),
         times: times.length > 0 ? times : [schedule.opensAt],
-        seats: schedule.capacity,
+        seats: capacityOn(schedule, day.getDay()),
         open: { from: schedule.opensAt, to: schedule.closesAt },
       })
       continue
     }
 
     if (times.length === 0) continue
-    out.push({ dateKey: key, weekday: day.getDay(), times, seats: times.length * schedule.capacity })
+    out.push({ dateKey: key, weekday: day.getDay(), times, seats: times.length * capacityOn(schedule, day.getDay()) })
   }
   return out
 }
@@ -223,13 +231,17 @@ export interface ScheduleSeats {
   /** "18 seats per departure", "6 vehicles at a time". */
   summary: string
   onEdit?: () => void
+  /** Allow a different number on some weekdays. Off for charters and rentals, whose number is fixed. */
+  varies?: boolean
 }
 
 /** One line for the review step. */
 export function describeSchedule(schedule: DraftSchedule, nouns?: Pick<ScheduleSeats, 'one' | 'many'>): string {
   const many = nouns?.many ?? 'seats'
   const one = nouns?.one ?? 'seat'
-  const seats = schedule.capacity > 0 ? `${schedule.capacity} ${schedule.capacity === 1 ? one : many}` : `no ${one} limit`
+  const differs = Object.entries(schedule.dayCapacity ?? {}).filter(([day, value]) => value > 0 && value !== schedule.capacity && schedule.weekdays.includes(Number(day)))
+  const base = schedule.capacity > 0 ? `${schedule.capacity} ${schedule.capacity === 1 ? one : many}` : `no ${one} limit`
+  const seats = differs.length > 0 ? `${base} (${differs.map(([day, value]) => `${value} on ${WEEKDAY_LABEL[Number(day)]}`).join(', ')})` : base
   if (schedule.mode === 'hours') {
     const arrival = schedule.entryInterval > 0 ? `arrival slots every ${schedule.entryInterval} min` : 'arrive any time'
     return `Open ${formatClock(schedule.opensAt)}–${formatClock(schedule.closesAt)} on ${plural(schedule.weekdays.length, 'day')} a week · ${arrival} · ${seats} a day`
@@ -338,7 +350,7 @@ export function ScheduleEditor({ schedule: given, onChange, nowIso, errors, show
                 <Users className="size-3.5 text-faint" aria-hidden="true" />
                 {seats.summary}
               </span>
-              <span className="mt-0.5 block text-xs text-subtle">Set once in Basics, used at every time and location.</span>
+              <span className="mt-0.5 block text-xs text-subtle">{Object.keys(schedule.dayCapacity ?? {}).length > 0 ? 'Set in Basics. The days below can sell a different number.' : 'Set once in Basics, used at every time and location.'}</span>
             </span>
             {seats.onEdit ? (
               <Button type="button" variant="ghost" size="xs" onClick={seats.onEdit}>
@@ -422,6 +434,10 @@ export function ScheduleEditor({ schedule: given, onChange, nowIso, errors, show
           </div>
         )}
       </div>
+
+      {seats?.varies && schedule.mode !== 'dates' && seats.capacity > 0 ? (
+        <DayCapacity schedule={schedule} set={set} one={seats.one} many={seats.many} />
+      ) : null}
 
       {/* ---------- preview ---------- */}
       <div className="rounded-xl border border-line bg-surface-sunken/60 p-4">
@@ -949,6 +965,85 @@ export function LocationsEditor({ schedule, onChange, locations, nowIso, errors,
         </ul>
         {errors?.locations ? <p className="mt-1.5 text-xs font-medium text-danger">{errors.locations}</p> : null}
       </div>
+    </div>
+  )
+}
+
+/* ==========================================================================
+   DAY-BY-DAY CAPACITY — the same every day, or a different number on the
+   days that need it (a bigger boat at the weekend, one guide midweek).
+   ========================================================================== */
+
+function DayCapacity({
+  schedule,
+  set,
+  one,
+  many,
+}: {
+  schedule: DraftSchedule
+  set: (patch: Partial<DraftSchedule>) => void
+  one: string
+  many: string
+}) {
+  const overrides = schedule.dayCapacity ?? {}
+  const custom = Object.keys(overrides).length > 0
+  const days = WEEKDAY_ORDER.filter((day) => schedule.weekdays.includes(day))
+  const unit = schedule.mode === 'hours' ? 'a day' : 'per departure'
+
+  const turn = (on: boolean) => {
+    if (!on) return set({ dayCapacity: undefined })
+    // Start every open day at the usual number, so only the different days need typing.
+    set({ dayCapacity: Object.fromEntries(days.map((day) => [day, schedule.capacity])) })
+  }
+  const setDay = (day: number, value: number) => set({ dayCapacity: { ...overrides, [day]: Math.max(0, value) } })
+  const weekend = () => {
+    const bump = Math.max(1, Math.round(schedule.capacity * 1.25))
+    set({ dayCapacity: Object.fromEntries(days.map((day) => [day, day === 0 || day === 6 ? bump : schedule.capacity])) })
+  }
+
+  return (
+    <div className="rounded-xl border border-line p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[0.8125rem] font-medium">Different {many} on some days</p>
+          <p className="mt-0.5 text-xs text-muted">
+            {custom ? `Set the ${many} ${unit} for each day. Empty or ${schedule.capacity} means the usual number.` : `Every day sells ${schedule.capacity} ${schedule.capacity === 1 ? one : many} ${unit}. Turn this on for a bigger weekend or a quieter midweek.`}
+          </p>
+        </div>
+        <Switch checked={custom} onCheckedChange={turn} aria-label={`Different ${many} on some days`} />
+      </div>
+      {custom ? (
+        <>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+            {days.map((day) => {
+              const value = overrides[day] ?? schedule.capacity
+              const changed = value !== schedule.capacity
+              return (
+                <label key={day} className={cn('flex flex-col gap-1 rounded-lg border px-2.5 py-2', changed ? 'border-primary/40 bg-primary-soft/20' : 'border-line')}>
+                  <span className={cn('text-xs font-semibold', changed ? 'text-primary' : 'text-muted')}>{WEEKDAY_LABEL[day]}</span>
+                  <Input
+                    type="number"
+                    size="sm"
+                    min={1}
+                    value={value || ''}
+                    placeholder={String(schedule.capacity)}
+                    aria-label={`${many} on ${WEEKDAY_LABEL[day]}`}
+                    onChange={(event) => setDay(day, Number.parseInt(event.target.value, 10) || 0)}
+                  />
+                </label>
+              )
+            })}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <Button type="button" variant="ghost" size="xs" onClick={weekend}>
+              More at the weekend
+            </Button>
+            <Button type="button" variant="ghost" size="xs" onClick={() => turn(true)}>
+              Reset to {schedule.capacity}
+            </Button>
+          </div>
+        </>
+      ) : null}
     </div>
   )
 }

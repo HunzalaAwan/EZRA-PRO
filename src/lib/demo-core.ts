@@ -1454,6 +1454,8 @@ type TierSpec = [label: string, price: number, min: number, max: number, note?: 
 type AddOnSpec = [label: string, price: number, note: string, max: number | null, icon?: string]
 
 interface SpecLocation {
+  /** Seats on particular weekdays when they differ. */
+  dayCapacity?: Record<number, number>
   /** Location slug within the business. */
   location: string
   times?: string[]
@@ -2362,7 +2364,8 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     resources: ['res_bh_kaimana_sky'],
     times: ['09:00', '13:00'],
     locations: [
-      { location: 'maalaea' },
+      // The bigger boat runs at the weekend from Maalaea.
+      { location: 'maalaea', dayCapacity: { 0: 44, 6: 44 } },
       { location: 'lahaina', times: ['10:00', '14:00'], meetingPoint: 'Lahaina Harbor, Slip 9 — family check-in desk opens 45 minutes prior.' },
     ],
     popularity: 0.78,
@@ -3451,6 +3454,7 @@ function activityLocations(tenant: Tenant, spec: ActivitySpec): ActivityLocation
     }
     if (entry.weekdays) resolved.weekdays = entry.weekdays
     if (entry.meetingPoint) resolved.meetingPoint = entry.meetingPoint
+    if (entry.dayCapacity) resolved.dayCapacity = entry.dayCapacity
     return resolved
   })
 }

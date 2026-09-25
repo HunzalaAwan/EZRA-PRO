@@ -351,10 +351,10 @@ export function seatsFor(draft: ActivityDraft): ScheduleSeats {
   if (kind === 'charter') {
     return { capacity: 1, one: 'charter', many: 'charters', summary: `One group each, up to ${settings.charter.maxGuests} guests` }
   }
-  if (kind === 'lesson') return { capacity: n, one: 'place', many: 'places', summary: `${n} ${pluralize(n, 'student')} per class` }
-  if (kind === 'pass') return { capacity: n, one: 'ticket', many: 'tickets', summary: n > 0 ? `${n} tickets per day` : 'No ticket limit' }
-  if (kind === 'activity') return { capacity: n, one: 'place', many: 'places', summary: `${n} ${pluralize(n, 'rider')} per time slot` }
-  return { capacity: n, one: 'seat', many: 'seats', summary: n > 0 ? `${n} seats per departure` : 'No seat limit' }
+  if (kind === 'lesson') return { capacity: n, one: 'place', many: 'places', summary: `${n} ${pluralize(n, 'student')} per class`, varies: true }
+  if (kind === 'pass') return { capacity: n, one: 'ticket', many: 'tickets', summary: n > 0 ? `${n} tickets per day` : 'No ticket limit', varies: true }
+  if (kind === 'activity') return { capacity: n, one: 'place', many: 'places', summary: `${n} ${pluralize(n, 'rider')} per time slot`, varies: true }
+  return { capacity: n, one: 'seat', many: 'seats', summary: n > 0 ? `${n} seats per departure` : 'No seat limit', varies: true }
 }
 
 /**
@@ -429,6 +429,7 @@ function scheduleFromActivity(activity: Activity, base: DraftSchedule, homeTimes
     capacity: activity.maxCapacity,
     startTimes: homeTimes.length > 0 ? homeTimes : base.startTimes,
     weekdays: activity.locations[0]?.weekdays ?? base.weekdays,
+    ...(activity.locations[0]?.dayCapacity ? { dayCapacity: { ...activity.locations[0].dayCapacity } } : {}),
     locations: [],
   }
   const sites: DraftLocation[] = activity.locations.map((site) => ({
@@ -437,6 +438,7 @@ function scheduleFromActivity(activity: Activity, base: DraftSchedule, homeTimes
       ...shared,
       startTimes: site.times.length > 0 ? site.times : shared.startTimes,
       weekdays: site.weekdays ?? shared.weekdays,
+      ...(site.dayCapacity ? { dayCapacity: { ...site.dayCapacity } } : {}),
     },
   }))
   return { ...shared, locations: sites }
@@ -1509,7 +1511,8 @@ export function ActivityWizard({
               : null,
           locations: draft.schedule.locations.map((site) => {
             const rule = draft.schedule.locations.length > 1 ? site.schedule : draft.schedule
-            return { locationId: site.locationId, times: rule.startTimes, weekdays: rule.weekdays }
+            const dayCapacity = Object.fromEntries(Object.entries(rule.dayCapacity ?? {}).filter(([, value]) => value > 0 && value !== rule.capacity))
+            return { locationId: site.locationId, times: rule.startTimes, weekdays: rule.weekdays, ...(Object.keys(dayCapacity).length > 0 ? { dayCapacity } : {}) }
           }),
         })
         toast.success('Changes saved', { description: `${draft.name} is updated on the storefront.` })
