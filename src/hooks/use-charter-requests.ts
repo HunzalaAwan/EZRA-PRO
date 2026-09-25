@@ -17,6 +17,7 @@ import type { CharterRequest } from '@/types'
 export const CHARTER_EVENT = 'ezra:charter-requests'
 const requestsKey = (slug: string) => `ezra:charter-requests:${slug}`
 const statesKey = (slug: string) => `ezra:charter-quotes:${slug}`
+const invoicesKey = (slug: string) => `ezra:custom-invoices:${slug}`
 
 type RequestState = Pick<CharterRequest, 'status' | 'quote' | 'paidAt'> & { declinedReason?: string }
 
@@ -48,6 +49,7 @@ export function useCharterRequests(slug: string, tenantId: string, seeded: Chart
   }, [])
   const rawRequests = React.useSyncExternalStore(subscribe, () => read(requestsKey(slug)), () => '')
   const rawStates = React.useSyncExternalStore(subscribe, () => read(statesKey(slug)), () => '')
+  const rawInvoices = React.useSyncExternalStore(subscribe, () => read(invoicesKey(slug)), () => '')
 
   const states = React.useMemo(() => parse<Record<string, RequestState>>(rawStates, {}), [rawStates])
 
@@ -68,10 +70,11 @@ export function useCharterRequests(slug: string, tenantId: string, seeded: Chart
         status: 'new',
       }),
     )
-    return [...fromWidget, ...seeded]
+    const invoices = parse<CharterRequest[]>(rawInvoices, [])
+    return [...invoices, ...fromWidget, ...seeded]
       .map((request) => ({ ...request, ...states[request.id] }))
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
-  }, [rawRequests, seeded, states, tenantId])
+  }, [rawRequests, rawInvoices, seeded, states, tenantId])
 
   const patch = React.useCallback(
     (id: string, next: RequestState) => {
@@ -90,6 +93,17 @@ export function useCharterRequests(slug: string, tenantId: string, seeded: Chart
 
   return {
     requests,
+    /** A custom invoice for anyone: saved, then sent with its payment link. */
+    createInvoice: (invoice: CharterRequest) => {
+      const list = parse<CharterRequest[]>(read(invoicesKey(slug)), [])
+      try {
+        window.localStorage.setItem(invoicesKey(slug), JSON.stringify([invoice, ...list].slice(0, 200)))
+      } catch {
+        /* storage blocked */
+      }
+      window.dispatchEvent(new Event(CHARTER_EVENT))
+    },
+    nextInvoiceNumber: () => `INV-${1001 + requests.filter((request) => request.source === 'invoice').length}`,
     sendQuote: (id: string, quote: Omit<NonNullable<CharterRequest['quote']>, 'sentAt'>) =>
       patch(id, { status: 'quoted', quote: { ...quote, sentAt: nowStamp() } }),
     decline: (id: string, reason: string) => patch(id, { status: 'declined', declinedReason: reason }),

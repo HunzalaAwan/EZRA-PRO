@@ -256,6 +256,7 @@ export interface PickupStop {
   phone: string
   party: number
   activityName: string
+  departureId: string
   departureAt: string
   status: string
 }
@@ -284,6 +285,7 @@ export function getPickupRunSheet(tenantId: string, day: Date = NOW): PickupRunS
         phone: customer?.phone ?? '',
         party: booking.partySize,
         activityName: activities.get(departure.activityId)?.name ?? 'Departure',
+        departureId: departure.id,
         departureAt: departure.startsAt,
         status: booking.status,
       })

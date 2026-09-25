@@ -177,7 +177,7 @@ export const DASHBOARD_NAV: DashboardNavSection[] = [
     items: [
       { label: 'Walk-ins', href: '/dashboard/walk-in', icon: 'Banknote' },
       { label: 'Rentals', href: '/dashboard/rentals', icon: 'KeyRound' },
-      { label: 'Charter requests', href: '/dashboard/requests', icon: 'Inbox' },
+      { label: 'Custom requests', href: '/dashboard/requests', icon: 'Inbox' },
       { label: 'Pickups', href: '/dashboard/pickups', icon: 'Bus' },
       { label: 'Check-in', href: '/dashboard/check-in', icon: 'ScanLine' },
       { label: 'Weather', href: '/dashboard/weather', icon: 'CloudSun' },

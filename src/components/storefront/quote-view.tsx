@@ -54,11 +54,13 @@ export function QuoteView({
   const { quote } = request
   const deposit = Math.round((quote.amount * quote.depositPercent) / 100)
   const paid = request.status === 'paid'
+  const invoice = request.source === 'invoice'
+  const full = quote.depositPercent >= 100
 
   return (
     <div className={shell}>
-      <p className="text-xs font-semibold tracking-[0.12em] text-faint uppercase">Private charter quote</p>
-      <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">{charter?.name ?? 'Your charter'}</h1>
+      <p className="text-xs font-semibold tracking-[0.12em] text-faint uppercase">{invoice ? `Invoice ${request.number ?? ''}` : 'Your quote'}</p>
+      <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">{charter?.name ?? (invoice ? `From ${tenantName}` : 'Your booking')}</h1>
       <p className="mt-1 text-muted">For {request.name}, from {tenantName}.</p>
 
       <div className="mt-6 overflow-hidden rounded-2xl border border-line bg-surface">
@@ -67,12 +69,13 @@ export function QuoteView({
             <Image src={charter.image} alt="" fill priority sizes="(max-width: 700px) 100vw, 672px" className="object-cover" />
           </div>
         ) : null}
+        {request.startsAt || request.party > 0 || charter ? (
         <dl className="grid gap-4 p-5 text-sm sm:grid-cols-3">
           <div className="flex items-start gap-2">
             <CalendarDays className="mt-0.5 size-4 text-primary" aria-hidden="true" />
             <div>
               <dt className="text-xs text-subtle">When</dt>
-              <dd className="font-medium">{formatDateLong(new Date(request.startsAt))} · {formatTime(request.startsAt)}</dd>
+              <dd className="font-medium">{request.startsAt ? `${formatDateLong(new Date(request.startsAt))} · ${formatTime(request.startsAt)}` : 'To arrange'}</dd>
             </div>
           </div>
           <div className="flex items-start gap-2">
@@ -86,15 +89,33 @@ export function QuoteView({
             <MapPin className="mt-0.5 size-4 text-primary" aria-hidden="true" />
             <div>
               <dt className="text-xs text-subtle">Meet</dt>
-              <dd className="font-medium">{charter?.meetingPoint.split(' — ')[0] ?? 'Confirmed by email'}</dd>
+              <dd className="font-medium">{charter?.meetingPoint ? charter.meetingPoint.split(' — ')[0] : 'Confirmed by email'}</dd>
             </div>
           </div>
         </dl>
+        ) : null}
+        {request.lines && request.lines.length > 0 ? (
+          <ul className="list-none space-y-1.5 border-t border-line-subtle p-0 px-5 py-4 text-sm">
+            {request.lines.map((line, index) => (
+              <li key={index} className="flex justify-between gap-3">
+                <span className="text-muted">
+                  {line.label}
+                  {line.qty > 1 ? <span className="text-subtle"> × {line.qty}</span> : null}
+                </span>
+                <span className="tabular-nums">{formatCurrency(line.unit * line.qty, currency)}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
         {quote.note ? <p className="border-t border-line-subtle px-5 py-4 text-sm leading-relaxed text-muted">{quote.note}</p> : null}
         <div className="space-y-2 border-t border-line-subtle px-5 py-4 text-sm">
-          <div className="flex justify-between"><span className="text-muted">Charter</span><span className="font-medium tabular-nums">{formatCurrency(quote.amount, currency)}</span></div>
-          <div className="flex justify-between"><span className="text-muted">Deposit ({quote.depositPercent}%)</span><span className="font-semibold tabular-nums">{formatCurrency(deposit, currency)}</span></div>
-          <div className="flex justify-between text-xs text-subtle"><span>Balance before the day</span><span className="tabular-nums">{formatCurrency(quote.amount - deposit, currency)}</span></div>
+          <div className="flex justify-between"><span className="text-muted">Total</span><span className="font-medium tabular-nums">{formatCurrency(quote.amount, currency)}</span></div>
+          {full ? null : (
+            <>
+              <div className="flex justify-between"><span className="text-muted">Deposit ({quote.depositPercent}%)</span><span className="font-semibold tabular-nums">{formatCurrency(deposit, currency)}</span></div>
+              <div className="flex justify-between text-xs text-subtle"><span>Balance before the day</span><span className="tabular-nums">{formatCurrency(quote.amount - deposit, currency)}</span></div>
+            </>
+          )}
         </div>
       </div>
 
@@ -102,7 +123,7 @@ export function QuoteView({
         <div role="status" className="mt-6 rounded-2xl border border-success/40 bg-success-soft px-5 py-4">
           <p className="flex items-center gap-2 font-semibold text-foreground">
             <CheckCircle2 className="size-5 text-success" aria-hidden="true" />
-            Deposit paid. Your charter is confirmed.
+            {full ? 'Paid in full. Thank you.' : 'Deposit paid. You are confirmed.'}
           </p>
           <p className="mt-1 text-sm text-muted">A receipt is on its way to {request.email}. {tenantName} will be in touch about the details.</p>
         </div>
@@ -121,9 +142,9 @@ export function QuoteView({
               }, 1100)
             }}
           >
-            Pay the {formatCurrency(deposit, currency)} deposit
+            {full ? `Pay ${formatCurrency(quote.amount, currency)}` : `Pay the ${formatCurrency(deposit, currency)} deposit`}
           </Button>
-          <p className="mt-2 text-center text-xs text-faint">This quote is valid until {formatDateLong(new Date(`${quote.validUntil}T12:00:00`))}.</p>
+          <p className="mt-2 text-center text-xs text-faint">{invoice ? 'Please pay by' : 'This quote is valid until'} {formatDateLong(new Date(`${quote.validUntil}T12:00:00`))}.</p>
         </div>
       )}
     </div>

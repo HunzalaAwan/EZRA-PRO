@@ -10,17 +10,19 @@ import { RequestsInbox } from '@/components/dashboard/operations/requests-inbox'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: 'Charter requests',
-  description: 'Private charter enquiries: quote them, send a payment link, see the deposit land.',
+  title: 'Custom requests',
+  description: 'Quote requests from guests and custom invoices you send to anyone, for any activity.',
 }
 
 export default async function RequestsPage() {
   const { tenant } = await requireWorkspaceRoute('/dashboard/requests')
   const activities = getActivitiesByTenant(tenant.id)
-    .filter((activity) => activity.kind === 'charter')
+    .filter((activity) => activity.status !== 'archived')
     .map((activity) => ({
       slug: activity.slug,
       name: activity.name,
+      kind: activity.kind ?? 'trip',
+      perGroup: activity.kind === 'charter',
       maxGuests: activity.charter?.maxGuests ?? activity.maxCapacity,
       tiers: activity.priceTiers.map((tier) => ({ id: tier.id, label: tier.label, price: tier.price })),
     }))
@@ -28,8 +30,8 @@ export default async function RequestsPage() {
     <div className="flex flex-col gap-5 pb-16">
       <PageHeader
         className="mb-0"
-        title="Charter requests"
-        description="Guests send their plan from a request-to-book charter. Quote it, send the payment link, and the deposit confirms it."
+        title="Custom requests"
+        description="Quote requests from guests, and custom invoices you send to anyone for any activity. Each one gets a payment link."
       />
       <RequestsInbox
         tenantId={tenant.id}

@@ -1179,7 +1179,7 @@ export function BookingWidget({
 
         {/* ---------- reserve ---------- */}
         <div className="space-y-3">
-          {requestMode && requestSent ? (
+          {requestSent ? (
             <div role="status" className="rounded-xl border border-success/40 bg-success-soft px-4 py-3.5 text-sm">
               <p className="flex items-center gap-2 font-semibold text-foreground">
                 <CheckCircle2 className="size-4 text-success" aria-hidden="true" />
@@ -1189,7 +1189,7 @@ export function BookingWidget({
                 We reply within a few hours with a quote and a payment link to {request.email || 'your email'}.
               </p>
             </div>
-          ) : requestMode && requestOpen ? (
+          ) : requestOpen ? (
             <form
               className="flex flex-col gap-2.5 rounded-xl border border-line p-3.5"
               onSubmit={(event) => {
@@ -1234,6 +1234,11 @@ export function BookingWidget({
             {!slot ? (kind === 'rental' ? 'Choose a start time' : 'Choose a departure') : requestMode ? 'Request a quote' : kind === 'rental' ? 'Rent now' : 'Reserve now'}
           </Button>
           )}
+          {!requestMode && !requestOpen && !requestSent ? (
+            <button type="button" onClick={() => setRequestOpen(true)} className="w-full text-center text-sm font-medium text-primary hover:underline">
+              Planning something bigger? Ask for a custom quote
+            </button>
+          ) : null}
           <TrustSeal freeCancellationHours={activity.cancellationPolicy.freeCancellationHours} />
           <p className="text-center text-xs text-faint">
             You will not be charged until the final step.

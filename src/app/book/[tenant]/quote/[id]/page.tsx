@@ -6,7 +6,7 @@ import { getSeedCharterRequests } from '@/lib/operations'
 import { QuoteView } from '@/components/storefront/quote-view'
 
 export const metadata: Metadata = {
-  title: 'Your charter quote',
+  title: 'Your quote',
   robots: { index: false },
 }
 
@@ -15,8 +15,8 @@ export default async function QuotePage({ params }: { params: Promise<{ tenant: 
   const storefront = getStorefront(slug)
   if (!storefront) notFound()
   const { tenant, activities } = storefront
+  // Quotes and invoices can be for any activity, not only charters.
   const charters = activities
-    .filter((activity) => activity.kind === 'charter')
     .map((activity) => ({
       slug: activity.slug,
       name: activity.name,

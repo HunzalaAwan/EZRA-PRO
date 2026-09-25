@@ -338,6 +338,13 @@ export interface CharterRequest {
   message: string
   createdAt: string
   status: CharterRequestStatus
+  /** A request a guest sent, or an invoice the business made for anyone. */
+  source?: 'request' | 'invoice'
+  phone?: string
+  /** Invoices: "INV-1004". */
+  number?: string
+  /** Invoices: what is charged, line by line. Unit prices in minor units. */
+  lines?: { label: string; qty: number; unit: number }[]
   quote?: {
     /** Minor units, for the whole charter. */
     amount: number
