@@ -50,6 +50,7 @@ export interface ActivityOverride {
   /** null turns pickup off; undefined keeps the seeded setting. */
   pickup?: ActivityPickup | null
   languages?: string[]
+  customRequests?: boolean
   theme?: ActivityTheme
   /** null clears a custom category. */
   customCategory?: string | null

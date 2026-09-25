@@ -125,8 +125,13 @@ export interface ActivityLocation {
   weekdays?: number[]
   /** Where to meet at this place; the activity's own meeting point applies when omitted. */
   meetingPoint?: string
-  /** Seats on particular weekdays (0=Sun … 6=Sat) when they differ from the activity's usual number. */
+  /**
+   * The most sold on a weekday (0=Sun … 6=Sat) across every departure that
+   * day. Optional: a weekday without a number has no daily limit.
+   */
   dayCapacity?: Record<number, number>
+  /** What the daily limit counts: tickets (guests or units) or bookings. */
+  dayLimitUnit?: 'tickets' | 'bookings'
 }
 
 export type Role = 'owner' | 'admin' | 'manager' | 'staff' | 'guide' | 'viewer'
@@ -517,6 +522,8 @@ export interface Activity {
   pickup?: ActivityPickup
   /** Languages the guide or instructor speaks. */
   languages?: string[]
+  /** Guests can ask for a custom quote from the activity page and at checkout. */
+  customRequests?: boolean
   /** The storefront category; guessed from the activity when absent. */
   theme?: ActivityTheme
   /** A category the business made itself; shown instead of the theme when set. */

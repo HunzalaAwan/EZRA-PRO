@@ -480,6 +480,9 @@ const PICKUP_BY_SLUG: Record<string, ActivityPickup> = {
    GUEST QUESTIONS — what each activity asks at checkout.
    ========================================================================== */
 
+/** Activities that take custom quote requests in the demo. */
+const CUSTOM_REQUEST_SLUGS = new Set(['sunset-catamaran-sail-snorkel', 'molokini-crater-dawn-patrol', 'upcountry-horseback-ride', 'island-jeep-rental', 'family-reef-snorkel', 'private-sportfishing-charter', 'shotover-canyon-swing', 'alpine-heli-hike'])
+
 const MOTOR_ACTIVITIES = new Set(['jet-ski-safari', 'jet-ski-rental'])
 
 const GUEST_QUESTIONS: Record<string, GuestQuestion[]> = {
@@ -1454,8 +1457,9 @@ type TierSpec = [label: string, price: number, min: number, max: number, note?: 
 type AddOnSpec = [label: string, price: number, note: string, max: number | null, icon?: string]
 
 interface SpecLocation {
-  /** Seats on particular weekdays when they differ. */
+  /** Optional most sold on a weekday across the day's departures. */
   dayCapacity?: Record<number, number>
+  dayLimitUnit?: 'tickets' | 'bookings'
   /** Location slug within the business. */
   location: string
   times?: string[]
@@ -1473,6 +1477,8 @@ interface ActivitySpec {
   lesson?: { level: 'all' | 'beginner' | 'intermediate' | 'advanced'; sessions: number; ratio: number; certification?: string; equipmentIncluded?: boolean }
   /** Languages the guide or instructor speaks. */
   languages?: string[]
+  /** Accepts custom quote requests from the storefront. */
+  customRequests?: boolean
   ride?: RideConfig
   route?: RouteInfo
   pass?: { validDays: number; reentry: boolean }
@@ -2364,8 +2370,8 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     resources: ['res_bh_kaimana_sky'],
     times: ['09:00', '13:00'],
     locations: [
-      // The bigger boat runs at the weekend from Maalaea.
-      { location: 'maalaea', dayCapacity: { 0: 44, 6: 44 } },
+      // One crew on Monday and Wednesday: at most 40 guests from Maalaea those days.
+      { location: 'maalaea', dayCapacity: { 1: 40, 3: 40 }, dayLimitUnit: 'tickets' },
       { location: 'lahaina', times: ['10:00', '14:00'], meetingPoint: 'Lahaina Harbor, Slip 9 — family check-in desk opens 45 minutes prior.' },
     ],
     popularity: 0.78,
@@ -3455,6 +3461,7 @@ function activityLocations(tenant: Tenant, spec: ActivitySpec): ActivityLocation
     if (entry.weekdays) resolved.weekdays = entry.weekdays
     if (entry.meetingPoint) resolved.meetingPoint = entry.meetingPoint
     if (entry.dayCapacity) resolved.dayCapacity = entry.dayCapacity
+    if (entry.dayLimitUnit) resolved.dayLimitUnit = entry.dayLimitUnit
     return resolved
   })
 }
@@ -3529,6 +3536,7 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
         })()
       : {}),
     ...(spec.languages ? { languages: spec.languages } : {}),
+    ...(spec.customRequests || CUSTOM_REQUEST_SLUGS.has(spec.slug) ? { customRequests: true } : {}),
     ...(spec.ride ? { ride: spec.ride } : {}),
     ...(spec.route ? { route: spec.route } : {}),
     ...(spec.lesson ? { lesson: { ...spec.lesson } } : {}),

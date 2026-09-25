@@ -577,6 +577,9 @@ for (const [tenantId, specs] of SPEC_BY_TENANT) {
         const wd = mondayIndex(day)
         const inStorm = off <= STORM_TO && off >= STORM_FROM
 
+        // The optional daily limit (in tickets) caps the whole day across its departures.
+        const dayLimit = site.dayLimitUnit === 'bookings' ? undefined : site.dayCapacity?.[day.getDay()]
+        let dayBooked = 0
         for (const time of siteTimes) {
           const startsAt = atTime(day, time)
           const startMs = startsAt.getTime()
@@ -584,7 +587,7 @@ for (const [tenantId, specs] of SPEC_BY_TENANT) {
           const hour = startsAt.getHours()
           const isPast = startMs < NOW_MS
 
-          let capacity = site.dayCapacity?.[day.getDay()] ?? activity.maxCapacity
+          let capacity = activity.maxCapacity
           if (rng() < 0.08) {
             capacity = Math.max(activity.minParticipants + 1, round(capacity * (0.7 + rng() * 0.2)))
           }
@@ -605,7 +608,11 @@ for (const [tenantId, specs] of SPEC_BY_TENANT) {
             stormFactor(off) *
             (0.8 + rng() * 0.36)
 
-          const booked = clamp(round(capacity * clamp(demand, 0, 1.05)), 0, capacity)
+          const booked = Math.min(
+            clamp(round(capacity * clamp(demand, 0, 1.05)), 0, capacity),
+            dayLimit ? Math.max(0, dayLimit - dayBooked) : capacity,
+          )
+          dayBooked += booked
 
           const cancelRoll = rng()
           const departureCancelled = inStorm

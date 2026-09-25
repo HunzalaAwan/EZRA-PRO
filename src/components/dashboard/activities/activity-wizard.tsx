@@ -193,6 +193,8 @@ export interface ActivityDraft {
   languages: string[]
   /** Optional distance or track, for trips and activities. */
   route: DraftRoute
+  /** Guests can ask for a custom quote from this activity. */
+  customRequests: boolean
   /** The storefront category. */
   theme: ActivityTheme
   /** A category the business made itself; wins over the theme when set. */
@@ -246,6 +248,7 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
     pickup: { enabled: false, zoneIds: [], required: false },
     languages: ['English'],
     route: emptyRoute(),
+    customRequests: false,
     theme: defaultTheme(category),
     customCategory: null,
     accessibility: [],
@@ -429,7 +432,7 @@ function scheduleFromActivity(activity: Activity, base: DraftSchedule, homeTimes
     capacity: activity.maxCapacity,
     startTimes: homeTimes.length > 0 ? homeTimes : base.startTimes,
     weekdays: activity.locations[0]?.weekdays ?? base.weekdays,
-    ...(activity.locations[0]?.dayCapacity ? { dayCapacity: { ...activity.locations[0].dayCapacity } } : {}),
+    ...(activity.locations[0]?.dayCapacity ? { dayCapacity: { ...activity.locations[0].dayCapacity }, dayLimitUnit: activity.locations[0].dayLimitUnit ?? 'tickets' } : {}),
     locations: [],
   }
   const sites: DraftLocation[] = activity.locations.map((site) => ({
@@ -438,7 +441,7 @@ function scheduleFromActivity(activity: Activity, base: DraftSchedule, homeTimes
       ...shared,
       startTimes: site.times.length > 0 ? site.times : shared.startTimes,
       weekdays: site.weekdays ?? shared.weekdays,
-      ...(site.dayCapacity ? { dayCapacity: { ...site.dayCapacity } } : {}),
+      ...(site.dayCapacity ? { dayCapacity: { ...site.dayCapacity }, dayLimitUnit: site.dayLimitUnit ?? 'tickets' } : {}),
     },
   }))
   return { ...shared, locations: sites }
@@ -495,6 +498,7 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
       : { enabled: false, zoneIds: [], required: false },
     languages: [...(activity.languages ?? ['English'])],
     theme: themeOf(activity),
+    customRequests: Boolean(activity.customRequests),
     customCategory: activity.customCategory ?? null,
     accessibility: [...(activity.accessibility ?? [])],
     bring: [...(activity.bring ?? [])],
@@ -915,8 +919,8 @@ function validateStep(step: number, draft: ActivityDraft): FieldErrors {
   const kind = draft.kind ?? 'trip'
   const settings = normalizeKindSettings(draft.kindSettings)
   if (kind === 'rental' && settings.rental.units < 1) errors['rental.units'] = 'At least one unit has to be available'
-  if (kind === 'rental' && settings.rental.modes.includes('day') && settings.rental.maxDays < settings.rental.minDays) errors['rental.maxDays'] = 'Most days cannot be fewer than the fewest'
-  if (kind === 'rental' && settings.rental.modes.includes('hour') && settings.rental.maxHours < settings.rental.minHours) errors['rental.maxHours'] = 'Most hours cannot be fewer than the fewest'
+  if (kind === 'rental' && settings.rental.modes.includes('day') && settings.rental.maxDays > 0 && settings.rental.maxDays < settings.rental.minDays) errors['rental.maxDays'] = 'Most days cannot be fewer than the fewest'
+  if (kind === 'rental' && settings.rental.modes.includes('hour') && settings.rental.maxHours > 0 && settings.rental.maxHours < settings.rental.minHours) errors['rental.maxHours'] = 'Most hours cannot be fewer than the fewest'
   if (kind === 'lesson' && draft.maxCapacity < 1) errors.maxCapacity = 'A class needs at least one place'
   if (kind === 'activity' && draft.maxCapacity < 1) errors.maxCapacity = 'A slot needs at least one rider'
   if (kind === 'activity' && draft.durationMinutes < 5) errors.durationMinutes = 'Give each slot a length'
@@ -1486,6 +1490,7 @@ export function ActivityWizard({
           featured: draft.featured,
           languages: draft.languages ?? [],
           theme: draft.theme ?? defaultTheme(draft.category),
+          customRequests: Boolean(draft.customRequests),
           customCategory: draft.customCategory?.trim() || null,
           accessibility: draft.accessibility ?? [],
           bring: (draft.bring ?? []).map((item) => item.trim()).filter(Boolean),
@@ -1511,8 +1516,13 @@ export function ActivityWizard({
               : null,
           locations: draft.schedule.locations.map((site) => {
             const rule = draft.schedule.locations.length > 1 ? site.schedule : draft.schedule
-            const dayCapacity = Object.fromEntries(Object.entries(rule.dayCapacity ?? {}).filter(([, value]) => value > 0 && value !== rule.capacity))
-            return { locationId: site.locationId, times: rule.startTimes, weekdays: rule.weekdays, ...(Object.keys(dayCapacity).length > 0 ? { dayCapacity } : {}) }
+            const dayCapacity = Object.fromEntries(Object.entries(rule.dayCapacity ?? {}).filter(([, value]) => value > 0))
+            return {
+              locationId: site.locationId,
+              times: rule.startTimes,
+              weekdays: rule.weekdays,
+              ...(Object.keys(dayCapacity).length > 0 ? { dayCapacity, dayLimitUnit: rule.dayLimitUnit ?? 'tickets' } : {}),
+            }
           }),
         })
         toast.success('Changes saved', { description: `${draft.name} is updated on the storefront.` })
@@ -1890,7 +1900,7 @@ function kindFacts(draft: ActivityDraft): string[] {
     const r = s.rental
     const meta = rentalCategoryMeta(r.category)
     return [
-      [r.modes.includes('hour') ? `By the hour · ${r.minHours}–${r.maxHours} h` : null, r.modes.includes('day') ? `By the day · ${r.minDays}–${r.maxDays} days` : null].filter(Boolean).join(' or '),
+      [r.modes.includes('hour') ? `By the hour · ${r.maxHours ? `${r.minHours}–${r.maxHours} h` : `from ${r.minHours} h`}` : null, r.modes.includes('day') ? `By the day · ${r.maxDays ? `${r.minDays}–${r.maxDays} days` : `from ${r.minDays} ${r.minDays === 1 ? 'day' : 'days'}`}` : null].filter(Boolean).join(' or '),
       `${r.units} ${r.units === 1 ? meta.unit : meta.units} · ${r.seatsPerUnit} per ${meta.unit}`,
       r.licence === 'none' ? age : `${LICENCE_LABEL[r.licence]} · ${age.toLowerCase()}`,
       ...(meta.fuel ? [FUEL_LABEL[r.fuel]] : []),
@@ -2170,7 +2180,8 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '' }: StepPro
         />
       ) : kind === 'trip' ? (
         <TourBasicsFields draft={draft} patch={patch} errors={errors} />
-      ) : (
+      ) : null}
+      {dining || kind === 'trip' ? null : (
         <KindFields
           kind={kind}
           settings={settings}
@@ -2182,6 +2193,17 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '' }: StepPro
           onShared={(changes) => patch(changes)}
           tenantSlug={tenantSlug}
         />
+      )}
+      {dining ? null : (
+        <label className="flex items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-3">
+          <span>
+            <span className="block text-sm font-medium">Accept custom requests</span>
+            <span className="block text-xs text-subtle">
+              Guests can ask for a custom quote from this {kind === 'rental' ? 'rental' : kind === 'charter' ? 'charter' : 'activity'}&rsquo;s page and at checkout, for a bigger group, a private version or a special date. Requests land in Custom requests.
+            </span>
+          </span>
+          <Switch checked={Boolean(draft.customRequests)} onCheckedChange={(customRequests) => patch({ customRequests })} aria-label="Accept custom requests" />
+        </label>
       )}
     </div>
   )

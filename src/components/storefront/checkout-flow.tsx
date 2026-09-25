@@ -545,6 +545,12 @@ export function CheckoutFlow({
             </div>
           </div>
 
+          {activity.customRequests ? (
+            <div className="mt-8 lg:hidden">
+              <CustomQuoteCard activity={activity} tenantSlug={tenant.slug} departure={departure} guest={guest} />
+            </div>
+          ) : null}
+
           {/* ---------- actions ---------- */}
           <div className="mt-8 flex flex-col-reverse gap-3 border-t border-line-subtle pt-6 sm:flex-row sm:items-center sm:justify-between">
             <Button asChild variant="ghost" leftIcon={<ArrowLeft aria-hidden="true" />}>
@@ -571,9 +577,94 @@ export function CheckoutFlow({
               departure={departure}
               quote={displayQuote}
             />
+            {activity.customRequests ? <CustomQuoteCard activity={activity} tenantSlug={tenant.slug} departure={departure} guest={guest} /> : null}
           </div>
         </aside>
       </div>
+    </div>
+  )
+}
+
+/* ==========================================================================
+   CUSTOM QUOTE — when the activity accepts custom requests, a guest can ask
+   for something different instead of paying now. Lands in Custom requests.
+   ========================================================================== */
+
+function CustomQuoteCard({
+  activity,
+  tenantSlug,
+  departure,
+  guest,
+}: {
+  activity: Activity
+  tenantSlug: string
+  departure: CheckoutDeparture
+  guest: { firstName: string; lastName: string; email: string; phone: string }
+}) {
+  const [open, setOpen] = React.useState(false)
+  const [sent, setSent] = React.useState(false)
+  const [message, setMessage] = React.useState('')
+  const [error, setError] = React.useState('')
+  const name = `${guest.firstName} ${guest.lastName}`.trim()
+
+  const send = () => {
+    if (name.length < 2 || !/^S+@S+.S+$/.test(guest.email)) return setError('Add your name and email in Your details first.')
+    if (message.trim().length < 5) return setError('Tell us what you have in mind.')
+    try {
+      const key = `ezra:charter-requests:${tenantSlug}`
+      const list = JSON.parse(window.localStorage.getItem(key) ?? '[]') as unknown[]
+      list.unshift({
+        id: `req_${Date.now().toString(36)}`,
+        activitySlug: activity.slug,
+        departureId: departure.id,
+        startsAt: departure.startsAt,
+        party: 1,
+        name,
+        email: guest.email,
+        phone: guest.phone,
+        message: message.trim(),
+        createdAt: new Date().toISOString(),
+      })
+      window.localStorage.setItem(key, JSON.stringify(list.slice(0, 50)))
+    } catch {
+      /* storage blocked: the request still shows as sent */
+    }
+    setSent(true)
+  }
+
+  return (
+    <div className="mt-4 rounded-xl border border-line bg-surface p-4">
+      {sent ? (
+        <>
+          <p className="text-sm font-semibold text-foreground">Request sent</p>
+          <p className="mt-1 text-xs text-muted">We&rsquo;ll reply to {guest.email} with a quote. You haven&rsquo;t been charged.</p>
+        </>
+      ) : (
+        <>
+          <p className="text-sm font-semibold text-foreground">Want something different?</p>
+          <p className="mt-1 text-xs text-muted">A bigger group, a private version or another date. Ask for a custom quote instead of paying now.</p>
+          {open ? (
+            <div className="mt-3 space-y-2">
+              <Textarea
+                rows={3}
+                value={message}
+                onChange={(event) => { setMessage(event.target.value); setError('') }}
+                placeholder="What would you like?"
+                aria-label="What would you like?"
+              />
+              {error ? <p className="text-xs text-danger">{error}</p> : null}
+              <div className="flex gap-2">
+                <Button size="sm" onClick={send}>Send request</Button>
+                <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+              </div>
+            </div>
+          ) : (
+            <Button size="sm" variant="secondary" className="mt-3" onClick={() => setOpen(true)}>
+              Ask for a custom quote
+            </Button>
+          )}
+        </>
+      )}
     </div>
   )
 }

@@ -562,21 +562,21 @@ export function KindFields({
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {hourly ? (
               <>
-                <Field label="Fewest hours" error={errors['rental.minHours']}>
-                  {(control) => <Input {...control} type="number" min={1} max={12} suffix="hours" value={rental.minHours} onChange={(e) => set('rental', { minHours: num(e.target.value, 1) })} />}
+                <Field label="Fewest hours" optional error={errors['rental.minHours']}>
+                  {(control) => <Input {...control} type="number" min={1} max={12} suffix="hours" placeholder="1" value={rental.minHours > 1 ? rental.minHours : ''} onChange={(e) => set('rental', { minHours: num(e.target.value, 1) })} />}
                 </Field>
-                <Field label="Most hours" error={errors['rental.maxHours']}>
-                  {(control) => <Input {...control} type="number" min={1} max={24} suffix="hours" value={rental.maxHours} onChange={(e) => set('rental', { maxHours: num(e.target.value, 1) })} />}
+                <Field label="Most hours" optional error={errors['rental.maxHours']}>
+                  {(control) => <Input {...control} type="number" min={1} max={24} suffix="hours" placeholder="No limit" value={rental.maxHours || ''} onChange={(e) => set('rental', { maxHours: num(e.target.value) })} />}
                 </Field>
               </>
             ) : null}
             {daily ? (
               <>
-                <Field label="Fewest days" error={errors['rental.minDays']}>
-                  {(control) => <Input {...control} type="number" min={1} suffix="days" value={rental.minDays} onChange={(e) => set('rental', { minDays: num(e.target.value, 1) })} />}
+                <Field label="Fewest days" optional error={errors['rental.minDays']}>
+                  {(control) => <Input {...control} type="number" min={1} suffix="days" placeholder="1" value={rental.minDays > 1 ? rental.minDays : ''} onChange={(e) => set('rental', { minDays: num(e.target.value, 1) })} />}
                 </Field>
-                <Field label="Most days" error={errors['rental.maxDays']}>
-                  {(control) => <Input {...control} type="number" min={1} max={30} suffix="days" value={rental.maxDays} onChange={(e) => set('rental', { maxDays: num(e.target.value, 1) })} />}
+                <Field label="Most days" optional error={errors['rental.maxDays']}>
+                  {(control) => <Input {...control} type="number" min={1} max={60} suffix="days" placeholder="No limit" value={rental.maxDays || ''} onChange={(e) => set('rental', { maxDays: num(e.target.value) })} />}
                 </Field>
               </>
             ) : null}

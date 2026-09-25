@@ -309,11 +309,11 @@ export function BookingWidget({
   const dayRental = kind === 'rental' && (modes.length > 0 ? rentalMode === 'day' : isDayRental(activity))
   const hourRental = kind === 'rental' && rated && rentalMode === 'hour'
   const minHours = Math.max(1, activity.rental?.minHours ?? 1)
-  const maxHours = Math.max(minHours, activity.rental?.maxHours ?? 4)
+  const maxHours = Math.max(minHours, activity.rental?.maxHours || 12)
   const [rentHours, setRentHours] = React.useState(minHours)
   const rentalMeta = rentalCategoryMeta(activity.rental?.category)
   const minDays = Math.max(1, activity.rental?.minDays ?? 1)
-  const maxDays = Math.max(minDays, activity.rental?.maxDays ?? 14)
+  const maxDays = Math.max(minDays, activity.rental?.maxDays || 30)
   const [rentDays, setRentDays] = React.useState(minDays)
   const showTime = kind !== 'pass' && !dayRental
   const stepList = [multiSite ? 'location' : null, 'date', showTime ? 'time' : null, 'guests', 'extras'].filter(
@@ -1234,7 +1234,7 @@ export function BookingWidget({
             {!slot ? (kind === 'rental' ? 'Choose a start time' : 'Choose a departure') : requestMode ? 'Request a quote' : kind === 'rental' ? 'Rent now' : 'Reserve now'}
           </Button>
           )}
-          {!requestMode && !requestOpen && !requestSent ? (
+          {activity.customRequests && !requestMode && !requestOpen && !requestSent ? (
             <button type="button" onClick={() => setRequestOpen(true)} className="w-full text-center text-sm font-medium text-primary hover:underline">
               Planning something bigger? Ask for a custom quote
             </button>

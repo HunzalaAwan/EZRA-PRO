@@ -107,7 +107,7 @@ export function getRentalBoard(tenantId: string, day: Date = NOW): RentalBoard {
     })
 
     // A day rental picked up earlier in the week can still be out today.
-    const lookBack = byDay ? Math.min(7, config?.maxDays ?? 7) : 0
+    const lookBack = byDay ? Math.min(7, config?.maxDays || 7) : 0
     const departures = Array.from({ length: lookBack + 1 }, (_, index) => addDays(day, index - lookBack)).flatMap((date) =>
       (toDateKey(date) === todayKey ? today : getDeparturesForDay(tenantId, date)).filter((departure) => departure.activityId === activity.id),
     )
@@ -127,7 +127,7 @@ export function getRentalBoard(tenantId: string, day: Date = NOW): RentalBoard {
       // Hourly rentals with rates: a plausible number of hours inside the allowed range.
       const rated = !byDay && (config?.rates?.length ?? 0) > 0 && (config?.modes ?? []).includes('hour')
       const least = Math.max(1, config?.minHours ?? 1)
-      const hoursTaken = rated ? least + (hashSeed(`hours:${booking.id}`) % (Math.max(least, config?.maxHours ?? least) - least + 1)) : 0
+      const hoursTaken = rated ? least + (hashSeed(`hours:${booking.id}`) % (Math.max(least, config?.maxHours || least + 3) - least + 1)) : 0
       const tier = activity.priceTiers.find((entry) => entry.id === pick.tierId)
       const dayKey = departure.startsAt.slice(0, 10)
       let start: Date
@@ -135,7 +135,7 @@ export function getRentalBoard(tenantId: string, day: Date = NOW): RentalBoard {
       let days = 1
       if (byDay) {
         const least = Math.max(1, config?.minDays ?? 1)
-        const most = Math.max(least, Math.min(config?.maxDays ?? 5, 5))
+        const most = Math.max(least, Math.min(config?.maxDays || 5, 5))
         days = least + (hashSeed(`days:${booking.id}`) % (most - least + 1))
         start = new Date(`${dayKey}T${config?.pickupTime ?? '08:00'}:00`)
         end = addDays(new Date(`${dayKey}T${config?.returnTime ?? '17:00'}:00`), days)

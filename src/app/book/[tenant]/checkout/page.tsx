@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 
 import { NOW, getDepartureById, getStorefront, getStorefrontAvailability, getLocationById, getWaiverById, getPickupZonesByTenant } from '@/lib/demo'
 import { locationAddress } from '@/lib/locations'
+import { buildDays } from '@/lib/storefront-availability'
 import { bookingReference, clamp, seatsRemaining } from '@/lib/utils'
 import type { Activity } from '@/types'
 import { rentalModes, type RentalMode } from '@/lib/activity-kinds'
@@ -150,9 +151,9 @@ export default async function CheckoutPage({
   const rentalMode = modes.length > 0 ? (modes.includes(query.m as RentalMode) ? (query.m as RentalMode) : modes[0]) : undefined
   const dayRental = (activity.kind ?? 'trip') === 'rental' && (rentalMode ? rentalMode === 'day' : activity.rental?.billing === 'day')
   const minHours = Math.max(1, activity.rental?.minHours ?? 1)
-  const rentalHours = rentalMode === 'hour' ? clamp(Math.floor(Number(query.h) || minHours), minHours, Math.max(minHours, activity.rental?.maxHours ?? 4)) : undefined
+  const rentalHours = rentalMode === 'hour' ? clamp(Math.floor(Number(query.h) || minHours), minHours, Math.max(minHours, activity.rental?.maxHours || 12)) : undefined
   const minDays = Math.max(1, activity.rental?.minDays ?? 1)
-  const maxDays = Math.max(minDays, activity.rental?.maxDays ?? 14)
+  const maxDays = Math.max(minDays, activity.rental?.maxDays || 30)
   const rentalDays = dayRental ? clamp(Math.floor(Number(query.n) || minDays), minDays, maxDays) : 1
   const party =
     (activity.kind ?? 'trip') === 'charter'
@@ -176,7 +177,10 @@ export default async function CheckoutPage({
     startsAt: pickupAt ?? departureRow.startsAt,
     endsAt: returnsAt ?? (rentalHours ? plusMinutes(departureRow.startsAt, rentalHours * 60) : departureRow.endsAt),
     returnsAt,
-    seatsLeft: seatsRemaining(departureRow.capacity, departureRow.booked, departureRow.held),
+    seatsLeft: Math.min(
+      seatsRemaining(departureRow.capacity, departureRow.booked, departureRow.held),
+      buildDays(activity, 45).flatMap((day) => day.slots).find((slot) => slot.departureId === departureRow.id)?.seatsLeft ?? Number.POSITIVE_INFINITY,
+    ),
     priceMultiplier: departureRow.priceMultiplier ?? 1,
     location: site
       ? { name: site.name, addressLine: locationAddress(site), meetingPoint: siteMeeting ?? activity.meetingPoint }
