@@ -200,6 +200,8 @@ export interface ActivityDraft {
   route: DraftRoute
   /** Guests can ask for a custom quote from this activity. */
   customRequests: boolean
+  /** Checkout offers a tip. */
+  tips: boolean
   /** The storefront category. */
   theme: ActivityTheme
   /** A category the business made itself; wins over the theme when set. */
@@ -210,7 +212,7 @@ export interface ActivityDraft {
   bring: string[]
 }
 
-const STORAGE_KEY = 'ezra:activity-wizard:v9'
+const STORAGE_KEY = 'ezra:activity-wizard:v10'
 
 /** Dining is the one category whose product is a table, not a departure. */
 export const isDining = (draft: Pick<ActivityDraft, 'category'>) => draft.category === 'restaurants'
@@ -256,6 +258,7 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
     languages: ['English'],
     route: emptyRoute(),
     customRequests: false,
+    tips: false,
     theme: defaultTheme(category),
     customCategory: null,
     accessibility: [],
@@ -508,6 +511,7 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
     languages: [...(activity.languages ?? ['English'])],
     theme: themeOf(activity),
     customRequests: Boolean(activity.customRequests),
+    tips: Boolean(activity.tips),
     customCategory: activity.customCategory ?? null,
     accessibility: [...(activity.accessibility ?? [])],
     bring: [...(activity.bring ?? [])],
@@ -1500,6 +1504,7 @@ export function ActivityWizard({
           languages: draft.languages ?? [],
           theme: draft.theme ?? defaultTheme(draft.category),
           customRequests: Boolean(draft.customRequests),
+          tips: Boolean(draft.tips),
           customCategory: draft.customCategory?.trim() || null,
           accessibility: draft.accessibility ?? [],
           bring: (draft.bring ?? []).map((item) => item.trim()).filter(Boolean),
@@ -1735,6 +1740,27 @@ export function ActivityWizard({
                           presets={dining ? DINING_ADDON_PRESETS : undefined}
                         />
                       </section>
+
+                      <Separator />
+
+                      <label className="flex items-start justify-between gap-3 rounded-xl border border-line px-3.5 py-3">
+                        <span>
+                          <span className="block text-sm font-medium">Offer tips at checkout</span>
+                          <span className="block text-xs text-subtle">
+                            Guests can add a tip for the {dining ? 'team' : 'crew'} before paying: 5%, 10%, 15%, 20%, 25% or an amount of their own. Tips are optional and never discounted.
+                          </span>
+                          {draft.tips ? (
+                            <span className="mt-2 flex flex-wrap gap-1.5" aria-hidden="true">
+                              {['No tip', '5%', '10%', '15%', '20%', '25%', 'Custom'].map((chip) => (
+                                <span key={chip} className="rounded-full border border-line px-2.5 py-0.5 text-xs font-medium text-muted">
+                                  {chip}
+                                </span>
+                              ))}
+                            </span>
+                          ) : null}
+                        </span>
+                        <Switch checked={Boolean(draft.tips)} onCheckedChange={(tips) => patch({ tips })} aria-label="Offer tips at checkout" />
+                      </label>
 
                       {(draft.kind ?? 'trip') === 'rental' && !dining ? null : <GuestPricePreview
                         tiers={draft.tiers}

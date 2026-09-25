@@ -541,6 +541,8 @@ export interface Activity {
   languages?: string[]
   /** Guests can ask for a custom quote from the activity page and at checkout. */
   customRequests?: boolean
+  /** Checkout offers a tip for the crew: 5–25% or an amount of the guest's own. */
+  tips?: boolean
   /** The storefront category; guessed from the activity when absent. */
   theme?: ActivityTheme
   /** A category the business made itself; shown instead of the theme when set. */

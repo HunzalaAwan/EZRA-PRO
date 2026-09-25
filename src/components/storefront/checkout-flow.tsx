@@ -23,6 +23,7 @@ import { z } from 'zod'
 
 import {
   cn,
+  currencySymbol,
   formatCurrency,
   formatDateLong,
   formatDuration,
@@ -366,14 +367,26 @@ export function CheckoutFlow({
   const card = pricing.giftCards.find((entry) => entry.code === giftCode)
   const itemsSubtotal = [...quote.ticketLines, ...quote.addOnLines].reduce((sum, line) => sum + line.total, 0)
   const promoOff = promo && !promoProblem(promo, { activitySlug: activity.slug, subtotal: itemsSubtotal, todayKey }) ? promoDiscount(promo, itemsSubtotal) : 0
-  const giftOff = card && !giftProblem(card, todayKey) ? Math.min(card.balance, Math.max(0, withPickup.total - promoOff)) : 0
+  /* ---------- tip, on what the guest is buying, after any promo code ---------- */
+  const [tipChoice, setTipChoice] = React.useState<TipChoice>('none')
+  const [customTip, setCustomTip] = React.useState('')
+  const tipBase = Math.max(0, itemsSubtotal - promoOff)
+  const tip = !activity.tips
+    ? 0
+    : tipChoice === 'custom'
+      ? Math.max(0, Math.round((Number.parseFloat(customTip) || 0) * 100) / 100)
+      : tipChoice === 'none'
+        ? 0
+        : Math.round(tipBase * Number(tipChoice)) / 100
+  const giftOff = card && !giftProblem(card, todayKey) ? Math.min(card.balance, Math.max(0, withPickup.total + tip - promoOff)) : 0
   const displayQuote = React.useMemo(() => {
-    if (promoOff === 0 && giftOff === 0) return withPickup
+    if (promoOff === 0 && giftOff === 0 && tip === 0) return withPickup
     const lines = [...withPickup.addOnLines]
+    if (tip > 0) lines.push({ id: 'tip', label: tipChoice === 'custom' ? 'Tip for the crew' : `Tip for the crew · ${tipChoice}%`, kind: 'addon' as const, quantity: 1, unitPrice: tip, total: tip })
     if (promoOff > 0 && promo) lines.push({ id: 'promo', label: `Code ${promo.code}`, kind: 'addon' as const, quantity: 1, unitPrice: -promoOff, total: -promoOff })
     if (giftOff > 0 && card) lines.push({ id: 'gift', label: `Gift card …${card.code.slice(-4)}`, kind: 'addon' as const, quantity: 1, unitPrice: -giftOff, total: -giftOff })
-    return { ...withPickup, addOnLines: lines, total: Math.max(0, withPickup.total - promoOff - giftOff) }
-  }, [withPickup, promoOff, giftOff, promo, card])
+    return { ...withPickup, addOnLines: lines, subtotal: withPickup.subtotal + tip, total: Math.max(0, withPickup.total + tip - promoOff - giftOff) }
+  }, [withPickup, promoOff, giftOff, promo, card, tip, tipChoice])
   const finishPayment = () => {
     pricing.recordRedemption(promoOff > 0 ? promo?.code : undefined, giftOff > 0 && card ? { code: card.code, amount: giftOff } : undefined)
     setConfirmed(true)
@@ -563,6 +576,19 @@ export function CheckoutFlow({
                 ) : null}
               </div>
             ) : null}
+            {activity.tips ? (
+              <div className="border-t border-line-subtle pt-10">
+                <TipStep
+                  base={tipBase}
+                  currency={tenant.currency}
+                  choice={tipChoice}
+                  setChoice={setTipChoice}
+                  customTip={customTip}
+                  setCustomTip={setCustomTip}
+                  tip={tip}
+                />
+              </div>
+            ) : null}
             <div className="border-t border-line-subtle pt-10">
               <PaymentStep
                 payment={payment}
@@ -615,6 +641,82 @@ export function CheckoutFlow({
         </aside>
       </div>
     </div>
+  )
+}
+
+/* ==========================================================================
+   TIP — optional, on the tickets and extras after any promo code. The
+   percentages show what they come to; Custom takes any amount.
+   ========================================================================== */
+
+const TIP_PERCENTS = ['5', '10', '15', '20', '25'] as const
+type TipChoice = 'none' | 'custom' | (typeof TIP_PERCENTS)[number]
+
+function TipStep({
+  base,
+  currency,
+  choice,
+  setChoice,
+  customTip,
+  setCustomTip,
+  tip,
+}: {
+  base: number
+  currency: Tenant['currency']
+  choice: TipChoice
+  setChoice: (choice: TipChoice) => void
+  customTip: string
+  setCustomTip: (value: string) => void
+  tip: number
+}) {
+  const money = (amount: number) => formatCurrency(amount, currency, { decimals: amount % 1 !== 0 })
+  const chip = (active: boolean) =>
+    cn(
+      'flex min-h-14 flex-col items-center justify-center rounded-xl border px-2 py-2 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
+      active ? 'border-primary bg-primary-soft/40 text-foreground' : 'border-line bg-surface text-foreground hover:border-line-strong',
+    )
+  return (
+    <section aria-labelledby="step-tip" className="space-y-4">
+      <div>
+        <h2 id="step-tip" className="font-display text-xl font-semibold tracking-tight">
+          Add a tip for the crew
+        </h2>
+        <p className="mt-1.5 text-sm text-muted">Optional. Every cent goes to the guides and crew on your day.</p>
+      </div>
+      <div role="radiogroup" aria-label="Tip" className="grid grid-cols-3 gap-2 sm:grid-cols-7">
+        <button type="button" role="radio" aria-checked={choice === 'none'} className={chip(choice === 'none')} onClick={() => setChoice('none')}>
+          <span className="text-sm font-semibold">No tip</span>
+        </button>
+        {TIP_PERCENTS.map((percent) => (
+          <button key={percent} type="button" role="radio" aria-checked={choice === percent} className={chip(choice === percent)} onClick={() => setChoice(percent)}>
+            <span className="text-sm font-semibold">{percent}%</span>
+            <span className="text-xs text-muted">{money(Math.round(base * Number(percent)) / 100)}</span>
+          </button>
+        ))}
+        <button type="button" role="radio" aria-checked={choice === 'custom'} className={chip(choice === 'custom')} onClick={() => setChoice('custom')}>
+          <span className="text-sm font-semibold">Custom</span>
+        </button>
+      </div>
+      {choice === 'custom' ? (
+        <Field label="Tip amount" description="Any amount you like.">
+          {(control) => (
+            <Input
+              {...control}
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="0.01"
+              className="sm:w-56"
+              leftIcon={<span className="text-sm text-muted">{currencySymbol(currency)}</span>}
+              value={customTip}
+              placeholder="0"
+              onChange={(e) => setCustomTip(e.target.value)}
+            />
+          )}
+        </Field>
+      ) : null}
+      {tip > 0 ? <p className="text-sm text-muted">Thank you. {money(tip)} is added to your total.</p> : null}
+    </section>
   )
 }
 
@@ -1059,7 +1161,7 @@ function SummaryLines({
           <li key={line.id} className="flex items-baseline justify-between gap-3">
             <span className="min-w-0 truncate text-muted">
               {line.label}
-              {line.total >= 0 ? (
+              {line.total >= 0 && line.id !== 'tip' ? (
                 <span className="ml-1.5 text-xs text-faint">
                   {line.quantity} × {formatCurrency(line.unitPrice, tenant.currency)}
                 </span>

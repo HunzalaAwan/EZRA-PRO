@@ -54,6 +54,7 @@ export interface ActivityOverride {
   pickup?: ActivityPickup | null
   languages?: string[]
   customRequests?: boolean
+  tips?: boolean
   theme?: ActivityTheme
   /** null clears a custom category. */
   customCategory?: string | null
@@ -141,6 +142,7 @@ export function applyActivityOverride<T extends Activity>(activity: T, override?
     guestDetails: override.guestDetails ?? activity.guestDetails,
     languages: override.languages ?? activity.languages,
     customRequests: override.customRequests ?? activity.customRequests,
+    tips: override.tips ?? activity.tips,
     theme: override.theme ?? activity.theme,
     customCategory: override.customCategory === undefined ? activity.customCategory : (override.customCategory ?? undefined),
     accessibility: override.accessibility ?? activity.accessibility,

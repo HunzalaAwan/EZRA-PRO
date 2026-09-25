@@ -3550,6 +3550,8 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
       : {}),
     ...(spec.languages ? { languages: spec.languages } : {}),
     ...(spec.customRequests || CUSTOM_REQUEST_SLUGS.has(spec.slug) ? { customRequests: true } : {}),
+    // Guided trips and rides offer a tip; rentals and passes do not.
+    ...(['trip', 'activity', 'charter', 'lesson'].includes(spec.kind ?? 'trip') ? { tips: true } : {}),
     ...(spec.ride ? { ride: spec.ride } : {}),
     ...(spec.route ? { route: spec.route } : {}),
     ...(spec.lesson ? { lesson: { ...spec.lesson } } : {}),
