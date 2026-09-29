@@ -7,6 +7,7 @@ import type { Tenant } from '@/types'
 import { StorefrontFooter } from '@/components/storefront/storefront-footer'
 import { StorefrontHeader } from '@/components/storefront/storefront-header'
 import { StorefrontBrandOverrides } from '@/components/storefront/storefront-brand'
+import { SignupPopup } from '@/components/storefront/storefront-marketing'
 import { brandTokenCss } from '@/lib/brand-colors'
 
 /* ==========================================================================
@@ -119,6 +120,7 @@ export default async function StorefrontLayout({
       </main>
 
       <StorefrontFooter tenant={tenant} />
+      <SignupPopup tenant={tenant} />
     </div>
   )
 }

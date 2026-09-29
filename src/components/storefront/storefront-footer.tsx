@@ -3,6 +3,7 @@ import { ExternalLink, Mail, MapPin, Phone, ShieldCheck } from 'lucide-react'
 
 import { getStorefront } from '@/lib/demo'
 import { SITE } from '@/lib/site-config'
+import { FooterSignup } from '@/components/storefront/storefront-marketing'
 import { cn, initials } from '@/lib/utils'
 import type { Tenant } from '@/types'
 import { Logo } from '@/components/marketing/logo'
@@ -71,6 +72,7 @@ export function StorefrontFooter({ tenant, className }: StorefrontFooterProps) {
       />
 
       <div className="relative mx-auto w-full max-w-[88rem] px-4 py-14 sm:px-6 lg:px-10 lg:py-16">
+        <FooterSignup tenant={tenant} />
         <div className="grid grid-cols-1 gap-10 md:grid-cols-2 lg:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))] lg:gap-8">
           {/* ---------- identity + contact ---------- */}
           <div className="min-w-0">

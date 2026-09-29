@@ -61,6 +61,7 @@ import { TicketQr, ticketPayload } from '@/components/ui/ticket-qr'
 import { CheckoutDiscounts } from '@/components/storefront/checkout-discounts'
 import { applyRules, giftProblem, promoDiscount, promoProblem } from '@/lib/pricing'
 import { guestDetailsOf } from '@/lib/guest-requirements'
+import { AfterBookingRewards, CheckoutOptIn, useCheckoutOptIn } from '@/components/storefront/storefront-marketing'
 import { usePricing } from '@/hooks/use-pricing'
 
 /* ==========================================================================
@@ -387,7 +388,9 @@ export function CheckoutFlow({
     if (giftOff > 0 && card) lines.push({ id: 'gift', label: `Gift card …${card.code.slice(-4)}`, kind: 'addon' as const, quantity: 1, unitPrice: -giftOff, total: -giftOff })
     return { ...withPickup, addOnLines: lines, subtotal: withPickup.subtotal + tip, total: Math.max(0, withPickup.total + tip - promoOff - giftOff) }
   }, [withPickup, promoOff, giftOff, promo, card, tip, tipChoice])
+  const optIn = useCheckoutOptIn(tenant)
   const finishPayment = () => {
+    optIn.record(guest.email, guest.phone)
     pricing.recordRedemption(promoOff > 0 ? promo?.code : undefined, giftOff > 0 && card ? { code: card.code, amount: giftOff } : undefined)
     setConfirmed(true)
   }
@@ -516,7 +519,10 @@ export function CheckoutFlow({
 
           {/* ---------- details, then payment, one page ---------- */}
           <div className="mt-8 space-y-10">
-            <GuestStep guest={guest} setGuest={setGuest} errors={errors} />
+            <div className="space-y-4">
+              <GuestStep guest={guest} setGuest={setGuest} errors={errors} />
+              <CheckoutOptIn optIn={optIn} />
+            </div>
             <CheckoutDiscounts
               promos={pricing.promos}
               giftCards={pricing.giftCards}
@@ -1650,6 +1656,10 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
           <SummaryLines quote={quote} tenant={tenant} />
         </div>
       </motion.div>
+
+      <div className="mt-5">
+        <AfterBookingRewards tenant={tenant} firstName={guest.firstName} reference={reference} total={quote.total} />
+      </div>
 
       <div className="mt-8 flex flex-col items-center gap-3 text-center">
         <p className="text-sm text-muted">
