@@ -14,6 +14,10 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
 import { useMarketing, useMarketingTenant } from '@/hooks/use-marketing'
+import { brandColors, useEmailContext } from '@/hooks/use-email-context'
+import { EmailContentCard } from '@/components/dashboard/marketing/email-content-card'
+import { EmailFrame } from '@/components/dashboard/marketing/email-designer'
+import { blockId, designFromText, type EmailContext, type EmailDesign, type SavedEmailTemplate } from '@/lib/email-design'
 import { usePricing } from '@/hooks/use-pricing'
 import type { MarketingData } from '@/lib/data/guest-marketing'
 import {
@@ -97,6 +101,8 @@ export function CampaignsClient({ tenant: tenantRecord, nowIso, data }: { tenant
   const [report, setReport] = React.useState<Campaign | null>(null)
   const [picking, setPicking] = React.useState(false)
   const [tab, setTab] = React.useState<'all' | Campaign['status']>('all')
+  const ctx = useEmailContext(tenantRecord, data.activities, { first_name: 'Maia', link: tenant.slug + '.ezrapro.com' })
+  const brand = React.useMemo(() => brandColors(tenantRecord), [tenantRecord])
 
   const recipientsFor = React.useCallback(
     (campaign: Pick<Campaign, 'audienceId' | 'channel'>) => {
@@ -307,6 +313,13 @@ export function CampaignsClient({ tenant: tenantRecord, nowIso, data }: { tenant
           activities={data.activities}
           nowIso={nowIso}
           paused={marketing.settings.paused}
+          ctx={ctx}
+          brand={brand}
+          saved={marketing.emailTemplates}
+          onSaveTemplate={(name, design) => {
+            marketing.saveEmailTemplate({ id: 'tpl_' + Date.now().toString(36), name, design, updatedAt: new Date().toISOString() })
+            toast.success(name + ' saved to Email templates')
+          }}
           onClose={() => setEditing(null)}
           onSave={save}
         />
@@ -336,6 +349,10 @@ function CampaignEditor({
   activities,
   nowIso,
   paused,
+  ctx,
+  brand,
+  saved,
+  onSaveTemplate,
   onClose,
   onSave,
 }: {
@@ -345,6 +362,10 @@ function CampaignEditor({
   activities: { slug: string; name: string }[]
   nowIso: string
   paused: boolean
+  ctx: EmailContext
+  brand: string[]
+  saved: SavedEmailTemplate[]
+  onSaveTemplate: (name: string, design: EmailDesign) => void
   onClose: () => void
   onSave: (campaign: Campaign, mode: 'draft' | 'schedule' | 'send') => void
 }) {
@@ -362,6 +383,16 @@ function CampaignEditor({
     link: 'book.link/x7',
   }
   const render = (text: string) => text.replace(/\{([a-z_]+)\}/g, (match, key: string) => context[key] ?? match)
+  const emailCtx = React.useMemo(() => ({ ...ctx, vars: { ...ctx.vars, ...context } }), [ctx, context.offer_code, context.offer_percent]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Without a design: a simple letter from the text, with the code and button under it.
+  const letter = React.useMemo<EmailDesign>(() => {
+    const base = designFromText(draft.subject, draft.body, brand[0] ?? '#601CEF')
+    const extra = [
+      ...(draft.offer.enabled ? [{ id: blockId(), type: 'coupon' as const, title: 'Your code', note: 'Good for ' + draft.offer.validDays + ' days.' }] : []),
+      ...(draft.button.enabled ? [{ id: blockId(), type: 'button' as const, label: draft.button.label || 'Book now', link: draft.button.activitySlug ? 'activity:' + draft.button.activitySlug : '{book_link}', align: 'left' as const, style: 'solid' as const, full: false }] : []),
+    ]
+    return { ...base, blocks: [base.blocks[0], base.blocks[1], ...extra, base.blocks[2]] }
+  }, [draft.subject, draft.body, draft.offer.enabled, draft.offer.validDays, draft.button, brand])
   const rendered = render(draft.body)
   const segments = Math.max(1, Math.ceil(rendered.length / 160))
   const defaultLater = React.useMemo(() => {
@@ -442,8 +473,24 @@ function CampaignEditor({
             </section>
           ) : null}
 
+          {draft.channel === 'email' ? (
+            <EmailContentCard
+              design={draft.design}
+              onChange={(design) => set({ design })}
+              fallback={letter}
+              ctx={emailCtx}
+              subject={draft.subject}
+              preheader={draft.preheader}
+              text={draft.body}
+              brand={brand}
+              saved={saved}
+              onSaveTemplate={onSaveTemplate}
+              title={draft.name + ': email'}
+            />
+          ) : null}
+
           <div>
-            <Field label="Message" description={draft.channel === 'sms' ? `${rendered.length} characters · ${segments} text ${segments === 1 ? 'segment' : 'segments'} per guest` : undefined}>
+            <Field label={draft.channel === 'sms' ? 'Message' : draft.design ? 'Plain-text version' : 'Letter'} description={draft.channel === 'sms' ? `${rendered.length} characters · ${segments} text ${segments === 1 ? 'segment' : 'segments'} per guest` : undefined}>
               {(control) => <Textarea {...control} ref={bodyRef} rows={8} value={draft.body} onChange={(e) => set({ body: e.target.value })} />}
             </Field>
             <div className="mt-2 flex flex-wrap gap-1.5">
@@ -455,7 +502,7 @@ function CampaignEditor({
             </div>
           </div>
 
-          {draft.channel === 'email' ? (
+          {draft.channel === 'email' && !draft.design ? (
             <section className="rounded-xl border border-line p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -518,21 +565,12 @@ function CampaignEditor({
           <section className="flex flex-col gap-3">
             <p className="text-xs font-semibold tracking-wide text-subtle uppercase">Preview</p>
             {draft.channel === 'email' ? (
-              <div className="overflow-hidden rounded-xl border border-line bg-surface">
-                <div className="border-b border-line-subtle px-4 py-2.5 text-xs text-subtle">
+              <div className="overflow-hidden rounded-xl border border-line" style={{ background: (draft.design ?? letter).theme.background }}>
+                <div className="border-b border-line-subtle bg-surface px-4 py-2.5 text-xs text-subtle">
                   <span className="font-medium text-foreground">{business}</span> · {render(draft.subject) || 'No subject yet'}
                   {draft.preheader ? <span className="text-faint"> — {render(draft.preheader)}</span> : null}
                 </div>
-                <div className="px-4 py-4">
-                  <p className="text-sm leading-relaxed whitespace-pre-line text-foreground">{rendered}</p>
-                  {draft.button.enabled ? (
-                    <span className="mt-4 inline-flex h-10 items-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground">{draft.button.label || 'Book now'}</span>
-                  ) : null}
-                  {draft.offer.enabled ? (
-                    <p className="mt-4 rounded-lg border border-dashed border-line-strong px-3 py-2 text-center font-mono text-sm tracking-wider">{cleanCode(draft.offer.code) || 'CODE'}</p>
-                  ) : null}
-                  <p className="mt-5 text-xs text-faint">Unsubscribe · Update preferences</p>
-                </div>
+                <EmailFrame design={draft.design ?? letter} ctx={emailCtx} preheader={draft.preheader} width={600} scale={0.88} className="mx-auto" />
               </div>
             ) : (
               <p className="max-w-[20rem] rounded-2xl rounded-bl-md bg-surface-sunken px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-line text-foreground">

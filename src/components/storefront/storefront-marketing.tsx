@@ -2,22 +2,20 @@
 
 import * as React from 'react'
 import { usePathname } from 'next/navigation'
-import { Check, Copy, Gift, Share2, Sparkles, X } from 'lucide-react'
+import { Check, Copy, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/toaster'
 import { addSignup, useMarketing, useMarketingTenant } from '@/hooks/use-marketing'
-import { usePricing } from '@/hooks/use-pricing'
-import { cleanCode, upsertOfferPromo } from '@/lib/marketing'
-import { cn, formatCurrency } from '@/lib/utils'
+import { cleanCode } from '@/lib/marketing'
 import type { Tenant } from '@/types'
 
 /* ==========================================================================
    Storefront marketing — the pieces guests see, each driven by a switch on
    the Marketing page: the sign-up pop-up, the footer sign-up, the checkout
-   opt-in, and the refer-a-friend and points panel after booking.
+   opt-in.
    ========================================================================== */
 
 const NOW_ISO = '2026-09-11T09:00:00'
@@ -252,79 +250,6 @@ export function CheckoutOptIn({ optIn }: { optIn: ReturnType<typeof useCheckoutO
           <Checkbox className="mt-0.5" checked={state.sms} onCheckedChange={(checked) => setState((current) => ({ ...current, sms: checked === true }))} />
           <span>{checkout.smsLabel}</span>
         </label>
-      ) : null}
-    </div>
-  )
-}
-
-/* --------------------------------------------------------------------------
-   After booking: refer a friend and points
-   -------------------------------------------------------------------------- */
-
-export function AfterBookingRewards({ tenant: tenantRecord, firstName, reference, total }: { tenant: Tenant; firstName: string; reference: string; total: number }) {
-  const tenant = useMarketingTenant(tenantRecord)
-  const marketing = useMarketing(tenant, NOW_ISO)
-  const pricing = usePricing(tenant.slug)
-  const { referral, loyalty } = marketing.rewards
-  const code = cleanCode(`${firstName || 'FRIEND'}${reference.slice(-4)}`)
-  const showReferral = referral.enabled && referral.showAfterBooking
-  const saved = React.useRef(false)
-
-  // The guest's own referral code works at checkout straight away.
-  React.useEffect(() => {
-    if (!showReferral || saved.current || pricing.promos.some((promo) => promo.code === code)) return
-    saved.current = true
-    pricing.setPromos(
-      upsertOfferPromo(pricing.promos, { enabled: true, percent: referral.friendPercent, validDays: 90, code }, `Referral from ${firstName || 'a guest'} (${reference})`).map((promo) =>
-        promo.code === code ? { ...promo, maxUses: 20, minSubtotal: referral.minSpend * 100 } : promo,
-      ),
-    )
-  }, [showReferral, code, pricing, referral.friendPercent, referral.minSpend, firstName, reference])
-
-  if (!showReferral && !loyalty.enabled) return null
-  const link = `${typeof window === 'undefined' ? '' : window.location.origin}/book/${tenant.slug}?ref=${code}`
-  const message = referral.message.replace('{business}', tenant.name).replace('{friend_percent}', `${referral.friendPercent}%`)
-  const points = Math.round((total / 100) * loyalty.pointsPerUnit)
-
-  return (
-    <div className="flex flex-col gap-4">
-      {showReferral ? (
-        <div className="rounded-2xl border border-line bg-surface p-5 text-left">
-          <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <Gift className="size-4 text-primary" aria-hidden="true" />
-            Give {referral.friendPercent}%, get {formatCurrency(referral.referrerCredit * 100, tenantRecord.currency)}
-          </p>
-          <p className="mt-1 text-sm text-muted">
-            Friends get {referral.friendPercent}% off their first trip with your code. When they book, you get {formatCurrency(referral.referrerCredit * 100, tenantRecord.currency)} off your next one.
-          </p>
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-            <p className="flex h-10 flex-1 items-center rounded-lg border border-dashed border-line-strong px-3 font-mono text-sm tracking-wider text-foreground">{code}</p>
-            <Button
-              variant="secondary"
-              leftIcon={<Copy />}
-              onClick={() => { void navigator.clipboard?.writeText(`${message} ${link}`); toast.success('Link copied', { description: 'Paste it in a message to a friend.' }) }}
-            >
-              Copy link
-            </Button>
-            <Button
-              leftIcon={<Share2 />}
-              onClick={() => {
-                if (navigator.share) void navigator.share({ title: tenant.name, text: message, url: link }).catch(() => undefined)
-                else { void navigator.clipboard?.writeText(`${message} ${link}`); toast.success('Link copied') }
-              }}
-            >
-              Share
-            </Button>
-          </div>
-        </div>
-      ) : null}
-      {loyalty.enabled ? (
-        <div className={cn('flex items-start gap-3 rounded-2xl border border-line bg-surface p-5 text-left')}>
-          <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
-          <p className="text-sm text-muted">
-            <span className="font-semibold text-foreground">You earned {points.toLocaleString('en-US')} points.</span> {loyalty.rewardAt.toLocaleString('en-US')} points get you {formatCurrency(loyalty.rewardValue * 100, tenantRecord.currency)} off a trip. Leave a review for {loyalty.reviewBonus} more.
-          </p>
-        </div>
       ) : null}
     </div>
   )

@@ -1,6 +1,7 @@
 import { COUNTRY_NAME_BY_CODE, getActivitiesByTenant, getBookingRows, getBookingsByCustomer, getCustomersByTenant } from '@/lib/demo'
 import { manageLink, type MessageContext } from '@/lib/messaging'
 import { steady, type MarketingContact } from '@/lib/marketing'
+import { formatCurrency } from '@/lib/utils'
 import type { Tenant } from '@/types'
 
 /* ==========================================================================
@@ -11,7 +12,7 @@ import type { Tenant } from '@/types'
 
 export interface MarketingData {
   contacts: MarketingContact[]
-  activities: { slug: string; name: string }[]
+  activities: { slug: string; name: string; tagline: string; image: string; price: string }[]
   /** Major units: the average paid booking, for the revenue estimates. */
   avgOrder: number
   tags: string[]
@@ -50,7 +51,13 @@ export function getMarketingData(tenant: Tenant): MarketingData {
   })
   return {
     contacts,
-    activities: activities.map((activity) => ({ slug: activity.slug, name: activity.name })),
+    activities: activities.map((activity) => ({
+      slug: activity.slug,
+      name: activity.name,
+      tagline: activity.tagline,
+      image: (activity.media.find((item) => item.isPrimary && item.type === 'image') ?? activity.media.find((item) => item.type === 'image'))?.url ?? '',
+      price: formatCurrency(activity.basePrice, tenant.currency),
+    })),
     avgOrder: paidCount > 0 ? Math.round(paid / paidCount / 100) : 150,
     tags: [...new Set(contacts.flatMap((contact) => contact.tags))].sort(),
     countries: [...new Set(contacts.map((contact) => contact.country))].sort(),

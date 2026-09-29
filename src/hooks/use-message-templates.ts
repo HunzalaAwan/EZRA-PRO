@@ -2,6 +2,8 @@
 
 import * as React from 'react'
 
+import { toast } from '@/components/ui/toaster'
+
 import { DEFAULT_TEMPLATES, type MessageTemplate, type TemplateKey } from '@/lib/messaging'
 
 /* ==========================================================================
@@ -39,7 +41,14 @@ export function useMessageTemplates(tenantId: string) {
     }
   }, [raw])
 
-  const templates = React.useMemo(() => DEFAULT_TEMPLATES.map((template) => ({ ...template, ...edits[template.key] })), [edits])
+  const templates = React.useMemo(() => {
+    const builtIn = DEFAULT_TEMPLATES.map((template) => ({ ...template, ...edits[template.key] }))
+    // The business's own automations are stored whole, keyed custom_…
+    const custom = Object.entries(edits)
+      .filter(([key, value]) => key.startsWith('custom_') && value && (value as MessageTemplate).name)
+      .map(([, value]) => value as MessageTemplate)
+    return [...builtIn, ...custom]
+  }, [edits])
 
   const write = React.useCallback(
     (next: Partial<Record<TemplateKey, Partial<MessageTemplate>>> | null) => {
@@ -47,7 +56,8 @@ export function useMessageTemplates(tenantId: string) {
         if (next) window.localStorage.setItem(keyFor(tenantId), JSON.stringify(next))
         else window.localStorage.removeItem(keyFor(tenantId))
       } catch {
-        /* storage blocked */
+        // Usually a full browser store: big uploaded photos. Say so rather than lose the change quietly.
+        toast.error('Could not save', { description: 'The browser storage is full. Use smaller photos or image links.' })
       }
       window.dispatchEvent(new Event(TEMPLATES_EVENT))
     },
@@ -57,7 +67,19 @@ export function useMessageTemplates(tenantId: string) {
   return {
     templates,
     update: (key: TemplateKey, patch: Partial<MessageTemplate>) => write({ ...edits, [key]: { ...edits[key], ...patch } }),
-    reset: () => write(null),
-    hasEdits: raw !== '',
+    /** Add one of the business's own automations. */
+    create: (template: MessageTemplate) => write({ ...edits, [template.key]: { ...template, custom: true } }),
+    /** Delete one of the business's own automations. */
+    remove: (key: TemplateKey) => {
+      const next = { ...edits }
+      delete next[key]
+      write(next)
+    },
+    /** Back to the default wording and timing. The business's own automations stay. */
+    reset: () => {
+      const own = Object.fromEntries(Object.entries(edits).filter(([key]) => key.startsWith('custom_')))
+      write(Object.keys(own).length > 0 ? own : null)
+    },
+    hasEdits: Object.keys(edits).some((key) => !key.startsWith('custom_')),
   }
 }

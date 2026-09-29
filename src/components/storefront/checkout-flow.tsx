@@ -61,7 +61,7 @@ import { TicketQr, ticketPayload } from '@/components/ui/ticket-qr'
 import { CheckoutDiscounts } from '@/components/storefront/checkout-discounts'
 import { applyRules, giftProblem, promoDiscount, promoProblem } from '@/lib/pricing'
 import { guestDetailsOf } from '@/lib/guest-requirements'
-import { AfterBookingRewards, CheckoutOptIn, useCheckoutOptIn } from '@/components/storefront/storefront-marketing'
+import { CheckoutOptIn, useCheckoutOptIn } from '@/components/storefront/storefront-marketing'
 import { usePricing } from '@/hooks/use-pricing'
 
 /* ==========================================================================
@@ -1656,10 +1656,6 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
           <SummaryLines quote={quote} tenant={tenant} />
         </div>
       </motion.div>
-
-      <div className="mt-5">
-        <AfterBookingRewards tenant={tenant} firstName={guest.firstName} reference={reference} total={quote.total} />
-      </div>
 
       <div className="mt-8 flex flex-col items-center gap-3 text-center">
         <p className="text-sm text-muted">

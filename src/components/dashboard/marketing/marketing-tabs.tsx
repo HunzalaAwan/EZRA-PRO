@@ -16,7 +16,7 @@ export const MARKETING_TABS = [
   { href: '/dashboard/marketing/campaigns', label: 'Campaigns' },
   { href: '/dashboard/marketing/audiences', label: 'Audiences' },
   { href: '/dashboard/marketing/forms', label: 'Sign-up forms' },
-  { href: '/dashboard/marketing/rewards', label: 'Referrals & rewards' },
+  { href: '/dashboard/marketing/templates', label: 'Email templates' },
   { href: '/dashboard/marketing/settings', label: 'Settings' },
 ] as const
 

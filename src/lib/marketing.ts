@@ -1,5 +1,6 @@
 import type { Customer } from '@/types'
 import type { PromoCode } from '@/lib/pricing'
+import type { EmailDesign } from '@/lib/email-design'
 
 /* ==========================================================================
    Marketing — audiences, campaigns, sign-up forms, referrals and the rules
@@ -168,6 +169,8 @@ export interface Campaign {
   offer: MarketingOffer
   /** A second subject line sent to half the list; the winner goes to the rest. */
   abTest: { enabled: boolean; subjectB: string }
+  /** The designed email. Without one, the body goes as a simple letter. */
+  design?: EmailDesign
   status: CampaignStatus
   sendAt?: string
   sentAt?: string
@@ -224,49 +227,6 @@ export function defaultForms(slug: string): SignupForms {
       smsLabel: 'Text me last-minute seats. Msg & data rates may apply. Reply STOP to opt out.',
     },
   }
-}
-
-/* --------------------------------------------------------------------------
-   Referrals and rewards
-   -------------------------------------------------------------------------- */
-
-export interface Rewards {
-  referral: {
-    enabled: boolean
-    /** What the friend gets on their first booking. */
-    friendPercent: number
-    /** Credit for the guest who sent them, in major units. */
-    referrerCredit: number
-    /** The friend's booking has to reach this, in major units. */
-    minSpend: number
-    message: string
-    showAfterBooking: boolean
-    inReviewEmail: boolean
-  }
-  loyalty: {
-    enabled: boolean
-    /** Points for every 1 spent. */
-    pointsPerUnit: number
-    /** Points needed for one reward. */
-    rewardAt: number
-    /** The reward, in major units off a booking. */
-    rewardValue: number
-    /** Points earned for a review. */
-    reviewBonus: number
-  }
-}
-
-export const DEFAULT_REWARDS: Rewards = {
-  referral: {
-    enabled: true,
-    friendPercent: 10,
-    referrerCredit: 20,
-    minSpend: 50,
-    message: 'I just booked with {business} and loved it. Here is {friend_percent} off your first trip:',
-    showAfterBooking: true,
-    inReviewEmail: true,
-  },
-  loyalty: { enabled: false, pointsPerUnit: 1, rewardAt: 500, rewardValue: 25, reviewBonus: 50 },
 }
 
 /* --------------------------------------------------------------------------
@@ -334,7 +294,7 @@ const MONTHLY_REACH: Record<string, number> = {
   next_trip: 0.03,
   win_back: 0.025,
   anniversary: 0.015,
-  referral_ask: 0.012,
+  review_thanks: 0.012,
   gift_expiry: 0.003,
   birthday: 0.018,
   waitlist: 0.004,

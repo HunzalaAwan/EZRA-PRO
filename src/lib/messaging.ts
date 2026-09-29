@@ -1,5 +1,6 @@
 import type { Activity, Booking, Customer, Departure } from '@/types'
 import { NO_OFFER, type MarketingOffer } from '@/lib/marketing'
+import type { EmailDesign } from '@/lib/email-design'
 
 /* ==========================================================================
    Messaging — the emails and texts a booking sends on its own: when each
@@ -10,7 +11,10 @@ import { NO_OFFER, type MarketingOffer } from '@/lib/marketing'
 
 export type MessageChannel = 'email' | 'sms' | 'both'
 
-export type TemplateKey =
+/** Built-in messages, plus automations the business makes itself (custom_…). */
+export type TemplateKey = BuiltInTemplateKey | `custom_${string}`
+
+export type BuiltInTemplateKey =
   | 'confirmation'
   | 'reminder'
   | 'what_to_bring'
@@ -24,7 +28,7 @@ export type TemplateKey =
   | 'next_trip'
   | 'win_back'
   | 'anniversary'
-  | 'referral_ask'
+  | 'review_thanks'
   | 'gift_expiry'
   | 'birthday'
   | 'waitlist'
@@ -50,8 +54,68 @@ export interface MessageTemplate {
   offer?: MarketingOffer
   /** A second subject line for half the guests. */
   abTest?: { enabled: boolean; subjectB: string }
-  /** Growth: stop once the guest books again. */
+  /** Growth: stop once the guest books again. Older setting; `rules.exitOn` wins. */
   stopIfBooked?: boolean
+  /** The designed email for the first message. Without one, the body goes as a simple letter. */
+  design?: EmailDesign
+  /** Follow-up messages after the first, each after a wait and an optional condition. */
+  steps?: AutomationStep[]
+  /** Send window, frequency, exit and extra conditions. */
+  rules?: Partial<AutomationRules>
+  /** Made by the business; can be renamed and deleted. */
+  custom?: boolean
+}
+
+export interface AutomationStep {
+  id: string
+  /** Days after the message before it. */
+  waitDays: number
+  /** Only sent if the guest has not done this since the message before. */
+  onlyIf: 'always' | 'not_opened' | 'not_clicked' | 'not_booked'
+  channel: 'email' | 'sms'
+  subject: string
+  body: string
+  design?: EmailDesign
+}
+
+export interface AutomationRules {
+  /** Weekdays it may go (0=Sun). Empty: any day. */
+  days: number[]
+  /** Hold until this local time (HH:MM). Empty: as soon as it is due. */
+  sendAt: string
+  /** How often one guest can get it. */
+  repeat: 'once' | 'every' | 'cooldown'
+  cooldownDays: number
+  /** What ends the sequence early. */
+  exitOn: 'booked' | 'clicked' | 'never'
+  /** Skip guests with any of these tags. */
+  excludeTags: string[]
+  /** Skip guests who booked within this many days. 0: off. */
+  skipBookedWithinDays: number
+  /** Only for bookings of at least this many guests. 0: any. */
+  minPartySize: number
+  /** Only guests from these countries. Empty: anywhere. */
+  countries: string[]
+  /** No email on file? Send the text version instead, and the other way round. */
+  fallback: boolean
+}
+
+export const DEFAULT_RULES: AutomationRules = {
+  days: [],
+  sendAt: '',
+  repeat: 'once',
+  cooldownDays: 30,
+  exitOn: 'booked',
+  excludeTags: [],
+  skipBookedWithinDays: 0,
+  minPartySize: 0,
+  countries: [],
+  fallback: true,
+}
+
+export function rulesOf(template: Pick<MessageTemplate, 'rules' | 'stopIfBooked' | 'group'>): AutomationRules {
+  const base: AutomationRules = { ...DEFAULT_RULES, repeat: (template.group ?? 'booking') === 'booking' ? 'every' : 'once', exitOn: template.stopIfBooked === false ? 'never' : (template.group ?? 'booking') === 'booking' ? 'never' : 'booked' }
+  return { ...base, ...template.rules }
 }
 
 export type TriggerWhen =
@@ -250,13 +314,13 @@ export const DEFAULT_TEMPLATES: MessageTemplate[] = [
     audienceId: 'aud_all',
   },
   {
-    key: 'referral_ask',
+    key: 'review_thanks',
     group: 'growth',
-    name: 'Refer a friend',
-    purpose: 'After a great review, the guest’s own referral link.',
+    name: 'Thanks for the review',
+    purpose: 'A thank-you after a 4 or 5 star review, with ideas for the next trip.',
     channel: 'email',
-    subject: 'Share {business} and get a trip credit',
-    body: 'Hi {first_name}, thank you for the lovely review. Know someone who would love it too? Your friends get {offer_percent} off and you get credit on your next trip: {book_link}',
+    subject: 'Thank you, {first_name}',
+    body: 'Hi {first_name}, thank you for the lovely review. It means a lot to a small crew. When you are ready for the next one, here is what is coming up: {book_link}',
     timing: { when: 'review', hours: 24 },
     enabled: true,
     audienceId: 'aud_all',

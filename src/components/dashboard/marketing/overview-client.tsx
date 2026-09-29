@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { ArrowRight, Gift, Lightbulb, Mail, Megaphone, MousePointerClick, Pause, Sparkles, Zap } from 'lucide-react'
+import { ArrowRight, Lightbulb, Mail, Megaphone, MousePointerClick, Pause, Zap } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -59,15 +59,12 @@ export function MarketingOverviewClient({ tenant: tenantRecord, nowIso, data }: 
     { label: 'Growth automations', text: `${growth.filter((t) => t.enabled).length} of ${growth.length} on`, href: '/dashboard/marketing/automations', icon: Zap, checked: growth.some((t) => t.enabled), toggle: null },
     { label: 'Storefront pop-up', text: marketing.forms.popup.offer.enabled ? `${marketing.forms.popup.offer.percent}% first-trip code` : 'List only, no code', href: '/dashboard/marketing/forms', icon: MousePointerClick, checked: marketing.forms.popup.enabled, toggle: (value: boolean) => marketing.setForms({ ...marketing.forms, popup: { ...marketing.forms.popup, enabled: value } }) },
     { label: 'Checkout opt-in', text: marketing.forms.checkout.sms ? 'Email and texts' : 'Email', href: '/dashboard/marketing/forms', icon: Mail, checked: marketing.forms.checkout.enabled, toggle: (value: boolean) => marketing.setForms({ ...marketing.forms, checkout: { ...marketing.forms.checkout, enabled: value } }) },
-    { label: 'Refer a friend', text: `${marketing.rewards.referral.friendPercent}% off for friends, ${formatCurrency(marketing.rewards.referral.referrerCredit * 100, currency)} credit`, href: '/dashboard/marketing/rewards', icon: Gift, checked: marketing.rewards.referral.enabled, toggle: (value: boolean) => marketing.setRewards({ ...marketing.rewards, referral: { ...marketing.rewards.referral, enabled: value } }) },
-    { label: 'Loyalty points', text: `${marketing.rewards.loyalty.pointsPerUnit} per 1 spent`, href: '/dashboard/marketing/rewards', icon: Sparkles, checked: marketing.rewards.loyalty.enabled, toggle: (value: boolean) => marketing.setRewards({ ...marketing.rewards, loyalty: { ...marketing.rewards.loyalty, enabled: value } }) },
   ]
 
   const ideas = [
     !on('win_back') && lapsed > 0 ? { text: `${lapsed} guests have not been back in four months. Turn on “We miss you”.`, action: 'Turn on', run: () => update('win_back', { enabled: true }) } : null,
     !on('next_trip') && firstTimers > 0 ? { text: `${firstTimers} first-timers could get a next-trip code two weeks after their trip.`, action: 'Turn on', run: () => update('next_trip', { enabled: true }) } : null,
     !marketing.forms.popup.enabled ? { text: 'The storefront pop-up is off. It is usually the fastest way to grow the list.', action: 'Turn on', run: () => marketing.setForms({ ...marketing.forms, popup: { ...marketing.forms.popup, enabled: true } }) } : null,
-    !marketing.rewards.referral.enabled ? { text: 'Happy guests bring friends. Referrals are off.', action: 'Turn on', run: () => marketing.setRewards({ ...marketing.rewards, referral: { ...marketing.rewards.referral, enabled: true } }) } : null,
     !on('browse_abandon') ? { text: 'Guests who look at a trip and leave get nothing. “Viewed but did not book” can nudge them.', action: 'Turn on', run: () => update('browse_abandon', { enabled: true }) } : null,
     !on('birthday') ? { text: 'Birthday treats are off. They are among the best-opened emails there are.', action: 'Turn on', run: () => update('birthday', { enabled: true }) } : null,
     recentCampaigns.length === 0 ? { text: 'No campaign in the last 30 days. A short newsletter keeps you in mind.', action: 'Write one', href: '/dashboard/marketing/campaigns' } : null,

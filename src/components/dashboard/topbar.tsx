@@ -52,7 +52,7 @@ const EXTRA_SEGMENT_LABEL: Record<string, string> = {
   campaigns: 'Campaigns',
   audiences: 'Audiences',
   forms: 'Sign-up forms',
-  rewards: 'Referrals & rewards',
+  templates: 'Email templates',
   new: 'New',
   edit: 'Edit',
   billing: 'Billing',

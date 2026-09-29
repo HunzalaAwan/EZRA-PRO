@@ -2,8 +2,9 @@
 
 import * as React from 'react'
 
+import { toast } from '@/components/ui/toaster'
+
 import {
-  DEFAULT_REWARDS,
   NO_OFFER,
   defaultAudiences,
   defaultForms,
@@ -11,13 +12,13 @@ import {
   type Audience,
   type Campaign,
   type MarketingSettings,
-  type Rewards,
   type SignupForms,
 } from '@/lib/marketing'
+import type { SavedEmailTemplate } from '@/lib/email-design'
 import type { Tenant } from '@/types'
 
 /* ==========================================================================
-   useMarketing — campaigns, audiences, sign-up forms, rewards and the
+   useMarketing — campaigns, audiences, sign-up forms and the
    marketing rules for one business, live. Kept in the browser over the
    defaults (the demo has no backend), shared by the dashboard and the
    storefront so a switch flipped here shows there straight away.
@@ -32,8 +33,8 @@ interface MarketingStore {
   /** The business's own audiences; the built-in ones are always there. */
   audiences?: Audience[]
   forms?: SignupForms
-  rewards?: Rewards
   settings?: MarketingSettings
+  emailTemplates?: SavedEmailTemplate[]
 }
 
 export interface Signup {
@@ -167,10 +168,6 @@ export function useMarketing(tenant: MarketingTenant, nowIso: string) {
     const saved = store.forms
     return saved ? { popup: { ...base.popup, ...saved.popup }, footer: { ...base.footer, ...saved.footer }, checkout: { ...base.checkout, ...saved.checkout } } : base
   }, [store.forms, slug])
-  const rewards = React.useMemo(() => {
-    const saved = store.rewards
-    return saved ? { referral: { ...DEFAULT_REWARDS.referral, ...saved.referral }, loyalty: { ...DEFAULT_REWARDS.loyalty, ...saved.loyalty } } : DEFAULT_REWARDS
-  }, [store.rewards])
   const settings = React.useMemo(() => ({ ...defaultSettings(tenant.name, tenant.email), ...store.settings }), [store.settings, tenant.name, tenant.email])
   const signups = React.useMemo(() => parse<Signup[]>(signupsRaw, []), [signupsRaw])
 
@@ -180,7 +177,8 @@ export function useMarketing(tenant: MarketingTenant, nowIso: string) {
         if (patch) window.localStorage.setItem(keyFor(slug), JSON.stringify({ ...parse<MarketingStore>(read(keyFor(slug)), {}), ...patch }))
         else window.localStorage.removeItem(keyFor(slug))
       } catch {
-        /* storage blocked */
+        // Usually a full browser store: big uploaded photos. Say so rather than lose the change quietly.
+        toast.error('Could not save', { description: 'The browser storage is full. Use smaller photos or image links.' })
       }
       window.dispatchEvent(new Event(MARKETING_EVENT))
     },
@@ -192,9 +190,14 @@ export function useMarketing(tenant: MarketingTenant, nowIso: string) {
     audiences,
     customAudiences: store.audiences ?? [],
     forms,
-    rewards,
     settings,
     signups,
+    emailTemplates: store.emailTemplates ?? [],
+    saveEmailTemplate: (template: SavedEmailTemplate) => {
+      const own = store.emailTemplates ?? []
+      write({ emailTemplates: own.some((entry) => entry.id === template.id) ? own.map((entry) => (entry.id === template.id ? template : entry)) : [template, ...own] })
+    },
+    removeEmailTemplate: (id: string) => write({ emailTemplates: (store.emailTemplates ?? []).filter((entry) => entry.id !== id) }),
     saveCampaign: (campaign: Campaign) =>
       write({ campaigns: campaigns.some((entry) => entry.id === campaign.id) ? campaigns.map((entry) => (entry.id === campaign.id ? campaign : entry)) : [campaign, ...campaigns] }),
     removeCampaign: (id: string) => write({ campaigns: campaigns.filter((entry) => entry.id !== id) }),
@@ -204,7 +207,6 @@ export function useMarketing(tenant: MarketingTenant, nowIso: string) {
     },
     removeAudience: (id: string) => write({ audiences: (store.audiences ?? []).filter((entry) => entry.id !== id) }),
     setForms: (next: SignupForms) => write({ forms: next }),
-    setRewards: (next: Rewards) => write({ rewards: next }),
     setSettings: (next: MarketingSettings) => write({ settings: next }),
     reset: () => write(null),
     hasEdits: raw !== '',
