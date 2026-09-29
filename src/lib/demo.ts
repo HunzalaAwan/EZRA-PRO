@@ -258,7 +258,7 @@ function pickCountry(rng: () => number, entries: [string, string, number][]): [s
 }
 
 /** ISO country code -> display name, populated as customers are generated. */
-const COUNTRY_NAME_BY_CODE = new Map<string, string>()
+export const COUNTRY_NAME_BY_CODE = new Map<string, string>()
 
 /**
  * Guests are created on demand as bookings are generated, with preferential

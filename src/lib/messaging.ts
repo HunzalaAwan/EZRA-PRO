@@ -1,4 +1,5 @@
 import type { Activity, Booking, Customer, Departure } from '@/types'
+import { NO_OFFER, type MarketingOffer } from '@/lib/marketing'
 
 /* ==========================================================================
    Messaging — the emails and texts a booking sends on its own: when each
@@ -18,6 +19,15 @@ export type TemplateKey =
   | 'review_request'
   | 'upsell'
   | 'cart_recovery'
+  | 'welcome'
+  | 'browse_abandon'
+  | 'next_trip'
+  | 'win_back'
+  | 'anniversary'
+  | 'referral_ask'
+  | 'gift_expiry'
+  | 'birthday'
+  | 'waitlist'
 
 export interface MessageTemplate {
   key: TemplateKey
@@ -27,10 +37,52 @@ export interface MessageTemplate {
   channel: MessageChannel
   subject: string
   body: string
-  /** When it goes: at booking, N hours before the start, N hours after the end, or when staff trigger it. */
-  timing: { when: 'on_booking' | 'before' | 'after' | 'manual'; hours: number }
+  /** When it goes. Hours count from the moment named by `when`. */
+  timing: { when: TriggerWhen; hours: number }
   enabled: boolean
+  /** Booking messages go with every booking; growth messages are marketing and follow the marketing rules. */
+  group?: 'booking' | 'growth'
+  /** Only for guests in this audience (growth). */
+  audienceId?: string
+  /** Only for these activities. Empty: all. */
+  activitySlugs?: string[]
+  /** A code carried by the message. */
+  offer?: MarketingOffer
+  /** A second subject line for half the guests. */
+  abTest?: { enabled: boolean; subjectB: string }
+  /** Growth: stop once the guest books again. */
+  stopIfBooked?: boolean
 }
+
+export type TriggerWhen =
+  | 'on_booking'
+  | 'before'
+  | 'after'
+  | 'manual'
+  | 'signup'
+  | 'browse'
+  | 'since_last'
+  | 'anniversary'
+  | 'review'
+  | 'gift_expiry'
+  | 'birthday'
+  | 'waitlist'
+
+/** The moments a message can be tied to, for the editor. */
+export const TRIGGER_OPTIONS: { value: TriggerWhen; label: string; hours: 'before' | 'after' | 'none'; unit: 'hours' | 'days' }[] = [
+  { value: 'on_booking', label: 'When they book', hours: 'none', unit: 'hours' },
+  { value: 'before', label: 'Before the trip', hours: 'before', unit: 'hours' },
+  { value: 'after', label: 'After the trip', hours: 'after', unit: 'hours' },
+  { value: 'signup', label: 'After they join the list', hours: 'after', unit: 'hours' },
+  { value: 'browse', label: 'After viewing without booking', hours: 'after', unit: 'hours' },
+  { value: 'since_last', label: 'Days since their last trip', hours: 'after', unit: 'days' },
+  { value: 'anniversary', label: 'On the trip’s anniversary', hours: 'none', unit: 'days' },
+  { value: 'review', label: 'After a 4 or 5 star review', hours: 'after', unit: 'hours' },
+  { value: 'gift_expiry', label: 'Before a gift card runs out', hours: 'before', unit: 'days' },
+  { value: 'birthday', label: 'Before their birthday', hours: 'before', unit: 'days' },
+  { value: 'waitlist', label: 'When a waitlisted seat opens', hours: 'none', unit: 'hours' },
+  { value: 'manual', label: 'Only when staff send it', hours: 'none', unit: 'hours' },
+]
 
 export const PLACEHOLDERS: { token: string; label: string }[] = [
   { token: '{first_name}', label: 'First name' },
@@ -43,6 +95,9 @@ export const PLACEHOLDERS: { token: string; label: string }[] = [
   { token: '{balance}', label: 'Balance' },
   { token: '{manage_link}', label: 'Manage link' },
   { token: '{business}', label: 'Business' },
+  { token: '{offer_code}', label: 'Offer code' },
+  { token: '{offer_percent}', label: 'Offer %' },
+  { token: '{book_link}', label: 'Booking link' },
 ]
 
 export const DEFAULT_TEMPLATES: MessageTemplate[] = [
@@ -126,7 +181,129 @@ export const DEFAULT_TEMPLATES: MessageTemplate[] = [
     timing: { when: 'after', hours: 1 },
     enabled: true,
   },
+  /* ---------- growth: marketing that brings guests back ---------- */
+  {
+    key: 'welcome',
+    group: 'growth',
+    name: 'Welcome and first-trip code',
+    purpose: 'Thanks new subscribers and sends the sign-up code.',
+    channel: 'email',
+    subject: 'Welcome to {business}: here is {offer_percent} off',
+    body: 'Hi {first_name}, thanks for joining us. Here is {offer_percent} off your first trip with code {offer_code}. Pick a date: {book_link}\n\nSee you on the water,\n{business}',
+    timing: { when: 'signup', hours: 0 },
+    enabled: true,
+    audienceId: 'aud_all',
+    offer: { enabled: true, percent: 10, validDays: 30, code: 'WELCOME10' },
+    stopIfBooked: true,
+  },
+  {
+    key: 'browse_abandon',
+    group: 'growth',
+    name: 'Viewed but did not book',
+    purpose: 'A nudge to subscribers who looked at a trip and left.',
+    channel: 'email',
+    subject: 'Still thinking about {activity}?',
+    body: 'Hi {first_name}, {activity} still has seats this week. Questions? Just reply. Book in a minute: {book_link}',
+    timing: { when: 'browse', hours: 3 },
+    enabled: false,
+    audienceId: 'aud_all',
+    stopIfBooked: true,
+  },
+  {
+    key: 'next_trip',
+    group: 'growth',
+    name: 'Next-trip offer',
+    purpose: 'Two weeks after a trip, a code for the next one.',
+    channel: 'email',
+    subject: '{first_name}, your next trip is {offer_percent} off',
+    body: 'Hi {first_name}, thanks again for coming out. Ready for the next one? Use {offer_code} for {offer_percent} off any trip in the next month: {book_link}',
+    timing: { when: 'after', hours: 336 },
+    enabled: true,
+    audienceId: 'aud_all',
+    offer: { enabled: true, percent: 15, validDays: 30, code: 'NEXTTRIP15' },
+    stopIfBooked: true,
+  },
+  {
+    key: 'win_back',
+    group: 'growth',
+    name: 'We miss you',
+    purpose: 'Guests who have not been back in four months.',
+    channel: 'email',
+    subject: 'It has been a while, {first_name}',
+    body: 'Hi {first_name}, it has been a while since your last trip with us. Here is {offer_percent} off to come back: {offer_code}. New this season: {book_link}',
+    timing: { when: 'since_last', hours: 120 * 24 },
+    enabled: true,
+    audienceId: 'aud_lapsed',
+    offer: { enabled: true, percent: 20, validDays: 21, code: 'COMEBACK20' },
+    stopIfBooked: true,
+  },
+  {
+    key: 'anniversary',
+    group: 'growth',
+    name: 'A year since your trip',
+    purpose: 'On the anniversary of their trip, a memory and an invite back.',
+    channel: 'email',
+    subject: 'One year ago today: {activity}',
+    body: 'Hi {first_name}, a year ago today you were out with us on {activity}. Fancy doing it again, or trying something new? {book_link}',
+    timing: { when: 'anniversary', hours: 0 },
+    enabled: false,
+    audienceId: 'aud_all',
+  },
+  {
+    key: 'referral_ask',
+    group: 'growth',
+    name: 'Refer a friend',
+    purpose: 'After a great review, the guest’s own referral link.',
+    channel: 'email',
+    subject: 'Share {business} and get a trip credit',
+    body: 'Hi {first_name}, thank you for the lovely review. Know someone who would love it too? Your friends get {offer_percent} off and you get credit on your next trip: {book_link}',
+    timing: { when: 'review', hours: 24 },
+    enabled: true,
+    audienceId: 'aud_all',
+  },
+  {
+    key: 'gift_expiry',
+    group: 'growth',
+    name: 'Gift card running out',
+    purpose: 'Reminds the holder before a gift card expires.',
+    channel: 'email',
+    subject: 'Your {business} gift card runs out soon',
+    body: 'Hi {first_name}, your gift card still has credit on it and runs out soon. Book a trip and use it at checkout: {book_link}',
+    timing: { when: 'gift_expiry', hours: 30 * 24 },
+    enabled: true,
+  },
+  {
+    key: 'birthday',
+    group: 'growth',
+    name: 'Birthday treat',
+    purpose: 'For guests who gave a date of birth, a week before the day.',
+    channel: 'email',
+    subject: 'Happy birthday from {business}',
+    body: 'Hi {first_name}, happy early birthday! Celebrate with us: {offer_percent} off any trip this month with {offer_code}. {book_link}',
+    timing: { when: 'birthday', hours: 7 * 24 },
+    enabled: false,
+    audienceId: 'aud_all',
+    offer: { enabled: true, percent: 15, validDays: 30, code: 'BIRTHDAY15' },
+  },
+  {
+    key: 'waitlist',
+    group: 'growth',
+    name: 'A seat opened up',
+    purpose: 'Tells guests on the waitlist the moment a seat frees up.',
+    channel: 'sms',
+    subject: 'A seat opened on {activity}',
+    body: 'Hi {first_name}, a seat just opened on {activity} on {date} at {time}. First to book gets it: {book_link}',
+    timing: { when: 'waitlist', hours: 0 },
+    enabled: true,
+  },
 ]
+
+/** The offer on a template, or none. */
+export function offerOf(template: Pick<MessageTemplate, 'offer'>): MarketingOffer {
+  return template.offer ?? NO_OFFER
+}
+
+export const groupOf = (template: Pick<MessageTemplate, 'group'>) => template.group ?? 'booking'
 
 export interface MessageContext {
   first_name: string
@@ -139,6 +316,9 @@ export interface MessageContext {
   balance: string
   manage_link: string
   business: string
+  offer_code?: string
+  offer_percent?: string
+  book_link?: string
 }
 
 export function renderTemplate(text: string, context: Partial<MessageContext>): string {
@@ -146,10 +326,34 @@ export function renderTemplate(text: string, context: Partial<MessageContext>): 
 }
 
 export function timingLabel(timing: MessageTemplate['timing']): string {
-  if (timing.when === 'on_booking') return 'At booking'
-  if (timing.when === 'manual') return 'Sent by staff'
   const span = timing.hours >= 48 && timing.hours % 24 === 0 ? `${timing.hours / 24} days` : `${timing.hours} ${timing.hours === 1 ? 'hour' : 'hours'}`
-  return timing.when === 'before' ? `${span} before the start` : `${span} after the end`
+  const soon = timing.hours === 0 ? 'Straight away' : span
+  switch (timing.when) {
+    case 'on_booking':
+      return 'At booking'
+    case 'manual':
+      return 'Sent by staff'
+    case 'before':
+      return `${span} before the start`
+    case 'after':
+      return `${span} after the end`
+    case 'signup':
+      return timing.hours === 0 ? 'When they join the list' : `${span} after they join`
+    case 'browse':
+      return `${soon} after viewing a trip`
+    case 'since_last':
+      return `${span} after their last trip`
+    case 'anniversary':
+      return 'On the trip’s anniversary'
+    case 'review':
+      return `${soon} after a 4–5 star review`
+    case 'gift_expiry':
+      return `${span} before a gift card runs out`
+    case 'birthday':
+      return `${span} before their birthday`
+    case 'waitlist':
+      return 'When a seat opens'
+  }
 }
 
 export const CHANNEL_LABEL: Record<MessageChannel, string> = { email: 'Email', sms: 'Text', both: 'Email and text' }
@@ -221,7 +425,11 @@ export function buildMessageLog({
   const out: LoggedMessage[] = []
   let seq = 0
   for (const template of templates) {
-    if (!template.enabled || template.timing.when === 'manual' || template.key === 'cart_recovery') continue
+    if (!template.enabled || template.key === 'cart_recovery') continue
+    // Only the messages tied to this booking's own dates show on its record.
+    if (template.timing.when !== 'on_booking' && template.timing.when !== 'before' && template.timing.when !== 'after') continue
+    if (template.activitySlugs && template.activitySlugs.length > 0 && !template.activitySlugs.includes(activity.slug)) continue
+    if (groupOf(template) === 'growth' && !customer.marketingOptIn) continue
     if (template.key === 'balance_due' && balance <= 0) continue
     if (template.key === 'review_request' && (cancelled || booking.status === 'no_show')) continue
     const at =
@@ -242,7 +450,12 @@ export function buildMessageLog({
         channel,
         sentAt: stamp(at),
         status: at > now ? 'scheduled' : channel === 'sms' ? 'delivered' : opened === 0 ? 'clicked' : opened < 3 ? 'opened' : 'delivered',
-        preview: renderTemplate(channel === 'email' ? template.subject : template.body, context).slice(0, 140),
+        preview: renderTemplate(channel === 'email' ? template.subject : template.body, {
+          ...context,
+          offer_code: offerOf(template).code,
+          offer_percent: `${offerOf(template).percent}%`,
+          book_link: `/book/${tenantSlug}`,
+        }).slice(0, 140),
       })
       seq += 1
     }

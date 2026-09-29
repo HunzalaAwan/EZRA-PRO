@@ -197,6 +197,7 @@ export const DASHBOARD_NAV: DashboardNavSection[] = [
     items: [
       { label: 'Analytics', href: '/dashboard/analytics', icon: 'ChartSpline' },
       { label: 'Customers', href: '/dashboard/customers', icon: 'Users' },
+      { label: 'Marketing', href: '/dashboard/marketing', icon: 'Megaphone' },
       { label: 'Abandoned carts', href: '/dashboard/abandoned', icon: 'ShoppingCart', countKey: 'abandonedCarts' },
       { label: 'Payments', href: '/dashboard/payments', icon: 'CreditCard' },
       { label: 'Reviews', href: '/dashboard/reviews', icon: 'Star' },

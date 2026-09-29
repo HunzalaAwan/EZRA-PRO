@@ -76,6 +76,7 @@ const GROW = (guestsLabel: string): DashboardNavSection => ({
   items: [
     { label: 'Analytics', href: '/dashboard/analytics', icon: 'ChartSpline' },
     { label: guestsLabel, href: '/dashboard/customers', icon: 'Users' },
+    { label: 'Marketing', href: '/dashboard/marketing', icon: 'Megaphone' },
     { label: 'Abandoned carts', href: '/dashboard/abandoned', icon: 'ShoppingCart', countKey: 'abandonedCarts' },
     { label: 'Payments', href: '/dashboard/payments', icon: 'CreditCard' },
     { label: 'Reviews', href: '/dashboard/reviews', icon: 'Star' },

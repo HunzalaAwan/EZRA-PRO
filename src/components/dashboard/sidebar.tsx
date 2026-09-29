@@ -45,6 +45,7 @@ import {
   Sunrise,
   MessageCircle,
   Banknote,
+  Megaphone,
 } from 'lucide-react'
 
 import type { DashboardNavItem } from '@/lib/site-config'
@@ -88,6 +89,7 @@ type IconComponent = React.ComponentType<{ className?: string; 'aria-hidden'?: b
  */
 const REGISTRY: Record<string, IconComponent> = {
   Banknote,
+  Megaphone,
   MessageCircle,
   ScanLine,
   CloudSun,

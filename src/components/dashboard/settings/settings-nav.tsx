@@ -63,7 +63,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     icon: FileSignature,
   },
   {
-    href: '/dashboard/settings/messages',
+    href: '/dashboard/marketing/automations',
     label: 'Messages',
     description: 'Emails and texts each booking sends',
     icon: MessagesSquare,
