@@ -434,8 +434,19 @@ export interface RentalItem {
   deposit: number
   /** Not rentable right now: in repair, being cleaned, lost. */
   outOfService?: number
+  /** The most one of it costs for a whole rental, however long, minor units. Hourly and daily prices stop here. */
+  cap?: number
   /** Why some are out of service. */
   serviceNote?: string
+}
+
+/** A length sold at one price. */
+export interface RentalLength {
+  id: string
+  /** What guests see: "Up to 4 hours", "Half day". */
+  label: string
+  /** How long it can be out. */
+  hours: number
 }
 
 export interface RentalConfig {
@@ -452,12 +463,17 @@ export interface RentalConfig {
    * How it is sold: by the hour, by the day, or both. When set, each price
    * tier is something to rent (a model or type) with its own rates.
    */
-  modes?: ('hour' | 'day')[]
+  modes?: ('hour' | 'day' | 'length')[]
+  /**
+   * Set lengths sold at a set price, whatever the hours inside them:
+   * "Up to 4 hours", "Up to 8 hours", "Full day". Used with the length mode.
+   */
+  lengths?: RentalLength[]
   /** Hourly rentals: the fewest and most hours one booking can run. */
   minHours?: number
   maxHours?: number
   /** What each tier costs per hour and per day, minor units. */
-  rates?: { tierId: string; hour?: number; day?: number }[]
+  rates?: { tierId: string; hour?: number; day?: number; /** Price per length id. */ lengths?: Record<string, number> }[]
   /**
    * How it is charged. length: each price tier is a length (1 hour, half day).
    * day: guests pick a pick-up day and how many days; each tier is a model priced per day.
@@ -567,6 +583,13 @@ export interface Activity {
   languages?: string[]
   /** Guests can ask for a custom quote from the activity page and at checkout. */
   customRequests?: boolean
+  /**
+   * The most one booking pays for its tickets or items, minor units: a family
+   * of six never pays more than the cap. Add-ons are charged on top.
+   */
+  priceCap?: number
+  /** Bookings close this many hours before the start. 0 or absent: book until it starts. */
+  noticeHours?: number
   /** Checkout offers a tip for the crew: 5–25% or an amount of the guest's own. */
   tips?: boolean
   /** The storefront category; guessed from the activity when absent. */

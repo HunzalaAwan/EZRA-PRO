@@ -45,8 +45,12 @@ export function buildDays(activity: Activity, STRIP_DAYS = 21): AvailabilityDay[
   const byDay = new Map<string, AvailabilitySlot[]>()
   const holds = hasItems(activity) ? rentalHolds(activity, STRIP_DAYS + 14) : null
 
+  // Online booking closes this long before the start.
+  const notice = activity.noticeHours ?? activity.charter?.noticeHours ?? 0
+  const closesBefore = NOW.getTime() + notice * 3_600_000
   for (const event of getStorefrontAvailability(activity.id, STRIP_DAYS + 14)) {
     const { departure } = event
+    if (notice > 0 && new Date(departure.startsAt).getTime() < closesBefore) continue
     const key = departure.startsAt.slice(0, 10)
     const multiplier = departure.priceMultiplier ?? 1
     // Rentals with items: each item has its own count; the slot total is what is left across them.

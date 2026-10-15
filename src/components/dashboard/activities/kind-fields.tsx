@@ -67,11 +67,13 @@ export interface DraftKindSettings {
     returnTime: string
     seatsPerUnit: number
     /** By the hour, by the day, or both. */
-    modes: ('hour' | 'day')[]
+    modes: ('hour' | 'day' | 'length')[]
+    /** By length: the lengths sold, each at its own price per item. */
+    lengths: { id: string; label: string; hours: number }[]
     minHours: number
     maxHours: number
-    /** Per tier: price per hour and per day, minor units. */
-    rates: Record<string, { hour: number; day: number }>
+    /** Per tier: price per hour and per day, and per set length, minor units. */
+    rates: Record<string, { hour: number; day: number; lengths?: Record<string, number> }>
     /** Per tier: its own stock, how many people one fits, its deposit. */
     items: Record<string, DraftRentalItem>
     /** Charged per hour late, minor units. */
@@ -113,6 +115,7 @@ export function defaultKindSettings(): DraftKindSettings {
       minHours: 1,
       maxHours: 4,
       rates: {},
+      lengths: [],
       items: {},
       lateFee: 0,
       licence: 'none',
@@ -131,13 +134,15 @@ export interface DraftRentalItem {
   holds: number
   /** Minor units. */
   deposit: number
+  /** The most one item costs per rental, minor units. 0: no cap. */
+  cap: number
   outOfService: number
   serviceNote: string
 }
 
 /** One item's numbers, with sensible defaults for a new one. */
 export function draftItemOf(rental: DraftKindSettings['rental'], tierId: string): DraftRentalItem {
-  return rental.items?.[tierId] ?? { stock: 1, holds: Math.max(1, rental.seatsPerUnit || 1), deposit: rental.damageDeposit || 0, outOfService: 0, serviceNote: '' }
+  return rental.items?.[tierId] ?? { stock: 1, holds: Math.max(1, rental.seatsPerUnit || 1), deposit: rental.damageDeposit || 0, cap: 0, outOfService: 0, serviceNote: '' }
 }
 
 /** Drafts saved before a field existed pick up its default. */
@@ -500,13 +505,23 @@ export function KindFields({
     const hourly = rental.modes.includes('hour')
     const daily = rental.modes.includes('day')
     const byDay = daily && !hourly
-    const toggleMode = (mode: 'hour' | 'day') => {
+    const byLength = rental.modes.includes('length')
+    const toggleMode = (mode: 'hour' | 'day' | 'length') => {
       const on = rental.modes.includes(mode)
       // One way of charging has to stay on.
       if (on && rental.modes.length === 1) return
-      const modes = on ? rental.modes.filter((entry) => entry !== mode) : (['hour', 'day'] as const).filter((entry) => entry === mode || rental.modes.includes(entry))
-      set('rental', { modes: [...modes], billing: modes.length === 1 && modes[0] === 'day' ? 'day' : 'length' })
+      const modes = on ? rental.modes.filter((entry) => entry !== mode) : (['hour', 'day', 'length'] as const).filter((entry) => entry === mode || rental.modes.includes(entry))
+      set('rental', {
+        modes: [...modes],
+        billing: modes.length === 1 && modes[0] === 'day' ? 'day' : 'length',
+        // Two common lengths to start from; each can be renamed or removed.
+        ...(mode === 'length' && !on && rental.lengths.length === 0
+          ? { lengths: [{ id: 'len_4', label: 'Up to 4 hours', hours: 4 }, { id: 'len_8', label: 'Up to 8 hours', hours: 8 }] }
+          : {}),
+      })
     }
+    const setLength = (id: string, patch: Partial<{ label: string; hours: number }>) =>
+      set('rental', { lengths: rental.lengths.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)) })
     const pickCategory = (category: RentalCategory) => {
       const next = rentalCategoryMeta(category)
       set('rental', {
@@ -550,11 +565,12 @@ export function KindFields({
           </div>
         </Section>
 
-        <Section title="How it is charged" hint="Pick one or both. Guests then choose when they book. Prices per hour and per day are set per item in the Pricing step.">
-          <div role="group" aria-label="How it is charged" className="grid gap-2 sm:grid-cols-2">
+        <Section title="How it is charged" hint="Pick one or more. Guests choose when they book. The prices for each are set per item in the Pricing step.">
+          <div role="group" aria-label="How it is charged" className="grid gap-2 sm:grid-cols-3">
             {([
-              ['hour', 'By the hour', 'Guests pick a start time and how many hours.'],
-              ['day', 'By the day', 'Guests pick up after your opening time and return before closing, for one day or more.'],
+              ['hour', 'By the hour', 'A price per hour. Guests pick a start time and how many hours.'],
+              ['length', 'By length', 'One price for a set length, however much of it is used: up to 4 hours, a full day.'],
+              ['day', 'By the day', 'A price per day. Picked up after opening, back before closing, one day or more.'],
             ] as const).map(([mode, label, hint]) => {
               const on = rental.modes.includes(mode)
               return (
@@ -602,6 +618,41 @@ export function KindFields({
               </>
             ) : null}
           </div>
+          {byLength ? (
+            <div className="flex flex-col gap-2 rounded-xl border border-line p-3">
+              <p className="text-[0.8125rem] font-medium">Lengths you sell</p>
+              <p className="-mt-1.5 text-xs text-subtle">Each is one price, whether guests use all of it or not. Name them the way guests think: “Up to 4 hours”, “Half day”, “Full day”.</p>
+              <ul className="flex list-none flex-col gap-2 p-0">
+                {rental.lengths.map((length) => (
+                  <li key={length.id} className="grid grid-cols-[minmax(0,1fr)_8rem_2rem] items-center gap-2">
+                    <Input size="sm" aria-label="Length name" value={length.label} placeholder="Up to 4 hours" onChange={(e) => setLength(length.id, { label: e.target.value })} />
+                    <Input size="sm" aria-label="Hours it can be out" type="number" min={1} max={24} suffix="hours" value={length.hours || ''} onChange={(e) => setLength(length.id, { hours: num(e.target.value, 1) })} />
+                    <button
+                      type="button"
+                      aria-label={`Remove ${length.label || 'length'}`}
+                      disabled={rental.lengths.length === 1}
+                      onClick={() => set('rental', { lengths: rental.lengths.filter((entry) => entry.id !== length.id) })}
+                      className="grid size-8 place-items-center rounded-lg text-faint hover:bg-surface-sunken hover:text-danger disabled:opacity-30"
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <Button
+                type="button"
+                variant="secondary"
+                size="xs"
+                className="self-start"
+                onClick={() => {
+                  const hours = Math.min(24, (rental.lengths.at(-1)?.hours ?? 0) + 2)
+                  set('rental', { lengths: [...rental.lengths, { id: `len_${Date.now().toString(36)}`, label: `Up to ${hours} hours`, hours }] })
+                }}
+              >
+                + Add a length
+              </Button>
+            </div>
+          ) : null}
           <p className="text-xs text-subtle">
             {daily ? 'Pick-up and return times are your opening hours, set once in the Schedule step.' : 'Start times follow your opening hours in the Schedule step.'}
           </p>
@@ -922,7 +973,8 @@ export function RentalRatesEditor({
   const hourly = rental.modes.includes('hour')
   const daily = rental.modes.includes('day')
   const rateOf = (tier: DraftTier) => rental.rates[tier.id] ?? { hour: tier.price, day: Math.round((tier.price * 4) / 500) * 500 }
-  const setRate = (tier: DraftTier, patch: Partial<{ hour: number; day: number }>) =>
+  const byLength = rental.modes.includes('length')
+  const setRate = (tier: DraftTier, patch: Partial<{ hour: number; day: number; lengths: Record<string, number> }>) =>
     onSettings({ ...settings, rental: { ...rental, rates: { ...rental.rates, [tier.id]: { ...rateOf(tier), ...patch } } } })
   const setItem = (tierId: string, patch: Partial<DraftRentalItem>) =>
     onSettings({ ...settings, rental: { ...rental, items: { ...rental.items, [tierId]: { ...draftItemOf(rental, tierId), ...patch } } } })
@@ -983,6 +1035,27 @@ export function RentalRatesEditor({
                     {(control) => <Input {...control} type="number" min={0} leftIcon={<span className="text-sm font-medium">{currencySymbol}</span>} value={rate.day / 100 || ''} onChange={(e) => setRate(tier, { day: money(e.target.value) })} />}
                   </Field>
                 ) : null}
+                {byLength
+                  ? rental.lengths.map((length) => (
+                      <Field key={length.id} label={length.label || `${length.hours} hours`} labelSize="sm" error={errors[`rate.${tier.id}.len.${length.id}`]}>
+                        {(control) => (
+                          <Input
+                            {...control}
+                            type="number"
+                            min={0}
+                            leftIcon={<span className="text-sm font-medium">{currencySymbol}</span>}
+                            value={(rate.lengths?.[length.id] ?? 0) / 100 || ''}
+                            onChange={(e) => setRate(tier, { lengths: { ...rate.lengths, [length.id]: money(e.target.value) } })}
+                          />
+                        )}
+                      </Field>
+                    ))
+                  : null}
+                {hourly || daily ? (
+                  <Field label="Price cap" labelSize="sm" optional>
+                    {(control) => <Input {...control} type="number" min={0} placeholder="None" leftIcon={<span className="text-sm font-medium">{currencySymbol}</span>} value={item.cap ? item.cap / 100 : ''} onChange={(e) => setItem(tier.id, { cap: money(e.target.value) })} />}
+                  </Field>
+                ) : null}
                 <Field label="Deposit" labelSize="sm" optional>
                   {(control) => <Input {...control} type="number" min={0} placeholder="None" leftIcon={<span className="text-sm font-medium">{currencySymbol}</span>} value={item.deposit ? item.deposit / 100 : ''} onChange={(e) => setItem(tier.id, { deposit: money(e.target.value) })} />}
                 </Field>
@@ -1010,7 +1083,8 @@ export function RentalRatesEditor({
         + Add another item
       </Button>
       <p className="text-xs text-subtle">
-        {stock} {stock === 1 ? 'item' : 'items'} in all, for up to {people} {people === 1 ? 'person' : 'people'} at once. Guests choose any mix on one booking page, and each item is counted on its own:
+        {stock} {stock === 1 ? 'item' : 'items'} in all, for up to {people} {people === 1 ? 'person' : 'people'} at once.{' '}
+        {hourly || daily ? 'A price cap is the most one item costs for a whole rental: $100 an hour with a $550 cap never charges more than $550. ' : ''} Guests choose any mix on one booking page, and each item is counted on its own:
         when one runs out, the others can still be booked. Deposits are held at pick-up and returned when everything comes back.
       </p>
     </div>

@@ -165,6 +165,7 @@ export const isDayRental = (activity: Pick<Activity, 'kind' | 'rental'>) =>
 /** "2 jet skis", "6 guests", "1 vehicle": what a booking of this kind is counted in. */
 export function partyLabel(activity: Pick<Activity, 'kind' | 'rental'>, count: number): string {
   if ((activity.kind ?? 'trip') === 'rental') {
+    if ((activity.rental?.items?.length ?? 0) > 0) return `${count} ${count === 1 ? 'item' : 'items'}`
     const meta = rentalCategoryMeta(activity.rental?.category)
     return `${count} ${count === 1 ? meta.unit : meta.units}`
   }
@@ -406,7 +407,7 @@ export function crewName(charter: Pick<CharterConfig, 'vessel' | 'crewLabel'> | 
   return CHARTER_VESSELS.find((entry) => entry.value === charter?.vessel)?.crew ?? 'Crew'
 }
 
-export type RentalMode = 'hour' | 'day'
+export type RentalMode = 'hour' | 'day' | 'length'
 
 /** How a rental is sold. Empty for an older rental whose tiers are fixed lengths. */
 export function rentalModes(activity: Pick<Activity, 'kind' | 'rental'>): RentalMode[] {
@@ -416,8 +417,13 @@ export function rentalModes(activity: Pick<Activity, 'kind' | 'rental'>): Rental
 }
 
 /** A tier's price per hour or per day; the tier price for an older day rental. */
-export function rateFor(activity: Pick<Activity, 'rental' | 'priceTiers'>, tierId: string, mode: RentalMode): number | undefined {
+export function rateFor(activity: Pick<Activity, 'rental' | 'priceTiers'>, tierId: string, mode: RentalMode, lengthId?: string): number | undefined {
   const rate = activity.rental?.rates?.find((entry) => entry.tierId === tierId)
+  if (mode === 'length') {
+    // Without a length picked yet, the shortest one is the "from" price.
+    const id = lengthId ?? activity.rental?.lengths?.[0]?.id
+    return id ? rate?.lengths?.[id] : undefined
+  }
   if (rate) return mode === 'hour' ? rate.hour : rate.day
   if (mode === 'day' && activity.rental?.billing === 'day') return activity.priceTiers.find((tier) => tier.id === tierId)?.price
   return undefined

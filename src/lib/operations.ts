@@ -211,7 +211,11 @@ export function getRentalBoard(tenantId: string, day: Date = NOW): RentalBoard {
         startsAt: isoLocal(start),
         endsAt: isoLocal(end),
         minutes: Math.round((end.getTime() - start.getTime()) / 60_000),
-        lengthLabel: byDay ? `${days} ${days === 1 ? 'day' : 'days'}` : rated ? `${hoursTaken} ${hoursTaken === 1 ? 'hour' : 'hours'}` : (tier?.label ?? `${pick.minutes} min`),
+        lengthLabel: byDay
+          ? `${days} ${days === 1 ? 'day' : 'days'}`
+          : (config?.modes ?? []).includes('length') && config?.lengths?.length
+            ? (config.lengths.find((entry) => entry.hours === span.hours)?.label ?? `${span.hours} hours`)
+            : rated ? `${hoursTaken} ${hoursTaken === 1 ? 'hour' : 'hours'}` : (tier?.label ?? `${pick.minutes} min`),
         itemLabel: taken ? itemsSentence(fleetItems.map((item) => ({ name: item.name, qty: taken[item.tierId] ?? 0 }))) : (tier?.label ?? activity.name),
         lines: taken ? fleetItems.filter((item) => (taken[item.tierId] ?? 0) > 0).map((item) => ({ tierId: item.tierId, name: item.name, qty: taken[item.tierId] })) : [],
         days,

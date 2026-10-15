@@ -203,6 +203,10 @@ export interface ActivityDraft {
   customRequests: boolean
   /** Checkout offers a tip. */
   tips: boolean
+  /** The most one booking pays for its tickets or items, minor units. 0: no cap. */
+  priceCap: number
+  /** Bookings close this many hours before the start. 0: none. */
+  noticeHours: number
   /** The storefront category. */
   theme: ActivityTheme
   /** A category the business made itself; wins over the theme when set. */
@@ -260,6 +264,8 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
     route: emptyRoute(),
     customRequests: false,
     tips: false,
+    priceCap: 0,
+    noticeHours: 0,
     theme: defaultTheme(category),
     customCategory: null,
     accessibility: [],
@@ -280,7 +286,8 @@ function kindOverride(draft: ActivityDraft) {
     const meta = rentalCategoryMeta(r.category)
     const hourly = r.modes.includes('hour')
     const daily = r.modes.includes('day')
-    const rate = (tierId: string) => r.rates[tierId] ?? { hour: 0, day: 0 }
+    const byLength = r.modes.includes('length')
+    const rate = (tierId: string) => r.rates[tierId] ?? { hour: 0, day: 0, lengths: {} }
     const items = draft.tiers.map((tier) => {
       const item = draftItemOf(r, tier.id)
       return {
@@ -288,6 +295,7 @@ function kindOverride(draft: ActivityDraft) {
         stock: Math.max(1, item.stock),
         holds: Math.max(1, item.holds),
         deposit: item.deposit,
+        ...(item.cap > 0 && (hourly || daily) ? { cap: item.cap } : {}),
         ...(item.outOfService > 0 ? { outOfService: Math.min(item.outOfService, item.stock), serviceNote: item.serviceNote } : {}),
       }
     })
@@ -303,8 +311,14 @@ function kindOverride(draft: ActivityDraft) {
         bufferMinutes: r.bufferMinutes,
         damageDeposit: Math.max(0, ...items.map((item) => item.deposit)),
         ...(r.lateFee > 0 ? { lateFee: r.lateFee } : {}),
-        durations: draft.tiers.map((tier) => ({ tierId: tier.id, minutes: hourly ? r.minHours * 60 : 1440 })),
-        rates: draft.tiers.map((tier) => ({ tierId: tier.id, ...(hourly ? { hour: rate(tier.id).hour } : {}), ...(daily ? { day: rate(tier.id).day } : {}) })),
+        durations: draft.tiers.map((tier) => ({ tierId: tier.id, minutes: hourly ? r.minHours * 60 : byLength && r.lengths.length > 0 ? Math.min(...r.lengths.map((length) => length.hours)) * 60 : 1440 })),
+        rates: draft.tiers.map((tier) => ({
+          tierId: tier.id,
+          ...(hourly ? { hour: rate(tier.id).hour } : {}),
+          ...(daily ? { day: rate(tier.id).day } : {}),
+          ...(byLength ? { lengths: Object.fromEntries(r.lengths.map((length) => [length.id, rate(tier.id).lengths?.[length.id] ?? 0])) } : {}),
+        })),
+        ...(byLength ? { lengths: r.lengths.map((length) => ({ ...length, label: length.label.trim() || `Up to ${length.hours} hours` })) } : {}),
         seatsPerUnit: Math.max(1, ...items.map((item) => item.holds)),
         licence: r.licence,
         ...(meta.fuel ? { fuel: r.fuel } : {}),
@@ -399,20 +413,21 @@ export function deriveForKind(draft: ActivityDraft): ActivityDraft {
   if (kind === 'rental') {
     const r = settings.rental
     const hourly = r.modes.includes('hour')
+    const firstLength = r.modes.includes('length') ? r.lengths[0] : undefined
     // A rental can have out at once everything in stock, across its items.
     next.maxCapacity = Math.max(1, draft.tiers.reduce((sum, tier) => sum + draftItemOf(r, tier.id).stock, 0))
     next.minParticipants = 1
     next.difficulty = 'easy'
-    next.durationMinutes = hourly ? r.minHours * 60 : 1440
+    next.durationMinutes = hourly ? r.minHours * 60 : firstLength ? firstLength.hours * 60 : 1440
     // A rental's tiers are what can be rented; the headline price is the hourly rate, or the daily one.
     next.tiers = draft.tiers.map((tier) => {
       const rate = r.rates[tier.id]
       if (!rate) return tier
-      const price = hourly ? rate.hour : rate.day
+      const price = hourly ? rate.hour : firstLength ? (rate.lengths?.[firstLength.id] ?? tier.price) : rate.day
       return price === tier.price ? tier : { ...tier, price, minQuantity: 0 }
     })
     // Hourly: the last start leaves room for the fewest hours before the return time.
-    const last = hourly ? r.minHours * 60 : 0
+    const last = hourly ? r.minHours * 60 : firstLength ? Math.min(...r.lengths.map((length) => length.hours)) * 60 : 0
     if (next.schedule.lastEntryMinutes !== last) {
       next.schedule = { ...next.schedule, lastEntryMinutes: last, locations: next.schedule.locations.map((site) => ({ ...site, schedule: { ...site.schedule, lastEntryMinutes: last } })) }
     }
@@ -527,6 +542,8 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
     theme: themeOf(activity),
     customRequests: Boolean(activity.customRequests),
     tips: Boolean(activity.tips),
+    priceCap: activity.priceCap ?? 0,
+    noticeHours: activity.noticeHours ?? activity.charter?.noticeHours ?? 0,
     customCategory: activity.customCategory ?? null,
     accessibility: [...(activity.accessibility ?? [])],
     bring: [...(activity.bring ?? [])],
@@ -540,21 +557,22 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
       return {
         rental: rental
           ? (() => {
-              const { durations, rates, modes, items, lateFee, ...rest } = rental
+              const { durations, rates, modes, items, lateFee, lengths, ...rest } = rental
               // Older rentals shared one pool; each item starts with an even share of it.
               const share = Math.max(1, Math.round((rental.units || 1) / Math.max(1, activity.priceTiers.length)))
               return {
                 ...blank.rental,
                 ...rest,
                 lateFee: lateFee ?? 0,
+                lengths: lengths ? lengths.map((entry) => ({ ...entry })) : [],
                 items: Object.fromEntries(
                   activity.priceTiers.map((tier) => {
                     const item = items?.find((entry) => entry.tierId === tier.id)
                     return [
                       tier.id,
                       item
-                        ? { stock: item.stock, holds: item.holds, deposit: item.deposit, outOfService: item.outOfService ?? 0, serviceNote: item.serviceNote ?? '' }
-                        : { stock: share, holds: rental.seatsPerUnit ?? 1, deposit: rental.damageDeposit ?? 0, outOfService: 0, serviceNote: '' },
+                        ? { stock: item.stock, holds: item.holds, deposit: item.deposit, cap: item.cap ?? 0, outOfService: item.outOfService ?? 0, serviceNote: item.serviceNote ?? '' }
+                        : { stock: share, holds: rental.seatsPerUnit ?? 1, deposit: rental.damageDeposit ?? 0, cap: 0, outOfService: 0, serviceNote: '' },
                     ]
                   }),
                 ),
@@ -563,7 +581,7 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
                 rates: Object.fromEntries(
                   activity.priceTiers.map((tier) => {
                     const rate = rates?.find((entry) => entry.tierId === tier.id)
-                    return [tier.id, { hour: rate?.hour ?? (rental.billing === 'day' ? 0 : tier.price), day: rate?.day ?? (rental.billing === 'day' ? tier.price : tier.price * 4) }]
+                    return [tier.id, { hour: rate?.hour ?? (rental.billing === 'day' ? 0 : tier.price), day: rate?.day ?? (rental.billing === 'day' ? tier.price : tier.price * 4), lengths: { ...rate?.lengths } }]
                   }),
                 ),
               }
@@ -954,6 +972,7 @@ function validateStep(step: number, draft: ActivityDraft): FieldErrors {
       if (r.modes.includes('hour') && rate.hour <= 0) errors[`rate.${tier.id}.hour`] = 'Set an hourly price'
       if (r.modes.includes('day') && rate.day <= 0) errors[`rate.${tier.id}.day`] = 'Set a daily price'
       if (draftItemOf(r, tier.id).stock < 1) errors[`item.${tier.id}.stock`] = 'At least 1'
+      if (r.modes.includes('length')) for (const length of r.lengths) if ((rate.lengths?.[length.id] ?? 0) <= 0) errors[`rate.${tier.id}.len.${length.id}`] = 'Set a price'
     }
   }
   // With a location on the activity, its address is the meeting place; the note is optional.
@@ -1534,6 +1553,8 @@ export function ActivityWizard({
           theme: draft.theme ?? defaultTheme(draft.category),
           customRequests: Boolean(draft.customRequests),
           tips: Boolean(draft.tips),
+          priceCap: draft.priceCap ?? 0,
+          noticeHours: draft.noticeHours ?? 0,
           customCategory: draft.customCategory?.trim() || null,
           accessibility: draft.accessibility ?? [],
           bring: (draft.bring ?? []).map((item) => item.trim()).filter(Boolean),
@@ -1774,6 +1795,31 @@ export function ActivityWizard({
 
                       <Separator />
 
+                      {dining ? null : (
+                        <div className="flex flex-col gap-3 rounded-xl border border-line px-3.5 py-3 sm:flex-row sm:items-end sm:justify-between">
+                          <span>
+                            <span className="block text-sm font-medium">Booking price cap <span className="font-normal text-subtle">Optional</span></span>
+                            <span className="block text-xs text-subtle">
+                              {(draft.kind ?? 'trip') === 'rental'
+                                ? 'The most one booking pays for its items, whatever the mix and length. Caps for single items are set on each item above.'
+                                : (draft.kind ?? 'trip') === 'charter'
+                                  ? 'The most one booking pays, whichever option they pick.'
+                                  : 'The most one booking pays for its tickets. A family of six on a per-person price never pays more than this. Extras are charged on top.'}
+                            </span>
+                          </span>
+                          <Input
+                            className="sm:w-44"
+                            type="number"
+                            min={0}
+                            placeholder="No cap"
+                            aria-label="Booking price cap"
+                            leftIcon={<span className="text-sm font-medium">{currencySymbol(currency)}</span>}
+                            value={draft.priceCap ? draft.priceCap / 100 : ''}
+                            onChange={(event) => patch({ priceCap: Math.max(0, Math.round(Number(event.target.value) * 100) || 0) })}
+                          />
+                        </div>
+                      )}
+
                       <label className="flex items-start justify-between gap-3 rounded-xl border border-line px-3.5 py-3">
                         <span>
                           <span className="block text-sm font-medium">Offer tips at checkout</span>
@@ -1835,6 +1881,27 @@ export function ActivityWizard({
                         )}
                       </div>
                     )
+                  ) : null}
+                  {step === 4 && !dining ? (
+                    <div className="mt-6 flex flex-col gap-3 rounded-xl border border-line px-3.5 py-3 sm:flex-row sm:items-end sm:justify-between">
+                      <span>
+                        <span className="block text-sm font-medium">Booking notice <span className="font-normal text-subtle">Optional</span></span>
+                        <span className="block text-xs text-subtle">
+                          Online booking closes this long before the start, for anything that needs getting ready first.
+                          {draft.customRequests ? ' Guests can still ask for a sooner time with a custom request.' : ' Turn on Accept custom requests in Basics to let guests ask for other days or times.'}
+                        </span>
+                      </span>
+                      <Input
+                        className="sm:w-44"
+                        type="number"
+                        min={0}
+                        placeholder="None"
+                        suffix="hours"
+                        aria-label="Booking notice in hours"
+                        value={draft.noticeHours || ''}
+                        onChange={(event) => patch({ noticeHours: Math.max(0, Math.floor(Number(event.target.value)) || 0) })}
+                      />
+                    </div>
                   ) : null}
                   {step === 4 && crew.length > 0 ? (
                     <CrewPicker
@@ -1977,7 +2044,7 @@ function kindFacts(draft: ActivityDraft): string[] {
     const r = s.rental
     const meta = rentalCategoryMeta(r.category)
     return [
-      [r.modes.includes('hour') ? `By the hour · ${r.maxHours ? `${r.minHours}–${r.maxHours} h` : `from ${r.minHours} h`}` : null, r.modes.includes('day') ? `By the day · ${r.maxDays ? `${r.minDays}–${r.maxDays} days` : `from ${r.minDays} ${r.minDays === 1 ? 'day' : 'days'}`}` : null].filter(Boolean).join(' or '),
+      [r.modes.includes('length') && r.lengths.length > 0 ? `By length · ${r.lengths.map((length) => length.label).join(', ')}` : null, r.modes.includes('hour') ? `By the hour · ${r.maxHours ? `${r.minHours}–${r.maxHours} h` : `from ${r.minHours} h`}` : null, r.modes.includes('day') ? `By the day · ${r.maxDays ? `${r.minDays}–${r.maxDays} days` : `from ${r.minDays} ${r.minDays === 1 ? 'day' : 'days'}`}` : null].filter(Boolean).join(' or '),
       (() => {
         const total = draft.tiers.reduce((sum, tier) => sum + draftItemOf(r, tier.id).stock, 0)
         return `${draft.tiers.length} ${draft.tiers.length === 1 ? 'item' : 'items'} to choose from · ${total} in stock`

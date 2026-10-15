@@ -140,6 +140,10 @@ export interface Quote {
   days: number
   /** Hourly rentals: how many hours. */
   hours?: number
+  /** Length rentals: the length picked, in words. */
+  lengthLabel?: string
+  /** What the price caps took off, minor units. 0 when no cap was reached. */
+  capped: number
   /** People on the booking: the charter group, or the headcount. */
   party: number
   /** "2 jet skis", "6 guests": what the booking is counted in. */
@@ -151,9 +155,11 @@ export interface QuoteOptions {
   days?: number
   /** Charters: the group size, which the per-group price does not count. */
   party?: number
-  /** Rentals with rates: priced per hour or per day. */
+  /** Rentals with rates: priced per hour, per day or per set length. */
   rentalMode?: RentalMode
   hours?: number
+  /** Length rentals: which length was picked. */
+  lengthId?: string
 }
 
 /** Deterministic, integer-only money maths — minor units in, minor units out. */
@@ -167,6 +173,7 @@ export function buildQuote(
   const days = Math.max(1, Math.floor(options.days ?? 1))
   const tax = TAX_BY_TENANT[tenantSlug] ?? PROCESSING_FEE
   const ticketLines: QuoteLine[] = []
+  let capped = 0
   let seats = 0
   let headcount = 0
   let subtotal = 0
@@ -177,17 +184,23 @@ export function buildQuote(
     // A rental with rates prices each item per hour or per day; everything else uses the tier price.
     const rated = (activity.kind ?? 'trip') === 'rental' && options.rentalMode && (activity.rental?.rates?.length ?? 0) > 0
     const hours = Math.max(1, Math.floor(options.hours ?? 1))
-    const base = rated ? (rateFor(activity, tier.id, options.rentalMode!) ?? tier.price) : tier.price
-    const span = rated && options.rentalMode === 'hour' ? hours : days
-    const unitPrice = Math.round(base * priceMultiplier) * span
+    const byLength = rated && options.rentalMode === 'length'
+    const base = rated ? (rateFor(activity, tier.id, options.rentalMode!, options.lengthId) ?? tier.price) : tier.price
+    const span = byLength ? 1 : rated && options.rentalMode === 'hour' ? hours : days
+    const full = Math.round(base * priceMultiplier) * span
+    // A rental item's cap: an hourly or daily price stops at the most one item costs for the whole rental.
+    const itemCap = (activity.kind ?? 'trip') === 'rental' && !byLength ? activity.rental?.items?.find((item) => item.tierId === tier.id)?.cap : undefined
+    const unitPrice = itemCap && itemCap > 0 ? Math.min(full, itemCap) : full
+    if (unitPrice < full) capped += (full - unitPrice) * qty
     const total = unitPrice * qty
     ticketLines.push({
       id: tier.id,
-      label:
-        rated && options.rentalMode === 'hour'
-          ? `${tier.label} · ${hours} ${hours === 1 ? 'hour' : 'hours'}`
+      label: byLength
+        ? `${tier.label} · ${activity.rental?.lengths?.find((length) => length.id === options.lengthId)?.label ?? 'set length'}`
+        : rated && options.rentalMode === 'hour'
+          ? `${tier.label} · ${hours} ${hours === 1 ? 'hour' : 'hours'}${unitPrice < full ? ' · capped' : ''}`
           : days > 1
-            ? `${tier.label} · ${days} days`
+            ? `${tier.label} · ${days} days${unitPrice < full ? ' · capped' : ''}`
             : tier.label,
       kind: 'ticket',
       quantity: qty,
@@ -197,6 +210,15 @@ export function buildQuote(
     subtotal += total
     headcount += qty
     if (tier.countsTowardCapacity) seats += qty
+  }
+
+  // The booking's cap: tickets or items never come to more than this. Add-ons are on top.
+  const ticketTotal = ticketLines.reduce((sum, line) => sum + line.total, 0)
+  if (activity.priceCap && activity.priceCap > 0 && ticketTotal > activity.priceCap) {
+    const off = ticketTotal - activity.priceCap
+    ticketLines.push({ id: 'cap', label: 'Price cap', kind: 'ticket', quantity: 1, unitPrice: -off, total: -off })
+    subtotal -= off
+    capped += off
   }
 
   const addOnLines: QuoteLine[] = []
@@ -231,6 +253,13 @@ export function buildQuote(
     headcount,
     days,
     ...(options.rentalMode === 'hour' ? { hours: Math.max(1, Math.floor(options.hours ?? 1)) } : {}),
+    ...(options.rentalMode === 'length'
+      ? (() => {
+          const length = activity.rental?.lengths?.find((entry) => entry.id === options.lengthId)
+          return length ? { hours: length.hours, lengthLabel: length.label } : {}
+        })()
+      : {}),
+    capped,
     party: (activity.kind ?? 'trip') === 'charter' ? Math.max(1, options.party ?? headcount) : headcount,
     countLabel: partyLabel(activity, (activity.kind ?? 'trip') === 'charter' ? Math.max(1, options.party ?? headcount) : headcount),
   }
@@ -315,6 +344,12 @@ export function BookingWidget({
   const minHours = Math.max(1, activity.rental?.minHours ?? 1)
   const maxHours = Math.max(minHours, activity.rental?.maxHours || 12)
   const [rentHours, setRentHours] = React.useState(minHours)
+  // By length: one set length, at one price per item.
+  const lengths = activity.rental?.lengths ?? []
+  const [lengthId, setLengthId] = React.useState(lengths[0]?.id ?? '')
+  const byLength = kind === 'rental' && rated && rentalMode === 'length'
+  const length = lengths.find((entry) => entry.id === lengthId) ?? lengths[0]
+  const lengthHours = byLength && length ? length.hours : 0
   const rentalMeta = rentalCategoryMeta(activity.rental?.category)
   const minDays = Math.max(1, activity.rental?.minDays ?? 1)
   const maxDays = Math.max(minDays, activity.rental?.maxDays || 30)
@@ -439,9 +474,9 @@ export function BookingWidget({
         const open = entry.slots.filter((other) => !other.soldOut)
         free = Math.min(free, open.length > 0 ? Math.max(...open.map((other) => other.itemsLeft?.[tierId] ?? 0)) : 0)
       }
-    } else if (hourRental && day) {
+    } else if ((hourRental || byLength) && day) {
       // Longer than the shortest rental: it has to be free at every start time it covers.
-      const until = new Date(slot.startsAt).getTime() + rentHours * 3_600_000
+      const until = new Date(slot.startsAt).getTime() + (byLength ? lengthHours : rentHours) * 3_600_000
       for (const other of day.slots) {
         const at = new Date(other.startsAt).getTime()
         if (at > new Date(slot.startsAt).getTime() && at < until) free = Math.min(free, other.itemsLeft?.[tierId] ?? 0)
@@ -495,9 +530,9 @@ export function BookingWidget({
       buildQuote(activity, tenantSlug, selection, (slot?.priceMultiplier ?? 1) * ruleResult.multiplier, {
         days: dayRental ? rentDays : 1,
         party,
-        ...(rated ? { rentalMode, hours: rentHours } : {}),
+        ...(rated ? { rentalMode, hours: rentHours, lengthId: byLength ? length?.id : undefined } : {}),
       }),
-    [activity, tenantSlug, selection, slot, ruleResult.multiplier, dayRental, rentDays, party, rated, rentalMode, rentHours],
+    [activity, tenantSlug, selection, slot, ruleResult.multiplier, dayRental, rentDays, party, rated, rentalMode, rentHours, byLength, length],
   )
 
   // Per-person kinds: every tier's minimum per booking has to be met. Charters and rentals pick one option.
@@ -514,6 +549,7 @@ export function BookingWidget({
         n: dayRental ? rentDays : undefined,
         m: rated ? rentalMode : undefined,
         h: hourRental ? rentHours : undefined,
+        l: byLength ? length?.id : undefined,
         g: kind === 'charter' ? party : undefined,
       }),
     )
@@ -590,12 +626,12 @@ export function BookingWidget({
   let kindBlock: React.ReactNode = null
   if (kind === 'rental' && itemMode) {
     const rental = activity.rental
-    const shown = items.filter((item) => !rated || rateFor(activity, item.tierId, rentalMode) !== undefined)
+    const shown = items.filter((item) => !rated || rateFor(activity, item.tierId, rentalMode, byLength ? length?.id : undefined) !== undefined)
     const chosen = shown.filter((item) => (tierQty[item.tierId] ?? 0) > 0)
     const count = chosen.reduce((sum, item) => sum + (tierQty[item.tierId] ?? 0), 0)
     const fits = chosen.reduce((sum, item) => sum + (tierQty[item.tierId] ?? 0) * item.holds, 0)
     const deposit = chosen.reduce((sum, item) => sum + (tierQty[item.tierId] ?? 0) * item.deposit, 0)
-    const per = dayRental ? ' a day' : hourRental ? ' an hour' : ''
+    const per = dayRental ? ' a day' : hourRental ? ' an hour' : byLength && length ? ` · ${length.label.toLowerCase()}` : ''
     const lateFee = rental?.lateFee ?? 0
     const rules = [
       rental?.licence && rental.licence !== 'none' ? `${LICENCE_LABEL[rental.licence]} needed${activity.minAge > 0 ? `, ${activity.minAge}+` : ''}` : null,
@@ -615,7 +651,7 @@ export function BookingWidget({
           ) : null}
         </div>
         {modes.length > 1 ? (
-          <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl bg-surface-sunken p-1" role="radiogroup" aria-label="Rent by">
+          <div className={cn('mt-3 grid gap-1 rounded-xl bg-surface-sunken p-1', modes.length === 3 ? 'grid-cols-3' : 'grid-cols-2')} role="radiogroup" aria-label="Rent by">
             {modes.map((mode) => (
               <button
                 key={mode}
@@ -625,7 +661,26 @@ export function BookingWidget({
                 onClick={() => setRentalMode(mode)}
                 className={cn('rounded-lg px-3 py-2 text-sm font-semibold transition-colors', rentalMode === mode ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground')}
               >
-                By the {mode}
+                {mode === 'length' ? 'By length' : `By the ${mode}`}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {byLength && lengths.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-1.5" role="radiogroup" aria-label="How long">
+            {lengths.map((entry) => (
+              <button
+                key={entry.id}
+                type="button"
+                role="radio"
+                aria-checked={length?.id === entry.id}
+                onClick={() => setLengthId(entry.id)}
+                className={cn(
+                  'rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
+                  length?.id === entry.id ? 'border-primary bg-primary-soft/40 text-foreground' : 'border-line text-muted hover:text-foreground',
+                )}
+              >
+                {entry.label}
               </button>
             ))}
           </div>
@@ -634,7 +689,7 @@ export function BookingWidget({
           {shown.map((item) => {
             const left = itemLeft(item.tierId)
             const qty = tierQty[item.tierId] ?? 0
-            const price = rated ? (rateFor(activity, item.tierId, rentalMode) ?? 0) : (activity.priceTiers.find((tier) => tier.id === item.tierId)?.price ?? 0)
+            const price = rated ? (rateFor(activity, item.tierId, rentalMode, byLength ? length?.id : undefined) ?? 0) : (activity.priceTiers.find((tier) => tier.id === item.tierId)?.price ?? 0)
             const max = Math.min(left, item.maxPerBooking)
             return (
               <li key={item.tierId} className={cn('rounded-xl border px-3.5 py-3 transition-colors', qty > 0 ? 'border-primary bg-primary-soft/20' : 'border-line', slot && left === 0 && qty === 0 && 'opacity-60')}>
@@ -645,6 +700,7 @@ export function BookingWidget({
                     <p className="mt-1 text-sm font-medium text-foreground tabular">
                       {formatCurrency(Math.round(price * multiplier), currency)}
                       <span className="text-xs font-normal text-subtle">{per}</span>
+                      {item.cap && (hourRental || dayRental) ? <span className="text-xs font-normal text-subtle"> · never more than {formatCurrency(item.cap, currency)}</span> : null}
                     </p>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1.5">
@@ -1291,9 +1347,11 @@ export function BookingWidget({
                 >
                   <span className="min-w-0 truncate text-muted">
                     {line.label}
-                    <span className="ml-1.5 text-xs text-faint">
-                      {line.quantity} × {formatCurrency(line.unitPrice, currency)}
-                    </span>
+                    {line.total >= 0 ? (
+                      <span className="ml-1.5 text-xs text-faint">
+                        {line.quantity} × {formatCurrency(line.unitPrice, currency)}
+                      </span>
+                    ) : null}
                   </span>
                   <span className="shrink-0 tabular font-medium text-foreground">
                     {formatCurrency(line.total, currency)}

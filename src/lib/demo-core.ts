@@ -519,6 +519,7 @@ const GUEST_QUESTIONS: Record<string, GuestQuestion[]> = {
   ],
   'jet-ski-safari': [presetQuestion('licence'), presetQuestion('medical')],
   'jet-ski-rental': [presetQuestion('licence'), presetQuestion('medical')],
+  'boat-rental': [presetQuestion('licence')],
   'kayak-sup-rental': [presetQuestion('swim'), presetQuestion('experience')],
   'private-sportfishing-charter': [presetQuestion('dietary')],
   'private-catamaran-charter': [presetQuestion('dietary')],
@@ -1486,9 +1487,9 @@ interface ActivitySpec {
     bufferMinutes: number
     damageDeposit: number
     minutes: number[]
-    rateList?: { hour?: number; day?: number }[]
-    /** Per tier, in order: how many, how many people one fits, deposit, out of service. Each becomes its own stock. */
-    stockList?: { stock: number; holds: number; deposit?: number; out?: number; note?: string }[]
+    rateList?: { hour?: number; day?: number; lengths?: Record<string, number> }[]
+    /** Per tier, in order: how many, how many people one fits, deposit, price cap, out of service. Each becomes its own stock. */
+    stockList?: { stock: number; holds: number; deposit?: number; cap?: number; out?: number; note?: string }[]
   } & Omit<Partial<RentalConfig>, 'units' | 'bufferMinutes' | 'damageDeposit' | 'durations' | 'rates' | 'items'>
   /** Charters: optional length in minutes for each tier, in tier order. */
   charter?: { maxGuests: number; requestToBook: boolean; noticeHours: number; minutes?: number[] } & Omit<Partial<CharterConfig>, 'maxGuests' | 'requestToBook' | 'noticeHours' | 'durations'>
@@ -1497,6 +1498,10 @@ interface ActivitySpec {
   languages?: string[]
   /** Accepts custom quote requests from the storefront. */
   customRequests?: boolean
+  /** The most one booking pays for its tickets or items. */
+  priceCap?: number
+  /** Bookings close this many hours before the start. */
+  noticeHours?: number
   ride?: RideConfig
   route?: RouteInfo
   pass?: { validDays: number; reentry: boolean }
@@ -1681,6 +1686,64 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     freeCancelHours: 24,
   },
   {
+    slug: 'boat-rental',
+    kind: 'rental',
+    rental: {
+      units: 3,
+      bufferMinutes: 30,
+      damageDeposit: 50000,
+      minutes: [120, 120, 120],
+      category: 'watercraft',
+      billing: 'length',
+      modes: ['hour'],
+      minHours: 2,
+      maxHours: 8,
+      rateList: [{ hour: 10000 }, { hour: 10000 }, { hour: 15000 }],
+      stockList: [
+        { stock: 1, holds: 4, cap: 55000 },
+        { stock: 1, holds: 5, cap: 55000 },
+        { stock: 1, holds: 6, cap: 65000 },
+      ],
+      lateFee: 5000,
+      seatsPerUnit: 6,
+      licence: 'boat',
+      fuel: 'charged',
+    },
+    name: 'Boat Rental',
+    tagline: 'Your own skiff for the day: by the hour, never more than the day price.',
+    description:
+      'Take one of our skiffs out on your own. Each boat is checked, fuelled and launched for you, with vests, an anchor and a cooler on board. Pay by the hour; the price stops at the day rate, so a long day never costs more than it should. Weekends online; for a weekday, give us a call so we can launch the boat.',
+    highlights: ['Three skiffs, from 14 to 19 feet', 'Priced by the hour, capped at the day rate', 'Vests, anchor and cooler on board', 'Weekdays by request'],
+    included: ['Boat, launched and ready', 'Vests for everyone', 'Anchor and cooler', 'Safety briefing'],
+    excluded: ['Fuel used (charged on return)', 'Fishing gear'],
+    requirements: ['Skipper 18+ with a boater card', 'Book at least 24 hours ahead', 'Refundable deposit held per boat'],
+    meetingPoint: 'Maalaea Harbor launch ramp — the Blue Horizon trailer at slip 12.',
+    difficulty: 'easy',
+    durationMinutes: 120,
+    minAge: 18,
+    maxCapacity: 3,
+    pricingModel: 'per_unit',
+    tiers: [
+      ['14 Storm', 10000, 0, 1, 'Seats 4 · 25 hp · calm bays'],
+      ['17 Skiff', 10000, 0, 1, 'Seats 5 · 60 hp · coastline runs'],
+      ['19 Skiff', 15000, 0, 1, 'Seats 6 · 90 hp · open water'],
+    ],
+    addOns: [['Fishing kit', 4500, 'Two rods, tackle and bait.', 2, 'Fish']],
+    photos: ['photo-1476514525535-07fb3b4ae5f1', 'photo-1502680390469-be75c86b636f', 'photo-1505228395891-9a51e7e86bf6'],
+    colorKey: 'reef',
+    rating: 4.8,
+    reviewCount: 96,
+    resources: [],
+    format: 'open',
+    times: ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00'],
+    weekdays: [0, 6],
+    locations: [{ location: 'maalaea' }],
+    popularity: 0.55,
+    freeCancelHours: 48,
+    noticeHours: 24,
+    customRequests: true,
+  },
+  {
     slug: 'jet-ski-rental',
     kind: 'rental',
     rental: { units: 6, bufferMinutes: 15, damageDeposit: 25000, minutes: [60, 60], category: 'watercraft', billing: 'length', modes: ['hour'], minHours: 1, maxHours: 3, rateList: [{ hour: 14900 }, { hour: 17900 }], stockList: [{ stock: 4, holds: 2 }, { stock: 2, holds: 3, deposit: 35000 }], lateFee: 5000, seatsPerUnit: 2, licence: 'boat', fuel: 'included' },
@@ -1726,7 +1789,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
   {
     slug: 'kayak-sup-rental',
     kind: 'rental',
-    rental: { units: 12, bufferMinutes: 10, damageDeposit: 0, minutes: [60, 60, 60], category: 'gear', billing: 'length', modes: ['hour', 'day'], minHours: 1, maxHours: 4, minDays: 1, maxDays: 7, rateList: [{ hour: 2500, day: 6500 }, { hour: 3500, day: 8900 }, { hour: 3000, day: 7500 }], stockList: [{ stock: 3, holds: 1 }, { stock: 1, holds: 2 }, { stock: 4, holds: 1, out: 1, note: 'Fin box cracked, at the repair shop' }], lateFee: 1000, seatsPerUnit: 1, licence: 'none' },
+    rental: { units: 12, bufferMinutes: 10, damageDeposit: 0, minutes: [240, 240, 240], category: 'gear', billing: 'length', modes: ['length'], lengths: [{ id: 'len_4', label: 'Up to 4 hours', hours: 4 }, { id: 'len_8', label: 'Up to 8 hours', hours: 8 }], rateList: [{ lengths: { len_4: 5000, len_8: 10000 } }, { lengths: { len_4: 6500, len_8: 12500 } }, { lengths: { len_4: 4500, len_8: 8500 } }], stockList: [{ stock: 3, holds: 1 }, { stock: 1, holds: 2 }, { stock: 4, holds: 1, out: 1, note: 'Fin box cracked, at the repair shop' }], lateFee: 1000, seatsPerUnit: 1, licence: 'none' },
     name: 'Kayak & Paddleboard Rental',
     tagline: 'Sit-on-top kayaks and SUPs from the Kihei beach, with a reef map.',
     description:
@@ -1742,9 +1805,9 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     maxCapacity: 12,
     pricingModel: 'per_unit',
     tiers: [
-      ['Single kayak', 2500, 0, 6, 'Sit-on-top, one paddler'],
-      ['Double kayak', 3500, 0, 4, 'Two paddlers'],
-      ['Stand-up paddleboard', 3000, 0, 6, 'All-round board, leash included'],
+      ['Single kayak', 5000, 0, 6, 'Sit-on-top, one paddler'],
+      ['Double kayak', 6500, 0, 4, 'Two paddlers'],
+      ['Stand-up paddleboard', 4500, 0, 6, 'All-round board, leash included'],
     ],
     addOns: [['Snorkel set', 1200, 'Mask, snorkel and fins in your size.', 12, 'Waves']],
     photos: ['photo-1519046904884-53103b34b206', 'photo-1505228395891-9a51e7e86bf6', 'photo-1473116763249-2faaef81ccda'],
@@ -2338,6 +2401,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
   },
   {
     slug: 'family-reef-snorkel',
+    priceCap: 40000,
     name: 'Family Reef Snorkel',
     tagline: 'Shallow, calm, patient guides — the trip built for kids who have never snorkelled.',
     description:
@@ -3478,7 +3542,7 @@ function activityLocations(tenant: Tenant, spec: ActivitySpec): ActivityLocation
       locationId: site?.id ?? `loc_${tenant.id.replace(/^tnt_/, '')}_main`,
       times: entry.times ?? spec.times,
     }
-    if (entry.weekdays) resolved.weekdays = entry.weekdays
+    if (entry.weekdays ?? spec.weekdays) resolved.weekdays = entry.weekdays ?? spec.weekdays
     if (entry.meetingPoint) resolved.meetingPoint = entry.meetingPoint
     if (entry.dayCapacity) resolved.dayCapacity = entry.dayCapacity
     if (entry.dayLimitUnit) resolved.dayLimitUnit = entry.dayLimitUnit
@@ -3541,7 +3605,7 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
           const items = stockList
             ? priceTiers.map((tier, index) => {
                 const entry = stockList[index] ?? { stock: 1, holds: 1 }
-                return { tierId: tier.id, stock: entry.stock, holds: entry.holds, deposit: entry.deposit ?? rest.damageDeposit ?? 0, ...(entry.out ? { outOfService: entry.out, serviceNote: entry.note } : {}) }
+                return { tierId: tier.id, stock: entry.stock, holds: entry.holds, deposit: entry.deposit ?? rest.damageDeposit ?? 0, ...(entry.cap ? { cap: entry.cap } : {}), ...(entry.out ? { outOfService: entry.out, serviceNote: entry.note } : {}) }
               })
             : undefined
           return {
@@ -3567,6 +3631,8 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
       : {}),
     ...(spec.languages ? { languages: spec.languages } : {}),
     ...(spec.customRequests || CUSTOM_REQUEST_SLUGS.has(spec.slug) ? { customRequests: true } : {}),
+    ...(spec.priceCap ? { priceCap: spec.priceCap } : {}),
+    ...(spec.noticeHours ? { noticeHours: spec.noticeHours } : {}),
     // Guided trips and rides offer a tip; rentals and passes do not.
     ...(['trip', 'activity', 'charter', 'lesson'].includes(spec.kind ?? 'trip') ? { tips: true } : {}),
     ...(spec.ride ? { ride: spec.ride } : {}),

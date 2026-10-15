@@ -111,6 +111,12 @@ export function rentalSpan(activity: Pick<Activity, 'rental' | 'priceTiers' | 'd
     return { startMs: start.getTime(), endMs: end.getTime(), readyMs: end.getTime() + buffer, days, hours: 0, minutes: days * 1440 }
   }
   const start = new Date(startsAt).getTime()
+  // By length: one of the set lengths.
+  if ((rental?.modes ?? []).includes('length') && (rental?.lengths?.length ?? 0) > 0) {
+    const lengths = rental!.lengths!
+    const hours = lengths[hashSeed(`len:${bookingId}`) % lengths.length].hours
+    return { startMs: start, endMs: start + hours * 3_600_000, readyMs: start + hours * 3_600_000 + buffer, days: 1, hours, minutes: hours * 60 }
+  }
   const rated = (rental?.rates?.length ?? 0) > 0 && (rental?.modes ?? []).includes('hour')
   if (rated) {
     const least = Math.max(1, rental?.minHours ?? 1)
@@ -134,6 +140,11 @@ export function shortestRentalMs(activity: Pick<Activity, 'rental' | 'durationMi
     }
   }
   const start = new Date(startsAt).getTime()
-  const minutes = (rental?.modes ?? []).includes('hour') ? Math.max(1, rental?.minHours ?? 1) * 60 : Math.max(15, activity.durationMinutes)
+  const shortestLength = (rental?.modes ?? []).includes('length') && rental?.lengths?.length ? Math.min(...rental.lengths.map((length) => length.hours)) : 0
+  const minutes = (rental?.modes ?? []).includes('hour')
+    ? Math.max(1, rental?.minHours ?? 1) * 60
+    : shortestLength > 0
+      ? shortestLength * 60
+      : Math.max(15, activity.durationMinutes)
   return { startMs: start, endMs: start + minutes * 60_000 }
 }

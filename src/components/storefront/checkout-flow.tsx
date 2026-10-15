@@ -62,6 +62,7 @@ import { CheckoutDiscounts } from '@/components/storefront/checkout-discounts'
 import { applyRules, giftProblem, promoDiscount, promoProblem } from '@/lib/pricing'
 import { guestDetailsOf } from '@/lib/guest-requirements'
 import { CheckoutOptIn, useCheckoutOptIn } from '@/components/storefront/storefront-marketing'
+import type { RentalMode } from '@/lib/activity-kinds'
 import { usePricing } from '@/hooks/use-pricing'
 
 /* ==========================================================================
@@ -99,8 +100,10 @@ export interface CheckoutFlowProps {
   /** Day rentals: days each unit is out. */
   rentalDays?: number
   /** Rentals with rates: by the hour or by the day, and the hours. */
-  rentalMode?: 'hour' | 'day'
+  rentalMode?: RentalMode
   rentalHours?: number
+  /** Length rentals: the length picked. */
+  rentalLength?: string
   /** Charters: the group size. */
   party?: number
   basePath: string
@@ -267,6 +270,7 @@ export function CheckoutFlow({
   rentalDays = 1,
   rentalMode,
   rentalHours,
+  rentalLength,
   party,
   basePath,
   reference,
@@ -283,9 +287,9 @@ export function CheckoutFlow({
     () => buildQuote(activity, tenant.slug, selection, departure.priceMultiplier * ruleResult.multiplier, {
       days: rentalDays,
       party,
-      ...(rentalMode ? { rentalMode, hours: rentalHours } : {}),
+      ...(rentalMode ? { rentalMode, hours: rentalHours, lengthId: rentalLength } : {}),
     }),
-    [activity, tenant.slug, selection, departure.priceMultiplier, ruleResult.multiplier, rentalDays, party, rentalMode, rentalHours],
+    [activity, tenant.slug, selection, departure.priceMultiplier, ruleResult.multiplier, rentalDays, party, rentalMode, rentalHours, rentalLength],
   )
 
   const [errors, setErrors] = React.useState<Errors>({})
@@ -1233,7 +1237,7 @@ function OrderSummary({
           <p className="mt-1 truncate text-xs text-subtle">{tenant.name}</p>
           <p className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-muted">
             <Clock className="size-3" aria-hidden="true" />
-            {departure.returnsAt ? `${quote.days}-day rental` : quote.hours ? `${quote.hours}-hour rental` : formatDuration(activity.durationMinutes)}
+            {departure.returnsAt ? `${quote.days}-day rental` : quote.lengthLabel ? quote.lengthLabel : quote.hours ? `${quote.hours}-hour rental` : formatDuration(activity.durationMinutes)}
           </p>
         </div>
       </div>

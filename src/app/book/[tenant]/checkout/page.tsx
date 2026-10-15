@@ -155,7 +155,14 @@ export default async function CheckoutPage({
   const rentalMode = modes.length > 0 ? (modes.includes(query.m as RentalMode) ? (query.m as RentalMode) : modes[0]) : undefined
   const dayRental = (activity.kind ?? 'trip') === 'rental' && (rentalMode ? rentalMode === 'day' : activity.rental?.billing === 'day')
   const minHours = Math.max(1, activity.rental?.minHours ?? 1)
-  const rentalHours = rentalMode === 'hour' ? clamp(Math.floor(Number(query.h) || minHours), minHours, Math.max(minHours, activity.rental?.maxHours || 12)) : undefined
+  const lengths = activity.rental?.lengths ?? []
+  const rentalLength = rentalMode === 'length' ? (lengths.find((entry) => entry.id === query.l) ?? lengths[0]) : undefined
+  const rentalHours =
+    rentalMode === 'hour'
+      ? clamp(Math.floor(Number(query.h) || minHours), minHours, Math.max(minHours, activity.rental?.maxHours || 12))
+      : rentalLength
+        ? rentalLength.hours
+        : undefined
   const minDays = Math.max(1, activity.rental?.minDays ?? 1)
   const maxDays = Math.max(minDays, activity.rental?.maxDays || 30)
   const rentalDays = dayRental ? clamp(Math.floor(Number(query.n) || minDays), minDays, maxDays) : 1
@@ -226,6 +233,7 @@ export default async function CheckoutPage({
       rentalDays={rentalDays}
       rentalMode={rentalMode}
       rentalHours={rentalHours}
+      rentalLength={rentalLength?.id}
       party={party}
       basePath={`/book/${tenant.slug}`}
       reference={reference}
