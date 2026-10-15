@@ -19,7 +19,9 @@ export const DEFAULT_BOOKING: BookingSettings = {
 
 export function bookingOf(activity: Pick<Activity, 'booking' | 'charter' | 'customRequests'>): BookingSettings {
   const saved = activity.booking ?? {}
-  const method = saved.method ?? (activity.charter?.requestToBook ? 'request' : 'instant')
+  // Older saves may say 'call': that is a request with a phone number shown.
+  const savedMethod = saved.method as string | undefined
+  const method: BookingSettings['method'] = savedMethod === 'call' ? 'request' : (saved.method ?? (activity.charter?.requestToBook ? 'request' : 'instant'))
   return {
     ...DEFAULT_BOOKING,
     ...saved,
@@ -31,12 +33,11 @@ export function bookingOf(activity: Pick<Activity, 'booking' | 'charter' | 'cust
 }
 
 /** True when the storefront shows the date and time picker. */
-export const showsSchedule = (settings: BookingSettings) => settings.scheduled && settings.method !== 'call'
+export const showsSchedule = (settings: BookingSettings) => settings.scheduled
 
 export const METHOD_LABEL: Record<BookingSettings['method'], string> = {
   instant: 'Book online',
   request: 'Request to book',
-  call: 'Call to book',
 }
 
 export const REASON_LABEL: Record<RequestReason, string> = {

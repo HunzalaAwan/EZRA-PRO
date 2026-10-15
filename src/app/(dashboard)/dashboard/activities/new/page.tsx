@@ -27,7 +27,7 @@ export default async function NewActivityPage() {
           { label: 'New activity' },
         ]}
         title="New activity"
-        description={`Six steps to a bookable listing on the ${tenant.name} storefront. Your progress is kept if you step away.`}
+        description={`Seven steps to a bookable listing on the ${tenant.name} storefront. Your progress is kept if you step away.`}
         actions={
           <Button variant="ghost" asChild>
             <Link href="/dashboard/activities">Back to catalog</Link>

@@ -197,8 +197,8 @@ export function RequestForm({
 }
 
 /* --------------------------------------------------------------------------
-   Enquiry panel — call to book, or no set schedule: no date picker and no
-   checkout; a number to call and a request form instead.
+   Enquiry panel — request to book with no set schedule: no date picker and
+   no checkout; a request form, and a number to call if the business has one.
    -------------------------------------------------------------------------- */
 
 export function EnquiryPanel({
@@ -209,11 +209,8 @@ export function EnquiryPanel({
   businessPhone,
   minDate,
   priceUnit,
-  upcoming = [],
   className,
 }: {
-  /** Call to book on a schedule: the next times it runs, to mention when calling. */
-  upcoming?: string[]
   activity: Pick<Activity, 'slug' | 'name' | 'minParticipants' | 'maxCapacity' | 'basePrice'>
   tenantSlug: string
   currency: CurrencyCode
@@ -224,8 +221,6 @@ export function EnquiryPanel({
   className?: string
 }) {
   const phone = settings.phone.trim() || businessPhone
-  const call = settings.method === 'call'
-  const [writing, setWriting] = React.useState(!call)
   return (
     <section aria-label="How to book" className={cn('flex flex-col gap-4 rounded-2xl border border-line bg-surface p-5 shadow-lg', className)}>
       <div>
@@ -236,24 +231,29 @@ export function EnquiryPanel({
         </p>
       </div>
 
-      {upcoming.length > 0 ? (
-        <div>
-          <p className="text-xs font-semibold tracking-[0.08em] text-faint uppercase">Coming up</p>
-          <ul className="mt-1.5 flex list-none flex-wrap gap-1.5 p-0">
-            {upcoming.map((at) => (
-              <li key={at} className="rounded-lg bg-surface-sunken px-2.5 py-1 text-xs font-medium text-muted">
-                {new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date(at))}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
+      <ol className="flex list-none flex-col gap-1.5 p-0 text-sm text-muted">
+        {['Tell us the day and your group.', `We reply ${settings.replyHours <= 24 ? 'within a day' : 'soon'} with the price.`, 'Pay the link to confirm.'].map((step, index) => (
+          <li key={step} className="flex gap-2">
+            <span className="grid size-5 shrink-0 place-items-center rounded-full bg-primary-soft text-xs font-semibold text-primary">{index + 1}</span>
+            {step}
+          </li>
+        ))}
+      </ol>
 
-      {call ? (
-        <div className="flex flex-col gap-2">
-          <p className="text-sm text-muted">Booked by phone, so we can plan it around you.</p>
-          <Button asChild size="lg" fullWidth leftIcon={<Phone />}>
-            <a href={`tel:${phone.replace(/[^\d+]/g, '')}`}>Call {phone}</a>
+      <RequestForm
+        activity={activity}
+        tenantSlug={tenantSlug}
+        currency={currency}
+        context={{ reason: 'booking', askDate: true, askParty: true, minDate }}
+        replyHours={settings.replyHours}
+        title="Request a date"
+      />
+
+      {phone ? (
+        <div className="flex flex-col gap-1.5 border-t border-line-subtle pt-4">
+          <p className="text-center text-xs text-subtle">Prefer to talk it through?</p>
+          <Button asChild size="lg" variant="outline" fullWidth leftIcon={<Phone />}>
+            <a href={`tel:${phone.replace(/[^d+]/g, '')}`}>Call {phone}</a>
           </Button>
           {settings.callHours ? (
             <p className="flex items-center justify-center gap-1.5 text-xs text-subtle">
@@ -262,32 +262,7 @@ export function EnquiryPanel({
             </p>
           ) : null}
         </div>
-      ) : (
-        <ol className="flex list-none flex-col gap-1.5 p-0 text-sm text-muted">
-          {['Tell us the day and your group.', `We reply ${settings.replyHours <= 24 ? 'within a day' : 'soon'} with the price.`, 'Pay the link to confirm.'].map((step, index) => (
-            <li key={step} className="flex gap-2">
-              <span className="grid size-5 shrink-0 place-items-center rounded-full bg-primary-soft text-xs font-semibold text-primary">{index + 1}</span>
-              {step}
-            </li>
-          ))}
-        </ol>
-      )}
-
-      {writing ? (
-        <RequestForm
-          activity={activity}
-          tenantSlug={tenantSlug}
-          currency={currency}
-          context={{ reason: call ? 'message' : 'booking', askDate: true, askParty: true, minDate }}
-          replyHours={settings.replyHours}
-          title={call ? 'Or send us a message' : 'Request a date'}
-          onCancel={call ? () => setWriting(false) : undefined}
-        />
-      ) : (
-        <button type="button" onClick={() => setWriting(true)} className="text-center text-sm font-medium text-primary hover:underline">
-          Prefer to write? Send a request
-        </button>
-      )}
+      ) : null}
     </section>
   )
 }

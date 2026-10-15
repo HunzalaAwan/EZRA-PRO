@@ -351,7 +351,7 @@ export type CharterRequestStatus = 'new' | 'quoted' | 'paid' | 'declined'
  * Call: nothing is sold online; the listing shows a number and a message form.
  */
 export interface BookingSettings {
-  method: 'instant' | 'request' | 'call'
+  method: 'instant' | 'request'
   /** False: no set schedule, every booking is arranged with the guest (request and call only). */
   scheduled: boolean
   /** Instant booking: groups bigger than this send a request instead. 0: off. */

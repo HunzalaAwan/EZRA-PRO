@@ -329,11 +329,6 @@ export function BookingWidget(props: BookingWidgetProps) {
         businessPhone={props.businessPhone ?? ''}
         minDate={today}
         priceUnit={priceUnit(props.activity)}
-        upcoming={
-          settings.scheduled
-            ? props.days.flatMap((day) => day.slots.filter((slot) => !slot.soldOut).map((slot) => slot.startsAt)).slice(0, 4)
-            : []
-        }
         className={props.className}
       />
     )
@@ -1516,8 +1511,8 @@ function BookingWidgetInner({
                     Planning something special? Ask for a custom quote
                   </button>
                 ) : null}
-                {businessPhone && (requestMode || settings.otherDates || settings.groupLimit > 0) ? (
-                  <a href={`tel:${businessPhone.replace(/[^\d+]/g, '')}`} className="text-xs text-subtle hover:text-foreground">
+                {(settings.phone || businessPhone) && (requestMode || settings.otherDates || settings.groupLimit > 0) ? (
+                  <a href={`tel:${(settings.phone || businessPhone || '').replace(/[^\d+]/g, '')}`} className="text-xs text-subtle hover:text-foreground">
                     Or call {settings.phone || businessPhone}{settings.callHours ? ` · ${settings.callHours}` : ''}
                   </a>
                 ) : null}

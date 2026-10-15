@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { CalendarClock, MessageSquareText, Phone } from 'lucide-react'
+import { CalendarClock, MessageSquareText } from 'lucide-react'
 
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -18,8 +18,7 @@ import type { BookingSettings } from '@/types'
 
 const METHODS: { value: BookingSettings['method']; title: string; text: string; icon: typeof CalendarClock }[] = [
   { value: 'instant', title: 'Book online', text: 'Guests pick a time from your schedule and pay. Booked straight away.', icon: CalendarClock },
-  { value: 'request', title: 'Request to book', text: 'Guests send the time and group they want. You confirm and send a payment link.', icon: MessageSquareText },
-  { value: 'call', title: 'Call to book', text: 'Nothing is sold online. The page shows your number and a message form.', icon: Phone },
+  { value: 'request', title: 'Request to book', text: 'Guests send the time and group they want, or call you. You confirm and send a payment link.', icon: MessageSquareText },
 ]
 
 function Row({ title, text, checked, onChange, children }: { title: string; text: string; checked: boolean; onChange: (value: boolean) => void; children?: React.ReactNode }) {
@@ -63,7 +62,7 @@ export function BookingSettingsEditor({
         <p className="mt-0.5 text-xs text-subtle">Pick what fits how you work. You can change it any time; bookings already made are not affected.</p>
       </div>
 
-      <div role="radiogroup" aria-label="How guests book" className="grid gap-2 sm:grid-cols-3">
+      <div role="radiogroup" aria-label="How guests book" className="grid gap-2 sm:grid-cols-2">
         {METHODS.map((method) => {
           const on = value.method === method.value
           return (
@@ -90,7 +89,7 @@ export function BookingSettingsEditor({
           <p className="text-[0.8125rem] font-medium">Schedule</p>
           <div role="radiogroup" aria-label="Schedule" className="mt-2 grid gap-2 sm:grid-cols-2">
             {([
-              [true, 'On a schedule', value.method === 'call' ? 'Guests see your usual days and times on the page, then call.' : 'Guests pick one of your times and send a request for it.'],
+              [true, 'On a schedule', 'Guests pick one of your times and send a request for it.'],
               [false, 'No set schedule', 'Arranged with each guest. They suggest a day and you agree a time.'],
             ] as const).map(([scheduled, title, text]) => (
               <button
@@ -110,7 +109,7 @@ export function BookingSettingsEditor({
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Number guests call" optional description={value.method === 'call' ? 'Shown as the main button.' : 'Shown under the booking button.'}>
+        <Field label="Number guests call" optional description={instant ? 'Shown under the booking button.' : 'Shown as a Call button next to the request form.'}>
           {(control) => <Input {...control} type="tel" placeholder={businessPhone} value={value.phone} onChange={(e) => set({ phone: e.target.value })} />}
         </Field>
         <Field label="When you answer" optional>

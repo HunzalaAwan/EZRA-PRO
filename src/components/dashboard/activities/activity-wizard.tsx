@@ -1390,7 +1390,7 @@ function StorefrontPreview({
             </p>
           </div>
           <span className="pointer-events-none inline-flex h-9 items-center rounded-lg bg-primary px-4 text-[0.8125rem] font-semibold text-on-primary shadow-sm">
-            {dining ? 'Reserve a table' : 'Check availability'}
+            {dining ? 'Reserve a table' : draft.booking?.method === 'request' ? 'Request to book' : 'Check availability'}
           </span>
         </div>
       </div>

@@ -484,7 +484,7 @@ const PICKUP_BY_SLUG: Record<string, ActivityPickup> = {
 /** How guests book, where it is not simply online: request, call, no set schedule, or exceptions. */
 const BOOKING_BY_SLUG: Record<string, Partial<BookingSettings>> = {
   'private-sportfishing-charter': { method: 'request', scheduled: true, replyHours: 4, customQuote: true },
-  'private-catamaran-charter': { method: 'call', scheduled: true, callHours: 'Every day, 7am to 7pm' },
+  'private-catamaran-charter': { method: 'request', scheduled: true, callHours: 'Every day, 7am to 7pm' },
   'molokai-channel-crossing': { method: 'request', scheduled: false, replyHours: 24 },
   'family-reef-snorkel': { method: 'instant', groupLimit: 12, otherDates: true, customQuote: true },
   'boat-rental': { method: 'instant', otherDates: true, customQuote: true },

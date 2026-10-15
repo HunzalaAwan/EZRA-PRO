@@ -196,7 +196,7 @@ export function ActivityDetailView({
 
   // The main button says how this activity is booked.
   const booking = bookingOf(activity)
-  const ctaLabel = booking.method === 'call' ? 'Call to book' : booking.method === 'request' || !booking.scheduled ? 'Request to book' : 'Check availability'
+  const ctaLabel = booking.method === 'request' || !booking.scheduled ? 'Request to book' : 'Check availability'
   const languages = activity.languages && activity.languages.length > 0 ? activity.languages : (LANGUAGES_BY_LOCALE[tenant.locale] ?? ['English'])
   const packing = activity.bring && activity.bring.length > 0 ? activity.bring : (PACKING_LIST[activity.category] ?? PACKING_LIST.tours)
 
