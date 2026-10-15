@@ -345,6 +345,32 @@ export interface ActivityPickup {
 export type CharterRequestStatus = 'new' | 'quoted' | 'paid' | 'declined'
 
 /** A private charter enquiry from the storefront, and the quote that answers it. */
+/**
+ * How guests book an activity. Instant: pick a time and pay. Request: send
+ * the time and group they want; the business confirms with a payment link.
+ * Call: nothing is sold online; the listing shows a number and a message form.
+ */
+export interface BookingSettings {
+  method: 'instant' | 'request' | 'call'
+  /** False: no set schedule, every booking is arranged with the guest (request and call only). */
+  scheduled: boolean
+  /** Instant booking: groups bigger than this send a request instead. 0: off. */
+  groupLimit: number
+  /** Guests can ask for a day or time that is not on the schedule. */
+  otherDates: boolean
+  /** Guests can ask for a custom quote: a private version, a special occasion. */
+  customQuote: boolean
+  /** Shown to call. Empty: the business number. */
+  phone: string
+  /** "Mon–Sat, 8am–6pm". Optional. */
+  callHours: string
+  /** How soon the business replies to a request, in hours. */
+  replyHours: number
+}
+
+/** Why a guest sent a request. */
+export type RequestReason = 'booking' | 'group' | 'date' | 'sooner' | 'quote' | 'message'
+
 export interface CharterRequest {
   id: string
   tenantId: string
@@ -360,6 +386,10 @@ export interface CharterRequest {
   status: CharterRequestStatus
   /** A request a guest sent, or an invoice the business made for anyone. */
   source?: 'request' | 'invoice'
+  /** Why the guest asked. */
+  reason?: RequestReason
+  /** A preferred time of day when no exact time was picked: "Morning". */
+  when?: string
   phone?: string
   /** Invoices: "INV-1004". */
   number?: string
@@ -590,6 +620,8 @@ export interface Activity {
   priceCap?: number
   /** Bookings close this many hours before the start. 0 or absent: book until it starts. */
   noticeHours?: number
+  /** How guests book. Absent: instant booking. */
+  booking?: Partial<BookingSettings>
   /** Checkout offers a tip for the crew: 5–25% or an amount of the guest's own. */
   tips?: boolean
   /** The storefront category; guessed from the activity when absent. */

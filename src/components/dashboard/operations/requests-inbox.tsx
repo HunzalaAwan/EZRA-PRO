@@ -17,6 +17,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
 import { useCharterRequests } from '@/hooks/use-charter-requests'
 import { ACTIVITY_KIND_META } from '@/lib/activity-kinds'
+import { REASON_LABEL } from '@/lib/booking-method'
 import { cn, formatCurrency, formatDateLong, formatRelative, formatTime } from '@/lib/utils'
 import type { ActivityKind, CharterRequest, CharterRequestStatus, CurrencyCode } from '@/types'
 
@@ -189,6 +190,7 @@ export function RequestsInbox({
                     </span>
                     <Badge variant={STATUS_META[request.status].variant} size="sm">{STATUS_META[request.status].label}</Badge>
                   </span>
+                  {request.reason && !invoice ? <span className="text-xs font-medium text-primary">{REASON_LABEL[request.reason]}</span> : null}
                   <span className="truncate text-xs text-muted">
                     {invoice ? `${request.number} · ` : ''}
                     {activity?.name ?? (invoice ? 'Custom invoice' : 'Request')}
@@ -197,7 +199,7 @@ export function RequestsInbox({
                   <span className="flex justify-between gap-2 truncate text-xs text-subtle">
                     <span>
                       {request.party > 0 ? `${request.party} guests · ` : ''}
-                      {request.createdAt ? formatRelative(request.createdAt, now) : ''}
+                      {request.createdAt ? (new Date(request.createdAt) > now ? 'just now' : formatRelative(request.createdAt, now)) : ''}
                     </span>
                     {request.quote ? <span className="font-medium text-muted tabular-nums">{formatCurrency(request.quote.amount, currency)}</span> : null}
                   </span>
@@ -213,7 +215,7 @@ export function RequestsInbox({
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold tracking-[0.08em] text-faint uppercase">
-                  {sourceOf(selected) === 'invoice' ? `Invoice ${selected.number ?? ''}` : 'Guest request'}
+                  {sourceOf(selected) === 'invoice' ? `Invoice ${selected.number ?? ''}` : selected.reason ? REASON_LABEL[selected.reason] : 'Guest request'}
                 </p>
                 <h2 className="mt-0.5 text-lg font-semibold text-foreground">{selected.name}</h2>
                 <p className="flex flex-wrap gap-x-3 text-sm">
@@ -244,7 +246,11 @@ export function RequestsInbox({
                 <CalendarDays className="mt-0.5 size-4 text-faint" aria-hidden="true" />
                 <div>
                   <dt className="text-xs text-subtle">When</dt>
-                  <dd className="font-medium">{selected.startsAt ? `${formatDateLong(new Date(selected.startsAt))} · ${formatTime(selected.startsAt)}` : 'To arrange'}</dd>
+                  <dd className="font-medium">
+                    {selected.startsAt
+                      ? `${formatDateLong(new Date(selected.startsAt))} · ${selected.when ? selected.when.toLowerCase() : formatTime(selected.startsAt)}`
+                      : 'To arrange'}
+                  </dd>
                 </div>
               </div>
               <div className="flex items-start gap-2">
@@ -385,7 +391,9 @@ function QuoteDialog({
   onSend: (quote: { amount: number; depositPercent: number; note: string; validUntil: string }) => void
 }) {
   const tierPrice = activity?.tiers.find((tier) => tier.id === request.tierId)?.price ?? activity?.tiers[0]?.price ?? 0
-  const base = request.quote?.amount ?? (activity?.perGroup ? tierPrice : tierPrice * Math.max(1, request.party))
+  // What the guest picked, at list prices, is the starting point when they sent it.
+  const picked = (request.lines ?? []).reduce((sum, line) => sum + line.qty * line.unit, 0)
+  const base = request.quote?.amount ?? (picked > 0 ? picked : activity?.perGroup ? tierPrice : tierPrice * Math.max(1, request.party))
   const [amount, setAmount] = React.useState(base)
   const [deposit, setDeposit] = React.useState(String(request.quote?.depositPercent ?? 30))
   const [days, setDays] = React.useState('7')

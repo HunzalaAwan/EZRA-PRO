@@ -21,6 +21,7 @@
 
 import { presetQuestion } from '@/lib/guest-requirements'
 import type {
+  BookingSettings,
   CharterConfig,
   RentalConfig,
   RideConfig,
@@ -479,6 +480,15 @@ const PICKUP_BY_SLUG: Record<string, ActivityPickup> = {
 /* ==========================================================================
    GUEST QUESTIONS — what each activity asks at checkout.
    ========================================================================== */
+
+/** How guests book, where it is not simply online: request, call, no set schedule, or exceptions. */
+const BOOKING_BY_SLUG: Record<string, Partial<BookingSettings>> = {
+  'private-sportfishing-charter': { method: 'request', scheduled: true, replyHours: 4, customQuote: true },
+  'private-catamaran-charter': { method: 'call', scheduled: true, callHours: 'Every day, 7am to 7pm' },
+  'molokai-channel-crossing': { method: 'request', scheduled: false, replyHours: 24 },
+  'family-reef-snorkel': { method: 'instant', groupLimit: 12, otherDates: true, customQuote: true },
+  'boat-rental': { method: 'instant', otherDates: true, customQuote: true },
+}
 
 /** Activities that take custom quote requests in the demo. */
 const CUSTOM_REQUEST_SLUGS = new Set(['sunset-catamaran-sail-snorkel', 'molokini-crater-dawn-patrol', 'upcountry-horseback-ride', 'island-jeep-rental', 'family-reef-snorkel', 'private-sportfishing-charter', 'shotover-canyon-swing', 'alpine-heli-hike'])
@@ -3633,6 +3643,7 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     ...(spec.customRequests || CUSTOM_REQUEST_SLUGS.has(spec.slug) ? { customRequests: true } : {}),
     ...(spec.priceCap ? { priceCap: spec.priceCap } : {}),
     ...(spec.noticeHours ? { noticeHours: spec.noticeHours } : {}),
+    ...(BOOKING_BY_SLUG[spec.slug] ? { booking: BOOKING_BY_SLUG[spec.slug] } : {}),
     // Guided trips and rides offer a tip; rentals and passes do not.
     ...(['trip', 'activity', 'charter', 'lesson'].includes(spec.kind ?? 'trip') ? { tips: true } : {}),
     ...(spec.ride ? { ride: spec.ride } : {}),

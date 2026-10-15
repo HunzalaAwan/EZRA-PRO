@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
+import { bookingOf } from '@/lib/booking-method'
 
 import { NOW, getDepartureById, getStorefront, getStorefrontAvailability, getLocationById, getWaiverById, getPickupZonesByTenant } from '@/lib/demo'
 import { locationAddress } from '@/lib/locations'
@@ -131,6 +132,9 @@ export default async function CheckoutPage({
   const requestedSlug = typeof query.activity === 'string' ? query.activity : undefined
   const activity =
     activities.find((item) => item.slug === requestedSlug) ?? featured[0] ?? activities[0]
+
+  // Request and call activities are confirmed by the business first; there is nothing to pay here yet.
+  if (bookingOf(activity).method !== 'instant') redirect(`/book/${tenant.slug}/${activity.slug}`)
 
   /* ---------- departure ---------- */
 

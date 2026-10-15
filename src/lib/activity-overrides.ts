@@ -1,6 +1,7 @@
 import type {
   ActivityTheme,
   Activity,
+  BookingSettings,
   ActivityKind,
   ActivityPickup,
   ActivityLocation,
@@ -56,6 +57,7 @@ export interface ActivityOverride {
   customRequests?: boolean
   tips?: boolean
   priceCap?: number
+  booking?: Partial<BookingSettings>
   noticeHours?: number
   theme?: ActivityTheme
   /** null clears a custom category. */
@@ -145,6 +147,7 @@ export function applyActivityOverride<T extends Activity>(activity: T, override?
     languages: override.languages ?? activity.languages,
     customRequests: override.customRequests ?? activity.customRequests,
     tips: override.tips ?? activity.tips,
+    booking: override.booking ?? activity.booking,
     priceCap: override.priceCap === undefined ? activity.priceCap : override.priceCap || undefined,
     noticeHours: override.noticeHours === undefined ? activity.noticeHours : override.noticeHours || undefined,
     theme: override.theme ?? activity.theme,

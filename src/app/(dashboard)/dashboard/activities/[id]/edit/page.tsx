@@ -63,6 +63,7 @@ export default async function EditActivityPage({ params }: EditActivityPageProps
         pickupZones={getPickupZonesByTenant(tenant.id).map((zone) => ({ id: zone.id, name: zone.name, detail: `${zone.offsetMinutes} min before · ${zone.stops.length} stops`, fee: zone.fee }))}
         currency={tenant.currency}
         tenantName={tenant.name}
+        businessPhone={tenant.contact.phone}
         tenantSlug={tenant.slug}
         defaultCategory={activity.category}
         nowIso={NOW_ISO}

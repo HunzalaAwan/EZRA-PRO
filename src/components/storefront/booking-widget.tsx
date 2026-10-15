@@ -39,7 +39,11 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { hasItems, rentalItemsOf } from '@/lib/rental-items'
+import { bookingOf, showsSchedule } from '@/lib/booking-method'
+import { EnquiryPanel, RequestForm, type RequestContext } from '@/components/storefront/booking-request'
+import type { BookingSettings } from '@/types'
 import { useRentalService } from '@/hooks/use-rental-service'
+import { priceUnit } from '@/lib/activity-kinds'
 import { crewName, FUEL_LABEL, LESSON_LEVELS, LICENCE_LABEL, isDayRental, partyLabel, rateFor, rentalCategoryMeta, rentalModes, routeLabel, type RentalMode } from '@/lib/activity-kinds'
 import { applyRules } from '@/lib/pricing'
 import { usePricing } from '@/hooks/use-pricing'
@@ -303,9 +307,42 @@ export interface BookingWidgetProps {
   /** `sheet` drops the card chrome for the mobile bottom sheet. */
   variant?: 'rail' | 'sheet'
   className?: string
+  /** For call to book, and the call line under requests. */
+  businessPhone?: string
 }
 
-export function BookingWidget({
+/**
+ * Picks the panel for how the activity is booked: the date and time picker
+ * for instant booking and request to book on a schedule, or a call and
+ * request panel when it is booked by phone or has no set schedule.
+ */
+export function BookingWidget(props: BookingWidgetProps) {
+  const settings = bookingOf(props.activity)
+  if (!showsSchedule(settings)) {
+    const today = (props.nowIso ?? new Date().toISOString()).slice(0, 10)
+    return (
+      <EnquiryPanel
+        activity={props.activity}
+        tenantSlug={props.tenantSlug}
+        currency={props.currency}
+        settings={settings}
+        businessPhone={props.businessPhone ?? ''}
+        minDate={today}
+        priceUnit={priceUnit(props.activity)}
+        upcoming={
+          settings.scheduled
+            ? props.days.flatMap((day) => day.slots.filter((slot) => !slot.soldOut).map((slot) => slot.startsAt)).slice(0, 4)
+            : []
+        }
+        className={props.className}
+      />
+    )
+  }
+  return <BookingWidgetInner {...props} settings={settings} />
+}
+
+function BookingWidgetInner({
+  settings,
   activity,
   tenantSlug,
   currency,
@@ -317,7 +354,8 @@ export function BookingWidget({
   nowIso,
   variant = 'rail',
   className,
-}: BookingWidgetProps) {
+  businessPhone,
+}: BookingWidgetProps & { settings: BookingSettings }) {
   const router = useRouter()
   const reducedMotion = useReducedMotionSafe()
   const stripRef = React.useRef<HTMLDivElement>(null)
@@ -359,11 +397,11 @@ export function BookingWidget({
     (step): step is string => Boolean(step),
   )
   const stepOf = (id: string) => stepList.indexOf(id) + 1
-  const requestMode = kind === 'charter' && Boolean(activity.charter?.requestToBook)
+  // Request to book: the guest picks a time and sends it; the business confirms with a payment link.
+  const requestMode = settings.method === 'request'
   const [party, setParty] = React.useState(() => Math.max(2, activity.minParticipants || 1))
-  const [requestOpen, setRequestOpen] = React.useState(false)
-  const [requestSent, setRequestSent] = React.useState(false)
-  const [request, setRequest] = React.useState({ name: '', email: '', message: '' })
+  /** Which request form is open, if any. */
+  const [asking, setAsking] = React.useState<RequestContext['reason'] | null>(null)
 
   /* Only the chosen location's runs, with the day totals recomputed. */
   const days = React.useMemo(() => {
@@ -541,6 +579,9 @@ export function BookingWidget({
   const canReserve =
     shortTiers.length === 0 &&
     Boolean(slot) && !overCapacity && seatsUsed >= (kind === 'charter' || kind === 'rental' ? 1 : Math.max(1, activity.minParticipants)) && (kind !== 'charter' || party >= Math.max(1, activity.minParticipants))
+
+  // Instant booking with a group limit: bigger groups send a request instead of paying.
+  const overGroup = settings.method === 'instant' && settings.groupLimit > 0 && headcount > settings.groupLimit
 
   const reserve = () => {
     if (!slot || !canReserve) return
@@ -1412,70 +1453,83 @@ export function BookingWidget({
 
         {/* ---------- reserve ---------- */}
         <div className="space-y-3">
-          {requestSent ? (
-            <div role="status" className="rounded-xl border border-success/40 bg-success-soft px-4 py-3.5 text-sm">
-              <p className="flex items-center gap-2 font-semibold text-foreground">
-                <CheckCircle2 className="size-4 text-success" aria-hidden="true" />
-                Request sent
-              </p>
-              <p className="mt-1 text-muted">
-                We reply within a few hours with a quote and a payment link to {request.email || 'your email'}.
-              </p>
-            </div>
-          ) : requestOpen ? (
-            <form
-              className="flex flex-col gap-2.5 rounded-xl border border-line p-3.5"
-              onSubmit={(event) => {
-                event.preventDefault()
-                if (!slot || request.name.trim().length < 2 || !/^\S+@\S+\.\S+$/.test(request.email)) return
-                try {
-                  const key = `ezra:charter-requests:${tenantSlug}`
-                  const list = JSON.parse(window.localStorage.getItem(key) ?? '[]') as unknown[]
-                  list.unshift({
-                    id: `req_${Date.now().toString(36)}`,
-                    activitySlug: activity.slug,
-                    departureId: slot.departureId,
-                    startsAt: slot.startsAt,
-                    tierId: selection.tiers.find((tier) => tier.qty > 0)?.tierId,
-                    party,
-                    ...request,
-                    createdAt: new Date().toISOString(),
-                  })
-                  window.localStorage.setItem(key, JSON.stringify(list.slice(0, 50)))
-                } catch {
-                  /* storage blocked: the request still shows as sent */
-                }
-                setRequestSent(true)
-              }}
-            >
-              <p className="text-sm font-semibold text-foreground">Tell us about your group</p>
-              <Input placeholder="Your name" aria-label="Your name" value={request.name} onChange={(e) => setRequest((r) => ({ ...r, name: e.target.value }))} />
-              <Input type="email" placeholder="Email" aria-label="Email" value={request.email} onChange={(e) => setRequest((r) => ({ ...r, email: e.target.value }))} />
-              <Textarea rows={3} placeholder="The occasion, the plan, catering or anything else" aria-label="Your plan" value={request.message} onChange={(e) => setRequest((r) => ({ ...r, message: e.target.value }))} />
-              <Button type="submit" size="lg" fullWidth disabled={!slot || request.name.trim().length < 2 || !/^\S+@\S+\.\S+$/.test(request.email)}>
-                Send request
-              </Button>
-            </form>
+          {asking ? (
+            <RequestForm
+              activity={activity}
+              tenantSlug={tenantSlug}
+              currency={currency}
+              replyHours={settings.replyHours}
+              onCancel={() => setAsking(null)}
+              context={
+                asking === 'date' || asking === 'sooner'
+                  ? { reason: asking, askDate: true, askParty: true, party: headcount, minDate: (nowIso ?? new Date().toISOString()).slice(0, 10) }
+                  : asking === 'quote'
+                    ? { reason: 'quote', askDate: !slot, askParty: true, party: headcount, slot: slot ? { departureId: slot.departureId, startsAt: slot.startsAt } : undefined }
+                    : {
+                        reason: asking,
+                        slot: slot ? { departureId: slot.departureId, startsAt: slot.startsAt } : undefined,
+                        party: kind === 'charter' ? party : headcount,
+                        lines: quote.ticketLines.filter((line) => line.total > 0).map((line) => ({ label: line.label, qty: line.quantity, unit: line.unitPrice })),
+                      }
+              }
+            />
           ) : (
-          <Button
-            size="lg"
-            fullWidth
-            onClick={requestMode ? () => setRequestOpen(true) : reserve}
-            disabled={!canReserve}
-            className="h-12 text-[0.9375rem]"
-          >
-            {!slot ? (kind === 'rental' ? 'Choose a start time' : 'Choose a departure') : requestMode ? 'Request a quote' : kind === 'rental' ? 'Rent now' : 'Reserve now'}
-          </Button>
+            <>
+              {overGroup ? (
+                <p className="rounded-xl bg-surface-sunken px-3.5 py-2.5 text-sm text-muted">
+                  Groups of more than {settings.groupLimit} book by request. Send the details and we confirm with the price.
+                </p>
+              ) : null}
+              <Button
+                size="lg"
+                fullWidth
+                onClick={requestMode ? () => setAsking('booking') : overGroup ? () => setAsking('group') : reserve}
+                disabled={requestMode || overGroup ? !slot || headcount < 1 : !canReserve}
+                className="h-12 text-[0.9375rem]"
+              >
+                {!slot
+                  ? kind === 'rental'
+                    ? 'Choose a start time'
+                    : 'Choose a departure'
+                  : requestMode
+                    ? 'Send request'
+                    : overGroup
+                      ? 'Send a group request'
+                      : kind === 'rental'
+                        ? 'Rent now'
+                        : 'Reserve now'}
+              </Button>
+              {requestMode ? <p className="text-center text-xs text-subtle">Nothing is charged now. We confirm and send a payment link.</p> : null}
+              <div className="flex flex-col items-center gap-1.5">
+                {settings.otherDates ? (
+                  <button type="button" onClick={() => setAsking('date')} className="text-sm font-medium text-primary hover:underline">
+                    Can&rsquo;t find your date? Ask for another day
+                  </button>
+                ) : null}
+                {(activity.noticeHours ?? 0) > 0 ? (
+                  <button type="button" onClick={() => setAsking('sooner')} className="text-sm font-medium text-primary hover:underline">
+                    Need it within {activity.noticeHours} hours? Ask us
+                  </button>
+                ) : null}
+                {settings.customQuote ? (
+                  <button type="button" onClick={() => setAsking('quote')} className="text-sm font-medium text-primary hover:underline">
+                    Planning something special? Ask for a custom quote
+                  </button>
+                ) : null}
+                {businessPhone && (requestMode || settings.otherDates || settings.groupLimit > 0) ? (
+                  <a href={`tel:${businessPhone.replace(/[^\d+]/g, '')}`} className="text-xs text-subtle hover:text-foreground">
+                    Or call {settings.phone || businessPhone}{settings.callHours ? ` · ${settings.callHours}` : ''}
+                  </a>
+                ) : null}
+              </div>
+            </>
           )}
-          {activity.customRequests && !requestMode && !requestOpen && !requestSent ? (
-            <button type="button" onClick={() => setRequestOpen(true)} className="w-full text-center text-sm font-medium text-primary hover:underline">
-              Planning something bigger? Ask for a custom quote
-            </button>
-          ) : null}
-          <TrustSeal freeCancellationHours={activity.cancellationPolicy.freeCancellationHours} />
-          <p className="text-center text-xs text-faint">
-            You will not be charged until the final step.
-          </p>
+          <TrustSeal freeCancellationHours={activity.cancellationPolicy.freeCancellationHours} byRequest={requestMode} />
+          {requestMode ? null : (
+            <p className="text-center text-xs text-faint">
+              You will not be charged until the final step.
+            </p>
+          )}
         </div>
       </div>
     </section>

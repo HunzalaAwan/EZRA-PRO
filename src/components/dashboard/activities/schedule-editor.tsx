@@ -815,9 +815,10 @@ export interface LocationsEditorProps {
 
 const ownRule = (schedule: DraftSchedule): DraftSchedule => ({ ...schedule, locations: [] })
 
-export function LocationsEditor({ schedule, onChange, locations, nowIso, errors, seats, rental, className }: LocationsEditorProps) {
+export function LocationsEditor({ schedule, onChange, locations, nowIso, errors, seats, rental, className, pickOnly }: LocationsEditorProps & { pickOnly?: boolean }) {
   const picked = schedule.locations
-  const multi = picked.length > 1
+  // Pick only: no set schedule, so locations carry no days or times of their own.
+  const multi = picked.length > 1 && !pickOnly
   const [openIds, setOpenIds] = React.useState<string[]>(() => (picked[0] ? [picked[0].locationId] : []))
 
   const errorsFor = React.useCallback(
@@ -886,8 +887,9 @@ export function LocationsEditor({ schedule, onChange, locations, nowIso, errors,
           <div>
             <p className="text-[0.8125rem] font-medium">Where it runs from</p>
             <p className="mt-0.5 text-xs text-muted">
-              Tick every location this runs from. With more than one, open each location to set its own days and times.
-              Guests choose a location at checkout and only see its dates and times.
+              {pickOnly
+                ? 'Tick every location this runs from. Guests say which suits them when they ask.'
+                : 'Tick every location this runs from. With more than one, open each location to set its own days and times. Guests choose a location at checkout and only see its dates and times.'}
             </p>
           </div>
           <Link href="/dashboard/settings/locations" className="text-xs font-medium text-primary hover:underline">

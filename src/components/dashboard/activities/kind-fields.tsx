@@ -809,9 +809,6 @@ export function KindFields({
             <Field label="Fewest guests" error={errors.minParticipants} description="Below this, you do not go out.">
               {(control) => <Input {...control} type="number" min={1} value={shared.minParticipants} onChange={(e) => onShared({ minParticipants: num(e.target.value, 1) })} />}
             </Field>
-            <Field label="Notice needed" description="Hours before it can start.">
-              {(control) => <Input {...control} type="number" min={0} suffix="hours" value={charter.noticeHours} onChange={(e) => set('charter', { noticeHours: num(e.target.value) })} />}
-            </Field>
             {ageField(shared, onShared, errors)}
           </div>
         </Section>
@@ -829,13 +826,7 @@ export function KindFields({
           />
         </Section>
 
-        <Section title="Booking and guiding">
-          <Toggle
-            label="Request to book"
-            hint="Guests send their plan and you reply with a quote and a payment link, instead of paying on the spot."
-            checked={charter.requestToBook}
-            onChange={(requestToBook) => set('charter', { requestToBook })}
-          />
+        <Section title="Languages" hint="How guests book (online, request or call) and the notice you need are set on the Booking step.">
           <div>
             <p className="mb-2 text-xs font-medium text-muted">Languages on board</p>
             <LanguagePicker value={shared.languages} onChange={(languages) => onShared({ languages })} />

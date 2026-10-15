@@ -38,6 +38,7 @@ export default async function NewActivityPage() {
       <ActivityWizard
         currency={tenant.currency}
         tenantName={tenant.name}
+        businessPhone={tenant.contact.phone}
         tenantSlug={tenant.slug}
         defaultCategory={tenant.vertical}
         nowIso={NOW_ISO}

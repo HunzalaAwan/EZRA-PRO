@@ -20,6 +20,8 @@ export interface TrustBarProps extends React.ComponentProps<'div'> {
   freeCancellationHours?: number
   variant?: 'band' | 'inline'
   className?: string
+  /** Request and call activities are confirmed by the business, not instantly. */
+  confirmedBy?: 'instant' | 'business'
 }
 
 export function TrustBar({
@@ -28,6 +30,7 @@ export function TrustBar({
   freeCancellationHours = 24,
   variant = 'band',
   className,
+  confirmedBy = 'instant',
   ...props
 }: TrustBarProps) {
   const cancellation =
@@ -42,12 +45,9 @@ export function TrustBar({
       detail: 'Card details never touch our servers',
       tone: 'text-success',
     },
-    {
-      icon: Zap,
-      label: 'Instant confirmation',
-      detail: 'Tickets in your inbox in seconds',
-      tone: 'text-primary',
-    },
+    confirmedBy === 'instant'
+      ? { icon: Zap, label: 'Instant confirmation', detail: 'Tickets in your inbox in seconds', tone: 'text-primary' }
+      : { icon: Zap, label: 'Confirmed by the team', detail: 'You pay only once it is agreed', tone: 'text-primary' },
     {
       icon: CalendarCheck,
       label: cancellation,
@@ -121,9 +121,11 @@ export function TrustBar({
 
 export interface TrustSealProps extends React.ComponentProps<'p'> {
   freeCancellationHours?: number
+  /** Request to book: confirmed by the team, paid afterwards. */
+  byRequest?: boolean
 }
 
-export function TrustSeal({ freeCancellationHours = 24, className, ...props }: TrustSealProps) {
+export function TrustSeal({ freeCancellationHours = 24, byRequest = false, className, ...props }: TrustSealProps) {
   return (
     <p
       className={cn(
@@ -133,7 +135,7 @@ export function TrustSeal({ freeCancellationHours = 24, className, ...props }: T
       {...props}
     >
       <BadgeCheck className="size-3.5 shrink-0 text-success" aria-hidden="true" />
-      Free cancellation up to {freeCancellationHours}h before · instant confirmation · secure
+      Free cancellation up to {freeCancellationHours}h before · {byRequest ? 'confirmed by the team' : 'instant confirmation'} · secure
       payment
     </p>
   )

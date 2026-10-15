@@ -40,6 +40,7 @@ export function GuestQuestionsEditor({
   onGuestDetailsChange,
   forcedReason,
   waivers,
+  hidePresets = [],
 }: {
   questions: GuestQuestion[]
   onChange: (questions: GuestQuestion[]) => void
@@ -52,6 +53,8 @@ export function GuestQuestionsEditor({
   /** Set when something else in the activity needs every guest asked. */
   forcedReason?: string
   waivers: WaiverOption[]
+  /** Library questions another setting already asks: date of birth in guest details, a rental's licence. */
+  hidePresets?: readonly string[]
 }) {
   const perGuest = guestDetails.enabled || Boolean(forcedReason)
   const fieldOf = (key: GuestFieldKey) => guestDetails.fields.find((field) => field.key === key)
@@ -309,7 +312,7 @@ export function GuestQuestionsEditor({
         <div>
           <p className="text-xs font-medium text-muted">Add from the library</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {PRESET_ORDER.filter((key) => !used.has(key)).map((key) => (
+            {PRESET_ORDER.filter((key) => !used.has(key) && !hidePresets.includes(key)).map((key) => (
               <button
                 key={key}
                 type="button"

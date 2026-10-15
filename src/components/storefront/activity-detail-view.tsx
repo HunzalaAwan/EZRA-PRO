@@ -45,6 +45,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Reveal } from '@/components/motion/reveal'
 import { StaggerGroup, StaggerItem } from '@/components/motion/stagger'
+import { bookingOf } from '@/lib/booking-method'
 import { BookingWidget, type AvailabilityDay } from '@/components/storefront/booking-widget'
 import { StickyRail } from '@/components/storefront/sticky-rail'
 import { StarRow } from '@/components/storefront/storefront-hero'
@@ -193,6 +194,9 @@ export function ActivityDetailView({
   const hero = media.find((m) => m.isPrimary) ?? media[0]
   const rest = media.filter((m) => m.id !== hero?.id).slice(0, 2)
 
+  // The main button says how this activity is booked.
+  const booking = bookingOf(activity)
+  const ctaLabel = booking.method === 'call' ? 'Call to book' : booking.method === 'request' || !booking.scheduled ? 'Request to book' : 'Check availability'
   const languages = activity.languages && activity.languages.length > 0 ? activity.languages : (LANGUAGES_BY_LOCALE[tenant.locale] ?? ['English'])
   const packing = activity.bring && activity.bring.length > 0 ? activity.bring : (PACKING_LIST[activity.category] ?? PACKING_LIST.tours)
 
@@ -293,7 +297,7 @@ export function ActivityDetailView({
                   })
                 }
               >
-                Check availability
+                {ctaLabel}
               </Button>
             </div>
           </div>
@@ -648,6 +652,7 @@ export function ActivityDetailView({
                 days={days}
                 locations={locations}
                 checkoutPath={checkoutPath}
+                businessPhone={tenant.contact.phone}
                 initialDateKey={initialDateKey}
                 initialGuests={initialGuests}
                 nowIso={nowIso}
@@ -657,6 +662,7 @@ export function ActivityDetailView({
                 rating={activity.rating}
                 reviewCount={activity.reviewCount}
                 freeCancellationHours={activity.cancellationPolicy.freeCancellationHours}
+                confirmedBy={booking.method === 'instant' ? 'instant' : 'business'}
                 className="mt-5 justify-center"
               />
             </StickyRail>
@@ -728,7 +734,7 @@ export function ActivityDetailView({
             </p>
           </div>
           <Button size="lg" onClick={() => setMobileWidget(true)} className="shrink-0">
-            Check availability
+            {ctaLabel}
           </Button>
         </div>
       </div>
@@ -746,6 +752,7 @@ export function ActivityDetailView({
               days={days}
               locations={locations}
               checkoutPath={checkoutPath}
+                businessPhone={tenant.contact.phone}
               initialDateKey={initialDateKey}
               initialGuests={initialGuests}
               nowIso={nowIso}
