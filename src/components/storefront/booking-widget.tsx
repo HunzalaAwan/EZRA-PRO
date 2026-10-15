@@ -38,6 +38,8 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { hasItems, rentalItemsOf } from '@/lib/rental-items'
+import { useRentalService } from '@/hooks/use-rental-service'
 import { crewName, FUEL_LABEL, LESSON_LEVELS, LICENCE_LABEL, isDayRental, partyLabel, rateFor, rentalCategoryMeta, rentalModes, routeLabel, type RentalMode } from '@/lib/activity-kinds'
 import { applyRules } from '@/lib/pricing'
 import { usePricing } from '@/hooks/use-pricing'
@@ -55,6 +57,8 @@ import { locationAddress } from '@/lib/locations'
    ========================================================================== */
 
 export interface AvailabilitySlot {
+  /** Rentals with items: how many of each are still free at this time. */
+  itemsLeft?: Record<string, number>
   departureId: string
   /** Local ISO, "YYYY-MM-DDTHH:mm:ss". */
   startsAt: string
@@ -416,8 +420,53 @@ export function BookingWidget({
     }
     return Number.isFinite(least) ? least : 0
   }, [dayRental, slot, days, dateKey, rentDays])
-  const seatsLeft = dayRental ? spanLeft : (slot?.seatsLeft ?? 0)
-  const overCapacity = slot ? seatsUsed > seatsLeft : false
+  /* ---------- rentals with items: each item counted on its own ---------- */
+  const itemMode = hasItems(activity)
+  const items = React.useMemo(() => (itemMode ? rentalItemsOf(activity) : []), [itemMode, activity])
+  const service = useRentalService(tenantSlug)
+  /** Free of one item at this time; day rentals need it free every day of the span. Out of service set on the Rentals page counts too. */
+  const itemLeft = (tierId: string) => {
+    if (!slot) return 0
+    const item = items.find((entry) => entry.tierId === tierId)
+    const seeded = item?.outOfService ?? 0
+    const extra = item ? service.get(activity.id, tierId, { count: seeded, note: '' }).count - seeded : 0
+    let free = slot.itemsLeft?.[tierId] ?? 0
+    if (dayRental) {
+      const start = days.findIndex((entry) => entry.dateKey === dateKey)
+      for (let offset = 0; start >= 0 && offset < rentDays; offset++) {
+        const entry = days[start + offset]
+        if (!entry) break
+        const open = entry.slots.filter((other) => !other.soldOut)
+        free = Math.min(free, open.length > 0 ? Math.max(...open.map((other) => other.itemsLeft?.[tierId] ?? 0)) : 0)
+      }
+    } else if (hourRental && day) {
+      // Longer than the shortest rental: it has to be free at every start time it covers.
+      const until = new Date(slot.startsAt).getTime() + rentHours * 3_600_000
+      for (const other of day.slots) {
+        const at = new Date(other.startsAt).getTime()
+        if (at > new Date(slot.startsAt).getTime() && at < until) free = Math.min(free, other.itemsLeft?.[tierId] ?? 0)
+      }
+    }
+    return Math.max(0, free - extra)
+  }
+  // A new time or length: trim what is no longer free, and if nothing is picked, start with the first item that is.
+  const itemsKey = itemMode && slot ? items.map((item) => `${item.tierId}:${itemLeft(item.tierId)}`).join('|') : ''
+  React.useEffect(() => {
+    if (!itemsKey) return
+    setTierQty((current) => {
+      const next = { ...current }
+      for (const item of items) next[item.tierId] = Math.min(current[item.tierId] ?? 0, itemLeft(item.tierId))
+      if (items.every((item) => (next[item.tierId] ?? 0) === 0)) {
+        const first = items.find((item) => itemLeft(item.tierId) > 0)
+        if (first) next[first.tierId] = 1
+      }
+      return items.some((item) => next[item.tierId] !== current[item.tierId]) ? next : current
+    })
+    // itemLeft is read through itemsKey, which changes whenever any count does.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemsKey])
+  const seatsLeft = itemMode ? items.reduce((sum, item) => sum + itemLeft(item.tierId), 0) : dayRental ? spanLeft : (slot?.seatsLeft ?? 0)
+  const overCapacity = slot ? (itemMode ? items.some((item) => (tierQty[item.tierId] ?? 0) > itemLeft(item.tierId)) : seatsUsed > seatsLeft) : false
 
   const selection: QuoteSelection = React.useMemo(
     () => ({
@@ -539,7 +588,133 @@ export function BookingWidget({
   )
 
   let kindBlock: React.ReactNode = null
-  if (kind === 'rental') {
+  if (kind === 'rental' && itemMode) {
+    const rental = activity.rental
+    const shown = items.filter((item) => !rated || rateFor(activity, item.tierId, rentalMode) !== undefined)
+    const chosen = shown.filter((item) => (tierQty[item.tierId] ?? 0) > 0)
+    const count = chosen.reduce((sum, item) => sum + (tierQty[item.tierId] ?? 0), 0)
+    const fits = chosen.reduce((sum, item) => sum + (tierQty[item.tierId] ?? 0) * item.holds, 0)
+    const deposit = chosen.reduce((sum, item) => sum + (tierQty[item.tierId] ?? 0) * item.deposit, 0)
+    const per = dayRental ? ' a day' : hourRental ? ' an hour' : ''
+    const lateFee = rental?.lateFee ?? 0
+    const rules = [
+      rental?.licence && rental.licence !== 'none' ? `${LICENCE_LABEL[rental.licence]} needed${activity.minAge > 0 ? `, ${activity.minAge}+` : ''}` : null,
+      rental?.fuel && rentalMeta.fuel ? FUEL_LABEL[rental.fuel] : null,
+      rentalMeta.mileage ? (rental?.kmPerDay ? `${rental.kmPerDay} km a day included` : 'Unlimited km') : null,
+      lateFee > 0 ? `Late return ${formatCurrency(lateFee, currency)} an hour` : null,
+    ].filter((entry): entry is string => Boolean(entry))
+    const setQty = (tierId: string, qty: number) => setTierQty((current) => ({ ...current, [tierId]: qty }))
+    kindBlock = (
+      <div>
+        <div className="flex items-baseline justify-between gap-3">
+          <h3 className="text-[0.8125rem] font-semibold tracking-tight text-foreground">{stepOf('guests')} · What would you like?</h3>
+          {slot ? (
+            <span className={cn('text-xs font-medium tabular', seatsLeft <= 2 ? 'text-warning' : 'text-subtle')}>
+              {seatsLeft} free{dayRental && rentDays > 1 ? ' every day' : ''}
+            </span>
+          ) : null}
+        </div>
+        {modes.length > 1 ? (
+          <div className="mt-3 grid grid-cols-2 gap-1 rounded-xl bg-surface-sunken p-1" role="radiogroup" aria-label="Rent by">
+            {modes.map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                role="radio"
+                aria-checked={rentalMode === mode}
+                onClick={() => setRentalMode(mode)}
+                className={cn('rounded-lg px-3 py-2 text-sm font-semibold transition-colors', rentalMode === mode ? 'bg-surface text-foreground shadow-sm' : 'text-muted hover:text-foreground')}
+              >
+                By the {mode}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <ul className="mt-3 flex list-none flex-col gap-2 p-0" aria-label="Items">
+          {shown.map((item) => {
+            const left = itemLeft(item.tierId)
+            const qty = tierQty[item.tierId] ?? 0
+            const price = rated ? (rateFor(activity, item.tierId, rentalMode) ?? 0) : (activity.priceTiers.find((tier) => tier.id === item.tierId)?.price ?? 0)
+            const max = Math.min(left, item.maxPerBooking)
+            return (
+              <li key={item.tierId} className={cn('rounded-xl border px-3.5 py-3 transition-colors', qty > 0 ? 'border-primary bg-primary-soft/20' : 'border-line', slot && left === 0 && qty === 0 && 'opacity-60')}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-foreground">{item.name}</p>
+                    <p className="mt-0.5 text-xs text-subtle">{[item.description, `Fits ${item.holds}`].filter(Boolean).join(' · ')}</p>
+                    <p className="mt-1 text-sm font-medium text-foreground tabular">
+                      {formatCurrency(Math.round(price * multiplier), currency)}
+                      <span className="text-xs font-normal text-subtle">{per}</span>
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-col items-end gap-1.5">
+                    {stepper(qty, 0, Math.max(qty, max), (next) => setQty(item.tierId, next), item.name)}
+                    <span className={cn('text-xs font-medium tabular', !slot ? 'text-subtle' : left === 0 ? 'text-danger' : left <= 2 ? 'text-warning' : 'text-subtle')}>
+                      {!slot ? 'Pick a time' : left === 0 ? 'None left' : `${left} left`}
+                    </span>
+                  </div>
+                </div>
+                {slot && qty > left ? (
+                  <p className="mt-1.5 text-xs font-medium text-danger">
+                    {left === 0 ? "None left" : `Only ${left} left`} {dayRental && rentDays > 1 ? "for all those days" : "at this time"}. Lower it or pick another time.
+                  </p>
+                ) : null}
+              </li>
+            )
+          })}
+        </ul>
+        {hourRental ? (
+          <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-3">
+            <span>
+              <span className="block text-sm font-medium text-foreground">How many hours</span>
+              <span className="block text-xs text-subtle">
+                {slot ? `${formatTime(slot.startsAt)} to ${clock(addMinutes(slot.startsAt.slice(11, 16), rentHours * 60))}` : `${minHours} to ${maxHours} hours`}
+              </span>
+            </span>
+            {stepper(rentHours, minHours, maxHours, setRentHours, 'hours')}
+          </div>
+        ) : null}
+        {dayRental ? (
+          <div className="mt-3 rounded-xl border border-line">
+            <div className="flex items-center justify-between gap-3 px-3.5 py-3">
+              <span>
+                <span className="block text-sm font-medium text-foreground">How many days</span>
+                <span className="block text-xs text-subtle">{minDays === maxDays ? `${minDays} days` : `${minDays} to ${maxDays} days`}</span>
+              </span>
+              {stepper(rentDays, minDays, maxDays, setRentDays, 'days')}
+            </div>
+            {dateKey ? (
+              <dl className="grid grid-cols-2 gap-3 border-t border-line-subtle px-3.5 py-3 text-xs">
+                <div>
+                  <dt className="text-subtle">Pick up after</dt>
+                  <dd className="mt-0.5 font-medium text-foreground">{shortDate(dateKey, 0)} · {clock(rental?.pickupTime ?? '09:00')}</dd>
+                </div>
+                <div>
+                  <dt className="text-subtle">Return before</dt>
+                  <dd className="mt-0.5 font-medium text-foreground">{shortDate(dateKey, rentDays)} · {clock(rental?.returnTime ?? '17:00')}</dd>
+                </div>
+              </dl>
+            ) : null}
+          </div>
+        ) : null}
+        <p className="mt-2 text-xs text-muted">
+          {count > 0
+            ? `${count} ${count === 1 ? 'item' : 'items'} · fits ${fits} ${fits === 1 ? 'person' : 'people'}${deposit > 0 ? ` · ${formatCurrency(deposit, currency)} refundable deposit held at pick-up` : ''}`
+            : 'Add at least one item.'}
+        </p>
+        {rules.length > 0 ? (
+          <ul className="mt-2 flex list-none flex-wrap gap-1.5 p-0">
+            {rules.map((rule) => (
+              <li key={rule} className="rounded-full bg-surface-sunken px-2.5 py-1 text-xs font-medium text-muted">
+                {rule}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+    )
+
+  } else if (kind === 'rental') {
     const rental = activity.rental
     const units = rental?.units ?? activity.maxCapacity
     const deposit = rental?.damageDeposit ?? 0

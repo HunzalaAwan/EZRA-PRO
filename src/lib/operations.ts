@@ -9,6 +9,7 @@ import {
 } from '@/lib/demo'
 import { addDays, hashSeed, toDateKey } from '@/lib/utils'
 import { rentalCategoryMeta } from '@/lib/activity-kinds'
+import { hasItems, itemsInBooking, itemsSentence, rentalItemsOf, rentalSpan } from '@/lib/rental-items'
 import type { CharterRequest, WeatherSnapshot } from '@/types'
 
 /* ==========================================================================
@@ -42,12 +43,14 @@ export interface RentalRow {
   endsAt: string
   minutes: number
   lengthLabel: string
-  /** What was rented: the tier (a length or a model). */
+  /** What was rented, in words: "2 × Single kayak, 1 × Double kayak". */
   itemLabel: string
+  /** Rentals with items: how many of each. */
+  lines: { tierId: string; name: string; qty: number }[]
   /** Day rentals: picked up on one day, back on a later one. */
   days: number
   status: RentalStatus
-  /** Minor units held per unit at hand-out. */
+  /** Minor units held for the whole rental at hand-out. */
   deposit: number
   balance: number
 }
@@ -66,6 +69,12 @@ export interface RentalFleet {
   byDay: boolean
   bufferMinutes: number
   damageDeposit: number
+  /** Per hour late, minor units. */
+  lateFee: number
+  /** What each unit is called on the board, by unit number - 1: "Double kayak 1". */
+  unitNames: string[]
+  /** Rentals with items: each kind with its units and service state. */
+  items: { tierId: string; name: string; stock: number; holds: number; deposit: number; outOfService: number; serviceNote: string; units: number[] }[]
 }
 
 export interface RentalBoard {
@@ -92,12 +101,29 @@ export function getRentalBoard(tenantId: string, day: Date = NOW): RentalBoard {
     const buffer = config?.bufferMinutes ?? 0
     const byDay = config?.modes ? config.modes.length === 1 && config.modes[0] === 'day' : config?.billing === 'day'
     const meta = rentalCategoryMeta(config?.category)
+    // Items: units are numbered across the whole rental, grouped by item, and named per item.
+    const items = hasItems(activity) ? rentalItemsOf(activity) : []
+    const unitTier: string[] = []
+    const unitNames: string[] = []
+    const fleetItems = items.map((item) => {
+      const numbers: number[] = []
+      for (let n = 1; n <= item.stock; n++) {
+        unitTier.push(item.tierId)
+        unitNames.push(`${item.name} ${n}`)
+        numbers.push(unitTier.length)
+      }
+      return { tierId: item.tierId, name: item.name, stock: item.stock, holds: item.holds, deposit: item.deposit, outOfService: item.outOfService ?? 0, serviceNote: item.serviceNote ?? '', units: numbers }
+    })
+    const fleetUnits = items.length > 0 ? unitTier.length : units
     fleets.push({
       id: activity.id,
       name: activity.name,
       slug: activity.slug,
       colorKey: activity.colorKey,
-      units,
+      units: fleetUnits,
+      lateFee: config?.lateFee ?? 0,
+      unitNames,
+      items: fleetItems,
       unitNoun: UNIT_NOUN[activity.slug] ?? meta.unit.charAt(0).toUpperCase() + meta.unit.slice(1),
       unitsWord: UNIT_WORDS[activity.slug]?.[1] ?? meta.units,
       unitWord: UNIT_WORDS[activity.slug]?.[0] ?? meta.unit,
@@ -113,7 +139,9 @@ export function getRentalBoard(tenantId: string, day: Date = NOW): RentalBoard {
     )
 
     const lengths = config?.durations ?? [{ tierId: activity.priceTiers[0]?.id ?? '', minutes: activity.durationMinutes }]
-    const freeAt = Array.from({ length: units }, () => 0)
+    const freeAt = Array.from({ length: fleetUnits }, () => 0)
+    // Units out of service never go out: the last ones of each item.
+    for (const item of fleetItems) for (const unit of item.units.slice(item.units.length - Math.min(item.outOfService, item.units.length))) freeAt[unit - 1] = Number.POSITIVE_INFINITY
     const mine = departures
       .flatMap((departure) =>
         getBookingsByDeparture(departure.id)
@@ -133,26 +161,33 @@ export function getRentalBoard(tenantId: string, day: Date = NOW): RentalBoard {
       let start: Date
       let end: Date
       let days = 1
+      // The same rule the availability uses, so the board and the storefront agree.
+      const span = rentalSpan(activity, booking.id, departure.startsAt)
+      start = new Date(span.startMs)
+      end = new Date(span.endMs)
       if (byDay) {
-        const least = Math.max(1, config?.minDays ?? 1)
-        const most = Math.max(least, Math.min(config?.maxDays || 5, 5))
-        days = least + (hashSeed(`days:${booking.id}`) % (most - least + 1))
-        start = new Date(`${dayKey}T${config?.pickupTime ?? '08:00'}:00`)
-        end = addDays(new Date(`${dayKey}T${config?.returnTime ?? '17:00'}:00`), days)
+        days = span.days
         // Only what touches today: picked up today, out today or due back today.
         if (toDateKey(end) < todayKey) continue
-      } else {
-        start = new Date(departure.startsAt)
-        end = new Date(start.getTime() + (rated ? hoursTaken * 60 : pick.minutes) * 60_000)
       }
-      const count = Math.max(1, Math.min(units, byDay ? Math.ceil(booking.partySize / 3) : booking.partySize))
+      void dayKey
+      // What the booking took: per item when the rental has items, a head count otherwise.
+      const taken = items.length > 0 ? itemsInBooking(activity, booking) : null
+      const wanted: { tierId: string | null; qty: number }[] = taken
+        ? Object.entries(taken).map(([tierId, qty]) => ({ tierId, qty }))
+        : [{ tierId: null, qty: Math.max(1, Math.min(units, byDay ? Math.ceil(booking.partySize / 3) : booking.partySize)) }]
+      const count = wanted.reduce((sum, entry) => sum + entry.qty, 0)
+      if (count === 0) continue
 
-      // Earliest-free units first, so the list reads like the shack runs it.
-      const order = freeAt
-        .map((at, index) => ({ at, index }))
-        .filter((entry) => entry.at <= start.getTime())
-        .sort((a, b) => a.index - b.index)
-      const chosen = order.slice(0, count).map((entry) => entry.index)
+      // Earliest-free units first, of the right item, so the list reads like the counter runs it.
+      const chosen: number[] = []
+      for (const entry of wanted) {
+        const order = freeAt
+          .map((at, index) => ({ at, index }))
+          .filter((unit) => unit.at <= start.getTime() && (entry.tierId === null || unitTier[unit.index] === entry.tierId))
+          .sort((a, b) => a.index - b.index)
+        chosen.push(...order.slice(0, entry.qty).map((unit) => unit.index))
+      }
       for (const index of chosen) freeAt[index] = end.getTime() + buffer * 60_000
       // Seeded demand can run past the fleet; a booking that finds nothing free at all was never taken.
       if (chosen.length === 0) continue
@@ -177,10 +212,11 @@ export function getRentalBoard(tenantId: string, day: Date = NOW): RentalBoard {
         endsAt: isoLocal(end),
         minutes: Math.round((end.getTime() - start.getTime()) / 60_000),
         lengthLabel: byDay ? `${days} ${days === 1 ? 'day' : 'days'}` : rated ? `${hoursTaken} ${hoursTaken === 1 ? 'hour' : 'hours'}` : (tier?.label ?? `${pick.minutes} min`),
-        itemLabel: tier?.label ?? activity.name,
+        itemLabel: taken ? itemsSentence(fleetItems.map((item) => ({ name: item.name, qty: taken[item.tierId] ?? 0 }))) : (tier?.label ?? activity.name),
+        lines: taken ? fleetItems.filter((item) => (taken[item.tierId] ?? 0) > 0).map((item) => ({ tierId: item.tierId, name: item.name, qty: taken[item.tierId] })) : [],
         days,
         status,
-        deposit: config?.damageDeposit ?? 0,
+        deposit: taken ? fleetItems.reduce((sum, item) => sum + (taken[item.tierId] ?? 0) * item.deposit, 0) : (config?.damageDeposit ?? 0) * chosen.length,
         balance: Math.max(0, booking.total - booking.amountPaid),
       })
     }

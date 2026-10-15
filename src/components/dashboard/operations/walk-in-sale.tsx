@@ -57,7 +57,7 @@ export interface WalkInActivity {
   image: string
   tiers: { id: string; label: string; price: number; min: number; max: number; seat: boolean }[]
   addOns: { id: string; label: string; price: number }[]
-  slots: { id: string; startsAt: string; seatsLeft: number }[]
+  slots: { id: string; startsAt: string; seatsLeft: number; itemsLeft?: Record<string, number> }[]
 }
 
 interface DeskProps {
@@ -243,7 +243,10 @@ function WalkInTill({
   const giftOff = card && !giftProblem(card, todayKey) ? Math.min(card.balance, subtotal - promoOff) : 0
   const total = Math.max(0, subtotal - promoOff - giftOff)
   const change = method === 'cash' && tendered ? Math.round(Number(tendered) * 100) - total : 0
-  const overSeats = slot ? seatsUsed > slot.seatsLeft : false
+  // Rentals with items: each item has its own count at this time.
+  const itemCap = (tierId: string) => slot?.itemsLeft?.[tierId] ?? Number.POSITIVE_INFINITY
+  const overItem = activity ? activity.tiers.find((tier) => (qty[tier.id] ?? 0) > itemCap(tier.id)) : undefined
+  const overSeats = slot ? seatsUsed > slot.seatsLeft || Boolean(overItem) : false
   const nameMissing = guest.name.trim().length < 2
   const emailBad = guest.email.trim().length > 0 && !/^\S+@\S+\.\S+$/.test(guest.email.trim())
   const perPerson = activity ? activity.kind !== 'charter' && activity.kind !== 'rental' : false
@@ -386,18 +389,21 @@ function WalkInTill({
                     <li key={tier.id} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
                       <span>
                         <span className="block text-sm font-medium">{tier.label}</span>
-                        <span className="block text-xs text-subtle tabular-nums">{formatCurrency(Math.round(tier.price * rules.multiplier), currency)}</span>
+                        <span className="block text-xs text-subtle tabular-nums">
+                          {formatCurrency(Math.round(tier.price * rules.multiplier), currency)}
+                          {slot?.itemsLeft ? ` · ${slot.itemsLeft[tier.id] ?? 0} left` : ''}
+                        </span>
                       </span>
                       <span className="flex items-center gap-2">
                         <IconButton aria-label={`Fewer ${tier.label}`} size="sm" variant="outline" disabled={value <= (perPerson ? tier.min : 0)} onClick={() => setQty((q) => ({ ...q, [tier.id]: value - 1 }))}><Minus aria-hidden="true" /></IconButton>
                         <span className="w-6 text-center text-base font-semibold tabular-nums">{value}</span>
-                        <IconButton aria-label={`More ${tier.label}`} size="sm" variant="outline" disabled={value >= tier.max || (tier.seat && slot ? seatsUsed >= slot.seatsLeft : false)} onClick={() => setQty((q) => ({ ...q, [tier.id]: value + 1 }))}><Plus aria-hidden="true" /></IconButton>
+                        <IconButton aria-label={`More ${tier.label}`} size="sm" variant="outline" disabled={value >= tier.max || value >= itemCap(tier.id) || (tier.seat && slot ? seatsUsed >= slot.seatsLeft : false)} onClick={() => setQty((q) => ({ ...q, [tier.id]: value + 1 }))}><Plus aria-hidden="true" /></IconButton>
                       </span>
                     </li>
                   )
                 })}
               </ul>
-              {overSeats ? <p className="mt-1.5 text-xs font-medium text-danger">Only {slot?.seatsLeft} left at this time.</p> : null}
+              {overSeats ? <p className="mt-1.5 text-xs font-medium text-danger">{overItem ? `Only ${itemCap(overItem.id)} ${overItem.label} left at this time.` : `Only ${slot?.seatsLeft} left at this time.`}</p> : null}
             </div>
 
             {activity.addOns.length > 0 ? (

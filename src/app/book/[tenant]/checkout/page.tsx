@@ -63,6 +63,8 @@ function resolveSelection(
   rawTiers: string | string[] | undefined,
   rawAddOns: string | string[] | undefined,
   seatsLeft: number,
+  /** Rentals with items: what is left of each. */
+  itemsLeft?: Record<string, number>,
 ): QuoteSelection {
   const requestedTiers = parsePairs(rawTiers)
   const requestedAddOns = parsePairs(rawAddOns)
@@ -73,14 +75,16 @@ function resolveSelection(
     // The minimum per booking is required; a link without it gets it added.
     const wanted = Math.max(requestedTiers.get(tier.id) ?? 0, perPerson ? tier.minQuantity : 0)
     const room = tier.countsTowardCapacity ? Math.max(0, seatsLeft - seatsUsed) : tier.maxQuantity
-    const qty = clamp(wanted, 0, Math.min(tier.maxQuantity, room))
+    // Each rental item is capped by its own count, not just the total.
+    const itemRoom = itemsLeft ? (itemsLeft[tier.id] ?? 0) : Number.POSITIVE_INFINITY
+    const qty = clamp(wanted, 0, Math.min(tier.maxQuantity, room, itemRoom))
     if (tier.countsTowardCapacity) seatsUsed += qty
     return { tierId: tier.id, qty }
   })
 
   // A bare /checkout link still has to render a complete, sensible order.
   if (tiers.every((tier) => tier.qty === 0)) {
-    const lead = activity.priceTiers[0]
+    const lead = (itemsLeft ? activity.priceTiers.find((tier) => (itemsLeft[tier.id] ?? 0) > 0) : undefined) ?? activity.priceTiers[0]
     const fallback = clamp(
       Math.max(lead.minQuantity, Math.min((activity.kind ?? 'trip') === 'rental' ? 1 : 2, activity.maxCapacity)),
       1,
@@ -172,6 +176,7 @@ export default async function CheckoutPage({
   const site = departureRow.locationId ? getLocationById(departureRow.locationId) : undefined
   const siteMeeting = activity.locations.find((entry) => entry.locationId === departureRow.locationId)?.meetingPoint
 
+  const slotRow = buildDays(activity, 45).flatMap((day) => day.slots).find((slot) => slot.departureId === departureRow.id)
   const departure: CheckoutDeparture = {
     id: departureRow.id,
     startsAt: pickupAt ?? departureRow.startsAt,
@@ -179,7 +184,7 @@ export default async function CheckoutPage({
     returnsAt,
     seatsLeft: Math.min(
       seatsRemaining(departureRow.capacity, departureRow.booked, departureRow.held),
-      buildDays(activity, 45).flatMap((day) => day.slots).find((slot) => slot.departureId === departureRow.id)?.seatsLeft ?? Number.POSITIVE_INFINITY,
+      slotRow?.seatsLeft ?? Number.POSITIVE_INFINITY,
     ),
     priceMultiplier: departureRow.priceMultiplier ?? 1,
     location: site
@@ -194,6 +199,7 @@ export default async function CheckoutPage({
     query.t,
     query.a,
     Math.max(1, departure.seatsLeft),
+    slotRow?.itemsLeft,
   )
 
   /* ---------- confirmation code (deterministic, seeded) ---------- */

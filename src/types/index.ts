@@ -417,9 +417,35 @@ export interface RouteInfo {
 }
 
 /** What is rented: decides the requirements a rental asks for. */
-export type RentalCategory = 'watercraft' | 'vehicle' | 'bike' | 'gear'
+export type RentalCategory = 'watercraft' | 'vehicle' | 'bike' | 'gear' | 'space'
+
+/**
+ * One kind of thing a rental lends out — "Single kayak", "Double kayak",
+ * "Large locker" — with its own stock, size and deposit. Its name, photo
+ * line and prices live on the price tier with the same id.
+ */
+export interface RentalItem {
+  tierId: string
+  /** How many of it the business owns. */
+  stock: number
+  /** How many people one fits. */
+  holds: number
+  /** Refundable deposit held per item at pick-up, minor units. 0 = none. */
+  deposit: number
+  /** Not rentable right now: in repair, being cleaned, lost. */
+  outOfService?: number
+  /** Why some are out of service. */
+  serviceNote?: string
+}
 
 export interface RentalConfig {
+  /**
+   * The things guests choose from under one booking link, each counted
+   * separately. When absent, every price tier shares `units`.
+   */
+  items?: RentalItem[]
+  /** Charged per hour a rental comes back late, minor units. 0 = none. */
+  lateFee?: number
   /** Watercraft, vehicle, bike or gear. Defaults to gear. */
   category?: RentalCategory
   /**
@@ -711,6 +737,8 @@ export interface BookingLineItem {
   id: string
   /** Matches a PriceTier.label or AddOn.label. */
   label: string
+  /** The price tier it was for; rentals count stock per item with it. */
+  tierId?: string
   kind: 'ticket' | 'addon' | 'fee' | 'discount' | 'tax'
   quantity: number
   /** Minor units, per unit. */

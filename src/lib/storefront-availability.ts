@@ -1,5 +1,6 @@
-import { NOW, getBookingsByDeparture, getStorefrontAvailability } from '@/lib/demo'
+import { NOW, getBookingsByDeparture, getDeparturesInRange, getStorefrontAvailability } from '@/lib/demo'
 import { addDays, toDateKey } from '@/lib/utils'
+import { hasItems, itemsInBooking, rentalItemsOf, rentalSpan, shortestRentalMs } from '@/lib/rental-items'
 import type { Activity } from '@/types'
 import type { AvailabilityDay, AvailabilitySlot } from '@/components/storefront/booking-widget'
 
@@ -11,14 +12,46 @@ import type { AvailabilityDay, AvailabilitySlot } from '@/components/storefront/
 
 export const STRIP_DAYS = 21
 
+/**
+ * Rentals with items: every booking that holds units, with when it goes out
+ * and when it is ready again. A start time is free of an item only when no
+ * hold overlaps the shortest rental from that time.
+ */
+function rentalHolds(activity: Activity, days: number) {
+  const departures = getDeparturesInRange(activity.tenantId, addDays(NOW, -8), addDays(NOW, days + 1)).filter(
+    (departure) => departure.activityId === activity.id && departure.status !== 'cancelled',
+  )
+  return departures.flatMap((departure) =>
+    getBookingsByDeparture(departure.id)
+      .filter((booking) => booking.status !== 'cancelled' && booking.status !== 'refunded')
+      .map((booking) => {
+        const span = rentalSpan(activity, booking.id, departure.startsAt)
+        return { from: span.startMs, to: span.readyMs, items: itemsInBooking(activity, booking) }
+      }),
+  )
+}
+
+export function rentalItemsLeftAt(activity: Activity, holds: ReturnType<typeof rentalHolds>, startsAt: string): Record<string, number> {
+  const window = shortestRentalMs(activity, startsAt)
+  const taken: Record<string, number> = {}
+  for (const hold of holds) {
+    if (hold.from >= window.endMs || hold.to <= window.startMs) continue
+    for (const [tierId, qty] of Object.entries(hold.items)) taken[tierId] = (taken[tierId] ?? 0) + qty
+  }
+  return Object.fromEntries(rentalItemsOf(activity).map((item) => [item.tierId, Math.max(0, item.rentable - (taken[item.tierId] ?? 0))]))
+}
+
 export function buildDays(activity: Activity, STRIP_DAYS = 21): AvailabilityDay[] {
   const byDay = new Map<string, AvailabilitySlot[]>()
+  const holds = hasItems(activity) ? rentalHolds(activity, STRIP_DAYS + 14) : null
 
   for (const event of getStorefrontAvailability(activity.id, STRIP_DAYS + 14)) {
     const { departure } = event
     const key = departure.startsAt.slice(0, 10)
     const multiplier = departure.priceMultiplier ?? 1
-    const seatsLeft = event.seatsLeft
+    // Rentals with items: each item has its own count; the slot total is what is left across them.
+    const left = holds ? rentalItemsLeftAt(activity, holds, departure.startsAt) : undefined
+    const seatsLeft = left ? Math.min(event.seatsLeft, Object.values(left).reduce((sum, value) => sum + value, 0)) : event.seatsLeft
     const slot: AvailabilitySlot = {
       departureId: departure.id,
       startsAt: departure.startsAt,
@@ -29,6 +62,7 @@ export function buildDays(activity: Activity, STRIP_DAYS = 21): AvailabilityDay[
       priceMultiplier: multiplier,
       leadPrice: Math.round((departure.priceOverride ?? activity.basePrice) * multiplier),
       locationId: departure.locationId,
+      ...(left ? { itemsLeft: left } : {}),
       soldOut: seatsLeft <= 0 || departure.status === 'sold_out',
     }
     const list = byDay.get(key)

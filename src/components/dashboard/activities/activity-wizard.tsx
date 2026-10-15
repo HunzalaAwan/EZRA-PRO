@@ -76,7 +76,8 @@ import {
   type DraftTier,
 } from './pricing-tier-editor'
 import { AddonEditor, type DraftAddOn } from './addon-editor'
-import { KindFields, KindPicker, LanguagePicker, RentalRatesEditor, RouteFields, defaultKindSettings, emptyRoute, normalizeKindSettings, type DraftKindSettings, type DraftRoute, type SharedBasics } from './kind-fields'
+import { KindFields, KindPicker, LanguagePicker, RentalRatesEditor, RouteFields, defaultKindSettings, emptyRoute, normalizeKindSettings,
+  draftItemOf, type DraftKindSettings, type DraftRoute, type SharedBasics } from './kind-fields'
 import { DurationField, DURATION_UNITS, unitFor, type DurationUnit } from './duration-field'
 import { useCustomCategories } from '@/hooks/use-custom-categories'
 import { GuestQuestionsEditor, type WaiverOption } from './guest-questions-editor'
@@ -212,7 +213,7 @@ export interface ActivityDraft {
   bring: string[]
 }
 
-const STORAGE_KEY = 'ezra:activity-wizard:v10'
+const STORAGE_KEY = 'ezra:activity-wizard:v11'
 
 /** Dining is the one category whose product is a table, not a departure. */
 export const isDining = (draft: Pick<ActivityDraft, 'category'>) => draft.category === 'restaurants'
@@ -280,6 +281,16 @@ function kindOverride(draft: ActivityDraft) {
     const hourly = r.modes.includes('hour')
     const daily = r.modes.includes('day')
     const rate = (tierId: string) => r.rates[tierId] ?? { hour: 0, day: 0 }
+    const items = draft.tiers.map((tier) => {
+      const item = draftItemOf(r, tier.id)
+      return {
+        tierId: tier.id,
+        stock: Math.max(1, item.stock),
+        holds: Math.max(1, item.holds),
+        deposit: item.deposit,
+        ...(item.outOfService > 0 ? { outOfService: Math.min(item.outOfService, item.stock), serviceNote: item.serviceNote } : {}),
+      }
+    })
     // With one location the opening hours are the pick-up and return window; several locations use the first.
     const hours = draft.schedule.locations.length > 1 ? (draft.schedule.locations[0]?.schedule ?? draft.schedule) : draft.schedule
     return {
@@ -287,12 +298,14 @@ function kindOverride(draft: ActivityDraft) {
         category: r.category,
         modes: r.modes,
         billing: daily && !hourly ? ('day' as const) : ('length' as const),
-        units: r.units,
+        items,
+        units: items.reduce((sum, item) => sum + item.stock, 0),
         bufferMinutes: r.bufferMinutes,
-        damageDeposit: r.damageDeposit,
+        damageDeposit: Math.max(0, ...items.map((item) => item.deposit)),
+        ...(r.lateFee > 0 ? { lateFee: r.lateFee } : {}),
         durations: draft.tiers.map((tier) => ({ tierId: tier.id, minutes: hourly ? r.minHours * 60 : 1440 })),
         rates: draft.tiers.map((tier) => ({ tierId: tier.id, ...(hourly ? { hour: rate(tier.id).hour } : {}), ...(daily ? { day: rate(tier.id).day } : {}) })),
-        seatsPerUnit: r.seatsPerUnit,
+        seatsPerUnit: Math.max(1, ...items.map((item) => item.holds)),
         licence: r.licence,
         ...(meta.fuel ? { fuel: r.fuel } : {}),
         ...(meta.mileage ? { kmPerDay: r.kmPerDay } : {}),
@@ -358,8 +371,9 @@ export function seatsFor(draft: ActivityDraft): ScheduleSeats {
   const n = draft.maxCapacity
   if (kind === 'rental') {
     const meta = rentalCategoryMeta(settings.rental.category)
-    const units = settings.rental.units
-    return { capacity: units, one: meta.unit, many: meta.units, summary: `${units} ${units === 1 ? meta.unit : meta.units} at a time` }
+    void meta
+    const units = draft.tiers.reduce((sum, tier) => sum + draftItemOf(settings.rental, tier.id).stock, 0)
+    return { capacity: units, one: 'item', many: 'items', summary: `${units} ${units === 1 ? 'item' : 'items'} in stock, across ${draft.tiers.length} ${draft.tiers.length === 1 ? 'kind' : 'kinds'}` }
   }
   if (kind === 'charter') {
     return { capacity: 1, one: 'charter', many: 'charters', summary: `One group each, up to ${settings.charter.maxGuests} guests` }
@@ -385,7 +399,8 @@ export function deriveForKind(draft: ActivityDraft): ActivityDraft {
   if (kind === 'rental') {
     const r = settings.rental
     const hourly = r.modes.includes('hour')
-    next.maxCapacity = r.units
+    // A rental can have out at once everything in stock, across its items.
+    next.maxCapacity = Math.max(1, draft.tiers.reduce((sum, tier) => sum + draftItemOf(r, tier.id).stock, 0))
     next.minParticipants = 1
     next.difficulty = 'easy'
     next.durationMinutes = hourly ? r.minHours * 60 : 1440
@@ -525,10 +540,24 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
       return {
         rental: rental
           ? (() => {
-              const { durations, rates, modes, ...rest } = rental
+              const { durations, rates, modes, items, lateFee, ...rest } = rental
+              // Older rentals shared one pool; each item starts with an even share of it.
+              const share = Math.max(1, Math.round((rental.units || 1) / Math.max(1, activity.priceTiers.length)))
               return {
                 ...blank.rental,
                 ...rest,
+                lateFee: lateFee ?? 0,
+                items: Object.fromEntries(
+                  activity.priceTiers.map((tier) => {
+                    const item = items?.find((entry) => entry.tierId === tier.id)
+                    return [
+                      tier.id,
+                      item
+                        ? { stock: item.stock, holds: item.holds, deposit: item.deposit, outOfService: item.outOfService ?? 0, serviceNote: item.serviceNote ?? '' }
+                        : { stock: share, holds: rental.seatsPerUnit ?? 1, deposit: rental.damageDeposit ?? 0, outOfService: 0, serviceNote: '' },
+                    ]
+                  }),
+                ),
                 minutes: Object.fromEntries(durations.map((entry) => [entry.tierId, entry.minutes])),
                 modes: modes && modes.length > 0 ? [...modes] : rental.billing === 'day' ? ['day' as const] : ['hour' as const],
                 rates: Object.fromEntries(
@@ -924,6 +953,7 @@ function validateStep(step: number, draft: ActivityDraft): FieldErrors {
       const rate = r.rates[tier.id] ?? { hour: tier.price, day: tier.price * 4 }
       if (r.modes.includes('hour') && rate.hour <= 0) errors[`rate.${tier.id}.hour`] = 'Set an hourly price'
       if (r.modes.includes('day') && rate.day <= 0) errors[`rate.${tier.id}.day`] = 'Set a daily price'
+      if (draftItemOf(r, tier.id).stock < 1) errors[`item.${tier.id}.stock`] = 'At least 1'
     }
   }
   // With a location on the activity, its address is the meeting place; the note is optional.
@@ -931,7 +961,6 @@ function validateStep(step: number, draft: ActivityDraft): FieldErrors {
   if (step !== 0 || isDining(draft)) return errors
   const kind = draft.kind ?? 'trip'
   const settings = normalizeKindSettings(draft.kindSettings)
-  if (kind === 'rental' && settings.rental.units < 1) errors['rental.units'] = 'At least one unit has to be available'
   if (kind === 'rental' && settings.rental.modes.includes('day') && settings.rental.maxDays > 0 && settings.rental.maxDays < settings.rental.minDays) errors['rental.maxDays'] = 'Most days cannot be fewer than the fewest'
   if (kind === 'rental' && settings.rental.modes.includes('hour') && settings.rental.maxHours > 0 && settings.rental.maxHours < settings.rental.minHours) errors['rental.maxHours'] = 'Most hours cannot be fewer than the fewest'
   if (kind === 'lesson' && draft.maxCapacity < 1) errors.maxCapacity = 'A class needs at least one place'
@@ -1358,7 +1387,7 @@ export function ActivityWizard({
   const router = useRouter()
   const reduceMotion = useReducedMotionSafe()
   const editing = mode === 'edit' && Boolean(activityId)
-  const storageKey = editing ? `ezra:activity-wizard:edit:${activityId}` : STORAGE_KEY
+  const storageKey = editing ? `ezra:activity-wizard:edit:v2:${activityId}` : STORAGE_KEY
   const exitHref = editing ? `/dashboard/activities/${activityId}` : '/dashboard/activities'
 
   const initial = React.useMemo(
@@ -1594,7 +1623,9 @@ export function ActivityWizard({
                 <CardTitle className="text-base">
                   {step + 1}. {currentStep.label}
                 </CardTitle>
-                <CardDescription>{(dining ? DINING_STEP_COPY : STEP_COPY)[step]}</CardDescription>
+                <CardDescription>
+                  {step === 3 && !dining && (draft.kind ?? 'trip') === 'rental' ? 'What you lend out, how many you have of each, what it costs, and the extras you offer.' : (dining ? DINING_STEP_COPY : STEP_COPY)[step]}
+                </CardDescription>
               </div>
             </CardHeader>
 
@@ -1685,8 +1716,8 @@ export function ActivityWizard({
 
                       {!dining && (draft.kind ?? 'trip') === 'rental' ? (
                       <section>
-                        <h3 className="text-sm font-semibold">Rates</h3>
-                        <p className="mt-0.5 mb-3 text-xs text-muted">Everything you rent out, with its price per hour and per day. The cheapest sets the “from” price.</p>
+                        <h3 className="text-sm font-semibold">Items and prices</h3>
+                        <p className="mt-0.5 mb-3 text-xs text-muted">Everything you lend out: how many you have of each, who it fits and what it costs. The cheapest sets the “from” price.</p>
                         <RentalRatesEditor
                           tiers={draft.tiers}
                           onTiers={(tiers) => patch({ tiers })}
@@ -1947,11 +1978,15 @@ function kindFacts(draft: ActivityDraft): string[] {
     const meta = rentalCategoryMeta(r.category)
     return [
       [r.modes.includes('hour') ? `By the hour · ${r.maxHours ? `${r.minHours}–${r.maxHours} h` : `from ${r.minHours} h`}` : null, r.modes.includes('day') ? `By the day · ${r.maxDays ? `${r.minDays}–${r.maxDays} days` : `from ${r.minDays} ${r.minDays === 1 ? 'day' : 'days'}`}` : null].filter(Boolean).join(' or '),
-      `${r.units} ${r.units === 1 ? meta.unit : meta.units} · ${r.seatsPerUnit} per ${meta.unit}`,
+      (() => {
+        const total = draft.tiers.reduce((sum, tier) => sum + draftItemOf(r, tier.id).stock, 0)
+        return `${draft.tiers.length} ${draft.tiers.length === 1 ? 'item' : 'items'} to choose from · ${total} in stock`
+      })(),
       r.licence === 'none' ? age : `${LICENCE_LABEL[r.licence]} · ${age.toLowerCase()}`,
       ...(meta.fuel ? [FUEL_LABEL[r.fuel]] : []),
       ...(meta.mileage ? [r.kmPerDay > 0 ? `${r.kmPerDay} km a day` : 'Unlimited km'] : []),
-      ...(r.damageDeposit > 0 ? ['Damage deposit held'] : []),
+      ...(draft.tiers.some((tier) => draftItemOf(r, tier.id).deposit > 0) ? ['Refundable deposit held'] : []),
+      ...(r.lateFee > 0 ? ['Late return fee'] : []),
     ]
   }
   if (kind === 'charter') {

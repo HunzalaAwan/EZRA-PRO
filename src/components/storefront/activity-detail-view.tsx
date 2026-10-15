@@ -314,7 +314,9 @@ export function ActivityDetailView({
               {activity.kind === 'activity'
                 ? `${activity.maxCapacity} per time slot`
                 : activity.kind === 'rental'
-                ? `${activity.rental?.seatsPerUnit ?? 1} per ${rentalCategoryMeta(activity.rental?.category).unit} · ${activity.rental?.units ?? activity.maxCapacity} in the fleet`
+                ? (activity.rental?.items?.length ?? 0) > 1
+                  ? `${activity.rental?.items?.length} items to choose from, mix and match`
+                  : `Fits ${activity.rental?.seatsPerUnit ?? 1} · ${activity.rental?.units ?? activity.maxCapacity} available`
                 : activity.kind === 'lesson'
                   ? `${activity.lesson?.ratio ?? 4} students per instructor`
                   : activity.kind === 'charter'

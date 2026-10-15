@@ -42,7 +42,7 @@ export default async function WalkInPage() {
       slots: buildDays(activity, 2).flatMap((day) =>
         day.slots
           .filter((slot) => slot.startsAt >= NOW_ISO.slice(0, 13) && !slot.soldOut)
-          .map((slot) => ({ id: slot.departureId, startsAt: slot.startsAt, seatsLeft: slot.seatsLeft })),
+          .map((slot) => ({ id: slot.departureId, startsAt: slot.startsAt, seatsLeft: slot.seatsLeft, ...(slot.itemsLeft ? { itemsLeft: slot.itemsLeft } : {}) })),
       ),
     }))
     .filter((activity) => activity.slots.length > 0)

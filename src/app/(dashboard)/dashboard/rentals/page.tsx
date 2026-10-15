@@ -21,7 +21,7 @@ export default async function RentalsPage() {
         title="Rentals"
         description="What to hand out next, what is out, and what is due back. One button per rental."
       />
-      <RentalsBoard board={getRentalBoard(tenant.id)} currency={tenant.currency} />
+      <RentalsBoard board={getRentalBoard(tenant.id)} currency={tenant.currency} tenantSlug={tenant.slug} />
     </div>
   )
 }

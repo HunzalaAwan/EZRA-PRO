@@ -18,6 +18,7 @@
  */
 
 
+import { rentalItemsOf, rentalSpan } from '@/lib/rental-items'
 import type {
   Activity,
   ActivityFeedItem,
@@ -567,6 +568,11 @@ for (const [tenantId, specs] of SPEC_BY_TENANT) {
     const isGroupPriced = activity.pricingModel === 'per_group'
     const crewSize = activity.maxCapacity >= 30 ? 3 : activity.maxCapacity >= 14 ? 2 : 1
 
+    // Rentals with items: when each unit (per item) is next free, across every day, so a
+    // three-hour rental at nine keeps its kayak from the ten and eleven o'clock starts.
+    const unitFree: number[][] | null =
+      activity.kind === 'rental' && activity.rental?.items?.length ? rentalItemsOf(activity).map((item) => Array.from({ length: item.rentable }, () => 0)) : null
+
     /* One pass per base the activity runs from: each has its own times and, sometimes, days. */
     for (const site of activity.locations) {
       const siteTimes = site.times.length > 0 ? site.times : spec.times
@@ -596,7 +602,9 @@ for (const [tenantId, specs] of SPEC_BY_TENANT) {
 
           if (activity.kind === 'charter') capacity = 1
 
-          if (activity.kind === 'rental') capacity = activity.rental?.units ?? activity.maxCapacity
+          // With items, each has its own shelf; what can go out is everything not out of service.
+          const rentalItems = activity.kind === 'rental' && activity.rental?.items?.length ? rentalItemsOf(activity) : null
+          if (activity.kind === 'rental') capacity = rentalItems ? rentalItems.reduce((sum, item) => sum + item.rentable, 0) : (activity.rental?.units ?? activity.maxCapacity)
 
           const demand =
             spec.popularity *
@@ -608,10 +616,12 @@ for (const [tenantId, specs] of SPEC_BY_TENANT) {
             stormFactor(off) *
             (0.8 + rng() * 0.36)
 
-          const booked = Math.min(
+          let booked = Math.min(
             clamp(round(capacity * clamp(demand, 0, 1.05)), 0, capacity),
             dayLimit ? Math.max(0, dayLimit - dayBooked) : capacity,
           )
+          // Rentals with items can only sell what is back on the shelf at this start time.
+          if (unitFree) booked = Math.min(booked, unitFree.reduce((sum, units) => sum + units.filter((at) => at <= startMs).length, 0))
           dayBooked += booked
 
           const cancelRoll = rng()
@@ -758,6 +768,31 @@ for (const [tenantId, specs] of SPEC_BY_TENANT) {
                 })
                 subtotal += childTotal
               }
+            }
+
+            // Rentals with items: the party's units are spread over what is still on each shelf.
+            if (rentalItems) {
+              for (const line of lineItems.filter((entry) => entry.kind === 'ticket')) subtotal -= line.total
+              lineItems.splice(0, lineItems.length, ...lineItems.filter((entry) => entry.kind !== 'ticket'))
+              const pick = createRng(hashSeed(`items:${bookingId}`))
+              const counts = rentalItems.map(() => 0)
+              const span = rentalSpan(activity, bookingId, isoLocal(startsAt))
+              for (let unit = 0; unit < size && unitFree; unit++) {
+                const open = unitFree.flatMap((units, index) => (units.some((at) => at <= startMs) ? [index] : []))
+                if (open.length === 0) break
+                // Smaller items go out more often than the big ones.
+                const index = open[Math.floor(pick() * pick() * open.length)]
+                const free = unitFree[index].findIndex((at) => at <= startMs)
+                unitFree[index][free] = span.readyMs
+                counts[index] += 1
+              }
+              counts.forEach((qty, index) => {
+                if (qty === 0) return
+                const tier = activity.priceTiers.find((entry) => entry.id === rentalItems[index].tierId)
+                if (!tier) return
+                lineItems.push({ id: `li_${bookingId}_${++li}`, label: tier.label, tierId: tier.id, kind: 'ticket', quantity: qty, unitPrice: tier.price, total: qty * tier.price })
+                subtotal += qty * tier.price
+              })
             }
 
             let addonPicks = 0

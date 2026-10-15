@@ -1481,7 +1481,15 @@ interface ActivitySpec {
   /** Scheduled trip unless said otherwise. */
   kind?: ActivityKind
   /** Rentals: units at once, buffer, deposit, and a length in minutes for each tier, in tier order. */
-  rental?: { units: number; bufferMinutes: number; damageDeposit: number; minutes: number[]; rateList?: { hour?: number; day?: number }[] } & Omit<Partial<RentalConfig>, 'units' | 'bufferMinutes' | 'damageDeposit' | 'durations' | 'rates'>
+  rental?: {
+    units: number
+    bufferMinutes: number
+    damageDeposit: number
+    minutes: number[]
+    rateList?: { hour?: number; day?: number }[]
+    /** Per tier, in order: how many, how many people one fits, deposit, out of service. Each becomes its own stock. */
+    stockList?: { stock: number; holds: number; deposit?: number; out?: number; note?: string }[]
+  } & Omit<Partial<RentalConfig>, 'units' | 'bufferMinutes' | 'damageDeposit' | 'durations' | 'rates' | 'items'>
   /** Charters: optional length in minutes for each tier, in tier order. */
   charter?: { maxGuests: number; requestToBook: boolean; noticeHours: number; minutes?: number[] } & Omit<Partial<CharterConfig>, 'maxGuests' | 'requestToBook' | 'noticeHours' | 'durations'>
   lesson?: { level: 'all' | 'beginner' | 'intermediate' | 'advanced'; sessions: number; ratio: number; certification?: string; equipmentIncluded?: boolean }
@@ -1583,6 +1591,8 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
       billing: 'day',
       modes: ['day'],
       rateList: [{ day: 11900 }, { day: 14900 }, { day: 17900 }],
+      stockList: [{ stock: 4, holds: 4 }, { stock: 3, holds: 5 }, { stock: 1, holds: 5, deposit: 75000 }],
+      lateFee: 2500,
       minDays: 1,
       maxDays: 14,
       pickupTime: '08:00',
@@ -1639,7 +1649,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
   {
     slug: 'e-bike-rental',
     kind: 'rental',
-    rental: { units: 10, bufferMinutes: 15, damageDeposit: 10000, minutes: [120, 120], category: 'bike', billing: 'length', modes: ['hour', 'day'], minHours: 2, maxHours: 8, minDays: 1, maxDays: 5, rateList: [{ hour: 2500, day: 8900 }, { hour: 3000, day: 10500 }], seatsPerUnit: 1, licence: 'none' },
+    rental: { units: 10, bufferMinutes: 15, damageDeposit: 10000, minutes: [120, 120], category: 'bike', billing: 'length', modes: ['hour', 'day'], minHours: 2, maxHours: 8, minDays: 1, maxDays: 5, rateList: [{ hour: 2500, day: 8900 }, { hour: 3000, day: 10500 }], stockList: [{ stock: 8, holds: 1 }, { stock: 2, holds: 2 }], lateFee: 1000, seatsPerUnit: 1, licence: 'none' },
     name: 'E-Bike Rental',
     tagline: 'Pedal-assist cruisers along the Lahaina coast, helmet and lock included.',
     description:
@@ -1673,7 +1683,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
   {
     slug: 'jet-ski-rental',
     kind: 'rental',
-    rental: { units: 6, bufferMinutes: 15, damageDeposit: 25000, minutes: [60, 60], category: 'watercraft', billing: 'length', modes: ['hour'], minHours: 1, maxHours: 3, rateList: [{ hour: 14900 }, { hour: 17900 }], seatsPerUnit: 2, licence: 'boat', fuel: 'included' },
+    rental: { units: 6, bufferMinutes: 15, damageDeposit: 25000, minutes: [60, 60], category: 'watercraft', billing: 'length', modes: ['hour'], minHours: 1, maxHours: 3, rateList: [{ hour: 14900 }, { hour: 17900 }], stockList: [{ stock: 4, holds: 2 }, { stock: 2, holds: 3, deposit: 35000 }], lateFee: 5000, seatsPerUnit: 2, licence: 'boat', fuel: 'included' },
     name: 'Jet Ski Rental',
     tagline: 'Your own WaveRunner off Kaanapali, by the half hour or the hour.',
     description:
@@ -1716,7 +1726,7 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
   {
     slug: 'kayak-sup-rental',
     kind: 'rental',
-    rental: { units: 12, bufferMinutes: 10, damageDeposit: 0, minutes: [60, 60, 60], category: 'gear', billing: 'length', modes: ['hour', 'day'], minHours: 1, maxHours: 4, minDays: 1, maxDays: 7, rateList: [{ hour: 2500, day: 6500 }, { hour: 3500, day: 8900 }, { hour: 3000, day: 7500 }], seatsPerUnit: 1, licence: 'none' },
+    rental: { units: 12, bufferMinutes: 10, damageDeposit: 0, minutes: [60, 60, 60], category: 'gear', billing: 'length', modes: ['hour', 'day'], minHours: 1, maxHours: 4, minDays: 1, maxDays: 7, rateList: [{ hour: 2500, day: 6500 }, { hour: 3500, day: 8900 }, { hour: 3000, day: 7500 }], stockList: [{ stock: 3, holds: 1 }, { stock: 1, holds: 2 }, { stock: 4, holds: 1, out: 1, note: 'Fin box cracked, at the repair shop' }], lateFee: 1000, seatsPerUnit: 1, licence: 'none' },
     name: 'Kayak & Paddleboard Rental',
     tagline: 'Sit-on-top kayaks and SUPs from the Kihei beach, with a reef map.',
     description:
@@ -3291,7 +3301,7 @@ const RIDGELINE_SPECS: ActivitySpec[] = [
   {
     slug: 'queenstown-e-bike-hire',
     kind: 'rental',
-    rental: { units: 12, bufferMinutes: 15, damageDeposit: 15000, minutes: [120], category: 'bike', billing: 'length', modes: ['hour', 'day'], minHours: 2, maxHours: 8, minDays: 1, maxDays: 5, rateList: [{ hour: 3500, day: 12900 }], seatsPerUnit: 1, licence: 'none' },
+    rental: { units: 12, bufferMinutes: 15, damageDeposit: 15000, minutes: [120], category: 'bike', billing: 'length', modes: ['hour', 'day'], minHours: 2, maxHours: 8, minDays: 1, maxDays: 5, rateList: [{ hour: 3500, day: 12900 }], stockList: [{ stock: 12, holds: 1 }], lateFee: 1500, seatsPerUnit: 1, licence: 'none' },
     name: 'Queenstown E-Bike Hire',
     tagline: 'A full-suspension e-bike, a trail map and the whole Wakatipu basin to yourself.',
     description:
@@ -3527,10 +3537,17 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     kind: spec.kind ?? 'trip',
     ...(spec.rental
       ? (() => {
-          const { minutes, rateList, ...rest } = spec.rental
+          const { minutes, rateList, stockList, ...rest } = spec.rental
+          const items = stockList
+            ? priceTiers.map((tier, index) => {
+                const entry = stockList[index] ?? { stock: 1, holds: 1 }
+                return { tierId: tier.id, stock: entry.stock, holds: entry.holds, deposit: entry.deposit ?? rest.damageDeposit ?? 0, ...(entry.out ? { outOfService: entry.out, serviceNote: entry.note } : {}) }
+              })
+            : undefined
           return {
             rental: {
               ...rest,
+              ...(items ? { items, units: items.reduce((sum, item) => sum + item.stock, 0), seatsPerUnit: Math.max(...items.map((item) => item.holds)) } : {}),
               durations: priceTiers.map((tier, index) => ({ tierId: tier.id, minutes: minutes[index] ?? 60 })),
               ...(rateList ? { rates: priceTiers.map((tier, index) => ({ tierId: tier.id, ...rateList[index] })) } : {}),
             },

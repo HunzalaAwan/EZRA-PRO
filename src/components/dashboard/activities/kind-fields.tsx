@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Anchor, Bike, Car, GraduationCap, KeyRound, Package, Route, Ship, Ticket, Zap, type LucideIcon } from 'lucide-react'
+import { Anchor, Bike, Car, DoorOpen, GraduationCap, KeyRound, Package, Route, Ship, Ticket, Zap, type LucideIcon } from 'lucide-react'
 
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -50,6 +50,7 @@ const CATEGORY_ICONS: Record<RentalCategory, LucideIcon> = {
   vehicle: Car,
   bike: Bike,
   gear: Package,
+  space: DoorOpen,
 }
 
 export interface DraftKindSettings {
@@ -71,6 +72,10 @@ export interface DraftKindSettings {
     maxHours: number
     /** Per tier: price per hour and per day, minor units. */
     rates: Record<string, { hour: number; day: number }>
+    /** Per tier: its own stock, how many people one fits, its deposit. */
+    items: Record<string, DraftRentalItem>
+    /** Charged per hour late, minor units. */
+    lateFee: number
     licence: NonNullable<RentalConfig['licence']>
     fuel: NonNullable<RentalConfig['fuel']>
     kmPerDay: number
@@ -108,6 +113,8 @@ export function defaultKindSettings(): DraftKindSettings {
       minHours: 1,
       maxHours: 4,
       rates: {},
+      items: {},
+      lateFee: 0,
       licence: 'none',
       fuel: 'included',
       kmPerDay: 0,
@@ -117,6 +124,20 @@ export function defaultKindSettings(): DraftKindSettings {
     pass: { validDays: 1, reentry: true },
     activity: { minHeightCm: 0, maxWeightKg: 0 },
   }
+}
+
+export interface DraftRentalItem {
+  stock: number
+  holds: number
+  /** Minor units. */
+  deposit: number
+  outOfService: number
+  serviceNote: string
+}
+
+/** One item's numbers, with sensible defaults for a new one. */
+export function draftItemOf(rental: DraftKindSettings['rental'], tierId: string): DraftRentalItem {
+  return rental.items?.[tierId] ?? { stock: 1, holds: Math.max(1, rental.seatsPerUnit || 1), deposit: rental.damageDeposit || 0, outOfService: 0, serviceNote: '' }
 }
 
 /** Drafts saved before a field existed pick up its default. */
@@ -529,7 +550,7 @@ export function KindFields({
           </div>
         </Section>
 
-        <Section title="How it is charged" hint="Pick one or both. Guests then choose at checkout. You set the prices per hour and per day in the Pricing step.">
+        <Section title="How it is charged" hint="Pick one or both. Guests then choose when they book. Prices per hour and per day are set per item in the Pricing step.">
           <div role="group" aria-label="How it is charged" className="grid gap-2 sm:grid-cols-2">
             {([
               ['hour', 'By the hour', 'Guests pick a start time and how many hours.'],
@@ -586,28 +607,14 @@ export function KindFields({
           </p>
         </Section>
 
-        <Section title="Fleet" hint="How many go out at once. This is the only capacity a rental has.">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Field label={`${meta.units.charAt(0).toUpperCase()}${meta.units.slice(1)} available`} required error={errors['rental.units']} description="How many can be out at once.">
-              {(control) => <Input {...control} type="number" min={1} value={rental.units} onChange={(e) => set('rental', { units: num(e.target.value) })} />}
+        <Section title="Returns" hint="What you lend out, how many you have and what each costs are set per item in the Pricing step.">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Gap between rentals" optional description="Time to clean, check or refuel before it goes out again.">
+              {(control) => <Input {...control} type="number" min={0} step={5} suffix="min" placeholder="None" value={rental.bufferMinutes || ''} onChange={(e) => set('rental', { bufferMinutes: num(e.target.value) })} />}
             </Field>
-            <Field label={`People per ${meta.unit}`} description="Riders or seats, shown to guests.">
-              {(control) => <Input {...control} type="number" min={1} value={rental.seatsPerUnit} onChange={(e) => set('rental', { seatsPerUnit: num(e.target.value, 1) })} />}
+            <Field label={`Late return fee (${currencySymbol})`} optional description="Per hour. Shown to guests before they book.">
+              {(control) => <Input {...control} type="number" min={0} placeholder="None" value={rental.lateFee ? Math.round(rental.lateFee / 100) : ''} onChange={(e) => set('rental', { lateFee: num(e.target.value) * 100 })} />}
             </Field>
-            {byDay ? (
-              <Field label={`Damage deposit (${currencySymbol})`} description={`Held per ${meta.unit}, 0 for none.`}>
-                {(control) => <Input {...control} type="number" min={0} value={Math.round(rental.damageDeposit / 100)} onChange={(e) => set('rental', { damageDeposit: num(e.target.value) * 100 })} />}
-              </Field>
-            ) : (
-              <Field label="Gap between rentals" description="Minutes for cleaning or fuel.">
-                {(control) => <Input {...control} type="number" min={0} step={5} suffix="min" value={rental.bufferMinutes} onChange={(e) => set('rental', { bufferMinutes: num(e.target.value) })} />}
-              </Field>
-            )}
-            {byDay ? null : (
-              <Field label={`Damage deposit (${currencySymbol})`} description={`Held per ${meta.unit}, 0 for none.`}>
-                {(control) => <Input {...control} type="number" min={0} value={Math.round(rental.damageDeposit / 100)} onChange={(e) => set('rental', { damageDeposit: num(e.target.value) * 100 })} />}
-              </Field>
-            )}
           </div>
         </Section>
 
@@ -886,8 +893,10 @@ export function KindFields({
 }
 
 /* ==========================================================================
-   RENTAL RATES — the Pricing step for a rental: what can be rented, and
-   what each costs per hour and per day. Replaces price tiers.
+   ITEMS AND PRICES — the Pricing step for a rental. Every kind of thing you
+   lend out is one item with its own stock, size, prices and deposit, so a
+   guest can take two of one and one of another on the same booking, and
+   each is counted on its own.
    ========================================================================== */
 
 export function RentalRatesEditor({
@@ -915,63 +924,94 @@ export function RentalRatesEditor({
   const rateOf = (tier: DraftTier) => rental.rates[tier.id] ?? { hour: tier.price, day: Math.round((tier.price * 4) / 500) * 500 }
   const setRate = (tier: DraftTier, patch: Partial<{ hour: number; day: number }>) =>
     onSettings({ ...settings, rental: { ...rental, rates: { ...rental.rates, [tier.id]: { ...rateOf(tier), ...patch } } } })
+  const setItem = (tierId: string, patch: Partial<DraftRentalItem>) =>
+    onSettings({ ...settings, rental: { ...rental, items: { ...rental.items, [tierId]: { ...draftItemOf(rental, tierId), ...patch } } } })
+  const setTier = (tierId: string, patch: Partial<DraftTier>) => onTiers(tiers.map((entry) => (entry.id === tierId ? { ...entry, ...patch } : entry)))
   const money = (value: string) => Math.max(0, Math.round(Number(value) * 100) || 0)
-  const cols = cn('grid gap-3 sm:items-center', hourly && daily ? 'sm:grid-cols-[minmax(0,1.6fr)_8rem_8rem_7rem_2rem] sm:items-end' : 'sm:grid-cols-[minmax(0,1.6fr)_9rem_7rem_2rem] sm:items-end')
+  const whole = (value: string, least = 0) => Math.max(least, Number.parseInt(value, 10) || 0)
+  const stock = tiers.reduce((sum, tier) => sum + draftItemOf(rental, tier.id).stock, 0)
+  const people = tiers.reduce((sum, tier) => sum + draftItemOf(rental, tier.id).stock * draftItemOf(rental, tier.id).holds, 0)
+  const examples: Record<string, string> = {
+    gear: 'Single kayak',
+    watercraft: 'Pontoon boat',
+    vehicle: 'Compact car',
+    bike: 'City e-bike',
+    space: 'Meeting room',
+  }
 
   return (
     <div className="flex flex-col gap-3">
-      <ul className="flex list-none flex-col gap-2 p-0">
+      <ul className="flex list-none flex-col gap-3 p-0">
         {tiers.map((tier, index) => {
           const rate = rateOf(tier)
+          const item = draftItemOf(rental, tier.id)
           return (
-            <li key={tier.id} className={cn(cols, 'rounded-xl border border-line bg-surface p-3')}>
-              <Field label="What you rent" labelSize="sm" error={errors[`tiers.${index}.label`]}>
-                {(control) => <Input {...control} value={tier.label} placeholder={meta.value === 'vehicle' ? 'Jeep Wrangler 4-door' : meta.value === 'watercraft' ? 'WaveRunner VX' : meta.value === 'bike' ? 'E-bike' : 'Single kayak'} onChange={(e) => onTiers(tiers.map((entry) => (entry.id === tier.id ? { ...entry, label: e.target.value } : entry)))} />}
-              </Field>
-              {hourly ? (
-                <Field label="Per hour" labelSize="sm" error={errors[`rate.${tier.id}.hour`]}>
-                  {(control) => <Input {...control} type="number" min={0} leftIcon={<span className="text-sm font-medium">{currencySymbol}</span>} value={rate.hour / 100 || ''} onChange={(e) => setRate(tier, { hour: money(e.target.value) })} />}
+            <li key={tier.id} className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-4">
+              <div className="flex items-start gap-3">
+                <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+                  <Field label="Item" labelSize="sm" error={errors[`tiers.${index}.label`]}>
+                    {(control) => <Input {...control} value={tier.label} placeholder={examples[meta.value] ?? 'Item name'} onChange={(e) => setTier(tier.id, { label: e.target.value })} />}
+                  </Field>
+                  <Field label="Short description" labelSize="sm" optional>
+                    {(control) => <Input {...control} value={tier.description} placeholder="What guests should know about it" onChange={(e) => setTier(tier.id, { description: e.target.value })} />}
+                  </Field>
+                </div>
+                <button
+                  type="button"
+                  aria-label={`Remove ${tier.label || 'this item'}`}
+                  disabled={tiers.length === 1}
+                  onClick={() => onTiers(tiers.filter((entry) => entry.id !== tier.id))}
+                  className="mt-6 grid size-8 shrink-0 place-items-center rounded-lg text-faint hover:bg-surface-sunken hover:text-danger disabled:opacity-30"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <Field label="In stock" labelSize="sm" error={errors[`item.${tier.id}.stock`]}>
+                  {(control) => <Input {...control} type="number" min={1} value={item.stock || ''} onChange={(e) => setItem(tier.id, { stock: whole(e.target.value) })} />}
                 </Field>
-              ) : null}
-              {daily ? (
-                <Field label="Per day" labelSize="sm" error={errors[`rate.${tier.id}.day`]}>
-                  {(control) => <Input {...control} type="number" min={0} leftIcon={<span className="text-sm font-medium">{currencySymbol}</span>} value={rate.day / 100 || ''} onChange={(e) => setRate(tier, { day: money(e.target.value) })} />}
+                <Field label="Fits" labelSize="sm">
+                  {(control) => <Input {...control} type="number" min={1} suffix={item.holds === 1 ? 'person' : 'people'} value={item.holds || ''} onChange={(e) => setItem(tier.id, { holds: whole(e.target.value, 1) })} />}
                 </Field>
-              ) : null}
-              <Field label="Max per booking" labelSize="sm" optional>
-                {(control) => (
-                  <Input
-                    {...control}
-                    type="number"
-                    min={1}
-                    placeholder="No limit"
-                    value={tier.maxQuantity >= 99 ? '' : tier.maxQuantity}
-                    onChange={(e) => {
-                      const parsed = Number.parseInt(e.target.value, 10)
-                      onTiers(tiers.map((entry) => (entry.id === tier.id ? { ...entry, maxQuantity: Number.isFinite(parsed) && parsed > 0 ? parsed : 99 } : entry)))
-                    }}
-                  />
-                )}
-              </Field>
-              <button
-                type="button"
-                aria-label={`Remove ${tier.label || 'this item'}`}
-                disabled={tiers.length === 1}
-                onClick={() => onTiers(tiers.filter((entry) => entry.id !== tier.id))}
-                className="grid size-8 place-items-center justify-self-end rounded-lg text-faint hover:bg-surface-sunken hover:text-danger disabled:opacity-30"
-              >
-                ×
-              </button>
+                {hourly ? (
+                  <Field label="Per hour" labelSize="sm" error={errors[`rate.${tier.id}.hour`]}>
+                    {(control) => <Input {...control} type="number" min={0} leftIcon={<span className="text-sm font-medium">{currencySymbol}</span>} value={rate.hour / 100 || ''} onChange={(e) => setRate(tier, { hour: money(e.target.value) })} />}
+                  </Field>
+                ) : null}
+                {daily ? (
+                  <Field label="Per day" labelSize="sm" error={errors[`rate.${tier.id}.day`]}>
+                    {(control) => <Input {...control} type="number" min={0} leftIcon={<span className="text-sm font-medium">{currencySymbol}</span>} value={rate.day / 100 || ''} onChange={(e) => setRate(tier, { day: money(e.target.value) })} />}
+                  </Field>
+                ) : null}
+                <Field label="Deposit" labelSize="sm" optional>
+                  {(control) => <Input {...control} type="number" min={0} placeholder="None" leftIcon={<span className="text-sm font-medium">{currencySymbol}</span>} value={item.deposit ? item.deposit / 100 : ''} onChange={(e) => setItem(tier.id, { deposit: money(e.target.value) })} />}
+                </Field>
+                <Field label="Max per booking" labelSize="sm" optional>
+                  {(control) => (
+                    <Input
+                      {...control}
+                      type="number"
+                      min={1}
+                      placeholder="Any"
+                      value={tier.maxQuantity >= 99 ? '' : tier.maxQuantity}
+                      onChange={(e) => {
+                        const parsed = Number.parseInt(e.target.value, 10)
+                        setTier(tier.id, { maxQuantity: Number.isFinite(parsed) && parsed > 0 ? parsed : 99 })
+                      }}
+                    />
+                  )}
+                </Field>
+              </div>
             </li>
           )
         })}
       </ul>
       <Button type="button" variant="secondary" size="sm" className="self-start" onClick={() => onTiers([...tiers, newTier('')])}>
-        + Add another {meta.unit}
+        + Add another item
       </Button>
       <p className="text-xs text-subtle">
-        Guests pick what to rent, then {hourly && daily ? 'hours or days' : hourly ? 'how many hours' : 'how many days'}. The price is per {meta.unit}
-        {hourly && daily ? ', and the day rate shows as the better deal for long rentals.' : '.'}
+        {stock} {stock === 1 ? 'item' : 'items'} in all, for up to {people} {people === 1 ? 'person' : 'people'} at once. Guests choose any mix on one booking page, and each item is counted on its own:
+        when one runs out, the others can still be booked. Deposits are held at pick-up and returned when everything comes back.
       </p>
     </div>
   )

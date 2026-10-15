@@ -126,14 +126,15 @@ export const RENTAL_CATEGORIES: {
   fuel: boolean
   mileage: boolean
 }[] = [
-  { value: 'watercraft', label: 'Watercraft', hint: 'Jet skis, boats, pontoons', unit: 'craft', units: 'craft', licence: 'boat', seatsPerUnit: 2, billing: 'length', fuel: true, mileage: false },
-  { value: 'vehicle', label: 'Vehicle', hint: 'Cars, jeeps, scooters, ATVs', unit: 'vehicle', units: 'vehicles', licence: 'driver', seatsPerUnit: 5, billing: 'day', fuel: true, mileage: true },
-  { value: 'bike', label: 'Bike or e-bike', hint: 'Road, mountain, e-bikes', unit: 'bike', units: 'bikes', licence: 'none', seatsPerUnit: 1, billing: 'length', fuel: false, mileage: false },
-  { value: 'gear', label: 'Gear', hint: 'Kayaks, SUPs, surfboards, snorkel sets', unit: 'item', units: 'items', licence: 'none', seatsPerUnit: 1, billing: 'length', fuel: false, mileage: false },
+  { value: 'gear', label: 'Equipment', hint: 'Boards, kayaks, tools, cameras, sports gear', unit: 'item', units: 'items', licence: 'none', seatsPerUnit: 1, billing: 'length', fuel: false, mileage: false },
+  { value: 'watercraft', label: 'Boats and watercraft', hint: 'Boats, jet skis, pontoons', unit: 'craft', units: 'craft', licence: 'boat', seatsPerUnit: 2, billing: 'length', fuel: true, mileage: false },
+  { value: 'vehicle', label: 'Vehicles', hint: 'Cars, scooters, vans, buggies', unit: 'vehicle', units: 'vehicles', licence: 'driver', seatsPerUnit: 5, billing: 'day', fuel: true, mileage: true },
+  { value: 'bike', label: 'Bikes', hint: 'Bikes, e-bikes, kick scooters', unit: 'bike', units: 'bikes', licence: 'none', seatsPerUnit: 1, billing: 'length', fuel: false, mileage: false },
+  { value: 'space', label: 'Spaces', hint: 'Rooms, desks, courts, lockers, cabanas', unit: 'space', units: 'spaces', licence: 'none', seatsPerUnit: 4, billing: 'length', fuel: false, mileage: false },
 ]
 
 export const rentalCategoryMeta = (category: RentalCategory | undefined) =>
-  RENTAL_CATEGORIES.find((entry) => entry.value === (category ?? 'gear')) ?? RENTAL_CATEGORIES[3]
+  RENTAL_CATEGORIES.find((entry) => entry.value === (category ?? 'gear')) ?? RENTAL_CATEGORIES[0]
 
 export const LICENCE_LABEL: Record<NonNullable<RentalConfig['licence']>, string> = {
   none: 'No licence needed',
@@ -217,7 +218,7 @@ const DIFFICULTY_WORD: Record<Activity['difficulty'], string> = {
 export function kindBadge(activity: Pick<Activity, 'kind' | 'difficulty' | 'rental' | 'lesson' | 'pass'>): string {
   switch (activity.kind ?? 'trip') {
     case 'rental':
-      return `${rentalCategoryMeta(activity.rental?.category).label} rental`
+      return 'Rental'
     case 'activity':
       return DIFFICULTY_WORD[activity.difficulty]
     case 'charter':
@@ -242,7 +243,8 @@ export function kindCardFacts(activity: Pick<Activity, 'kind' | 'difficulty' | '
       const licence = activity.rental?.licence && activity.rental.licence !== 'none' ? `Licence, ${activity.minAge}+` : age
       const modes = activity.rental?.modes
       const how = modes && modes.length > 1 ? 'Hour or day' : modes?.[0] === 'day' || activity.rental?.billing === 'day' ? 'By the day' : 'By the hour'
-      return [how, `${activity.rental?.seatsPerUnit ?? 1} per ${meta.unit}`, licence]
+      const kinds = activity.rental?.items?.length ?? 0
+      return [how, kinds > 1 ? `${kinds} items to choose from` : `Fits ${activity.rental?.seatsPerUnit ?? 1}`, licence]
     }
     case 'charter':
       return [`Up to ${activity.charter?.maxGuests ?? activity.maxCapacity} guests`, activity.charter?.crewed === false ? 'Self-skippered' : 'Crew included', age]
@@ -275,7 +277,7 @@ export function kindNote(activity: Pick<Activity, 'kind' | 'minAge' | 'rental' |
         meta.fuel && r?.fuel ? `${FUEL_LABEL[r.fuel]}.` : null,
         meta.mileage ? (r?.kmPerDay ? `${r.kmPerDay} km a day included.` : 'Unlimited kilometres.') : null,
       ]
-      return { title: `${meta.label} rental.`, body: parts.filter(Boolean).join(' ') }
+      return { title: "Before you rent.", body: parts.filter(Boolean).join(' ') }
     }
     case 'charter': {
       return {

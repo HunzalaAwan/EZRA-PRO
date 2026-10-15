@@ -9,9 +9,14 @@ import {
   CircleAlert,
   Clock,
   KeyRound,
+  Minus,
+  Pencil,
   Phone,
+  Plus,
+  Wrench,
   X,
 } from 'lucide-react'
+import Link from 'next/link'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -26,6 +31,7 @@ import { Sheet, SheetBody, SheetContent, SheetDescription, SheetFooter, SheetHea
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
 import type { RentalBoard, RentalFleet, RentalRow, RentalStatus } from '@/lib/operations'
+import { useRentalService } from '@/hooks/use-rental-service'
 import { cn, formatCurrency, formatTime, pluralize } from '@/lib/utils'
 import type { CurrencyCode } from '@/types'
 
@@ -66,8 +72,24 @@ function when(iso: string, dayKey: string) {
 /** The moment that matters next: the hand-out for a booking, the return for anything out. */
 const actionAt = (row: RentalRow) => (row.status === 'booked' ? row.startsAt : row.endsAt)
 
-export function RentalsBoard({ board, currency }: { board: RentalBoard; currency: CurrencyCode }) {
+/** What a unit is called: "Double kayak 1" for rentals with items, "Ski 3" otherwise. */
+const unitName = (fleet: RentalFleet | undefined, unit: number) => fleet?.unitNames[unit - 1] ?? `${fleet?.unitNoun ?? 'Unit'} ${unit}`
+
+/** "3 units", or the items in words when the rental has them. */
+const whatWords = (row: RentalRow, fleet: RentalFleet | undefined) => {
+  const count = row.units.length + row.short
+  return row.lines.length > 0 ? row.itemLabel : `${count} ${count === 1 ? (fleet?.unitWord ?? 'unit') : (fleet?.unitsWord ?? 'units')}`
+}
+
+export function RentalsBoard({ board, currency, tenantSlug }: { board: RentalBoard; currency: CurrencyCode; tenantSlug: string }) {
   const [rows, setRows] = React.useState<RentalRow[]>(board.rentals)
+  const [stockOpen, setStockOpen] = React.useState(false)
+  const service = useRentalService(tenantSlug)
+  /** Out of service now for one item: the count set here, or the activity's own. */
+  const offFor = (fleet: RentalFleet, tierId: string) => {
+    const item = fleet.items.find((entry) => entry.tierId === tierId)
+    return service.get(fleet.id, tierId, { count: item?.outOfService ?? 0, note: item?.serviceNote ?? '' })
+  }
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
   const [view, setView] = React.useState<View>('next')
   const [fleetId, setFleetId] = React.useState<string | null>(null)
@@ -92,7 +114,8 @@ export function RentalsBoard({ board, currency }: { board: RentalBoard; currency
   /* ---------- the day in four numbers ---------- */
   const outRows = rows.filter((row) => row.status === 'out' || row.status === 'late')
   const unitsOut = outRows.reduce((sum, row) => sum + row.units.length, 0)
-  const totalUnits = board.fleets.reduce((sum, fleet) => sum + fleet.units, 0)
+  const offUnits = board.fleets.reduce((sum, fleet) => sum + fleet.items.reduce((total, item) => total + offFor(fleet, item.tierId).count, 0), 0)
+  const totalUnits = board.fleets.reduce((sum, fleet) => sum + fleet.units, 0) - offUnits
   const upcoming = rows.filter((row) => row.status === 'booked').sort((a, b) => a.startsAt.localeCompare(b.startsAt))
   const dueSoon = rows.filter((row) => row.status === 'out' && minutesBetween(nowMs, row.endsAt) <= 60)
   const late = rows.filter((row) => row.status === 'late')
@@ -101,10 +124,11 @@ export function RentalsBoard({ board, currency }: { board: RentalBoard; currency
   // Late returns first; only three at a time so the box stays readable.
   const shownLate = allAlerts ? late : late.slice(0, 3)
   const shownNoUnit = allAlerts ? noUnit : noUnit.slice(0, Math.max(0, 3 - shownLate.length))
-  const words = (fleet: RentalFleet | undefined, count: number) => (count === 1 ? (fleet?.unitWord ?? 'unit') : (fleet?.unitsWord ?? 'units'))
+  const words = (fleet: RentalFleet | undefined, count: number) =>
+    fleet && fleet.items.length > 0 ? (count === 1 ? 'item' : 'items') : count === 1 ? (fleet?.unitWord ?? 'unit') : (fleet?.unitsWord ?? 'units')
 
   const tiles = [
-    { label: 'Out right now', value: `${unitsOut}`, suffix: ` of ${totalUnits}`, hint: `${totalUnits - unitsOut} free to rent`, tone: '' },
+    { label: 'Out right now', value: `${unitsOut}`, suffix: ` of ${totalUnits}`, hint: `${Math.max(0, totalUnits - unitsOut)} free to rent${offUnits > 0 ? ` · ${offUnits} out of service` : ''}`, tone: '' },
     { label: 'Going out next', value: String(upcoming.length), suffix: '', hint: upcoming[0] ? `First at ${formatTime(upcoming[0].startsAt)}` : 'Nothing else today', tone: '' },
     { label: 'Coming back within the hour', value: String(dueSoon.length), suffix: '', hint: dueSoon.length > 0 ? `Next at ${formatTime([...dueSoon].sort((a, b) => a.endsAt.localeCompare(b.endsAt))[0].endsAt)}` : 'None due', tone: '' },
     { label: 'Late back', value: String(late.length), suffix: '', hint: late.length > 0 ? 'Call them' : 'Everyone on time', tone: late.length > 0 ? 'text-danger' : '' },
@@ -133,7 +157,7 @@ export function RentalsBoard({ board, currency }: { board: RentalBoard; currency
   const handOut = (row: RentalRow) => {
     setStatus(row.id, 'out')
     const fleet = fleetOf(row.activityId)
-    toast.success(`${row.units.length} ${row.units.length === 1 ? (fleet?.unitWord ?? 'unit') : (fleet?.unitsWord ?? 'units')} out to ${row.guestName}`, {
+    toast.success(`${whatWords(row, fleet)} out to ${row.guestName}`, {
       description: `Due back ${when(row.endsAt, board.dayKey)}.`,
     })
     setSelectedId(null)
@@ -175,7 +199,7 @@ export function RentalsBoard({ board, currency }: { board: RentalBoard; currency
                 <li key={row.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-surface px-3.5 py-2.5">
                   <p className="min-w-0 text-sm">
                     <span className="font-semibold text-foreground">{row.guestName}</span>
-                    <span className="text-muted"> is {relative(minutesBetween(nowMs, row.endsAt)).replace(' ago', '')} late with {row.units.length} {words(fleet, row.units.length)} ({fleet?.name})</span>
+                    <span className="text-muted"> is {relative(minutesBetween(nowMs, row.endsAt)).replace(' ago', '')} late with {whatWords(row, fleet)} ({fleet?.name}){fleet && fleet.lateFee > 0 ? ` · late fee so far ${formatCurrency(fleet.lateFee * Math.max(1, Math.ceil(-minutesBetween(nowMs, row.endsAt) / 60)), currency)}` : ''}</span>
                   </p>
                   <div className="flex items-center gap-2">
                     {row.phone ? (
@@ -220,11 +244,17 @@ export function RentalsBoard({ board, currency }: { board: RentalBoard; currency
       {/* ---------- what is free, per fleet ---------- */}
       <section aria-labelledby="rentals-fleet">
         <div className="mb-2.5 flex items-baseline justify-between gap-3">
-          <h2 id="rentals-fleet" className="text-sm font-semibold">Free right now</h2>
-          <p className="flex items-center gap-3 text-xs text-muted" aria-hidden="true">
+          <div className="flex items-center gap-3">
+            <h2 id="rentals-fleet" className="text-sm font-semibold">Free right now</h2>
+            <Button variant="secondary" size="xs" leftIcon={<Wrench />} onClick={() => setStockOpen(true)}>
+              Stock and repairs
+            </Button>
+          </div>
+          <p className="hidden items-center gap-3 text-xs text-muted sm:flex" aria-hidden="true">
             <span className="inline-flex items-center gap-1.5"><span className="size-3 rounded border border-line-strong bg-surface" />Free</span>
             <span className="inline-flex items-center gap-1.5"><span className="size-3 rounded bg-primary" />Out</span>
             <span className="inline-flex items-center gap-1.5"><span className="size-3 rounded bg-danger" />Late</span>
+            <span className="inline-flex items-center gap-1.5"><span className="size-3 rounded bg-surface-sunken bg-[repeating-linear-gradient(45deg,transparent_0_3px,var(--color-line-strong)_3px_4px)]" />Out of service</span>
           </p>
         </div>
         <div className="no-scrollbar -mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 xl:grid-cols-4">
@@ -234,6 +264,7 @@ export function RentalsBoard({ board, currency }: { board: RentalBoard; currency
               fleet={fleet}
               rows={rows.filter((row) => row.activityId === fleet.id)}
               dayKey={board.dayKey}
+              offFor={(tierId) => offFor(fleet, tierId).count}
               selected={fleetId === fleet.id}
               onSelect={() => setFleetId((current) => (current === fleet.id ? null : fleet.id))}
             />
@@ -296,6 +327,15 @@ export function RentalsBoard({ board, currency }: { board: RentalBoard; currency
         )}
       </section>
 
+      <StockSheet
+        open={stockOpen}
+        onClose={() => setStockOpen(false)}
+        fleets={board.fleets}
+        rows={rows}
+        offFor={offFor}
+        onSet={(fleet, tierId, state) => service.set(fleet.id, tierId, state)}
+      />
+
       <RentalSheet
         row={selected}
         fleet={selected ? fleetOf(selected.activityId) : undefined}
@@ -323,18 +363,45 @@ function FleetCard({
   fleet,
   rows,
   dayKey,
+  offFor,
   selected,
   onSelect,
 }: {
   fleet: RentalFleet
   rows: RentalRow[]
   dayKey: string
+  offFor: (tierId: string) => number
   selected: boolean
   onSelect: () => void
 }) {
-  const stateOf = (unit: number) => rows.find((row) => (row.status === 'out' || row.status === 'late') && row.units.includes(unit))?.status ?? 'free'
+  const inUse = (unit: number) => rows.find((row) => (row.status === 'out' || row.status === 'late') && row.units.includes(unit))?.status as 'out' | 'late' | undefined
+  // Out of service: the last free units of each item.
+  const off = new Set<number>()
+  for (const item of fleet.items) {
+    const idle = item.units.filter((unit) => !inUse(unit))
+    for (const unit of idle.slice(Math.max(0, idle.length - offFor(item.tierId)))) off.add(unit)
+  }
+  const stateOf = (unit: number): 'free' | 'out' | 'late' | 'off' => inUse(unit) ?? (off.has(unit) ? 'off' : 'free')
   const units = Array.from({ length: fleet.units }, (_, index) => index + 1)
   const free = units.filter((unit) => stateOf(unit) === 'free').length
+  const square = (unit: number, label: string | number) => {
+    const state = stateOf(unit)
+    return (
+      <span
+        key={unit}
+        title={`${unitName(fleet, unit)}: ${state === 'off' ? 'out of service' : state}`}
+        className={cn(
+          'grid size-7 place-items-center rounded-md text-xs font-semibold tabular-nums',
+          state === 'free' && 'border border-line-strong bg-surface text-muted',
+          state === 'out' && 'bg-primary text-on-primary',
+          state === 'late' && 'bg-danger text-white',
+          state === 'off' && 'bg-surface-sunken bg-[repeating-linear-gradient(45deg,transparent_0_3px,var(--color-line-strong)_3px_4px)] text-faint',
+        )}
+      >
+        {label}
+      </span>
+    )
+  }
   const nextBack = rows.filter((row) => row.status === 'out').sort((a, b) => a.endsAt.localeCompare(b.endsAt))[0]
 
   return (
@@ -354,29 +421,33 @@ function FleetCard({
       </div>
       <p className="font-display text-3xl font-semibold tracking-tight tabular-nums">
         {free}
-        <span className="ml-1.5 text-sm font-medium text-subtle">of {fleet.units} {fleet.unitsWord} free</span>
+        <span className="ml-1.5 text-sm font-medium text-subtle">of {fleet.units - off.size} free</span>
       </p>
-      <div className="flex flex-wrap gap-1.5" aria-hidden="true">
-        {units.map((unit) => {
-          const state = stateOf(unit)
-          return (
-            <span
-              key={unit}
-              className={cn(
-                'grid size-7 place-items-center rounded-md text-xs font-semibold tabular-nums',
-                state === 'free' && 'border border-line-strong bg-surface text-muted',
-                state === 'out' && 'bg-primary text-on-primary',
-                state === 'late' && 'bg-danger text-white',
-              )}
-            >
-              {unit}
-            </span>
-          )
-        })}
-      </div>
+      {fleet.items.length > 0 ? (
+        <ul className="flex list-none flex-col gap-2 p-0">
+          {fleet.items.map((item) => {
+            const freeHere = item.units.filter((unit) => stateOf(unit) === 'free').length
+            return (
+              <li key={item.tierId}>
+                <p className="flex items-baseline justify-between gap-2 text-xs">
+                  <span className="truncate font-medium text-foreground">{item.name}</span>
+                  <span className={cn('shrink-0 tabular-nums', freeHere === 0 ? 'font-medium text-danger' : 'text-muted')}>{freeHere} free</span>
+                </p>
+                <div className="mt-1 flex flex-wrap gap-1" aria-hidden="true">
+                  {item.units.map((unit, index) => square(unit, index + 1))}
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      ) : (
+        <div className="flex flex-wrap gap-1.5" aria-hidden="true">
+          {units.map((unit) => square(unit, unit))}
+        </div>
+      )}
       <p className="text-xs text-muted">
         {nextBack
-          ? `Next back: ${fleet.unitNoun} ${nextBack.units[0]} ${nextBack.endsAt.slice(0, 10) === dayKey ? `at ${formatTime(nextBack.endsAt)}` : `on ${when(nextBack.endsAt, dayKey)}`}`
+          ? `Next back: ${unitName(fleet, nextBack.units[0])} ${nextBack.endsAt.slice(0, 10) === dayKey ? `at ${formatTime(nextBack.endsAt)}` : `on ${when(nextBack.endsAt, dayKey)}`}`
           : free === fleet.units
             ? 'Everything is in.'
             : 'Nothing due back soon.'}
@@ -452,13 +523,13 @@ function RentalItem({
         {/* what */}
         <div className="col-span-2 min-w-0 lg:col-span-1">
           <p className="text-sm text-foreground">
-            {count} {unitWord}
-            <span className="text-muted"> · {fleet?.byDay ? `${row.itemLabel} for ${row.lengthLabel}` : row.lengthLabel}</span>
+            {row.lines.length > 0 ? row.itemLabel : `${count} ${unitWord}`}
+            <span className="text-muted"> · {fleet?.byDay && row.lines.length === 0 ? `${row.itemLabel} for ${row.lengthLabel}` : row.lengthLabel}</span>
           </p>
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             {row.units.map((unit) => (
               <span key={unit} className="rounded-md bg-surface-sunken px-1.5 py-0.5 text-xs font-medium text-muted tabular-nums">
-                {fleet?.unitNoun ?? 'Unit'} {unit}
+                {unitName(fleet, unit)}
               </span>
             ))}
             {row.short > 0 ? (
@@ -563,7 +634,7 @@ function RentalSheet({
   }, [row])
 
   const unitNoun = fleet?.unitNoun ?? 'Unit'
-  const depositTotal = row ? row.deposit * row.units.length : 0
+  const depositTotal = row ? row.deposit : 0
   const canHandOut = checks.briefing && checks.licence && checks.deposit
 
   return (
@@ -589,7 +660,7 @@ function RentalSheet({
                 </div>
                 <div className="rounded-xl bg-surface-sunken/60 px-3 py-2.5">
                   <dt className="text-xs text-subtle">What</dt>
-                  <dd className="font-medium">{fleet?.byDay ? `${row.itemLabel} · ${row.lengthLabel}` : row.lengthLabel}</dd>
+                  <dd className="font-medium">{row.lines.length > 0 || fleet?.byDay ? `${row.itemLabel} · ${row.lengthLabel}` : row.lengthLabel}</dd>
                 </div>
                 <div className="rounded-xl bg-surface-sunken/60 px-3 py-2.5">
                   <dt className="text-xs text-subtle">Status</dt>
@@ -601,13 +672,13 @@ function RentalSheet({
                   <dt className="text-xs text-subtle">{row.units.length === 1 ? 'Unit' : 'Units'}</dt>
                   <dd className="mt-1 flex flex-wrap gap-1.5">
                     {row.units.map((unit) => (
-                      <span key={unit} className="rounded-md bg-surface px-2 py-0.5 text-sm font-medium tabular-nums">{unitNoun} {unit}</span>
+                      <span key={unit} className="rounded-md bg-surface px-2 py-0.5 text-sm font-medium tabular-nums">{unitName(fleet, unit)}</span>
                     ))}
                     {row.short > 0 ? <span className="rounded-md bg-danger-soft px-2 py-0.5 text-sm font-medium text-danger">{row.short} still need a unit</span> : null}
                   </dd>
                 </div>
                 <div className="col-span-2 flex items-center justify-between rounded-xl bg-surface-sunken/60 px-3 py-2.5">
-                  <dt className="text-xs text-subtle">Damage deposit</dt>
+                  <dt className="text-xs text-subtle">Deposit</dt>
                   <dd className="font-medium tabular-nums">{depositTotal > 0 ? formatCurrency(depositTotal, currency) : 'None'}</dd>
                 </div>
                 {row.balance > 0 ? (
@@ -690,7 +761,7 @@ function RentalSheet({
               {row.status === 'booked' ? (
                 <div className="flex w-full flex-col gap-2">
                   <Button fullWidth leftIcon={<ArrowUpFromLine />} disabled={!canHandOut || row.units.length === 0} onClick={() => onHandOut(row)}>
-                    Hand out {row.units.length} {row.units.length === 1 ? (fleet?.unitWord ?? 'unit') : (fleet?.unitsWord ?? 'units')}
+                    Hand out {row.lines.length > 0 ? `${row.units.length} ${row.units.length === 1 ? 'item' : 'items'}` : `${row.units.length} ${row.units.length === 1 ? (fleet?.unitWord ?? 'unit') : (fleet?.unitsWord ?? 'units')}`}
                   </Button>
                   {!canHandOut ? <p className="flex items-center justify-center gap-1.5 text-xs text-subtle"><Clock className="size-3.5" aria-hidden="true" />Tick the three checks first.</p> : null}
                 </div>
@@ -706,6 +777,94 @@ function RentalSheet({
             </SheetFooter>
           </>
         ) : null}
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+/* ==========================================================================
+   STOCK AND REPAIRS — every item, how many there are and how many are out
+   of service right now. Out of service comes off what guests can book.
+   ========================================================================== */
+
+function StockSheet({
+  open,
+  onClose,
+  fleets,
+  rows,
+  offFor,
+  onSet,
+}: {
+  open: boolean
+  onClose: () => void
+  fleets: RentalFleet[]
+  rows: RentalRow[]
+  offFor: (fleet: RentalFleet, tierId: string) => { count: number; note: string }
+  onSet: (fleet: RentalFleet, tierId: string, state: { count: number; note: string }) => void
+}) {
+  return (
+    <Sheet open={open} onOpenChange={(value) => !value && onClose()}>
+      <SheetContent side="right" size="lg">
+        <SheetHeader>
+          <SheetTitle>Stock and repairs</SheetTitle>
+          <SheetDescription>Take something out of service while it is being fixed, cleaned or is missing. It stops being bookable straight away, and comes back when you set it to 0.</SheetDescription>
+        </SheetHeader>
+        <SheetBody className="flex flex-col gap-6">
+          {fleets.map((fleet) => {
+            const list = fleet.items.length > 0 ? fleet.items : null
+            return (
+              <section key={fleet.id} className="flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-semibold">{fleet.name}</h3>
+                  <Button asChild variant="ghost" size="xs" leftIcon={<Pencil />}>
+                    <Link href={`/dashboard/activities/${fleet.id}/edit`}>Edit items and prices</Link>
+                  </Button>
+                </div>
+                {list ? (
+                  <ul className="flex list-none flex-col divide-y divide-line-subtle rounded-xl border border-line p-0">
+                    {list.map((item) => {
+                      const state = offFor(fleet, item.tierId)
+                      const out = rows.filter((row) => (row.status === 'out' || row.status === 'late') && row.activityId === fleet.id).reduce((sum, row) => sum + row.units.filter((unit) => item.units.includes(unit)).length, 0)
+                      const set = (patch: Partial<{ count: number; note: string }>) => onSet(fleet, item.tierId, { ...state, ...patch })
+                      return (
+                        <li key={item.tierId} className="flex flex-col gap-2 px-3.5 py-3">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-foreground">{item.name}</p>
+                              <p className="text-xs text-subtle">
+                                {item.stock} in stock · fits {item.holds} · {out} out now · {Math.max(0, item.stock - state.count - out)} free
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted">Out of service</span>
+                              <IconButton aria-label={`Fewer ${item.name} out of service`} size="sm" variant="outline" disabled={state.count <= 0} onClick={() => set({ count: state.count - 1, note: state.count - 1 === 0 ? '' : state.note })}>
+                                <Minus aria-hidden="true" />
+                              </IconButton>
+                              <span className="w-6 text-center text-sm font-semibold tabular-nums">{state.count}</span>
+                              <IconButton aria-label={`More ${item.name} out of service`} size="sm" variant="outline" disabled={state.count >= item.stock} onClick={() => set({ count: state.count + 1 })}>
+                                <Plus aria-hidden="true" />
+                              </IconButton>
+                            </div>
+                          </div>
+                          {state.count > 0 ? (
+                            <Input size="sm" placeholder="Why, and when it is back (optional)" value={state.note} onChange={(event) => set({ note: event.target.value })} aria-label={`Why ${item.name} is out of service`} />
+                          ) : null}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                ) : (
+                  <p className="rounded-xl border border-line px-3.5 py-3 text-sm text-muted">
+                    {fleet.units} {fleet.unitsWord} shared by every option. Split them into items in the activity to count each one on its own.
+                  </p>
+                )}
+              </section>
+            )
+          })}
+        </SheetBody>
+        <SheetFooter>
+          <Button onClick={onClose}>Done</Button>
+        </SheetFooter>
       </SheetContent>
     </Sheet>
   )
