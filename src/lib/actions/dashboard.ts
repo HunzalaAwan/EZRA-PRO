@@ -4,6 +4,9 @@ import {
   getActivityById,
   getAnalytics,
   getBookingDetail,
+  getBookingRowsInRange,
+  toDeskRow,
+  type DeskRow,
   getBookingsByDeparture,
   getCalendarEvents,
   getCustomerById,
@@ -89,6 +92,11 @@ export async function fetchDepartureDetail(departureId: string): Promise<Departu
     gross,
     paid,
   }
+}
+
+/** The reservations desk's calendar: bookings running on the days picked. */
+export async function fetchDeskRows(tenantId: string, fromKey: string, toKey: string): Promise<DeskRow[]> {
+  return getBookingRowsInRange(tenantId, fromKey, toKey, 2000).map(toDeskRow)
 }
 
 export async function fetchStorefrontAvailability(activityId: string, days = 45): Promise<CalendarEvent[]> {

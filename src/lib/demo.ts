@@ -1390,6 +1390,54 @@ export function getBookingRows(tenantId: string, limit?: number): BookingRow[] {
   return limit ? rows.slice(0, limit) : rows
 }
 
+/**
+ * A row as the desk list needs it: the activity is sent once with the page
+ * and joined back in the browser, and the guest list and line items stay on
+ * the booking record. Keeps the page a fraction of the size.
+ */
+export type DeskRow = Omit<BookingRow, 'activity' | 'booking'> & { booking: Omit<BookingRow['booking'], 'participants' | 'lineItems' | 'answers' | 'reviewText'> & { participants: []; lineItems: [] } }
+
+export function toDeskRow(row: BookingRow): DeskRow {
+  const { activity: _activity, ...rest } = row
+  const { participants: _participants, lineItems: _lineItems, answers: _answers, reviewText: _review, ...booking } = row.booking
+  const { departure, customer } = rest
+  return {
+    ...rest,
+    // Only what the list shows; the booking record loads the rest.
+    departure: { ...departure, assignedStaffIds: [], assignedResourceIds: [], weather: undefined, notes: undefined },
+    customer: { ...customer, tags: [], notes: undefined },
+    booking: { ...booking, participants: [], lineItems: [] },
+  }
+}
+
+/** Bookings running between two days, inclusive, for the reservations desk's calendar. */
+export function getBookingRowsInRange(tenantId: string, fromKey: string, toKey: string, limit = 2000): BookingRow[] {
+  return getBookingRows(tenantId)
+    .filter((row) => {
+      const key = row.departure.startsAt.slice(0, 10)
+      return key >= fromKey && key <= toKey
+    })
+    .slice(0, limit)
+}
+
+/**
+ * The desk's first load: this week (yesterday to six days out) and the
+ * newest bookings, so Today, Upcoming, Recently booked and Needs attention
+ * open at once. Other dates come from getBookingRowsInRange when picked.
+ */
+export function getDeskRows(tenantId: string, today: Date): { rows: DeskRow[]; loaded: { from: string; to: string } } {
+  const from = toDateKey(addDays(today, -1))
+  const to = toDateKey(addDays(today, 6))
+  const week = getBookingRowsInRange(tenantId, from, to, 2000)
+  const seen = new Set(week.map((row) => row.booking.id))
+  const newest = getBookingRows(tenantId)
+    .slice()
+    .sort((a, b) => (a.booking.createdAt < b.booking.createdAt ? 1 : -1))
+    .filter((row) => !seen.has(row.booking.id))
+    .slice(0, 300)
+  return { rows: [...week, ...newest].map(toDeskRow), loaded: { from, to } }
+}
+
 export function getBookingDetail(
   bookingId: string,
 ): (BookingRow & { payments: Payment[] }) | undefined {

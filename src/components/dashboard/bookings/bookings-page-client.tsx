@@ -18,7 +18,7 @@ import {
   Wallet,
 } from 'lucide-react'
 
-import type { BookingRow } from '@/lib/demo'
+import type { BookingRow, DeskRow } from '@/lib/demo'
 import type { Activity, Location, Tenant } from '@/types'
 import { addDays, formatNumber, percentChange, toDateKey, formatCurrency } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -38,16 +38,14 @@ import { PageHeader } from '@/components/dashboard/page-header'
 import {
   BookingsFilters,
   DEFAULT_BOOKING_FILTERS,
-  SAVED_VIEWS,
-  STATUS_TAB_LABEL,
-  STATUS_TAB_MATCH,
-  STATUS_TAB_ORDER,
-  SavedViewSelect,
-  isDefaultFilters,
+  DESK_VIEWS,
+  STATUS_MATCH,
+  activeFilterCount,
   type BookingFilters,
-  type BookingStatusTab,
-  type SavedView,
+  type DeskView,
 } from '@/components/dashboard/bookings/bookings-filters'
+import type { DateRange } from '@/types'
+import { fetchDeskRows } from '@/lib/actions/dashboard'
 import { BookingsDisplayMenu, BookingsTable } from '@/components/dashboard/bookings/bookings-table'
 import { BookingDetailSheet } from '@/components/dashboard/bookings/booking-detail-sheet'
 import { NewBookingDialog } from '@/components/dashboard/bookings/new-booking-dialog'
@@ -58,9 +56,40 @@ import { NewBookingDialog } from '@/components/dashboard/bookings/new-booking-di
    rail, saved views, and 13k reservations paginated underneath.
    ========================================================================== */
 
-/* Soonest departure first: the list opens on what happens next. */
-const DEFAULT_SORT: DataTableSort = { id: 'departure', dir: 'asc' }
-const DEFAULT_VIEW = SAVED_VIEWS.find((view) => view.id === 'upcoming') ?? SAVED_VIEWS[0]
+/* Each view's own order: time order for the days ahead, newest first for what just came in. */
+const SORT_FOR: Record<DeskView, DataTableSort> = {
+  today: { id: 'departure', dir: 'asc' },
+  upcoming: { id: 'departure', dir: 'asc' },
+  recent: { id: 'created', dir: 'desc' },
+  attention: { id: 'departure', dir: 'asc' },
+  cancelled: { id: 'departure', dir: 'desc' },
+  all: { id: 'departure', dir: 'asc' },
+}
+
+const CANCELLED = new Set<string>(STATUS_MATCH.cancelled)
+
+const shiftDay = (dayKey: string, days: number) => toDateKey(addDays(new Date(`${dayKey}T12:00:00`), days))
+
+/** What each view shows, before the calendar and the filters. */
+function inView(view: DeskView, row: BookingRow, todayKey: string) {
+  const day = row.departure.startsAt.slice(0, 10)
+  const cancelled = CANCELLED.has(row.booking.status)
+  switch (view) {
+    case 'today':
+      return day === todayKey
+    case 'upcoming':
+      return day >= todayKey && day <= shiftDay(todayKey, 6) && !cancelled
+    case 'attention':
+      return day >= todayKey && day <= shiftDay(todayKey, 6) && !cancelled && (row.booking.status === 'pending' || row.booking.total - row.booking.amountPaid > 0)
+    case 'cancelled':
+      return cancelled
+    case 'recent':
+      // Made in the last seven days.
+      return row.booking.createdAt.slice(0, 10) >= shiftDay(todayKey, -6)
+    default:
+      return true
+  }
+}
 
 function matchesSearch(row: BookingRow, needle: string) {
   const { booking, customer } = row
@@ -75,12 +104,15 @@ function matchesSearch(row: BookingRow, needle: string) {
 
 export interface BookingsPageClientProps {
   tenant: Tenant
-  allRows: BookingRow[]
+  /** Rows without their activity, which is joined back from `activities`. */
+  allRows: DeskRow[]
   activities: Activity[]
   /** The business's locations, for the filter and the default. */
   locations: Location[]
   now: Date
   todayKey: string
+  /** The days the first load covers; other days are fetched when picked. */
+  loaded?: { from: string; to: string }
 }
 
 /**
@@ -90,7 +122,35 @@ export interface BookingsPageClientProps {
  * handed down as a prop; it must never be re-fetched or re-generated here,
  * or the entire synthetic dataset ships into the client bundle again.
  */
-export function BookingsPageClient({ tenant, allRows: sourceRows, activities, locations, now: NOW, todayKey: TODAY_KEY }: BookingsPageClientProps) {
+export function BookingsPageClient({ tenant, allRows: firstRows, activities, locations, now: NOW, todayKey: TODAY_KEY, loaded }: BookingsPageClientProps) {
+  /* Days outside the first load are fetched from the server when picked, and kept. */
+  const [fetched, setFetched] = React.useState<DeskRow[]>([])
+  const [fetchedDays, setFetchedDays] = React.useState<{ from: string; to: string }[]>([])
+  const [loadingDays, setLoadingDays] = React.useState(false)
+  const activityById = React.useMemo(() => new Map(activities.map((activity) => [activity.id, activity])), [activities])
+  const sourceRows = React.useMemo(() => {
+    const seen = new Set(firstRows.map((row) => row.booking.id))
+    const desk = [...firstRows, ...fetched.filter((row) => !seen.has(row.booking.id))]
+    return desk.flatMap((row) => {
+      const activity = activityById.get(row.booking.activityId)
+      return activity ? [{ ...row, activity } as BookingRow] : []
+    })
+  }, [firstRows, fetched, activityById])
+  const ensureDays = (range: DateRange | null) => {
+    if (!range || !loaded) return
+    const covered = (from: string, to: string) => range.from >= from && range.to <= to
+    if (covered(loaded.from, loaded.to) || fetchedDays.some((entry) => covered(entry.from, entry.to))) return
+    setLoadingDays(true)
+    fetchDeskRows(tenant.id, range.from, range.to)
+      .then((rows) => {
+        setFetched((current) => {
+          const seen = new Set(current.map((row) => row.booking.id))
+          return [...current, ...rows.filter((row) => !seen.has(row.booking.id))]
+        })
+        setFetchedDays((current) => [...current, range])
+      })
+      .finally(() => setLoadingDays(false))
+  }
   /* Refunds and cancellations made at this desk, layered over the server rows. */
   const [adjustments, setAdjustments] = React.useState<Record<string, { refunded: number; cancelled: boolean }>>({})
   // Moves, guest changes and cancellations made anywhere (here, the booking record, the guest's page).
@@ -160,10 +220,10 @@ export function BookingsPageClient({ tenant, allRows: sourceRows, activities, lo
   const [refundTargets, setRefundTargets] = React.useState<BookingRow[]>([])
   const [refundOpen, setRefundOpen] = React.useState(false)
 
-  const [filters, setFilters] = React.useState<BookingFilters>(DEFAULT_VIEW.filters)
-  const [statusTab, setStatusTab] = React.useState<BookingStatusTab>('all')
-  const [activeViewId, setActiveViewId] = React.useState<string | null>(DEFAULT_VIEW.id)
-  const [sort, setSort] = React.useState<DataTableSort>(DEFAULT_SORT)
+  // The desk opens on today: what is running, in time order.
+  const [view, setView] = React.useState<DeskView>('today')
+  const [filters, setFilters] = React.useState<BookingFilters>({ ...DEFAULT_BOOKING_FILTERS, range: { from: TODAY_KEY, to: TODAY_KEY } })
+  const [sort, setSort] = React.useState<DataTableSort>(SORT_FOR.today)
   const [page, setPage] = React.useState(1)
   const [pageSize, setPageSize] = React.useState(25)
   const [selectedIds, setSelectedIds] = React.useState<string[]>([])
@@ -247,51 +307,43 @@ export function BookingsPageClient({ tenant, allRows: sourceRows, activities, lo
      numbers on the rail always describe what the rail would show.
      ---------------------------------------------------------------------- */
   const defaultLocationId = locations.find((site) => site.isDefault)?.id ?? locations[0]?.id
-  const preTabRows = React.useMemo(() => {
+  /* Search and the Filters button first, so every view's count describes what it would show. */
+  const baseRows = React.useMemo(() => {
     const needle = filters.search.trim().toLowerCase()
-    const from = filters.range?.from
-    const to = filters.range?.to
-
+    const statuses = filters.status === 'all' ? null : new Set<string>(STATUS_MATCH[filters.status])
     return allRows.filter((row) => {
       if (needle && !matchesSearch(row, needle)) return false
+      if (statuses && !statuses.has(row.booking.status)) return false
       if (filters.activityId !== 'all' && row.activity.id !== filters.activityId) return false
       if (filters.channel !== 'all' && row.booking.channel !== filters.channel) return false
       if (filters.payment !== 'all' && row.booking.paymentStatus !== filters.payment) return false
       if (filters.locationId !== 'all' && (row.departure.locationId ?? defaultLocationId) !== filters.locationId) return false
+      return true
+    })
+  }, [allRows, filters.search, filters.status, filters.activityId, filters.channel, filters.payment, filters.locationId, defaultLocationId])
+
+  const viewCounts = React.useMemo(() => {
+    const counts = Object.fromEntries(DESK_VIEWS.map((entry) => [entry.id, 0])) as Record<DeskView, number>
+    for (const row of baseRows) for (const entry of DESK_VIEWS) if (inView(entry.id, row, TODAY_KEY)) counts[entry.id] += 1
+    return counts
+  }, [baseRows, TODAY_KEY])
+
+  /* Then the view, then the calendar's days. */
+  const filteredRows = React.useMemo(() => {
+    const from = filters.range?.from
+    const to = filters.range?.to
+    return baseRows.filter((row) => {
+      if (!inView(view, row, TODAY_KEY)) return false
       if (from && to) {
         const key = row.departure.startsAt.slice(0, 10)
         if (key < from || key > to) return false
       }
       return true
     })
-  }, [allRows, filters, defaultLocationId])
+  }, [baseRows, view, filters.range, TODAY_KEY])
 
-  const tabCounts = React.useMemo(() => {
-    const counts: Record<BookingStatusTab, number> = {
-      all: preTabRows.length,
-      pending: 0,
-      confirmed: 0,
-      checked_in: 0,
-      completed: 0,
-      cancelled: 0,
-    }
-    for (const { booking } of preTabRows) {
-      for (const tab of STATUS_TAB_ORDER) {
-        if (tab === 'all') continue
-        if ((STATUS_TAB_MATCH[tab] as string[]).includes(booking.status)) {
-          counts[tab] += 1
-          break
-        }
-      }
-    }
-    return counts
-  }, [preTabRows])
-
-  const filteredRows = React.useMemo(() => {
-    if (statusTab === 'all') return preTabRows
-    const allowed = new Set<string>(STATUS_TAB_MATCH[statusTab])
-    return preTabRows.filter((row) => allowed.has(row.booking.status))
-  }, [preTabRows, statusTab])
+  /** Days with bookings, for the dots on the calendar. */
+  const bookedDays = React.useMemo(() => new Set(baseRows.filter((row) => !CANCELLED.has(row.booking.status)).map((row) => row.departure.startsAt.slice(0, 10))), [baseRows])
 
   /* ----------------------------------------------------------------------
      Sorting
@@ -338,24 +390,35 @@ export function BookingsPageClient({ tenant, allRows: sourceRows, activities, lo
      ---------------------------------------------------------------------- */
   const applyFilters = (next: BookingFilters) => {
     setFilters(next)
-    setActiveViewId(null)
     setPage(1)
   }
 
-  const applyView = (view: SavedView) => {
-    setFilters(view.filters)
-    setStatusTab(view.status)
-    setActiveViewId(view.id)
+  const applyView = (next: DeskView) => {
+    setView(next)
+    setSort(SORT_FOR[next])
+    // Today is a day on the calendar; every other view starts on any date.
+    setFilters((current) => ({ ...current, range: next === 'today' ? { from: TODAY_KEY, to: TODAY_KEY } : null }))
     setPage(1)
     setSelectedIds([])
   }
 
-  const clearEverything = () => {
-    setFilters(DEFAULT_BOOKING_FILTERS)
-    setStatusTab('all')
-    setActiveViewId('all')
+  /** A day or range from the calendar. Today and Upcoming are dates themselves, so another date shows under All. */
+  const applyRange = (range: DateRange | null) => {
+    const isToday = range?.from === TODAY_KEY && range.to === TODAY_KEY
+    if (isToday) {
+      setView('today')
+      setSort(SORT_FOR.today)
+    } else if (view === 'today' || view === 'upcoming') {
+      setView('all')
+      setSort(SORT_FOR.all)
+    }
+    setFilters((current) => ({ ...current, range }))
+    ensureDays(range)
     setPage(1)
+    setSelectedIds([])
   }
+
+  const clearEverything = () => applyView('today')
 
   const openRow = (row: BookingRow) => {
     setOpenBookingId(row.booking.id)
@@ -481,11 +544,8 @@ export function BookingsPageClient({ tenant, allRows: sourceRows, activities, lo
     setSelectedIds([])
   }
 
-  const statusOptions: SegmentedOption<BookingStatusTab>[] = STATUS_TAB_ORDER.map((tab) => ({
-    value: tab,
-    label: STATUS_TAB_LABEL[tab],
-    count: tabCounts[tab],
-  }))
+  const viewOptions: SegmentedOption<DeskView>[] = DESK_VIEWS.map((entry) => ({ value: entry.id, label: entry.label, count: viewCounts[entry.id] }))
+  const viewHint = DESK_VIEWS.find((entry) => entry.id === view)?.hint
 
   const openRowData = openIndex >= 0 ? sortedRows[openIndex] : null
 
@@ -559,12 +619,7 @@ export function BookingsPageClient({ tenant, allRows: sourceRows, activities, lo
           footer={
             <button
               type="button"
-              onClick={() => {
-                setStatusTab('pending')
-                setActiveViewId('needs-action')
-                setFilters(DEFAULT_BOOKING_FILTERS)
-                setPage(1)
-              }}
+              onClick={() => applyView('attention')}
               className="text-primary transition-colors hover:underline"
             >
               Review the queue →
@@ -607,44 +662,31 @@ export function BookingsPageClient({ tenant, allRows: sourceRows, activities, lo
           TOOLBAR — status tabs and the saved view, then search and filters
           ================================================================== */}
       <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           <div className="-mx-1 min-w-0 overflow-x-auto px-1 no-scrollbar">
-            <Segmented
-              options={statusOptions}
-              value={statusTab}
-              onValueChange={(value) => {
-                setStatusTab(value)
-                setActiveViewId(null)
-                setPage(1)
-                setSelectedIds([])
-              }}
-              label="Filter reservations by status"
-              size="md"
-              className="min-w-max"
-            />
+            <Segmented options={viewOptions} value={view} onValueChange={applyView} label="Reservation views" size="md" className="min-w-max" />
           </div>
-          <SavedViewSelect activeViewId={activeViewId} onApplyView={applyView} className="sm:ml-auto" />
+          {viewHint ? <p className="text-xs text-subtle">{viewHint}</p> : null}
         </div>
 
         <BookingsFilters
           filters={filters}
           onFiltersChange={applyFilters}
+          onRangeChange={applyRange}
+          todayKey={TODAY_KEY}
+          bookedDays={bookedDays}
           activities={activities}
           locations={locations.map((site) => ({ id: site.id, name: site.name }))}
-          resettable={activeViewId === null && (!isDefaultFilters(filters) || statusTab !== 'all')}
+          resettable={view !== 'today' || filters.search.trim() !== '' || activeFilterCount(filters) > 0}
           onReset={clearEverything}
-          resultSummary={
-            <>
-              {formatNumber(sortedRows.length)} of {formatNumber(allRows.length)} reservations
-            </>
-          }
+          resultSummary={<>{formatNumber(sortedRows.length)} {sortedRows.length === 1 ? 'booking' : 'bookings'}</>}
           trailing={
             <BookingsDisplayMenu
               density={density}
               onDensityChange={setDensity}
               groupByDay={groupByDay}
               onGroupByDayChange={setGroupByDay}
-              canGroup={sort.id === 'departure'}
+              canGroup={sort.id === 'departure' || sort.id === 'created'}
               className="hidden md:inline-flex"
             />
           }
@@ -680,6 +722,7 @@ export function BookingsPageClient({ tenant, allRows: sourceRows, activities, lo
         onClearFilters={clearEverything}
         density={density}
         groupByDay={groupByDay}
+        loading={loadingDays}
       />
 
       {/* ==================================================================

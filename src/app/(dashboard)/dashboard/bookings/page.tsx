@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { requireWorkspaceRoute } from '@/lib/workspace'
 
-import { NOW, TODAY_KEY, getActivitiesByTenant, getBookingRows, getLocationsByTenant } from '@/lib/demo'
+import { NOW, TODAY_KEY, getActivitiesByTenant, getDeskRows, getLocationsByTenant } from '@/lib/demo'
 import { BookingsPageClient } from '@/components/dashboard/bookings/bookings-page-client'
 
 export const dynamic = 'force-dynamic'
@@ -13,19 +13,20 @@ export const metadata: Metadata = {
 
 /**
  * Server Component: computes the dataset on the server and hands it to the
- * client view as plain props. Passing a stratified working set of ~800 rows
+ * client view as plain props. Passing this week and the newest bookings
  * keeps the payload lightweight (~250 KB) while preserving all filtering,
  * pagination, and interactive capabilities without browser latency.
  */
 export default async function BookingsPage() {
   const { tenant } = await requireWorkspaceRoute('/dashboard/bookings')
-  const allRows = getBookingRows(tenant.id, 800)
+  const { rows: allRows, loaded } = getDeskRows(tenant.id, NOW)
   const activities = getActivitiesByTenant(tenant.id)
 
   return (
     <BookingsPageClient
       tenant={tenant}
       allRows={allRows}
+      loaded={loaded}
       activities={activities}
       locations={getLocationsByTenant(tenant.id)}
       now={NOW}

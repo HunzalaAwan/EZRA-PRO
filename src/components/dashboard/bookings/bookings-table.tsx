@@ -182,11 +182,14 @@ function DayHeader({
   rows,
   todayKey,
   currency,
+  booked = false,
 }: {
   dayKey: string
   rows: BookingRow[]
   todayKey: string
   currency: CurrencyCode
+  /** Grouped by the day the bookings were made, not the day they run. */
+  booked?: boolean
 }) {
   const date = fromDateKey(dayKey)
   const relative =
@@ -212,7 +215,8 @@ function DayHeader({
   return (
     <div className="flex items-center justify-between gap-3">
       <div className="flex min-w-0 items-center gap-2 text-[0.8125rem]">
-        {relative ? <span className={cn('font-medium', relative === 'Today' ? 'text-primary' : 'text-muted')}>{relative}</span> : null}
+        {booked ? <span className="font-medium text-muted">Booked</span> : null}
+        {relative ? <span className={cn('font-medium', relative === 'Today' ? 'text-primary' : 'text-muted')}>{booked ? relative.toLowerCase() : relative}</span> : null}
         {relative ? <span className="text-faint">·</span> : null}
         <span className={cn('truncate', past ? 'text-subtle' : 'text-muted')}>
           {WEEKDAYS[date.getDay()]}, {formatDateShort(date)}
@@ -577,16 +581,19 @@ export function BookingsTable({
     onSelectionChange(Array.from(next))
   }
 
-  /* Days only make sense when the list runs in departure order. */
-  const canGroup = sort.id === 'departure'
+  /* Days only make sense when the list runs in date order: the day it runs, or the day it was booked. */
+  const byBooked = sort.id === 'created'
+  const canGroup = sort.id === 'departure' || byBooked
   const grouped = groupByDay && canGroup
+  // Grouped by when it was booked, each row still needs the day it runs.
+  const timeOnly = grouped && !byBooked
 
-  const groupBy = React.useCallback((row: BookingRow) => toDateKey(row.departure.startsAt), [])
+  const groupBy = React.useCallback((row: BookingRow) => toDateKey(byBooked ? row.booking.createdAt : row.departure.startsAt), [byBooked])
   const renderGroupHeader = React.useCallback(
     (key: string, groupRows: BookingRow[]) => (
-      <DayHeader dayKey={key} rows={groupRows} todayKey={todayKey} currency={currency} />
+      <DayHeader dayKey={key} rows={groupRows} todayKey={todayKey} currency={currency} booked={byBooked} />
     ),
-    [todayKey, currency],
+    [todayKey, currency, byBooked],
   )
 
   const columns = React.useMemo<DataTableColumn<BookingRow>[]>(
@@ -655,20 +662,35 @@ export function BookingsTable({
       },
       {
         id: 'departure',
-        header: grouped ? 'Time' : 'Departure',
+        header: timeOnly ? 'Time' : 'Date',
         sortable: true,
         numeric: true,
-        width: grouped ? '7rem' : '9rem',
+        width: timeOnly ? '7rem' : '9rem',
         defaultSortDir: 'desc',
         cell: ({ departure, activity }) => (
           <span className="whitespace-nowrap text-sm tabular-nums">
             <span className="text-foreground">
-              {grouped ? formatTime(departure.startsAt) : formatDateShort(departure.startsAt)}
+              {timeOnly ? formatTime(departure.startsAt) : formatDateShort(departure.startsAt)}
             </span>
-            <span className="text-subtle"> · {grouped ? formatDuration(activity.durationMinutes) : formatTime(departure.startsAt)}</span>
+            <span className="text-subtle"> · {timeOnly ? formatDuration(activity.durationMinutes) : formatTime(departure.startsAt)}</span>
           </span>
         ),
       },
+      ...(byBooked
+        ? [
+            {
+              id: 'created',
+              header: 'Booked',
+              sortable: true,
+              numeric: true,
+              width: '7rem',
+              defaultSortDir: 'desc' as const,
+              cell: ({ booking }: BookingRow) => (
+                <span className="whitespace-nowrap text-sm text-muted tabular-nums">{grouped ? formatTime(booking.createdAt) : `${formatDateShort(booking.createdAt)} · ${formatTime(booking.createdAt)}`}</span>
+              ),
+            },
+          ]
+        : []),
       {
         id: 'party',
         header: 'Party',
@@ -713,7 +735,7 @@ export function BookingsTable({
         ),
       },
     ]),
-    [currency, density, grouped, onRowAction],
+    [currency, density, grouped, timeOnly, byBooked, onRowAction],
   )
 
   const empty = (

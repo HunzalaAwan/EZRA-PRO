@@ -1,63 +1,42 @@
 'use client'
 
 import * as React from 'react'
-import {
-  Bookmark,
-  CalendarClock,
-  CircleDollarSign,
-  Globe,
-  Hourglass,
-  Layers,
-  ListFilter,
-  MapPin,
-  RotateCcw,
-  Ship,
-  Waves,
-  type LucideIcon,
-} from 'lucide-react'
+import { CircleDollarSign, Globe, ListFilter, MapPin, RotateCcw, Ship, Tag, X } from 'lucide-react'
 
-import type {
-  Activity,
-  BookingChannel,
-  BookingStatus,
-  DateRange,
-  PaymentStatus,
-} from '@/types'
-import { CHANNEL_LABELS, NOW, TODAY_KEY } from '@/lib/demo-core'
-import { addDays, cn, toDateKey } from '@/lib/utils'
+import type { Activity, BookingChannel, BookingStatus, DateRange, PaymentStatus } from '@/types'
+import { CHANNEL_LABELS } from '@/lib/demo-core'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { SearchInput } from '@/components/ui/search-input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import {
-  DateRangePicker,
-  formatRangeLabel,
-  rangeForPreset,
-} from '@/components/ui/date-range-picker'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { BookingDatePicker } from '@/components/dashboard/bookings/booking-date-picker'
 
 /* ==========================================================================
-   FILTER MODEL
-   The reservations desk filters live here so the page, the table and the
-   saved views all agree on one shape.
+   THE RESERVATIONS DESK — views and filters
+
+   Views answer the questions a desk asks all day, one tab each: what is on
+   today, what is coming, what just came in, what needs me, what fell
+   through, everything. The calendar picks any day or range. Everything
+   else (status, experience, location, channel, payment) sits behind one
+   Filters button, and whatever is on shows as a chip that can be removed.
    ========================================================================== */
 
-/** The six tabs across the top of the reservations desk. */
-export type BookingStatusTab =
-  | 'all'
-  | 'pending'
-  | 'confirmed'
-  | 'checked_in'
-  | 'completed'
-  | 'cancelled'
+export type DeskView = 'today' | 'upcoming' | 'recent' | 'attention' | 'cancelled' | 'all'
 
-/** Cancelled is a bucket, not a single status — no-shows and refunds land here too. */
-export const STATUS_TAB_MATCH: Record<BookingStatusTab, BookingStatus[]> = {
+export const DESK_VIEWS: { id: DeskView; label: string; hint: string }[] = [
+  { id: 'today', label: 'Today', hint: 'Everything running today, in time order' },
+  { id: 'upcoming', label: 'Next 7 days', hint: 'Today to a week out, soonest first. Pick any later date on the calendar.' },
+  { id: 'recent', label: 'Recently booked', hint: 'Made in the last 7 days, newest first' },
+  { id: 'attention', label: 'Needs attention', hint: 'This week: waiting to be confirmed, or money still to collect' },
+  { id: 'cancelled', label: 'Cancelled', hint: 'Cancelled, refunded and no-shows' },
+  { id: 'all', label: 'All', hint: 'Every booking, past and future' },
+]
+
+export type StatusFilter = 'all' | 'pending' | 'confirmed' | 'checked_in' | 'completed' | 'cancelled'
+
+/** Cancelled is a bucket, not a single status: no-shows and refunds land here too. */
+export const STATUS_MATCH: Record<StatusFilter, BookingStatus[]> = {
   all: [],
   pending: ['pending'],
   confirmed: ['confirmed'],
@@ -66,8 +45,8 @@ export const STATUS_TAB_MATCH: Record<BookingStatusTab, BookingStatus[]> = {
   cancelled: ['cancelled', 'no_show', 'refunded'],
 }
 
-export const STATUS_TAB_LABEL: Record<BookingStatusTab, string> = {
-  all: 'All',
+const STATUS_LABEL: Record<StatusFilter, string> = {
+  all: 'Any status',
   pending: 'Pending',
   confirmed: 'Confirmed',
   checked_in: 'Checked in',
@@ -75,29 +54,22 @@ export const STATUS_TAB_LABEL: Record<BookingStatusTab, string> = {
   cancelled: 'Cancelled',
 }
 
-export const STATUS_TAB_ORDER: BookingStatusTab[] = [
-  'all',
-  'pending',
-  'confirmed',
-  'checked_in',
-  'completed',
-  'cancelled',
-]
-
 export interface BookingFilters {
   /** Matches reference, guest name or guest email. */
   search: string
+  status: StatusFilter
   activityId: string | 'all'
   channel: BookingChannel | 'all'
   payment: PaymentStatus | 'all'
   /** The location the departure leaves from, or every location. */
   locationId: string | 'all'
-  /** `null` means "any date" — the picker still shows a sensible default range. */
+  /** The days the bookings run on; null is any date. */
   range: DateRange | null
 }
 
 export const DEFAULT_BOOKING_FILTERS: BookingFilters = {
   search: '',
+  status: 'all',
   activityId: 'all',
   channel: 'all',
   payment: 'all',
@@ -105,15 +77,9 @@ export const DEFAULT_BOOKING_FILTERS: BookingFilters = {
   range: null,
 }
 
-export function isDefaultFilters(filters: BookingFilters) {
-  return (
-    filters.search.trim() === '' &&
-    filters.activityId === 'all' &&
-    filters.channel === 'all' &&
-    filters.payment === 'all' &&
-    filters.locationId === 'all' &&
-    filters.range === null
-  )
+/** Filters behind the Filters button that are on. */
+export function activeFilterCount(filters: BookingFilters) {
+  return (['status', 'activityId', 'channel', 'payment', 'locationId'] as const).filter((key) => filters[key] !== 'all').length
 }
 
 const PAYMENT_OPTIONS: { value: PaymentStatus; label: string }[] = [
@@ -125,157 +91,13 @@ const PAYMENT_OPTIONS: { value: PaymentStatus; label: string }[] = [
   { value: 'failed', label: 'Payment failed' },
 ]
 
-/* --------------------------------------------------------------------------
-   SAVED VIEWS — the shortcuts a reservations lead actually keeps pinned
-   -------------------------------------------------------------------------- */
-
-export interface SavedView {
-  id: string
-  label: string
-  hint: string
-  icon: LucideIcon
-  status: BookingStatusTab
-  filters: BookingFilters
-}
-
-const TODAY_RANGE: DateRange = { from: TODAY_KEY, to: TODAY_KEY }
-const NEXT_7: DateRange = { from: TODAY_KEY, to: toDateKey(addDays(NOW, 7)) }
-/** Everything still to sail — the desk's default, since the past can wait. */
-const UPCOMING: DateRange = { from: TODAY_KEY, to: toDateKey(addDays(NOW, 400)) }
-
-export const SAVED_VIEWS: SavedView[] = [
-  {
-    id: 'upcoming',
-    label: 'Upcoming',
-    hint: 'From today, soonest first',
-    icon: CalendarClock,
-    status: 'all',
-    filters: { ...DEFAULT_BOOKING_FILTERS, range: UPCOMING },
-  },
-  {
-    id: 'all',
-    label: 'All reservations',
-    hint: 'Everything on the books',
-    icon: Layers,
-    status: 'all',
-    filters: DEFAULT_BOOKING_FILTERS,
-  },
-  {
-    id: 'needs-action',
-    label: 'Needs action',
-    hint: 'Pending confirmation',
-    icon: Hourglass,
-    status: 'pending',
-    filters: DEFAULT_BOOKING_FILTERS,
-  },
-  {
-    id: 'balance-due',
-    label: 'Balance due',
-    hint: 'Unpaid at departure',
-    icon: CircleDollarSign,
-    status: 'all',
-    filters: { ...DEFAULT_BOOKING_FILTERS, payment: 'unpaid' },
-  },
-  {
-    id: 'sailing-today',
-    label: 'Sailing today',
-    hint: "Today's departures",
-    icon: Waves,
-    status: 'all',
-    filters: { ...DEFAULT_BOOKING_FILTERS, range: TODAY_RANGE },
-  },
-  {
-    id: 'next-7',
-    label: 'Next 7 days',
-    hint: 'The week ahead',
-    icon: CalendarClock,
-    status: 'all',
-    filters: { ...DEFAULT_BOOKING_FILTERS, range: NEXT_7 },
-  },
-  {
-    id: 'ota',
-    label: 'OTA marketplace',
-    hint: 'Viator, GetYourGuide, Expedia',
-    icon: Globe,
-    status: 'all',
-    filters: { ...DEFAULT_BOOKING_FILTERS, channel: 'ota' },
-  },
-  {
-    id: 'cancellations',
-    label: 'Cancellations',
-    hint: 'Cancelled, refunded, no-show',
-    icon: RotateCcw,
-    status: 'cancelled',
-    filters: DEFAULT_BOOKING_FILTERS,
-  },
-]
-
-/* ==========================================================================
-   SAVED VIEW SELECT
-   One control instead of a rail of chips: the active view by name, or
-   "Custom view" once the operator has touched a tab or a filter.
-   ========================================================================== */
-
-export interface SavedViewSelectProps {
-  /** Id of the saved view currently applied, or `null` for a hand-rolled filter. */
-  activeViewId: string | null
-  onApplyView: (view: SavedView) => void
-  className?: string
-}
-
-export function SavedViewSelect({ activeViewId, onApplyView, className }: SavedViewSelectProps) {
-  const active = SAVED_VIEWS.find((view) => view.id === activeViewId) ?? null
-  const Icon = active?.icon ?? Bookmark
-  return (
-    <Select
-      value={activeViewId ?? ''}
-      onValueChange={(id) => {
-        const view = SAVED_VIEWS.find((v) => v.id === id)
-        if (view) onApplyView(view)
-      }}
-    >
-      <SelectTrigger
-        className={cn('w-full sm:w-[12.5rem]', className)}
-        aria-label="Saved view"
-        icon={<Icon className={cn('size-4', active ? 'text-primary' : 'text-subtle')} />}
-      >
-        <SelectValue placeholder="Custom view" />
-      </SelectTrigger>
-      <SelectContent align="end" className="min-w-[17rem]">
-        {SAVED_VIEWS.map((view) => {
-          const ViewIcon = view.icon
-          return (
-            <SelectItem
-              key={view.id}
-              value={view.id}
-              icon={<ViewIcon className="size-4" />}
-              description={view.hint}
-            >
-              {view.label}
-            </SelectItem>
-          )
-        })}
-      </SelectContent>
-    </Select>
-  )
-}
-
-/* ==========================================================================
-   TOOLBAR
-   Search, the departure dates, one Filters button for the rest, and a Reset
-   that only appears once the desk has left a saved view.
-   ========================================================================== */
-
-/** Shell shared by the date and Filters triggers so they sit level with the selects. */
 function triggerClass(active: boolean) {
   return cn(
     'group inline-flex h-10 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-medium whitespace-nowrap shadow-xs',
     'transition-[color,background-color,border-color] duration-200 ease-[var(--ease-out-quint)]',
     'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
     'data-[state=open]:border-primary data-[state=open]:ring-3 data-[state=open]:ring-primary/20',
-    active
-      ? 'border-[color-mix(in_oklab,var(--info)_40%,transparent)] bg-info-soft text-info'
-      : 'border-line bg-surface text-foreground hover:border-line-strong',
+    active ? 'border-[color-mix(in_oklab,var(--info)_40%,transparent)] bg-info-soft text-info' : 'border-line bg-surface text-foreground hover:border-line-strong',
   )
 }
 
@@ -296,55 +118,59 @@ interface FiltersPopoverProps {
 }
 
 function FiltersPopover({ filters, onFiltersChange, activities, locations }: FiltersPopoverProps) {
-  const set = <K extends keyof BookingFilters>(key: K, value: BookingFilters[K]) =>
-    onFiltersChange({ ...filters, [key]: value })
-
-  const count =
-    (filters.locationId !== 'all' ? 1 : 0) +
-    (filters.activityId !== 'all' ? 1 : 0) +
-    (filters.channel !== 'all' ? 1 : 0) +
-    (filters.payment !== 'all' ? 1 : 0)
-
-  const sortedActivities = React.useMemo(
-    () => [...activities].sort((a, b) => a.name.localeCompare(b.name)),
-    [activities],
-  )
+  const set = <K extends keyof BookingFilters>(key: K, value: BookingFilters[K]) => onFiltersChange({ ...filters, [key]: value })
+  const count = activeFilterCount(filters)
+  const sortedActivities = React.useMemo(() => [...activities].sort((a, b) => a.name.localeCompare(b.name)), [activities])
 
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          className={triggerClass(count > 0)}
-          aria-label={count > 0 ? `Filters, ${count} active` : 'Filters'}
-        >
-          <ListFilter
-            aria-hidden="true"
-            className={cn('size-4 shrink-0', count > 0 ? 'text-info' : 'text-subtle')}
-          />
+        <button type="button" className={triggerClass(count > 0)} aria-label={count > 0 ? `Filters, ${count} on` : 'Filters'}>
+          <ListFilter aria-hidden="true" className={cn('size-4 shrink-0', count > 0 ? 'text-info' : 'text-subtle')} />
           Filters
-          {count > 0 ? (
-            <span className="grid size-5 place-items-center rounded-full bg-info text-xs font-semibold text-on-primary tabular-nums">
-              {count}
-            </span>
-          ) : null}
+          {count > 0 ? <span className="grid size-5 place-items-center rounded-full bg-info text-xs font-semibold text-on-primary tabular-nums">{count}</span> : null}
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" width="md" padding="sm" className="flex flex-col gap-3">
         <div className="flex h-7 items-center justify-between">
           <p className="text-sm font-semibold text-foreground">Filters</p>
           {count > 0 ? (
-            <Button
-              variant="ghost"
-              size="xs"
-              onClick={() =>
-                onFiltersChange({ ...filters, activityId: 'all', channel: 'all', payment: 'all', locationId: 'all' })
-              }
-            >
+            <Button variant="ghost" size="xs" onClick={() => onFiltersChange({ ...filters, status: 'all', activityId: 'all', channel: 'all', payment: 'all', locationId: 'all' })}>
               Clear
             </Button>
           ) : null}
         </div>
+
+        <FilterField label="Status">
+          <Select value={filters.status} onValueChange={(value) => set('status', value as StatusFilter)}>
+            <SelectTrigger aria-label="Filter by status" icon={<Tag className="size-4" />}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {(Object.keys(STATUS_LABEL) as StatusFilter[]).map((status) => (
+                <SelectItem key={status} value={status}>
+                  {STATUS_LABEL[status]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FilterField>
+
+        <FilterField label="Experience">
+          <Select value={filters.activityId} onValueChange={(value) => set('activityId', value)}>
+            <SelectTrigger aria-label="Filter by experience" icon={<Ship className="size-4" />}>
+              <SelectValue placeholder="Experience" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All experiences</SelectItem>
+              {sortedActivities.map((activity) => (
+                <SelectItem key={activity.id} value={activity.id}>
+                  {activity.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FilterField>
 
         {locations.length > 1 ? (
           <FilterField label="Location">
@@ -364,79 +190,85 @@ function FiltersPopover({ filters, onFiltersChange, activities, locations }: Fil
           </FilterField>
         ) : null}
 
-        <FilterField label="Experience">
-          <Select value={filters.activityId} onValueChange={(value) => set('activityId', value)}>
-            <SelectTrigger aria-label="Filter by experience" icon={<Ship className="size-4" />}>
-              <SelectValue placeholder="Experience" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All experiences</SelectItem>
-              {sortedActivities.map((activity) => (
-                <SelectItem key={activity.id} value={activity.id}>
-                  {activity.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FilterField>
-
-        <FilterField label="Channel">
-          <Select
-            value={filters.channel}
-            onValueChange={(value) => set('channel', value as BookingChannel | 'all')}
-          >
-            <SelectTrigger aria-label="Filter by booking channel" icon={<Globe className="size-4" />}>
-              <SelectValue placeholder="Channel" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All channels</SelectItem>
-              {(Object.keys(CHANNEL_LABELS) as BookingChannel[]).map((channel) => (
-                <SelectItem key={channel} value={channel}>
-                  {CHANNEL_LABELS[channel]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FilterField>
-
-        <FilterField label="Payment">
-          <Select
-            value={filters.payment}
-            onValueChange={(value) => set('payment', value as PaymentStatus | 'all')}
-          >
-            <SelectTrigger
-              aria-label="Filter by payment status"
-              icon={<CircleDollarSign className="size-4" />}
-            >
-              <SelectValue placeholder="Payment" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Any payment state</SelectItem>
-              {PAYMENT_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </FilterField>
+        <div className="grid grid-cols-2 gap-3">
+          <FilterField label="Booked through">
+            <Select value={filters.channel} onValueChange={(value) => set('channel', value as BookingChannel | 'all')}>
+              <SelectTrigger aria-label="Filter by booking channel" icon={<Globe className="size-4" />}>
+                <SelectValue placeholder="Channel" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Anywhere</SelectItem>
+                {(Object.keys(CHANNEL_LABELS) as BookingChannel[]).map((channel) => (
+                  <SelectItem key={channel} value={channel}>
+                    {CHANNEL_LABELS[channel]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterField>
+          <FilterField label="Payment">
+            <Select value={filters.payment} onValueChange={(value) => set('payment', value as PaymentStatus | 'all')}>
+              <SelectTrigger aria-label="Filter by payment status" icon={<CircleDollarSign className="size-4" />}>
+                <SelectValue placeholder="Payment" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Any payment</SelectItem>
+                {PAYMENT_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FilterField>
+        </div>
       </PopoverContent>
     </Popover>
+  )
+}
+
+/** What is on, as chips that can be taken off one at a time. */
+function ActiveChips({ filters, onFiltersChange, activities, locations }: FiltersPopoverProps) {
+  const chips = [
+    filters.status !== 'all' ? { key: 'status' as const, label: STATUS_LABEL[filters.status] } : null,
+    filters.activityId !== 'all' ? { key: 'activityId' as const, label: activities.find((entry) => entry.id === filters.activityId)?.name ?? 'Experience' } : null,
+    filters.locationId !== 'all' ? { key: 'locationId' as const, label: locations.find((entry) => entry.id === filters.locationId)?.name ?? 'Location' } : null,
+    filters.channel !== 'all' ? { key: 'channel' as const, label: CHANNEL_LABELS[filters.channel] } : null,
+    filters.payment !== 'all' ? { key: 'payment' as const, label: PAYMENT_OPTIONS.find((entry) => entry.value === filters.payment)?.label ?? 'Payment' } : null,
+  ].filter((chip): chip is NonNullable<typeof chip> => chip !== null)
+  if (chips.length === 0) return null
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {chips.map((chip) => (
+        <span key={chip.key} className="inline-flex h-8 items-center gap-1 rounded-full border border-line bg-surface pr-1 pl-3 text-xs font-medium text-foreground">
+          {chip.label}
+          <button
+            type="button"
+            aria-label={`Remove ${chip.label}`}
+            onClick={() => onFiltersChange({ ...filters, [chip.key]: 'all' })}
+            className="grid size-6 place-items-center rounded-full text-subtle hover:bg-surface-sunken hover:text-foreground"
+          >
+            <X className="size-3.5" aria-hidden="true" />
+          </button>
+        </span>
+      ))}
+    </div>
   )
 }
 
 export interface BookingsFiltersProps {
   filters: BookingFilters
   onFiltersChange: (next: BookingFilters) => void
+  /** The calendar: any day or range, separate so the page can switch views with it. */
+  onRangeChange: (range: DateRange | null) => void
   activities: Activity[]
-  /** The business's locations; the popover offers a filter when there is more than one. */
   locations?: { id: string; name: string }[]
-  /** Shows the Reset control; the page decides when the desk has drifted from a view. */
+  todayKey: string
+  /** Days with bookings, dotted on the calendar. */
+  bookedDays?: Set<string>
   resettable?: boolean
   onReset?: () => void
-  /** Rendered at the right, e.g. "1,284 of 13,268 reservations". */
   resultSummary?: React.ReactNode
-  /** Display controls rendered after the summary. */
   trailing?: React.ReactNode
   className?: string
 }
@@ -444,71 +276,39 @@ export interface BookingsFiltersProps {
 export function BookingsFilters({
   filters,
   onFiltersChange,
+  onRangeChange,
   activities,
   locations = [],
+  todayKey,
+  bookedDays,
   resettable = false,
   onReset,
   resultSummary,
   trailing,
   className,
 }: BookingsFiltersProps) {
-  const set = React.useCallback(
-    <K extends keyof BookingFilters>(key: K, value: BookingFilters[K]) => {
-      onFiltersChange({ ...filters, [key]: value })
-    },
-    [filters, onFiltersChange],
-  )
-
-  const fallbackRange = React.useMemo(
-    () => rangeForPreset('30d', NOW) ?? { from: TODAY_KEY, to: TODAY_KEY },
-    [],
-  )
-
   return (
     <div className={cn('flex flex-wrap items-center gap-2', className)}>
       <SearchInput
         value={filters.search}
-        onValueChange={(value) => set('search', value)}
+        onValueChange={(value) => onFiltersChange({ ...filters, search: value })}
         debounceMs={180}
         label="Search reservations"
         placeholder="Reference, guest name or email…"
         shortcut={false}
-        fieldClassName="w-full rounded-lg sm:w-72"
+        fieldClassName="w-full rounded-lg sm:w-64"
       />
-
-      <DateRangePicker
-        value={filters.range ?? fallbackRange}
-        referenceDate={NOW}
-        onChange={(range) => set('range', range)}
-        numberOfMonths={2}
-        align="start"
-        label="Filter by departure date"
-        trigger={
-          <button type="button" className={triggerClass(Boolean(filters.range))}>
-            <CalendarClock
-              aria-hidden="true"
-              className={cn('size-4 shrink-0', filters.range ? 'text-info' : 'text-subtle')}
-            />
-            <span className="truncate tabular-nums">
-              {filters.range ? formatRangeLabel(filters.range) : 'Any date'}
-            </span>
-          </button>
-        }
-      />
-
+      <BookingDatePicker value={filters.range} onChange={onRangeChange} todayKey={todayKey} bookedDays={bookedDays} />
       <FiltersPopover filters={filters} onFiltersChange={onFiltersChange} activities={activities} locations={locations} />
-
+      <ActiveChips filters={filters} onFiltersChange={onFiltersChange} activities={activities} locations={locations} />
       {resettable && onReset ? (
         <Button variant="ghost" size="sm" onClick={onReset} leftIcon={<RotateCcw />}>
           Reset
         </Button>
       ) : null}
-
       {resultSummary || trailing ? (
         <div className="flex items-center gap-3 sm:ml-auto">
-          {resultSummary ? (
-            <span className="text-sm text-subtle tabular-nums">{resultSummary}</span>
-          ) : null}
+          {resultSummary ? <span className="text-sm text-subtle tabular-nums">{resultSummary}</span> : null}
           {trailing}
         </div>
       ) : null}

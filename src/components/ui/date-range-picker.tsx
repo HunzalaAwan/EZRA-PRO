@@ -115,7 +115,7 @@ function useMediaQuery(query: string): boolean {
   return matches
 }
 
-function DayPickerChevron({
+export function DayPickerChevron({
   orientation,
   className,
 }: {
@@ -386,7 +386,7 @@ function DateRangePicker({
   )
 }
 
-const POPOVER_KEYFRAMES = `
+export const POPOVER_KEYFRAMES = `
 @keyframes ezra-pop-in {
   from { opacity: 0; transform: scale(0.97) translateY(-4px); }
   to   { opacity: 1; transform: none; }
@@ -406,7 +406,7 @@ const POPOVER_KEYFRAMES = `
  * never imported. Range banding lives on the day <td> while the pill lives on
  * the inner <button>, which is what keeps the band continuous across a week.
  */
-const DAY_PICKER_CLASS_NAMES = {
+export const DAY_PICKER_CLASS_NAMES = {
   root: 'w-fit p-3',
   months: 'relative flex flex-col gap-5 sm:flex-row',
   month: 'flex flex-col gap-3',
