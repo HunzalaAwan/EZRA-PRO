@@ -1,6 +1,7 @@
-import { NOW, getBookingsByDeparture, getDeparturesInRange, getStorefrontAvailability } from '@/lib/demo'
+import { NOW, getActivityById, getBookingsByDeparture, getDeparturesInRange, getStorefrontAvailability } from '@/lib/demo'
 import { addDays, toDateKey } from '@/lib/utils'
 import { hasItems, itemsInBooking, rentalItemsOf, rentalSpan, shortestRentalMs } from '@/lib/rental-items'
+import { timeOf, type PackagePartView } from '@/lib/packages'
 import type { Activity } from '@/types'
 import type { AvailabilityDay, AvailabilitySlot } from '@/components/storefront/booking-widget'
 
@@ -123,4 +124,37 @@ export function applyDayLimit(activity: Activity, dateKey: string, slots: Availa
     }
   }
   return slots.map((slot) => limited.get(slot.departureId) ?? slot)
+}
+
+/**
+ * A package's parts with their own availability, kept to the times the
+ * package allows. Each part's seats are that activity's seats, so booking
+ * the package and booking the activity alone draw on the same count.
+ */
+export function buildPackageParts(activity: Activity, days = STRIP_DAYS): PackagePartView[] {
+  return (activity.package?.parts ?? []).flatMap((part) => {
+    const inner = getActivityById(part.activityId)
+    if (!inner) return []
+    const allowed = new Set(part.times)
+    const site = part.locationId ? inner.locations.find((entry) => entry.locationId === part.locationId) : undefined
+    return [
+      {
+        activityId: inner.id,
+        slug: inner.slug,
+        name: inner.name,
+        label: part.label?.trim() || inner.name,
+        durationMinutes: inner.durationMinutes,
+        meetingPoint: site?.meetingPoint ?? inner.meetingPoint,
+        basePrice: inner.basePrice,
+        times: part.times,
+        days: buildDays(inner, days + (activity.package?.sameDay === false ? activity.package.withinDays : 0)).map((day) => {
+          const slots = day.slots.filter(
+            (slot) => (allowed.size === 0 || allowed.has(timeOf(slot.startsAt))) && (!part.locationId || (slot.locationId ?? inner.locations[0]?.locationId) === part.locationId),
+          )
+          const open = slots.filter((slot) => !slot.soldOut)
+          return { ...day, slots, seatsLeft: open.reduce((sum, slot) => sum + slot.seatsLeft, 0), soldOut: slots.length > 0 && open.length === 0 }
+        }),
+      },
+    ]
+  })
 }

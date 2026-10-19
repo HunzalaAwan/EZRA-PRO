@@ -47,6 +47,7 @@ import { Reveal } from '@/components/motion/reveal'
 import { StaggerGroup, StaggerItem } from '@/components/motion/stagger'
 import { bookingOf } from '@/lib/booking-method'
 import { BookingWidget, type AvailabilityDay } from '@/components/storefront/booking-widget'
+import type { PackagePartView } from '@/lib/packages'
 import { StickyRail } from '@/components/storefront/sticky-rail'
 import { StarRow } from '@/components/storefront/storefront-hero'
 import { TrustBar } from '@/components/storefront/trust-bar'
@@ -157,6 +158,8 @@ export interface ActivityDetailViewProps {
   nowIso?: string
   /** The business's locations, to name the places this runs from. */
   locations?: Location[]
+  /** Packages: each part with its own availability. */
+  packageParts?: PackagePartView[]
 }
 
 /* ==========================================================================
@@ -177,6 +180,7 @@ export function ActivityDetailView({
   initialDateKey,
   initialGuests,
   recentBookings,
+  packageParts,
 }: ActivityDetailViewProps) {
   const sites = React.useMemo(
     () =>
@@ -512,7 +516,32 @@ export function ActivityDetailView({
             </Section>
 
             {/* ---------- meeting point ---------- */}
-            <Section id="meeting" title={sites.length > 1 ? 'Where it runs from' : 'Meeting point'}>
+            <Section id="meeting" title={packageParts ? "What's in the package" : sites.length > 1 ? 'Where it runs from' : 'Meeting point'}>
+              {packageParts ? (
+                <ol className="flex list-none flex-col gap-3 p-0">
+                  {packageParts.map((part, index) => (
+                    <li key={part.activityId} className="flex items-start gap-3 rounded-2xl border border-line bg-surface p-4">
+                      <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary-soft text-sm font-semibold text-primary tabular">{index + 1}</span>
+                      <div className="min-w-0 flex-1">
+                        <p className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                          <a href={`${basePath}/${part.slug}`} className="text-sm font-semibold text-foreground hover:text-primary">
+                            {part.label}
+                          </a>
+                          <span className="text-xs text-subtle">
+                            {formatDuration(part.durationMinutes)}
+                            {part.times.length > 0 ? ` · ${part.times.map(clockLabel).join(' or ')}` : ''}
+                          </span>
+                        </p>
+                        {part.label !== part.name ? <p className="text-xs text-subtle">{part.name}</p> : null}
+                        <p className="mt-1.5 flex items-start gap-1.5 text-sm leading-relaxed text-muted">
+                          <MapPin className="mt-1 size-3.5 shrink-0 text-primary" aria-hidden="true" />
+                          {part.meetingPoint}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
               <div className="overflow-hidden rounded-2xl border border-line bg-surface">
                 <MeetingPointMap label={tenant.city} />
                 <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
@@ -566,6 +595,7 @@ export function ActivityDetailView({
                   </Button>
                 </div>
               </div>
+              )}
             </Section>
 
             {/* ---------- cancellation ---------- */}
@@ -650,6 +680,7 @@ export function ActivityDetailView({
                 tenantSlug={tenant.slug}
                 currency={tenant.currency}
                 days={days}
+                packageParts={packageParts}
                 locations={locations}
                 checkoutPath={checkoutPath}
                 businessPhone={tenant.contact.phone}
@@ -750,6 +781,7 @@ export function ActivityDetailView({
               tenantSlug={tenant.slug}
               currency={tenant.currency}
               days={days}
+              packageParts={packageParts}
               locations={locations}
               checkoutPath={checkoutPath}
                 businessPhone={tenant.contact.phone}

@@ -10,6 +10,7 @@
  */
 
 import * as React from 'react'
+import { useBookingLedger } from '@/hooks/use-booking-ledger'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   CalendarClock,
@@ -113,6 +114,8 @@ function shift(view: ViewKey, cursor: Date, direction: 1 | -1): Date {
 
 export interface CalendarShellProps {
   tenantId?: string
+  /** Bookings and changes made in this browser are counted on top of the server's numbers. */
+  tenantSlug?: string
   /**
    * Events for a window around today, computed on the server. Navigating
    * outside it loads a wider window through a Server Action; the dataset
@@ -128,6 +131,7 @@ const WINDOW_PAD_DAYS = 21
 
 export function CalendarShell({
   tenantId = CURRENT_TENANT.id,
+  tenantSlug = CURRENT_TENANT.slug,
   initialWindow,
   initialEvents,
   className,
@@ -169,14 +173,29 @@ export function CalendarShell({
     }
   }, [covered, tenantId, range.from, range.to])
 
+  // Seats taken or given back by bookings, packages, moves and cancellations made in this browser.
+  const ledger = useBookingLedger(tenantSlug)
   const events = React.useMemo(() => {
     // Same inclusive day-bound semantics as getDeparturesInRange.
-    const inRange = cache.events.filter((event) => {
-      const key = event.departure.startsAt.slice(0, 10)
-      return key >= rangeFromKey && key <= rangeToKey
-    })
+    const inRange = cache.events
+      .filter((event) => {
+        const key = event.departure.startsAt.slice(0, 10)
+        return key >= rangeFromKey && key <= rangeToKey
+      })
+      .map((event) => {
+        const change = ledger.delta[event.departure.id]
+        if (!change) return event
+        const booked = Math.max(0, Math.min(event.departure.capacity, event.departure.booked + change))
+        const seatsLeft = Math.max(0, event.departure.capacity - booked - event.departure.held)
+        return {
+          ...event,
+          departure: { ...event.departure, booked, status: seatsLeft <= 0 && event.departure.status === 'scheduled' ? ('sold_out' as const) : event.departure.status },
+          seatsLeft,
+          fillRate: event.departure.capacity > 0 ? booked / event.departure.capacity : 0,
+        }
+      })
     return filterEvents(inRange, filters)
-  }, [cache.events, rangeFromKey, rangeToKey, filters])
+  }, [cache.events, rangeFromKey, rangeToKey, filters, ledger.delta])
 
   const eventsByDay = React.useMemo(() => {
     const out: Record<string, CalendarEvent[]> = {}
@@ -490,6 +509,7 @@ export function CalendarShell({
 
       {/* ------------------------------------------------------- surfaces -- */}
       <DepartureDetailSheet
+        tenantSlug={tenantSlug}
         departureId={selectedId}
         onOpenChange={(next) => {
           if (!next) setSelectedId(null)

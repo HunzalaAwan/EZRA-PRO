@@ -27,6 +27,7 @@ import {
   NOW,
   getActivitiesByTenant,
   getActivityById,
+  getLocationsByTenant,
   getAnalytics,
   getBookingsByDeparture,
   getCustomerById,
@@ -697,4 +698,20 @@ export function getActivityDetail(activityId: string): ActivityDetailData | unde
 
   detailCache.set(activityId, detail)
   return detail
+}
+
+/** The business's activities a package can be built from: everything but other packages. */
+export function packageOptionsFor(tenantId: string) {
+  const sites = getLocationsByTenant(tenantId)
+  return getActivitiesByTenant(tenantId)
+    .filter((activity) => activity.kind !== 'package' && activity.status !== 'archived')
+    .map((activity) => ({
+      id: activity.id,
+      name: activity.name,
+      durationMinutes: activity.durationMinutes,
+      maxCapacity: activity.kind === 'charter' ? 1 : activity.maxCapacity,
+      basePrice: activity.basePrice,
+      times: [...new Set(activity.locations.flatMap((site) => site.times))].sort(),
+      locations: activity.locations.map((site) => ({ id: site.locationId, name: sites.find((entry) => entry.id === site.locationId)?.name ?? 'Main location' })),
+    }))
 }

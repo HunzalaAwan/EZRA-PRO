@@ -9,6 +9,7 @@ import { getActivityById, getLocationsByTenant, getWaiversByTenant, getPickupZon
 import { getUsersByTenant } from '@/lib/demo'
 import { NOW_ISO } from '@/components/dashboard/activities/activity-data'
 import { ActivityWizard } from '@/components/dashboard/activities/activity-wizard'
+import { packageOptionsFor } from '@/components/dashboard/activities/activity-data'
 
 interface EditActivityPageProps {
   params: Promise<{ id: string }>
@@ -60,6 +61,7 @@ export default async function EditActivityPage({ params }: EditActivityPageProps
         crew={crew}
         locations={getLocationsByTenant(tenant.id)}
         waivers={getWaiversByTenant(tenant.id).map((waiver) => ({ id: waiver.id, title: waiver.title }))}
+        packageOptions={packageOptionsFor(tenant.id)}
         pickupZones={getPickupZonesByTenant(tenant.id).map((zone) => ({ id: zone.id, name: zone.name, detail: `${zone.offsetMinutes} min before · ${zone.stops.length} stops`, fee: zone.fee }))}
         currency={tenant.currency}
         tenantName={tenant.name}

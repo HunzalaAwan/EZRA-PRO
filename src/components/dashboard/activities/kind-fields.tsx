@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Anchor, Bike, Car, DoorOpen, GraduationCap, KeyRound, Package, Route, Ship, Ticket, Zap, type LucideIcon } from 'lucide-react'
+import { Anchor, Bike, Car, DoorOpen, GraduationCap, KeyRound, Layers, Package, Route, Ship, Ticket, Zap, type LucideIcon } from 'lucide-react'
 
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -43,6 +43,7 @@ export const KIND_ICONS: Record<ActivityKind, LucideIcon> = {
   rental: KeyRound,
   lesson: GraduationCap,
   pass: Ticket,
+  package: Layers,
 }
 
 const CATEGORY_ICONS: Record<RentalCategory, LucideIcon> = {

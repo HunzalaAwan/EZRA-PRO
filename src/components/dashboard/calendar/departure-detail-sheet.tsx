@@ -7,6 +7,8 @@
  */
 
 import * as React from 'react'
+import { useBookingLedger } from '@/hooks/use-booking-ledger'
+import { entriesOn } from '@/lib/booking-ledger'
 import Image from 'next/image'
 import {
   Anchor,
@@ -160,6 +162,8 @@ export interface DepartureDetailSheetProps {
   currency: CurrencyCode
   /** Opens the scheduling dialog pre-filled from this departure. */
   onDuplicate?: (departureId: string) => void
+  /** Bookings made in this browser (online, by staff, from packages) are listed too. */
+  tenantSlug?: string
 }
 
 export function DepartureDetailSheet({
@@ -167,7 +171,9 @@ export function DepartureDetailSheet({
   onOpenChange,
   currency,
   onDuplicate,
+  tenantSlug = '',
 }: DepartureDetailSheetProps) {
+  const ledger = useBookingLedger(tenantSlug)
   // Hold the last id so the closing animation still has something to render.
   const [cachedId, setCachedId] = React.useState<string | null>(departureId)
   const [confirmCancel, setConfirmCancel] = React.useState(false)
@@ -194,9 +200,12 @@ export function DepartureDetailSheet({
 
   const detail = React.useMemo(() => {
     if (!cachedId || !loaded || loaded.departure.id !== cachedId) return null
-    const { departure, activity, guests, crew, resources, gross, paid } = loaded
+    const { departure: served, activity, guests, crew, resources, gross, paid } = loaded
     const media = activity.media.find((item) => item.isPrimary) ?? activity.media[0]
+    const change = ledger.delta[served.id] ?? 0
+    const departure = change ? { ...served, booked: Math.max(0, Math.min(served.capacity, served.booked + change)) } : served
     return {
+      extra: entriesOn(ledger, served.id),
       departure,
       activity,
       guests,
@@ -208,7 +217,7 @@ export function DepartureDetailSheet({
       media,
       fill: fillRate(departure.booked, departure.capacity),
     }
-  }, [cachedId, loaded])
+  }, [cachedId, loaded, ledger])
 
   const open = Boolean(departureId)
 
@@ -489,7 +498,22 @@ export function DepartureDetailSheet({
                       />
                     </li>
                   ))}
-                  {guests.length === 0 ? (
+                  {detail.extra.map((entry) => (
+                    <li key={entry.id} className="flex items-center gap-3 border-t border-line-subtle bg-surface px-3 py-2.5 first:border-t-0">
+                      <Avatar name={entry.name} size="sm" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[0.8125rem] font-medium text-foreground">{entry.name}</p>
+                        <p className="truncate text-xs text-subtle">
+                          <span className="font-mono">{entry.reference}</span> · {entry.packageName ? `Package · ${entry.packageName}` : entry.source === 'dashboard' ? 'Booked by staff' : 'Booked online'}
+                        </p>
+                      </div>
+                      <span className="tabular shrink-0 text-[0.75rem] font-semibold text-muted">
+                        {entry.party} <span className="font-normal text-subtle">{entry.party === 1 ? 'guest' : 'guests'}</span>
+                      </span>
+                      <StatusBadge kind="booking" status="confirmed" size="sm" showIcon={false} className="shrink-0" />
+                    </li>
+                  ))}
+                  {guests.length === 0 && detail.extra.length === 0 ? (
                     <li className="bg-surface px-3 py-6 text-center text-[0.8125rem] text-subtle">
                       No bookings on this departure yet.
                     </li>

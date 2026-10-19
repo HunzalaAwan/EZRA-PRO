@@ -35,9 +35,10 @@ import {
 } from 'lucide-react'
 import { z } from 'zod'
 
-import type { Activity, ActivityKind, ActivityTheme, BookingSettings, CurrencyCode, DifficultyLevel, GuestDetailsConfig, GuestQuestion, Location, VerticalKey } from '@/types'
+import type { Activity, ActivityKind, ActivityTheme, BookingSettings, CurrencyCode, PackageConfig, DifficultyLevel, GuestDetailsConfig, GuestQuestion, Location, VerticalKey } from '@/types'
 import { DEFAULT_GUEST_FIELDS, guestDetailsOf } from '@/lib/guest-requirements'
 import { DEFAULT_BOOKING, METHOD_LABEL, bookingOf } from '@/lib/booking-method'
+import { EMPTY_PACKAGE, PackagePartsEditor, packageSeats, type PackageOption } from './package-parts-editor'
 import { BookingSettingsEditor } from './booking-settings-editor'
 import { saveActivityOverride } from '@/lib/activity-overrides'
 import {
@@ -219,9 +220,11 @@ export interface ActivityDraft {
   accessibility: string[]
   /** What guests should bring. */
   bring: string[]
+  /** Packages: the activities inside it and the times guests can pick. */
+  package: PackageConfig
 }
 
-const STORAGE_KEY = 'ezra:activity-wizard:v12'
+const STORAGE_KEY = 'ezra:activity-wizard:v13'
 
 /** Dining is the one category whose product is a table, not a departure. */
 export const isDining = (draft: Pick<ActivityDraft, 'category'>) => draft.category === 'restaurants'
@@ -275,6 +278,7 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
     customCategory: null,
     accessibility: [],
     bring: [],
+    package: { ...EMPTY_PACKAGE },
     freeCancellationHours: 24,
     crewIds: [],
     dining,
@@ -352,6 +356,7 @@ function kindOverride(draft: ActivityDraft) {
     return { lesson: { ...rest, ...(certification.trim() ? { certification: certification.trim() } : {}) } }
   }
   if (kind === 'pass') return { pass: { ...settings.pass } }
+  if (kind === 'package') return { package: { ...draft.package, parts: draft.package.parts.filter((part) => part.activityId) } }
   if (kind === 'activity') {
     const { minHeightCm, maxWeightKg } = settings.activity
     return { ride: { ...(minHeightCm > 0 ? { minHeightCm } : {}), ...(maxWeightKg > 0 ? { maxWeightKg } : {}) } }
@@ -559,6 +564,7 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
     route: activity.route
       ? { enabled: true, distance: activity.route.distance, unit: activity.route.unit, track: activity.route.track ?? '', elevationM: activity.route.elevationM ?? 0 }
       : emptyRoute(),
+    package: activity.package ?? { ...EMPTY_PACKAGE },
     kindSettings: (() => {
       const blank = defaultKindSettings()
       const rental = activity.rental
@@ -978,6 +984,8 @@ function validateSchemaStep(step: number, draft: ActivityDraft): FieldErrors {
   const id = TOUR_STEPS[step]?.id
   // No set schedule: only where it runs from is checked.
   if (!isDining(draft) && id === 'schedule' && (draft.booking?.method ?? 'instant') !== 'instant' && draft.booking?.scheduled === false) return {}
+  // A package runs on its parts' times; it has no schedule of its own.
+  if (!isDining(draft) && id === 'schedule' && draft.kind === 'package') return {}
   const schema = isDining(draft) ? DINING_STEP_SCHEMAS[step] : STEP_SCHEMAS[id ?? '']
   if (!schema) return {}
   const result = schema.safeParse(draft)
@@ -1020,6 +1028,11 @@ function validateStep(step: number, draft: ActivityDraft): FieldErrors {
   if (kind === 'activity' && draft.durationMinutes < 5) errors.durationMinutes = 'Give each slot a length'
   if (kind === 'lesson' && draft.durationMinutes < 15) errors.durationMinutes = 'Give each session at least 15 minutes'
   if (kind === 'charter' && settings.charter.maxGuests < 1) errors['charter.maxGuests'] = 'A charter carries at least one guest'
+  if (kind === 'package') {
+    delete errors.maxCapacity
+    delete errors.durationMinutes
+    if ((draft.package?.parts ?? []).filter((part) => part.activityId).length < 2) errors.package = 'Add at least two activities'
+  }
   if (kind === 'lesson') {
     if (settings.lesson.sessions < 1) errors['lesson.sessions'] = 'A course has at least one session'
     if (settings.lesson.ratio < 1) errors['lesson.ratio'] = 'At least one student per instructor'
@@ -1270,7 +1283,7 @@ function StorefrontPreview({
   const fromPrice = paid.length === 0 ? 0 : Math.min(...paid.map((tier) => tier.price))
   // No set schedule: nothing to list; the preview says it is arranged instead.
   const unscheduledPreview = (draft.booking?.method ?? 'instant') !== 'instant' && draft.booking?.scheduled === false
-  const upcoming = unscheduledPreview ? [] : previewDepartures(draft.schedule, nowIso, 10).slice(0, 3)
+  const upcoming = unscheduledPreview || draft.kind === 'package' ? [] : previewDepartures(draft.schedule, nowIso, 10).slice(0, 3)
   const highlights = draft.highlights.filter((item) => item.trim().length > 0).slice(0, 3)
   const dining = isDining(draft)
 
@@ -1425,6 +1438,8 @@ export interface ActivityWizardProps {
   waivers?: WaiverOption[]
   /** The business's pickup zones, for the Hotel pickup card. */
   pickupZones?: PickupZoneOption[]
+  /** The business's other activities, for building a package. */
+  packageOptions?: PackageOption[]
 }
 
 export function ActivityWizard({
@@ -1438,6 +1453,7 @@ export function ActivityWizard({
   locations = [],
   waivers = [],
   pickupZones = [],
+  packageOptions = [],
   mode = 'create',
   activityId,
   activity,
@@ -1712,7 +1728,7 @@ export function ActivityWizard({
                   className="min-w-0"
                 >
                   {currentStep.id === 'basics' ? (
-                    <BasicsStep draft={draft} patch={patch} errors={errors} currency={currency} tenantSlug={tenantSlug} />
+                    <BasicsStep draft={draft} patch={patch} errors={errors} currency={currency} tenantSlug={tenantSlug} packageOptions={packageOptions.filter((option) => option.id !== activityId)} />
                   ) : null}
                   {currentStep.id === 'description' ? <DescriptionStep draft={draft} patch={patch} errors={errors} part={dining ? undefined : 'copy'} /> : null}
                   {currentStep.id === 'guests' ? (
@@ -1907,6 +1923,8 @@ export function ActivityWizard({
                         nowIso={nowIso}
                         errors={errors}
                       />
+                    ) : (draft.kind ?? 'trip') === 'package' ? (
+                      <PackageBookingNote config={draft.package} options={packageOptions} onEdit={() => goTo(0, -1)} />
                     ) : (
                       <div className="flex flex-col gap-6">
                         <BookingSettingsEditor
@@ -2162,6 +2180,7 @@ const STARTER_TIER: Record<ActivityKind, string> = {
   rental: 'Standard',
   lesson: 'Student',
   pass: 'Day ticket',
+  package: 'Adult',
 }
 
 const NEW_CATEGORY = '__new'
@@ -2289,14 +2308,14 @@ function CategoryField({ draft, patch, tenantSlug }: { draft: ActivityDraft; pat
   )
 }
 
-function BasicsStep({ draft, patch, errors, currency, tenantSlug = '' }: StepProps & { tenantSlug?: string }) {
+function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOptions = [] }: StepProps & { tenantSlug?: string; packageOptions?: PackageOption[] }) {
   const dining = isDining(draft)
   const kind = draft.kind ?? 'trip'
   const settings = normalizeKindSettings(draft.kindSettings)
   const pickKind = (next: ActivityKind) => {
     const mode = ACTIVITY_KIND_META[next].defaultFormat === 'open' ? 'hours' : 'times'
     const starter = draft.tiers.length === 1 && Object.values(STARTER_TIER).includes(draft.tiers[0].label)
-    const arrival: ArrivalMode = next === 'pass' || next === 'rental' || next === 'activity' ? 'venue' : 'meet'
+    const arrival: ArrivalMode = next === 'pass' || next === 'rental' || next === 'activity' || next === 'package' ? 'venue' : 'meet'
     patch({
       kind: next,
       schedule: { ...draft.schedule, mode },
@@ -2373,7 +2392,21 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '' }: StepPro
       ) : kind === 'trip' ? (
         <TourBasicsFields draft={draft} patch={patch} errors={errors} />
       ) : null}
-      {dining || kind === 'trip' ? null : (
+      {kind === 'package' && !dining ? (
+        <PackagePartsEditor
+          value={draft.package ?? EMPTY_PACKAGE}
+          options={packageOptions}
+          currency={currency ?? 'USD'}
+          error={errors.package}
+          onChange={(next) => {
+            // Seats and length follow the parts: the smallest part, and the whole day end to end.
+            const parts = next.parts.map((part) => packageOptions.find((option) => option.id === part.activityId)).filter((option): option is PackageOption => Boolean(option))
+            const minutes = parts.reduce((sum, option) => sum + option.durationMinutes, 0) + Math.max(0, parts.length - 1) * next.gapMinutes
+            patch({ package: next, maxCapacity: packageSeats(next, packageOptions), durationMinutes: minutes })
+          }}
+        />
+      ) : null}
+      {dining || kind === 'trip' || kind === 'package' ? null : (
         <KindFields
           kind={kind}
           settings={settings}
@@ -3058,5 +3091,47 @@ function ReviewStep({
         </Badge>
       </div>
     </div>
+  )
+}
+
+/* ==========================================================================
+   A package on the Booking step: nothing to schedule. Its times are the
+   parts' own, picked on Basics; this says so and shows them.
+   ========================================================================== */
+
+function PackageBookingNote({ config, options, onEdit }: { config: PackageConfig; options: PackageOption[]; onEdit: () => void }) {
+  const clock = (hhmm: string) => {
+    const [h, m] = hhmm.split(':').map(Number)
+    return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`
+  }
+  return (
+    <section className="flex flex-col gap-4 rounded-xl border border-line p-4">
+      <div>
+        <h3 className="text-sm font-semibold">Booked on each activity&rsquo;s own times</h3>
+        <p className="mt-0.5 text-xs text-subtle">
+          A package has no schedule or seat count of its own. Guests pick from the times you allowed for each part, and a day is only offered when every part has room for the whole group.
+        </p>
+      </div>
+      <ol className="flex list-none flex-col divide-y divide-line-subtle rounded-lg border border-line-subtle p-0">
+        {config.parts.map((part, index) => {
+          const option = options.find((entry) => entry.id === part.activityId)
+          return (
+            <li key={`${part.activityId}-${index}`} className="flex flex-wrap items-baseline justify-between gap-2 px-3.5 py-2.5 text-sm">
+              <span className="font-medium">
+                <span className="mr-1.5 text-subtle tabular">{index + 1}.</span>
+                {part.label?.trim() || option?.name || 'Pick an activity'}
+              </span>
+              <span className="text-xs text-subtle">{part.times.length > 0 ? part.times.map(clock).join(' or ') : 'Any time it runs'}</span>
+            </li>
+          )
+        })}
+      </ol>
+      <p className="text-xs text-muted">
+        At least {config.gapMinutes} minutes between parts{config.sameDay ? ', all on one day' : `, spread over up to ${config.withinDays} days`}.{' '}
+        <button type="button" onClick={onEdit} className="font-medium text-primary hover:underline">
+          Change on Basics
+        </button>
+      </p>
+    </section>
   )
 }

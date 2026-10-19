@@ -15,7 +15,7 @@ export interface ActivityKindMeta {
   /** One line for the wizard's picker. */
   hint: string
   examples: string
-  icon: 'Route' | 'Zap' | 'Anchor' | 'KeyRound' | 'GraduationCap' | 'Ticket'
+  icon: 'Route' | 'Zap' | 'Anchor' | 'KeyRound' | 'GraduationCap' | 'Ticket' | 'Layers'
   /** What a single bookable instance is called. */
   unit: string
   units: string
@@ -25,7 +25,7 @@ export interface ActivityKindMeta {
   defaultFormat: ActivityFormat
 }
 
-export const ACTIVITY_KINDS: ActivityKind[] = ['trip', 'activity', 'charter', 'rental', 'lesson', 'pass']
+export const ACTIVITY_KINDS: ActivityKind[] = ['trip', 'activity', 'charter', 'rental', 'lesson', 'pass', 'package']
 
 export const ACTIVITY_KIND_META: Record<ActivityKind, ActivityKindMeta> = {
   trip: {
@@ -93,6 +93,17 @@ export const ACTIVITY_KIND_META: Record<ActivityKind, ActivityKindMeta> = {
     units: 'days',
     booksBy: 'Tickets for a day',
     defaultFormat: 'open',
+  },
+  package: {
+    label: 'Package',
+    short: 'Package',
+    hint: 'Two or more of your activities sold together. Seats come off each one.',
+    examples: 'Combo days, adventure bundles, ride and fly, multi-day trips',
+    icon: 'Layers',
+    unit: 'package',
+    units: 'packages',
+    booksBy: 'A time for each activity inside it',
+    defaultFormat: 'departures',
   },
 }
 
@@ -181,7 +192,7 @@ export function kindOf(activity: { kind?: ActivityKind }): ActivityKind {
 }
 
 /** The chip on a storefront card: what it is at a glance. */
-export function kindChipLabel(activity: Pick<Activity, 'kind' | 'durationMinutes' | 'maxCapacity' | 'rental' | 'charter' | 'lesson' | 'pass'>): string {
+export function kindChipLabel(activity: Pick<Activity, 'kind' | 'durationMinutes' | 'maxCapacity' | 'rental' | 'charter' | 'lesson' | 'pass' | 'package'>): string {
   switch (activity.kind ?? 'trip') {
     case 'rental': {
       const modes = activity.rental?.modes
@@ -203,6 +214,8 @@ export function kindChipLabel(activity: Pick<Activity, 'kind' | 'durationMinutes
       const days = activity.pass?.validDays ?? 1
       return days > 1 ? `${days}-day pass` : 'Day pass'
     }
+    case 'package':
+      return `Package · ${activity.package?.parts.length ?? 2} activities`
     default:
       return formatDuration(activity.durationMinutes)
   }
@@ -228,13 +241,15 @@ export function kindBadge(activity: Pick<Activity, 'kind' | 'difficulty' | 'rent
       return LESSON_LEVELS.find((entry) => entry.value === activity.lesson?.level)?.label ?? 'Lesson'
     case 'pass':
       return (activity.pass?.validDays ?? 1) > 1 ? `${activity.pass?.validDays}-day pass` : 'Day pass'
+    case 'package':
+      return 'Package'
     default:
       return DIFFICULTY_WORD[activity.difficulty]
   }
 }
 
 /** Two or three short facts for a listing card, in the kind's own terms. */
-export function kindCardFacts(activity: Pick<Activity, 'kind' | 'difficulty' | 'maxCapacity' | 'minAge' | 'rental' | 'charter' | 'lesson' | 'pass' | 'route'>): string[] {
+export function kindCardFacts(activity: Pick<Activity, 'kind' | 'difficulty' | 'maxCapacity' | 'minAge' | 'rental' | 'charter' | 'lesson' | 'pass' | 'route' | 'package'>): string[] {
   const age = activity.minAge > 0 ? `Ages ${activity.minAge}+` : 'All ages'
   switch (activity.kind ?? 'trip') {
     case 'activity':
@@ -253,6 +268,8 @@ export function kindCardFacts(activity: Pick<Activity, 'kind' | 'difficulty' | '
       return [`${activity.lesson?.ratio ?? 4} per instructor`, (activity.lesson?.sessions ?? 1) > 1 ? `${activity.lesson?.sessions} sessions` : 'Single lesson', age]
     case 'pass':
       return [activity.pass?.reentry ? 'Re-entry allowed' : 'Single entry', age]
+    case 'package':
+      return [`${activity.package?.parts.length ?? 2} activities, one booking`, activity.package?.sameDay === false ? `Over ${activity.package.withinDays} days` : 'All on one day', age]
     default:
       return [`Up to ${activity.maxCapacity}`, activity.route ? routeLabel(activity.route) : DIFFICULTY_WORD[activity.difficulty], age]
   }
@@ -292,6 +309,8 @@ export function kindNote(activity: Pick<Activity, 'kind' | 'minAge' | 'rental' |
     }
     case 'pass':
       return { title: 'Day pass.', body: `${activity.pass?.reentry ? 'Come and go as you like.' : 'Single entry.'} ${age}` }
+    case 'package':
+      return { title: 'One booking, every part.', body: `Pick a time for each part and we hold your places on all of them. ${age}` }
     default:
       return null
   }
@@ -311,6 +330,7 @@ export const STOREFRONT_GROUPS: Record<ActivityKind, { label: string; blurb: str
   rental: { label: 'Rentals', blurb: 'Take it out yourself, by the hour or the day.' },
   lesson: { label: 'Lessons & courses', blurb: 'Coached, with a level and a small class.' },
   pass: { label: 'Passes & tickets', blurb: 'Entry for the day. Come and go.' },
+  package: { label: 'Packages & combos', blurb: 'More than one activity, one booking, a better price.' },
 }
 
 /** "per person", "per bike", "per vehicle a day", "per group". */

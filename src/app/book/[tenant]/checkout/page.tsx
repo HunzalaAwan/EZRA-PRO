@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { notFound, redirect } from 'next/navigation'
 import { bookingOf } from '@/lib/booking-method'
 
-import { NOW, getDepartureById, getStorefront, getStorefrontAvailability, getLocationById, getWaiverById, getPickupZonesByTenant } from '@/lib/demo'
+import { NOW, getActivityById, getDepartureById, getStorefront, getStorefrontAvailability, getLocationById, getWaiverById, getPickupZonesByTenant } from '@/lib/demo'
 import { locationAddress } from '@/lib/locations'
 import { buildDays } from '@/lib/storefront-availability'
 import { bookingReference, clamp, seatsRemaining } from '@/lib/utils'
@@ -141,6 +141,35 @@ export default async function CheckoutPage({
   const requestedId = typeof query.d === 'string' ? query.d : undefined
   const requested = requestedId ? getDepartureById(requestedId) : undefined
 
+  // Packages: one departure per part, in the package's order, each of that part's activity.
+  const packageLegs = (() => {
+    if (activity.kind !== 'package') return null
+    const ids = typeof query.legs === 'string' ? query.legs.split(',') : []
+    const parts = activity.package?.parts ?? []
+    if (ids.length !== parts.length || parts.length === 0) return null
+    const legs = parts.map((part, index) => {
+      const row = getDepartureById(ids[index])
+      const inner = getActivityById(part.activityId)
+      if (!row || !inner || row.activityId !== inner.id || row.tenantId !== tenant.id || row.status === 'cancelled') return null
+      const slot = buildDays(inner, 45).flatMap((day) => day.slots).find((entry) => entry.departureId === row.id)
+      return {
+        row,
+        seatsLeft: Math.min(seatsRemaining(row.capacity, row.booked, row.held), slot?.seatsLeft ?? 0),
+        leg: {
+          departureId: row.id,
+          activitySlug: inner.slug,
+          activityName: inner.name,
+          label: part.label?.trim() || inner.name,
+          startsAt: row.startsAt,
+          endsAt: row.endsAt,
+          meetingPoint: inner.locations.find((entry) => entry.locationId === row.locationId)?.meetingPoint ?? inner.meetingPoint,
+        },
+      }
+    })
+    return legs.every(Boolean) ? (legs as NonNullable<(typeof legs)[number]>[]) : null
+  })()
+  if (activity.kind === 'package' && !packageLegs) redirect(`/book/${tenant.slug}/${activity.slug}`)
+
   const valid =
     requested &&
     requested.activityId === activity.id &&
@@ -151,7 +180,7 @@ export default async function CheckoutPage({
     (event) => event.seatsLeft > 0 && event.departure.status !== 'sold_out',
   )?.departure
 
-  const departureRow = valid ? requested : fallback
+  const departureRow = packageLegs ? packageLegs[0].row : valid ? requested : fallback
   if (!departureRow) notFound()
 
   /* Day rentals run for n days from the pick-up; charters carry their group size. */
@@ -187,8 +216,18 @@ export default async function CheckoutPage({
   const site = departureRow.locationId ? getLocationById(departureRow.locationId) : undefined
   const siteMeeting = activity.locations.find((entry) => entry.locationId === departureRow.locationId)?.meetingPoint
 
-  const slotRow = buildDays(activity, 45).flatMap((day) => day.slots).find((slot) => slot.departureId === departureRow.id)
-  const departure: CheckoutDeparture = {
+  const slotRow = packageLegs ? undefined : buildDays(activity, 45).flatMap((day) => day.slots).find((slot) => slot.departureId === departureRow.id)
+  const departure: CheckoutDeparture = packageLegs
+    ? {
+        id: packageLegs.map((entry) => entry.leg.departureId).join('+'),
+        startsAt: packageLegs[0].leg.startsAt,
+        endsAt: packageLegs[packageLegs.length - 1].leg.endsAt,
+        // The package has room for what its fullest part has room for.
+        seatsLeft: Math.min(...packageLegs.map((entry) => entry.seatsLeft)),
+        priceMultiplier: 1,
+        legs: packageLegs.map((entry) => entry.leg),
+      }
+    : {
     id: departureRow.id,
     startsAt: pickupAt ?? departureRow.startsAt,
     endsAt: returnsAt ?? (rentalHours ? plusMinutes(departureRow.startsAt, rentalHours * 60) : departureRow.endsAt),

@@ -51,6 +51,10 @@ import { IconButton } from '@/components/ui/icon-button'
 import { SimpleTooltip } from '@/components/ui/tooltip'
 import { TrustSeal } from '@/components/storefront/trust-bar'
 import { locationAddress } from '@/lib/locations'
+import { useBookingLedger } from '@/hooks/use-booking-ledger'
+import { withLedger } from '@/lib/booking-ledger'
+import type { PackagePartView } from '@/lib/packages'
+import { PackageWidget } from '@/components/storefront/package-widget'
 
 /* ==========================================================================
    AVAILABILITY CONTRACT
@@ -309,6 +313,8 @@ export interface BookingWidgetProps {
   className?: string
   /** For call to book, and the call line under requests. */
   businessPhone?: string
+  /** Packages: each part with its own availability. */
+  packageParts?: PackagePartView[]
 }
 
 /**
@@ -316,7 +322,35 @@ export interface BookingWidgetProps {
  * for instant booking and request to book on a schedule, or a call and
  * request panel when it is booked by phone or has no set schedule.
  */
-export function BookingWidget(props: BookingWidgetProps) {
+export function BookingWidget(rawProps: BookingWidgetProps) {
+  // Bookings, moves and cancellations made in this browser count at once.
+  const ledger = useBookingLedger(rawProps.tenantSlug)
+  const days = React.useMemo(
+    () =>
+      rawProps.days.map((day) => {
+        if (!day.slots.some((slot) => ledger.delta[slot.departureId])) return day
+        const slots = day.slots.map((slot) => withLedger(slot, ledger.delta))
+        const open = slots.filter((slot) => !slot.soldOut)
+        return { ...day, slots, seatsLeft: open.reduce((sum, slot) => sum + slot.seatsLeft, 0), soldOut: slots.length > 0 && open.length === 0 }
+      }),
+    [rawProps.days, ledger.delta],
+  )
+  const props = { ...rawProps, days }
+  if (props.activity.kind === 'package') {
+    return (
+      <PackageWidget
+        activity={props.activity}
+        tenantSlug={props.tenantSlug}
+        currency={props.currency}
+        parts={props.packageParts ?? []}
+        checkoutPath={props.checkoutPath}
+        initialDateKey={props.initialDateKey}
+        initialGuests={props.initialGuests}
+        variant={props.variant}
+        className={props.className}
+      />
+    )
+  }
   const settings = bookingOf(props.activity)
   if (!showsSchedule(settings)) {
     const today = (props.nowIso ?? new Date().toISOString()).slice(0, 10)
@@ -1538,7 +1572,7 @@ function BookingWidgetInner({
 const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-function DateChip({
+export function DateChip({
   day,
   currency,
   selected,
@@ -1610,7 +1644,7 @@ function DateChip({
   )
 }
 
-function TimeChip({
+export function TimeChip({
   slot,
   noun = 'seats',
   wholeGroup = false,

@@ -408,9 +408,35 @@ export interface CharterRequest {
 
 /**
  * What is being sold: seats on a trip, a slot on an activity (a ride, a
- * zipline, a flight), a private charter, a rental, a lesson or a pass.
+ * zipline, a flight), a private charter, a rental, a lesson, a pass, or a
+ * package of the business's own activities sold together.
  */
-export type ActivityKind = 'trip' | 'activity' | 'charter' | 'rental' | 'lesson' | 'pass'
+export type ActivityKind = 'trip' | 'activity' | 'charter' | 'rental' | 'lesson' | 'pass' | 'package'
+
+/** One activity inside a package, and the start times guests can pick for it. */
+export interface PackagePart {
+  activityId: string
+  /** "HH:mm" times guests can pick. Empty: any time it runs. */
+  times: string[]
+  /** What guests see instead of the activity's name: "Beach ride". */
+  label?: string
+  /** Where this part runs, when the activity runs from more than one place. Absent: anywhere it runs. */
+  locationId?: string
+}
+
+/**
+ * A package: two or more activities sold as one booking. Guests pick a time
+ * for each part; every part takes its seats from that activity's own time,
+ * so the activity on its own can never be oversold.
+ */
+export interface PackageConfig {
+  parts: PackagePart[]
+  /** Least minutes between one part ending and the next starting: travel, changing, lunch. */
+  gapMinutes: number
+  /** Every part on the same day. Off: guests spread the parts over `withinDays` days. */
+  sameDay: boolean
+  withinDays: number
+}
 
 /** What the experience is about, as guests search for it. */
 export type ActivityTheme =
@@ -596,6 +622,8 @@ export interface Activity {
   charter?: CharterConfig
   lesson?: LessonConfig
   pass?: PassConfig
+  /** Packages: the activities inside it. */
+  package?: PackageConfig
   ride?: RideConfig
   /** Distance or track, when the trip or activity has one. */
   route?: RouteInfo

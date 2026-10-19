@@ -64,6 +64,7 @@ import { guestDetailsOf } from '@/lib/guest-requirements'
 import { CheckoutOptIn, useCheckoutOptIn } from '@/components/storefront/storefront-marketing'
 import type { RentalMode } from '@/lib/activity-kinds'
 import { usePricing } from '@/hooks/use-pricing'
+import { recordBooking } from '@/lib/booking-ledger'
 
 /* ==========================================================================
    TYPES
@@ -79,6 +80,38 @@ export interface CheckoutDeparture {
   returnsAt?: string
   /** The location this run leaves from, when the business has more than one. */
   location?: { name: string; addressLine: string; meetingPoint: string }
+  /** Packages: each part, in order, with its own time and place. */
+  legs?: CheckoutLeg[]
+}
+
+export interface CheckoutLeg {
+  departureId: string
+  activitySlug: string
+  activityName: string
+  label: string
+  startsAt: string
+  endsAt: string
+  meetingPoint: string
+}
+
+/** A package's parts, one line each: what, when, where. */
+function LegList({ legs, compact = false }: { legs: CheckoutLeg[]; compact?: boolean }) {
+  return (
+    <ol className="flex list-none flex-col gap-2 p-0">
+      {legs.map((leg, index) => (
+        <li key={leg.departureId} className="min-w-0">
+          <p className="text-sm font-medium text-foreground">
+            <span className="mr-1 text-subtle tabular">{index + 1}.</span>
+            {leg.label}
+          </p>
+          <p className="text-xs text-subtle tabular">
+            {formatDateLong(leg.startsAt)} · {formatTime(leg.startsAt)} – {formatTime(leg.endsAt)}
+          </p>
+          {compact ? null : <p className="text-xs leading-relaxed text-muted">{leg.meetingPoint}</p>}
+        </li>
+      ))}
+    </ol>
+  )
 }
 
 /** Where to meet for this run: the location's own note, or the activity's. */
@@ -394,6 +427,30 @@ export function CheckoutFlow({
   }, [withPickup, promoOff, giftOff, promo, card, tip, tipChoice])
   const optIn = useCheckoutOptIn(tenant)
   const finishPayment = () => {
+    // Take the seats: one entry per part for a package, so each activity's own count drops.
+    const legs = departure.legs ?? [{ departureId: departure.id, activitySlug: activity.slug, activityName: activity.name, label: activity.name, startsAt: departure.startsAt, endsAt: departure.endsAt, meetingPoint: meetingPointFor(activity, departure) }]
+    recordBooking(
+      tenant.slug,
+      legs.map((leg, index) => ({
+        id: legs.length > 1 ? `${reference}-${index + 1}` : reference,
+        reference,
+        activitySlug: leg.activitySlug,
+        activityName: leg.activityName,
+        departureId: leg.departureId,
+        startsAt: leg.startsAt,
+        endsAt: leg.endsAt,
+        party: Math.max(1, quote.party),
+        source: 'storefront' as const,
+        ...(departure.legs ? { packageSlug: activity.slug, packageName: activity.name } : {}),
+        name: `${guest.firstName} ${guest.lastName}`.trim(),
+        email: guest.email,
+        phone: guest.phone,
+        total: index === 0 ? displayQuote.total : 0,
+        paidNow: index === 0 ? displayQuote.total : 0,
+        currency: tenant.currency,
+        createdAt: nowIso ?? new Date().toISOString().slice(0, 19),
+      })),
+    )
     optIn.record(guest.email, guest.phone)
     pricing.recordRedemption(promoOff > 0 ? promo?.code : undefined, giftOff > 0 && card ? { code: card.code, amount: giftOff } : undefined)
     setConfirmed(true)
@@ -1247,7 +1304,11 @@ function OrderSummary({
           <CalendarPlus className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
           <div className="min-w-0">
             <dt className="sr-only">Date and time</dt>
-            {departure.returnsAt ? (
+            {departure.legs ? (
+              <dd>
+                <LegList legs={departure.legs} compact />
+              </dd>
+            ) : departure.returnsAt ? (
               <>
                 <dd className="font-medium text-foreground">Pick up {formatDateLong(departure.startsAt)} · {formatTime(departure.startsAt)}</dd>
                 <dd className="font-medium text-foreground">Return {formatDateLong(departure.returnsAt)} · {formatTime(departure.returnsAt)}</dd>
@@ -1275,8 +1336,12 @@ function OrderSummary({
           <div className="min-w-0">
             <dt className="sr-only">Meeting point</dt>
             <dd className="text-xs leading-relaxed text-muted">
-              {departure.location ? <span className="block font-medium text-foreground">{departure.location.name}</span> : null}
-              {meetingPointFor(activity, departure)}
+              {departure.legs ? 'Each part meets at its own place, listed above.' : (
+                <>
+                  {departure.location ? <span className="block font-medium text-foreground">{departure.location.name}</span> : null}
+                  {meetingPointFor(activity, departure)}
+                </>
+              )}
             </dd>
           </div>
         </div>
@@ -1595,7 +1660,7 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
               When
             </dt>
             <dd className="mt-1 text-sm font-medium tabular text-foreground">
-              {formatDateLong(departure.startsAt)} · {formatTime(departure.startsAt)}{departure.returnsAt ? ` to ${formatDateLong(departure.returnsAt)} · ${formatTime(departure.returnsAt)}` : ""}
+              {departure.legs ? <LegList legs={departure.legs} compact /> : <>{formatDateLong(departure.startsAt)} · {formatTime(departure.startsAt)}{departure.returnsAt ? ` to ${formatDateLong(departure.returnsAt)} · ${formatTime(departure.returnsAt)}` : ""}</>}
             </dd>
           </div>
           <div>
@@ -1619,9 +1684,15 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
               Meeting point
             </dt>
             <dd className="mt-1 text-sm leading-relaxed text-muted">
-              {departure.location ? <span className="block font-medium text-foreground">{departure.location.name}</span> : null}
-              {meetingPointFor(activity, departure)}
-              {departure.location ? <span className="block text-xs text-subtle">{departure.location.addressLine}</span> : null}
+              {departure.legs ? (
+                <LegList legs={departure.legs} />
+              ) : (
+                <>
+                  {departure.location ? <span className="block font-medium text-foreground">{departure.location.name}</span> : null}
+                  {meetingPointFor(activity, departure)}
+                  {departure.location ? <span className="block text-xs text-subtle">{departure.location.addressLine}</span> : null}
+                </>
+              )}
             </dd>
           </div>
         </dl>

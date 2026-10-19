@@ -15,6 +15,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Ticket,
+  Layers,
   Users,
   Zap,
   type LucideIcon,
@@ -63,6 +64,7 @@ const GROUP_ICONS: Record<ActivityKind, LucideIcon> = {
   rental: KeyRound,
   lesson: GraduationCap,
   pass: Ticket,
+  package: Layers,
 }
 
 type GroupKey = ActivityKind | 'all'

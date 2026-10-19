@@ -1515,6 +1515,8 @@ interface ActivitySpec {
   ride?: RideConfig
   route?: RouteInfo
   pass?: { validDays: number; reentry: boolean }
+  /** Packages: the activities inside, by slug, with the times guests can pick. */
+  package?: { parts: { slug: string; times: string[]; label?: string; location?: string }[]; gapMinutes: number; sameDay?: boolean; withinDays?: number }
   slug: string
   name: string
   tagline: string
@@ -1560,6 +1562,44 @@ interface ActivitySpec {
 }
 
 const BLUE_HORIZON_SPECS: ActivitySpec[] = [
+  {
+    slug: 'maui-bucket-list',
+    kind: 'package',
+    package: {
+      parts: [
+        { slug: 'upcountry-horseback-ride', times: ['11:00', '15:30'], label: 'Ranch ride' },
+        { slug: 'west-maui-parasail-flight', times: ['13:00'], label: 'Parasail flight', location: 'kaanapali' },
+      ],
+      gapMinutes: 30,
+    },
+    name: 'Maui Bucket List',
+    tagline: 'A ranch ride and a parasail flight in one day, one booking, a better price.',
+    description:
+      'Two of our most-booked activities on one day. Ride the ranch loop above Lahaina in the late morning or the late afternoon, and fly eight hundred feet above Kaanapali in between. Pick the ride time that suits you; your place on both is held the moment you book.',
+    highlights: ['Ranch ride and parasail flight on the same day', 'Pick a morning or an afternoon ride', 'Save $19 on booking them apart', 'One booking, one confirmation'],
+    included: ['90-minute ranch ride with two wranglers', '10 to 12 minutes of flight time', 'Helmet, harness and briefings'],
+    excluded: ['Transport between Lahaina and Kaanapali', 'Photos'],
+    requirements: ['Ages 8 and over', 'Up to 110 kg per rider', 'Closed-toe shoes for the ride'],
+    meetingPoint: 'Each part meets at its own place; both are on your confirmation.',
+    difficulty: 'easy',
+    durationMinutes: 300,
+    minAge: 8,
+    maxCapacity: 8,
+    tiers: [
+      ['Adult', 22900, 1, 8, 'Ages 13 and over'],
+      ['Young adventurer', 18900, 0, 6, 'Ages 8 to 12, with an adult'],
+    ],
+    addOns: [['Ride and flight photos', 6900, 'Photos from the ridge and from the boat, sent the same evening.', 1, 'Camera']],
+    photos: ['photo-1553284965-83fd3e82fa5a', 'photo-1505228395891-9a51e7e86bf6', 'photo-1507525428034-b723cf961d3e'],
+    colorKey: 'reef',
+    rating: 4.9,
+    reviewCount: 64,
+    featured: false,
+    resources: [],
+    times: [],
+    popularity: 0.4,
+    freeCancelHours: 48,
+  },
   {
     slug: 'upcountry-horseback-ride',
     kind: 'activity',
@@ -3650,6 +3690,19 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     ...(spec.route ? { route: spec.route } : {}),
     ...(spec.lesson ? { lesson: { ...spec.lesson } } : {}),
     ...(spec.pass ? { pass: { ...spec.pass } } : {}),
+    ...(spec.package
+      ? {
+          package: {
+            parts: spec.package.parts.map((part) => {
+              const site = part.location ? getLocationsByTenant(tenant.id).find((entry) => entry.slug === part.location) : undefined
+              return { activityId: `act_${part.slug}`, times: part.times, ...(part.label ? { label: part.label } : {}), ...(site ? { locationId: site.id } : {}) }
+            }),
+            gapMinutes: spec.package.gapMinutes,
+            sameDay: spec.package.sameDay ?? true,
+            withinDays: spec.package.withinDays ?? 1,
+          },
+        }
+      : {}),
     difficulty: spec.difficulty,
     durationMinutes: spec.durationMinutes,
     minAge: spec.minAge,

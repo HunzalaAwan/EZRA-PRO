@@ -46,6 +46,7 @@ export interface ActivityOverride {
   charter?: CharterConfig
   lesson?: LessonConfig
   pass?: PassConfig
+  package?: Activity['package']
   guestQuestions?: GuestQuestion[]
   /** null clears the waiver; undefined keeps the seeded one. */
   waiverId?: string | null
