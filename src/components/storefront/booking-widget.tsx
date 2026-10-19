@@ -55,7 +55,7 @@ import { locationAddress } from '@/lib/locations'
 import { useBookingLedger } from '@/hooks/use-booking-ledger'
 import { peopleOf, placesOf } from '@/lib/places'
 import { withLedger } from '@/lib/booking-ledger'
-import { itinerary, type PackagePartView } from '@/lib/packages'
+import type { PackagePartView } from '@/lib/packages'
 import { PackageWidget } from '@/components/storefront/package-widget'
 
 /* ==========================================================================
@@ -364,7 +364,7 @@ export function BookingWidget(rawProps: BookingWidgetProps) {
     [rawProps.days, ledger.delta],
   )
   const props = { ...rawProps, days }
-  if (props.activity.kind === 'package' && (props.activity.package?.timing ?? 'parts') === 'parts') {
+  if (props.activity.kind === 'package') {
     return (
       <PackageWidget
         activity={props.activity}
@@ -412,7 +412,6 @@ function BookingWidgetInner({
   variant = 'rail',
   className,
   businessPhone,
-  packageParts,
 }: BookingWidgetProps & { settings: BookingSettings }) {
   const router = useRouter()
   const reducedMotion = useReducedMotionSafe()
@@ -1265,22 +1264,6 @@ function BookingWidgetInner({
         {/* ---------- tickets ---------- */}
         {kindBlock ?? (
         <div>
-          {kind === 'package' && slot && packageParts && packageParts.length > 0 ? (
-            <div className="mb-4 rounded-xl bg-surface-sunken px-3.5 py-3">
-              <p className="text-xs font-semibold tracking-[0.08em] text-faint uppercase">Your day</p>
-              <ol className="mt-1.5 flex list-none flex-col gap-1 p-0 text-sm">
-                {itinerary(packageParts, activity.package?.gapMinutes ?? 0, slot.startsAt).map((part) => (
-                  <li key={part.activityId} className="flex justify-between gap-2">
-                    <span className="min-w-0 text-foreground">{part.label}</span>
-                    <span className="shrink-0 font-medium whitespace-nowrap tabular text-foreground">
-                      {formatTime(part.startsAt!)} – {formatTime(part.endsAt!)}
-                    </span>
-                  </li>
-                ))}
-              </ol>
-              <p className="mt-1.5 text-xs text-subtle">Run just for this package, with the same group all day.</p>
-            </div>
-          ) : null}
           <div className="flex items-baseline justify-between gap-3">
             <h3 className="text-[0.8125rem] font-semibold tracking-tight text-foreground">
               {stepOf('guests')} · Who is coming

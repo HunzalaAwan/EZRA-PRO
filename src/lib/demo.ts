@@ -562,7 +562,7 @@ for (const [tenantId, specs] of SPEC_BY_TENANT) {
     const activity = activityById.get(`act_${spec.slug}`)!
     if (activity.status !== 'live') continue
     // Packages have no times of their own: their seats are the parts' seats.
-    if (activity.kind === 'package' && activity.package?.timing !== 'own') continue
+    if (activity.kind === 'package') continue
 
     const rng = createRng(hashSeed(`gen:${activity.id}`))
     const adultTier = activity.priceTiers[0]

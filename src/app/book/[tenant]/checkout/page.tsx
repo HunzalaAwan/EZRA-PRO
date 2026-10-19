@@ -5,7 +5,6 @@ import { bookingOf } from '@/lib/booking-method'
 import { NOW, getActivityById, getDepartureById, getStorefront, getStorefrontAvailability, getLocationById, getWaiverById, getPickupZonesByTenant } from '@/lib/demo'
 import { locationAddress } from '@/lib/locations'
 import { buildDays } from '@/lib/storefront-availability'
-import { itinerary } from '@/lib/packages'
 import { bookingReference, clamp, seatsRemaining } from '@/lib/utils'
 import type { Activity } from '@/types'
 import { rentalModes, type RentalMode } from '@/lib/activity-kinds'
@@ -146,7 +145,7 @@ export default async function CheckoutPage({
 
   // Packages: one departure per part, in the package's order, each of that part's activity.
   const packageLegs = (() => {
-    if (activity.kind !== 'package' || activity.package?.timing === 'own') return null
+    if (activity.kind !== 'package') return null
     const ids = typeof query.legs === 'string' ? query.legs.split(',') : []
     const parts = activity.package?.parts ?? []
     if (ids.length !== parts.length || parts.length === 0) return null
@@ -171,7 +170,7 @@ export default async function CheckoutPage({
     })
     return legs.every(Boolean) ? (legs as NonNullable<(typeof legs)[number]>[]) : null
   })()
-  if (activity.kind === 'package' && activity.package?.timing !== 'own' && !packageLegs) redirect(`/book/${tenant.slug}/${activity.slug}`)
+  if (activity.kind === 'package' && !packageLegs) redirect(`/book/${tenant.slug}/${activity.slug}`)
 
   const valid =
     requested &&
@@ -243,19 +242,6 @@ export default async function CheckoutPage({
     location: site
       ? { name: site.name, addressLine: locationAddress(site), meetingPoint: siteMeeting ?? activity.meetingPoint }
       : undefined,
-    // A package on its own schedule: the parts' times on this run, to show (they book nothing on their own).
-    ...(activity.kind === 'package' && activity.package?.timing === 'own'
-      ? {
-          itinerary: itinerary(
-            (activity.package.parts ?? []).flatMap((part) => {
-              const inner = getActivityById(part.activityId)
-              return inner ? [{ departureId: `${departureRow.id}-${inner.id}`, activitySlug: inner.slug, activityName: inner.name, label: part.label?.trim() || inner.name, durationMinutes: inner.durationMinutes, meetingPoint: inner.meetingPoint, startsAt: '', endsAt: '' }] : []
-            }),
-            activity.package.gapMinutes,
-            departureRow.startsAt,
-          ).map(({ durationMinutes: _minutes, offset: _offset, ...leg }) => ({ ...leg, startsAt: leg.startsAt!, endsAt: leg.endsAt! })),
-        }
-      : {}),
   }
 
   /* ---------- selection ---------- */

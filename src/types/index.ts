@@ -476,15 +476,6 @@ export interface PackagePart {
  * so the activity on its own can never be oversold.
  */
 export interface PackageConfig {
-  /**
-   * parts: guests join each activity's own times, and the seats are shared
-   * with guests who book that activity alone. own: the package runs on its
-   * own schedule, the parts back to back, only for package guests, with its
-   * own places. Absent: parts.
-   */
-  timing?: 'parts' | 'own'
-  /** Own schedule: the most bookings one run takes, however many places are left. Absent: no limit. */
-  maxBookingsPerRun?: number
   parts: PackagePart[]
   /** Least minutes between one part ending and the next starting: travel, changing, lunch. */
   gapMinutes: number

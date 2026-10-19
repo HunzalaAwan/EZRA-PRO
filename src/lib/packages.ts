@@ -65,37 +65,3 @@ export function firstCombo(parts: PackagePartView[], dateKeys: string[], party: 
 export function clock(iso: string) {
   return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(iso))
 }
-
-/** A local ISO plus some minutes, still local. */
-export function addMinutesIso(iso: string, minutes: number) {
-  const date = new Date(iso)
-  date.setMinutes(date.getMinutes() + minutes)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:00`
-}
-
-/**
- * A package on its own schedule: the parts run back to back from the
- * package's start, with the gap between them. Offsets in minutes; with a
- * start time, the clock times too.
- */
-export function itinerary<T extends { label: string; durationMinutes: number }>(parts: T[], gapMinutes: number, startIso?: string) {
-  let offset = 0
-  return parts.map((part) => {
-    const at = offset
-    offset += part.durationMinutes + gapMinutes
-    return {
-      ...part,
-      offset: at,
-      ...(startIso ? { startsAt: addMinutesIso(startIso, at), endsAt: addMinutesIso(startIso, at + part.durationMinutes) } : {}),
-    }
-  })
-}
-
-/** "+1h 30m" from the start. */
-export function offsetLabel(minutes: number) {
-  if (minutes === 0) return 'At the start'
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  return `+${h ? `${h}h` : ''}${h && m ? ' ' : ''}${m ? `${m}m` : ''}`
-}

@@ -84,8 +84,6 @@ export interface CheckoutDeparture {
   location?: { name: string; addressLine: string; meetingPoint: string }
   /** Packages: each part, in order, with its own time and place. */
   legs?: CheckoutLeg[]
-  /** Packages on their own schedule: the parts' times on this run. Shown only; nothing is booked on the parts. */
-  itinerary?: CheckoutLeg[]
 }
 
 export interface CheckoutLeg {
@@ -1366,9 +1364,9 @@ function OrderSummary({
           <CalendarPlus className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
           <div className="min-w-0">
             <dt className="sr-only">Date and time</dt>
-            {departure.legs ?? departure.itinerary ? (
+            {departure.legs ? (
               <dd>
-                <LegList legs={(departure.legs ?? departure.itinerary)!} compact />
+                <LegList legs={departure.legs} compact />
               </dd>
             ) : departure.returnsAt ? (
               <>
@@ -1738,7 +1736,7 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
               When
             </dt>
             <dd className="mt-1 text-sm font-medium tabular text-foreground">
-              {departure.legs ?? departure.itinerary ? <LegList legs={(departure.legs ?? departure.itinerary)!} compact /> : <>{formatDateLong(departure.startsAt)} · {formatTime(departure.startsAt)}{departure.returnsAt ? ` to ${formatDateLong(departure.returnsAt)} · ${formatTime(departure.returnsAt)}` : ""}</>}
+              {departure.legs ? <LegList legs={departure.legs} compact /> : <>{formatDateLong(departure.startsAt)} · {formatTime(departure.startsAt)}{departure.returnsAt ? ` to ${formatDateLong(departure.returnsAt)} · ${formatTime(departure.returnsAt)}` : ""}</>}
             </dd>
           </div>
           <div>
@@ -1763,8 +1761,8 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
               Meeting point
             </dt>
             <dd className="mt-1 text-sm leading-relaxed text-muted">
-              {departure.legs ?? departure.itinerary ? (
-                <LegList legs={(departure.legs ?? departure.itinerary)!} />
+              {departure.legs ? (
+                <LegList legs={departure.legs} />
               ) : (
                 <>
                   {departure.location ? <span className="block font-medium text-foreground">{departure.location.name}</span> : null}

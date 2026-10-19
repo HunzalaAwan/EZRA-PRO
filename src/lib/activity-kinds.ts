@@ -269,7 +269,7 @@ export function kindCardFacts(activity: Pick<Activity, 'kind' | 'difficulty' | '
     case 'pass':
       return [activity.pass?.reentry ? 'Re-entry allowed' : 'Single entry', age]
     case 'package':
-      return [`${activity.package?.parts.length ?? 2} activities, one booking`, activity.package?.timing === 'own' ? `Up to ${activity.maxCapacity}, set times` : activity.package?.sameDay === false ? `Over ${activity.package.withinDays} days` : 'All on one day', age]
+      return [`${activity.package?.parts.length ?? 2} activities, one booking`, activity.package?.sameDay === false ? `Over ${activity.package.withinDays} days` : 'All on one day', age]
     default:
       return [`Up to ${activity.maxCapacity}`, activity.route ? routeLabel(activity.route) : DIFFICULTY_WORD[activity.difficulty], age]
   }
@@ -310,9 +310,7 @@ export function kindNote(activity: Pick<Activity, 'kind' | 'minAge' | 'rental' |
     case 'pass':
       return { title: 'Day pass.', body: `${activity.pass?.reentry ? 'Come and go as you like.' : 'Single entry.'} ${age}` }
     case 'package':
-      return activity.package?.timing === 'own'
-        ? { title: 'One day, run for the package.', body: `Pick a start time; every part follows on at set times, with the same group throughout. ${age}` }
-        : { title: 'One booking, every part.', body: `Pick a time for each part and we hold your places on all of them. ${age}` }
+      return { title: 'One booking, every part.', body: `Pick a time for each part and we hold your places on all of them. ${age}` }
     default:
       return null
   }

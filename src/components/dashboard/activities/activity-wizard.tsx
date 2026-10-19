@@ -1021,30 +1021,12 @@ const DINING_STEP_SCHEMAS = [
 
 type FieldErrors = Record<string, string>
 
-/** A schema's problems, keyed the way the editors look them up. */
-function schemaIssues(schema: z.ZodTypeAny | undefined, draft: ActivityDraft): FieldErrors {
-  if (!schema) return {}
-  const result = schema.safeParse(draft)
-  if (result.success) return {}
-  const errors: FieldErrors = {}
-  for (const issue of result.error.issues) {
-    const path = issue.path.map(String)
-    const key = path[0] === 'schedule' ? path.slice(1).join('.') : path.join('.')
-    if (!errors[key || 'form']) errors[key || 'form'] = issue.message
-  }
-  return errors
-}
-
 function validateSchemaStep(step: number, draft: ActivityDraft): FieldErrors {
   const id = TOUR_STEPS[step]?.id
   // No set schedule: only where it runs from is checked.
   if (!isDining(draft) && id === 'schedule' && (draft.booking?.method ?? 'instant') !== 'instant' && draft.booking?.scheduled === false) return {}
-  // A package runs on its parts' times, or sets its own schedule on Basics: nothing to check here.
+  // A package runs on its activities' own times: no schedule of its own to check.
   if (!isDining(draft) && id === 'schedule' && draft.kind === 'package') return {}
-  // A package on its own schedule checks its schedule with Basics, where it is set.
-  if (!isDining(draft) && id === 'basics' && draft.kind === 'package' && draft.package?.timing === 'own') {
-    return { ...schemaIssues(STEP_SCHEMAS.basics, draft), ...schemaIssues(STEP_SCHEMAS.schedule, draft) }
-  }
   const schema = isDining(draft) ? DINING_STEP_SCHEMAS[step] : STEP_SCHEMAS[id ?? '']
   if (!schema) return {}
   const result = schema.safeParse(draft)
@@ -1088,7 +1070,7 @@ function validateStep(step: number, draft: ActivityDraft): FieldErrors {
   if (kind === 'lesson' && draft.durationMinutes < 15) errors.durationMinutes = 'Give each session at least 15 minutes'
   if (kind === 'charter' && settings.charter.maxGuests < 1) errors['charter.maxGuests'] = 'A charter carries at least one guest'
   if (kind === 'package') {
-    if ((draft.package?.timing ?? 'parts') === 'parts') delete errors.maxCapacity
+    delete errors.maxCapacity
     delete errors.durationMinutes
     if ((draft.package?.parts ?? []).filter((part) => part.activityId).length < 2) errors.package = 'Add at least two activities'
   }
@@ -1342,7 +1324,7 @@ function StorefrontPreview({
   const fromPrice = paid.length === 0 ? 0 : Math.min(...paid.map((tier) => tier.price))
   // No set schedule: nothing to list; the preview says it is arranged instead.
   const unscheduledPreview = (draft.booking?.method ?? 'instant') !== 'instant' && draft.booking?.scheduled === false
-  const upcoming = unscheduledPreview || (draft.kind === 'package' && (draft.package?.timing ?? 'parts') === 'parts') ? [] : previewDepartures(draft.schedule, nowIso, 10).slice(0, 3)
+  const upcoming = unscheduledPreview || draft.kind === 'package' ? [] : previewDepartures(draft.schedule, nowIso, 10).slice(0, 3)
   const highlights = draft.highlights.filter((item) => item.trim().length > 0).slice(0, 3)
   const dining = isDining(draft)
 
@@ -1764,8 +1746,6 @@ export function ActivityWizard({
   const unscheduled = (draft.booking?.method ?? 'instant') !== 'instant' && draft.booking?.scheduled === false
   const currentStep = steps[step]
   const isLast = step === steps.length - 1
-  /** A package on its own schedule: its days, times and place are set with the package on Basics. */
-  const ownPackage = !dining && draft.kind === 'package' && draft.package?.timing === 'own'
   const policyEditor = (
     <ChangesPolicyEditor
       cancellation={draft.cancellation ?? { preset: 'flexible', freeCancellationHours: 24, lateRefundPercent: 0, keepDeposit: false }}
@@ -1827,35 +1807,6 @@ export function ActivityWizard({
                 >
                   {currentStep.id === 'basics' ? (
                     <BasicsStep draft={draft} patch={patch} errors={errors} currency={currency} tenantSlug={tenantSlug} packageOptions={packageOptions.filter((option) => option.id !== activityId)} />
-                  ) : null}
-                  {currentStep.id === 'basics' && ownPackage ? (
-                    <section className="mt-6 flex flex-col gap-5 rounded-xl border border-line p-4">
-                      <div>
-                        <h3 className="text-sm font-semibold">When the package happens</h3>
-                        <p className="mt-0.5 text-xs text-subtle">Its own days and start times. Every start time takes the guests and bookings set above.</p>
-                      </div>
-                      {locations.length > 0 ? (
-                        <LocationsEditor
-                          rental={rentalHoursFor(draft)}
-                          seats={{ ...seatsFor(draft), onEdit: () => window.scrollTo({ top: 0, behavior: 'smooth' }) }}
-                          schedule={draft.schedule}
-                          onChange={(schedule) => patch({ schedule })}
-                          locations={locations}
-                          nowIso={nowIso}
-                          errors={errors}
-                        />
-                      ) : null}
-                      {draft.schedule.locations.length > 1 ? null : (
-                        <ScheduleEditor
-                          rental={rentalHoursFor(draft)}
-                          seats={{ ...seatsFor(draft), onEdit: () => window.scrollTo({ top: 0, behavior: 'smooth' }) }}
-                          schedule={draft.schedule}
-                          onChange={(schedule) => patch({ schedule })}
-                          nowIso={nowIso}
-                          errors={errors}
-                        />
-                      )}
-                    </section>
                   ) : null}
                   {currentStep.id === 'description' ? <DescriptionStep draft={draft} patch={patch} errors={errors} part={dining ? undefined : 'copy'} /> : null}
                   {currentStep.id === 'guests' ? (
@@ -2088,7 +2039,7 @@ export function ActivityWizard({
                         nowIso={nowIso}
                         errors={errors}
                       />
-                    ) : (draft.kind ?? 'trip') === 'package' && (draft.package?.timing ?? 'parts') === 'parts' ? (
+                    ) : (draft.kind ?? 'trip') === 'package' ? (
                       <div className="flex flex-col gap-6">
                         <PackageBookingNote config={draft.package} options={packageOptions} onEdit={() => goTo(0, -1)} />
                         {policyEditor}
@@ -2103,15 +2054,7 @@ export function ActivityWizard({
                           businessPhone={businessPhone}
                           groupWord={(draft.kind ?? 'trip') === 'rental' ? 'items' : 'guests'}
                         />
-                        {ownPackage ? (
-                          <p className="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">
-                            Where it starts, its days, start times and places are set with the package on Basics.{' '}
-                            <button type="button" onClick={() => goTo(0, -1)} className="font-medium text-primary hover:underline">
-                              Change them
-                            </button>
-                          </p>
-                        ) : null}
-                        {!ownPackage && locations.length > 0 ? (
+                        {locations.length > 0 ? (
                           <LocationsEditor
                             pickOnly={unscheduled}
                             rental={rentalHoursFor(draft)}
@@ -2127,7 +2070,7 @@ export function ActivityWizard({
                           <p className="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">
                             No set schedule: every booking is arranged with the guest. Their requests arrive in Custom requests; confirm a time there and send the payment link.
                           </p>
-                        ) : ownPackage || draft.schedule.locations.length > 1 ? null : (
+                        ) : draft.schedule.locations.length > 1 ? null : (
                           <ScheduleEditor
                             rental={rentalHoursFor(draft)}
                             seats={{ ...seatsFor(draft), onEdit: () => goTo(0, -1) }}
@@ -2574,17 +2517,12 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
           value={draft.package ?? EMPTY_PACKAGE}
           options={packageOptions}
           currency={currency ?? 'USD'}
-          error={errors.package ?? errors.maxCapacity}
-          capacity={draft.maxCapacity}
-          onCapacity={(maxCapacity) => patch({ maxCapacity, schedule: { ...draft.schedule, capacity: maxCapacity } })}
+          error={errors.package}
           onChange={(next) => {
-            // Length follows the parts end to end. On their own times, places are the smallest part's;
-            // on the package's own schedule they are the business's own number.
+            // Guests and length follow the activities: the smallest one's limit, and the whole day end to end.
             const parts = next.parts.map((part) => packageOptions.find((option) => option.id === part.activityId)).filter((option): option is PackageOption => Boolean(option))
             const minutes = parts.reduce((sum, option) => sum + option.durationMinutes, 0) + Math.max(0, parts.length - 1) * next.gapMinutes
-            const own = next.timing === 'own'
-            const places = own ? draft.maxCapacity || packageSeats(next, packageOptions) : packageSeats(next, packageOptions)
-            patch({ package: next, maxCapacity: places, durationMinutes: minutes, ...(own ? { schedule: { ...draft.schedule, mode: 'times', capacity: places } } : {}) })
+            patch({ package: next, maxCapacity: packageSeats(next, packageOptions), durationMinutes: minutes })
           }}
         />
       ) : null}
