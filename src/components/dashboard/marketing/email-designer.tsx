@@ -29,8 +29,8 @@ import { Input } from '@/components/ui/input'
 import { Segmented } from '@/components/ui/segmented'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
+import { DetailText } from '@/components/dashboard/marketing/flow-builder/fields'
 import {
   BLOCK_HINT,
   BLOCK_LABEL,
@@ -49,6 +49,7 @@ import {
   type EmailTheme,
   type SavedEmailTemplate,
 } from '@/lib/email-design'
+import { placeholderByToken, type FlowPlaceholder } from '@/lib/flows/catalog'
 import { cn } from '@/lib/utils'
 
 /* ==========================================================================
@@ -60,6 +61,8 @@ import { cn } from '@/lib/utils'
    ========================================================================== */
 
 const PLACEHOLDER_TOKENS = ['{first_name}', '{business}', '{activity}', '{date}', '{offer_code}', '{offer_percent}']
+/** The same details by name, as the rest of the product shows them: "[First name]" on screen, the token stored. */
+const DESIGNER_DETAILS = PLACEHOLDER_TOKENS.map((token) => placeholderByToken(token)).filter((item): item is FlowPlaceholder => Boolean(item))
 const ADDABLE: EmailBlockType[] = ['heading', 'text', 'image', 'button', 'activity', 'columns', 'coupon', 'divider', 'spacer', 'header', 'social', 'footer']
 
 /** Shrink an uploaded photo so it fits in the browser's storage: 1200px wide, JPEG. */
@@ -125,31 +128,9 @@ function AlignPicker({ value, onChange }: { value: BlockAlign; onChange: (value:
   return <Segmented size="sm" label="Align" value={value} onValueChange={(next: BlockAlign) => onChange(next)} options={[{ value: 'left', label: 'Left' }, { value: 'center', label: 'Centre' }]} />
 }
 
-function Tokens({ onInsert }: { onInsert: (token: string) => void }) {
-  return (
-    <div className="mt-1.5 flex flex-wrap gap-1">
-      {PLACEHOLDER_TOKENS.map((token) => (
-        <button key={token} type="button" onClick={() => onInsert(token)} className="rounded-md border border-line px-1.5 py-0.5 font-mono text-xs text-muted hover:border-primary/50 hover:text-foreground">
-          {token}
-        </button>
-      ))}
-    </div>
-  )
-}
-
+/** Text with personal details shown by name ("[First name]") and a menu to add one; the tokens stay in the stored text. */
 function TextWithTokens({ label, value, onChange, rows = 4 }: { label: string; value: string; onChange: (value: string) => void; rows?: number }) {
-  const ref = React.useRef<HTMLTextAreaElement>(null)
-  const insert = (token: string) => {
-    const el = ref.current
-    const at = el?.selectionStart ?? value.length
-    onChange(value.slice(0, at) + token + value.slice(el?.selectionEnd ?? at))
-  }
-  return (
-    <div>
-      <Field label={label}>{(control) => <Textarea {...control} ref={ref} rows={rows} value={value} onChange={(e) => onChange(e.target.value)} />}</Field>
-      <Tokens onInsert={insert} />
-    </div>
-  )
+  return <DetailText multiline rows={rows} label={label} value={value} onChange={onChange} placeholders={DESIGNER_DETAILS} />
 }
 
 function LinkField({ value, onChange, activities, label = 'Goes to' }: { value: string; onChange: (value: string) => void; activities: EmailContext['activities']; label?: string }) {
@@ -272,10 +253,7 @@ function BlockSettings({ block, set, ctx }: { block: EmailBlock; set: (patch: Pa
     case 'heading':
       return (
         <div className="flex flex-col gap-3">
-          <div>
-            <Field label="Heading">{(control) => <Input {...control} size="sm" value={block.text} onChange={(e) => set({ text: e.target.value })} />}</Field>
-            <Tokens onInsert={(token) => set({ text: block.text + token })} />
-          </div>
+          <DetailText label="Heading" value={block.text} onChange={(text) => set({ text })} placeholders={DESIGNER_DETAILS} />
           <div className="flex flex-wrap items-center gap-2">
             <Segmented size="sm" label="Size" value={block.size} onValueChange={(size: 'xl' | 'lg' | 'md') => set({ size })} options={[{ value: 'xl', label: 'Large' }, { value: 'lg', label: 'Medium' }, { value: 'md', label: 'Small' }]} />
             <AlignPicker value={block.align} onChange={(align) => set({ align })} />

@@ -5,7 +5,7 @@ import { Gift, Tag, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { giftProblem, promoProblem, type GiftCard, type PricingRule, type PromoCode } from '@/lib/pricing'
+import { findPromo, giftProblem, promoProblem, type GiftCard, type PricingRule, type PromoCode } from '@/lib/pricing'
 import { formatCurrency } from '@/lib/utils'
 import type { CurrencyCode } from '@/types'
 
@@ -56,7 +56,7 @@ export function CheckoutDiscounts({
       if (problem) return setError(problem)
       onGift(card.code)
     } else {
-      const promo = promos.find((entry) => entry.code === code)
+      const promo = findPromo(promos, code)
       const problem = promoProblem(promo, { activitySlug, subtotal, todayKey })
       if (problem) return setError(problem)
       onPromo(code)

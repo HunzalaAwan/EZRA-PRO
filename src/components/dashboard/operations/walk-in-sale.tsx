@@ -35,7 +35,7 @@ import { TicketQr, ticketPayload } from '@/components/ui/ticket-qr'
 import { usePricing } from '@/hooks/use-pricing'
 import { useWalkIns } from '@/hooks/use-walk-ins'
 import { ACTIVITY_KIND_META } from '@/lib/activity-kinds'
-import { applyRules, giftProblem, promoDiscount, promoProblem } from '@/lib/pricing'
+import { applyRules, findPromo, giftProblem, promoDiscount, promoProblem } from '@/lib/pricing'
 import { cn, formatCurrency, formatTime, pluralize } from '@/lib/utils'
 import { EMPTY_GUEST, WALK_IN_SOURCES, summarize, type WalkInGuest, type WalkInRecord } from '@/lib/walk-ins'
 import type { ActivityKind, CurrencyCode } from '@/types'
@@ -242,7 +242,7 @@ function WalkInTill({
       ]
     : []
   const subtotal = lines.reduce((sum, line) => sum + line.total, 0)
-  const promo = pricing.promos.find((entry) => entry.code === promoCode)
+  const promo = findPromo(pricing.promos, promoCode)
   const card = pricing.giftCards.find((entry) => entry.code === giftCode)
   const promoOff = promo && activity && !promoProblem(promo, { activitySlug: activity.slug, subtotal, todayKey }) ? promoDiscount(promo, subtotal) : 0
   const giftOff = card && !giftProblem(card, todayKey) ? Math.min(card.balance, subtotal - promoOff) : 0
@@ -267,7 +267,7 @@ function WalkInTill({
       if (problem) return setCodeError(problem)
       setGiftCode(gift.code)
     } else {
-      const problem = promoProblem(pricing.promos.find((entry) => entry.code === value), { activitySlug: activity.slug, subtotal, todayKey })
+      const problem = promoProblem(findPromo(pricing.promos, value), { activitySlug: activity.slug, subtotal, todayKey })
       if (problem) return setCodeError(problem)
       setPromoCode(value)
     }

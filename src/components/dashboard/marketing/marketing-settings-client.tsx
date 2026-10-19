@@ -17,7 +17,7 @@ import { useMarketing, useMarketingTenant } from '@/hooks/use-marketing'
 import { usePricing } from '@/hooks/use-pricing'
 import { NumberInput } from '@/components/dashboard/marketing/number-input'
 import { fromAddress, storefrontHost } from '@/lib/channels'
-import { campaignPromoNote, defaultSettings, marketingSender, retireOfferPromo, type MarketingSettings } from '@/lib/marketing'
+import { campaignPromoNote, defaultSettings, marketingSender, retireOfferPromo, upsertOfferPromo, type MarketingSettings } from '@/lib/marketing'
 import { cn, formatDateTime } from '@/lib/utils'
 import type { Tenant } from '@/types'
 
@@ -92,11 +92,13 @@ export function MarketingSettingsClient({ tenant: tenantRecord, nowIso }: { tena
     set({ paused: false })
     if (mode && held.length > 0) {
       marketing.releaseHeld(mode)
-      if (mode === 'draft') {
-        let promos = pricing.promos
-        for (const campaign of held) if (campaign.offer.enabled) promos = retireOfferPromo(promos, campaign.offer.code, campaignPromoNote(campaign))
-        if (promos !== pricing.promos) pricing.setPromos(promos)
+      let promos = pricing.promos
+      for (const campaign of held) {
+        if (!campaign.offer.enabled) continue
+        // Sent now: the code's days start today, not on the day it was first meant to go.
+        promos = mode === 'draft' ? retireOfferPromo(promos, campaign.offer.code, campaignPromoNote(campaign)) : upsertOfferPromo(promos, campaign.offer, campaignPromoNote(campaign), [], nowIso)
       }
+      if (promos !== pricing.promos) pricing.setPromos(promos)
     }
     setConfirmResume(false)
     const many = held.length > 1

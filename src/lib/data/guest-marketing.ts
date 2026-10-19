@@ -21,7 +21,36 @@ export interface MarketingData {
   countries: string[]
 }
 
+/** What pages that don't count guests need: no guest list, which runs to megabytes for a big business. */
+export type MarketingBasics = Omit<MarketingData, 'contacts'>
+
+/**
+ * The demo guest list and its clock don't change while the server runs: work it out once per
+ * business, not on every request to every marketing page.
+ */
+const cache = new Map<string, MarketingData>()
+const MAX_CACHED = 16
+
 export function getMarketingData(tenant: Tenant): MarketingData {
+  const key = `${tenant.id}|${tenant.currency}|${isoLocal(NOW)}`
+  const cached = cache.get(key)
+  if (cached) return cached
+  const data = buildMarketingData(tenant)
+  if (cache.size >= MAX_CACHED) {
+    const oldest = cache.keys().next().value
+    if (oldest !== undefined) cache.delete(oldest)
+  }
+  cache.set(key, data)
+  return data
+}
+
+/** Activities, tags, countries and the average order, without the guest list: for automations and email templates. */
+export function getMarketingBasics(tenant: Tenant): MarketingBasics {
+  const { contacts: _contacts, ...basics } = getMarketingData(tenant)
+  return basics
+}
+
+function buildMarketingData(tenant: Tenant): MarketingData {
   const activities = getActivitiesByTenant(tenant.id).filter((activity) => activity.status !== 'archived')
   const slugById = new Map(activities.map((activity) => [activity.id, activity.slug]))
   const nowIso = isoLocal(NOW)

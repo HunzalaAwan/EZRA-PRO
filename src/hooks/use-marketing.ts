@@ -11,6 +11,7 @@ import {
   defaultSettings,
   type Audience,
   type Campaign,
+  type CampaignStats,
   type MarketingSettings,
   type SignupForms,
 } from '@/lib/marketing'
@@ -220,6 +221,15 @@ export function useMarketing(tenant: MarketingTenant, nowIso: string) {
     saveCampaign: (campaign: Campaign) =>
       write({ campaigns: campaigns.some((entry) => entry.id === campaign.id) ? campaigns.map((entry) => (entry.id === campaign.id ? campaign : entry)) : [campaign, ...campaigns] }),
     removeCampaign: (id: string) => write({ campaigns: campaigns.filter((entry) => entry.id !== id) }),
+    /**
+     * Keep the numbers of campaigns that went on schedule (or were seeded as sent) as they were when
+     * they went, so editing or deleting an audience later doesn't change past results. Only fills
+     * campaigns that have none yet.
+     */
+    recordStats: (stats: Record<string, CampaignStats>) => {
+      if (!campaigns.some((entry) => entry.status === 'sent' && !entry.stats && stats[entry.id])) return
+      write({ campaigns: campaigns.map((entry) => (entry.status === 'sent' && !entry.stats && stats[entry.id] ? { ...entry, stats: stats[entry.id] } : entry)) })
+    },
     held,
     /** On resuming marketing: send the held campaigns now, or move them back to drafts. */
     releaseHeld: (mode: 'send' | 'draft') => {

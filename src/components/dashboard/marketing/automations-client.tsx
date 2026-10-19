@@ -46,16 +46,18 @@ import { brandColors, useEmailContext } from '@/hooks/use-email-context'
 import { useFlows } from '@/hooks/use-flows'
 import { useMarketing, useMarketingTenant } from '@/hooks/use-marketing'
 import { useMessageTemplates } from '@/hooks/use-message-templates'
+import { usePricing } from '@/hooks/use-pricing'
 import { runFlows } from '@/lib/actions/flows'
 import { textingNumber } from '@/lib/channels'
-import type { MarketingData } from '@/lib/data/guest-marketing'
+import type { MarketingBasics } from '@/lib/data/guest-marketing'
 import { FLOW_GOALS, PURPOSE_LABEL, STATUS_LABEL, goalMeta, triggerMeta } from '@/lib/flows/catalog'
 import { canGoLive, checkFlow } from '@/lib/flows/check'
 import { flowFromTemplate } from '@/lib/flows/defaults'
 import { describeTrigger, type DescribeLookups } from '@/lib/flows/describe'
 import type { FlowExtras } from '@/lib/flows/engine'
+import { syncFlowPromos } from '@/lib/flows/promos'
 import { RECIPES } from '@/lib/flows/recipes'
-import { messageSteps } from '@/lib/flows/tree'
+import { creditedTotals, forSimulation, messageSteps, simulationKey } from '@/lib/flows/tree'
 import type { Flow, FlowGoal, FlowRun, FlowStatus } from '@/lib/flows/types'
 import { CHANNEL_LABEL, groupOf, renderTemplate, timingLabel, type MessageContext, type MessageTemplate } from '@/lib/messaging'
 import { cn, formatCurrency, formatDateShort } from '@/lib/utils'
@@ -125,7 +127,7 @@ export function AutomationsClient({
 }: {
   tenant: Tenant
   nowIso: string
-  data: MarketingData
+  data: MarketingBasics
   sample: MessageContext
   /** Open the ideas on this recipe (from ?recipe=). */
   initialRecipe?: string | null
@@ -151,13 +153,34 @@ export function AutomationsClient({
   const [editing, setEditing] = React.useState<{ flow: Flow; isNew: boolean } | null>(null)
   const [editingMessage, setEditingMessage] = React.useState<MessageTemplate | null>(null)
   const [deleting, setDeleting] = React.useState<Flow | null>(null)
+  const [confirmRestore, setConfirmRestore] = React.useState(false)
+  const pricing = usePricing(tenantRecord.slug)
 
   const flows = store.flows
   const lookups = React.useMemo<DescribeLookups>(() => ({ activities: data.activities, audiences: marketing.audiences, currency }), [data.activities, marketing.audiences, currency])
   const checkCtx = React.useMemo(
-    () => ({ audiences: marketing.audiences, activities: data.activities, hasSmsNumber, marketingPaused: paused }),
-    [marketing.audiences, data.activities, hasSmsNumber, paused],
+    () => ({ audiences: marketing.audiences, activities: data.activities, hasSmsNumber, marketingPaused: paused, currency }),
+    [marketing.audiences, data.activities, hasSmsNumber, paused, currency],
   )
+
+  /* ---------- automation codes in Promo codes ---------- */
+
+  // The codes automations give out only work at checkout through Promo codes. Kept in line here:
+  // on a save or a switch (turning one back on switches its code back on), and once the saved lists
+  // have loaded (the built-in automations are live before anything is saved).
+  const promoRef = React.useRef(pricing)
+  promoRef.current = pricing
+  const syncPromos = React.useCallback((list: Flow[], reactivate: boolean) => {
+    const current = promoRef.current
+    const next = syncFlowPromos(current.promos, list, { reactivate })
+    if (next !== current.promos) current.setPromos(next)
+  }, [])
+  const flowsRef = React.useRef(flows)
+  flowsRef.current = flows
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => syncPromos(flowsRef.current, false), 0)
+    return () => window.clearTimeout(timer)
+  }, [flows, syncPromos])
 
   /* ---------- numbers from the simulator ---------- */
 
@@ -176,16 +199,12 @@ export function AutomationsClient({
     [marketing.signups, marketing.settings, marketing.audiences, nowIso],
   )
 
-  // The simulator reads what a flow does, not its name, status or history:
+  // The simulator reads what a flow does, not its name, status, history or email designs:
   // switching one on or renaming it must not replay every automation again.
-  const runKey = React.useMemo(
-    () =>
-      JSON.stringify([
-        flows.map((flow) => [flow.id, flow.purpose, flow.trigger, flow.who, flow.steps, flow.exit, flow.settings]),
-        extras,
-      ]),
-    [flows, extras],
-  )
+  const runKey = React.useMemo(() => JSON.stringify([simulationKey(flows), extras]), [flows, extras])
+  // While the builder is open it runs its own numbers; the list's replay waits until it closes, so the
+  // builder's requests don't queue behind a replay of every automation.
+  const builderOpen = editing !== null
   const latest = React.useRef({ flows, extras })
   latest.current = { flows, extras }
 
@@ -193,11 +212,13 @@ export function AutomationsClient({
   const [runFailed, setRunFailed] = React.useState(false)
   const [attempt, setAttempt] = React.useState(0)
   React.useEffect(() => {
+    if (builderOpen) return
     let alive = true
     // Saves come in bursts from the builder, and the saved list lands just after the first paint: wait for a quiet moment.
     const timer = window.setTimeout(() => {
       setRunFailed(false)
-      runFlows(tenantRecord.id, latest.current.flows, latest.current.extras)
+      // Without the email designs: uploaded photos can be megabytes, over the server's upload limit.
+      runFlows(tenantRecord.id, latest.current.flows.map(forSimulation), latest.current.extras)
         .then((result) => {
           if (alive) setRuns(result)
         })
@@ -209,7 +230,7 @@ export function AutomationsClient({
       alive = false
       window.clearTimeout(timer)
     }
-  }, [tenantRecord.id, runKey, attempt])
+  }, [tenantRecord.id, runKey, attempt, builderOpen])
 
   const windowDays = React.useMemo(() => {
     const first = runs ? Object.values(runs)[0] : undefined
@@ -222,8 +243,6 @@ export function AutomationsClient({
   const kpis = React.useMemo(() => {
     let inNow = 0
     let due = 0
-    let bookings = 0
-    let revenue = 0
     const busiest = new Map<string, number>()
     for (const flow of live) {
       const run = runs?.[flow.id]
@@ -233,11 +252,9 @@ export function AutomationsClient({
         due += count
         busiest.set(key, (busiest.get(key) ?? 0) + count)
       }
-      if (flow.purpose === 'marketing') {
-        bookings += run.bookings
-        revenue += run.revenue
-      }
     }
+    // A booking two automations both led to counts once, for the one whose message went last before it.
+    const { bookings, revenue } = creditedTotals(live.filter((flow) => flow.purpose === 'marketing').map((flow) => runs?.[flow.id]))
     const top = [...busiest.entries()].sort((a, b) => b[1] - a[1])[0]
     return { inNow, due, bookings, revenue, busiest: top && top[1] > 0 ? top : null }
   }, [live, runs])
@@ -284,10 +301,25 @@ export function AutomationsClient({
   const removeFlow = (flow: Flow) => {
     const saved = storeRef.current.byId(flow.id) ?? flow
     storeRef.current.remove(flow.id)
+    syncPromos(
+      storeRef.current.flows.filter((entry) => entry.id !== flow.id),
+      false,
+    )
     toast(`${saved.name} deleted`, {
       description: 'Nothing more goes out from it.',
-      action: { label: 'Undo', onClick: () => storeRef.current.create(saved) },
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          if (storeRef.current.create(saved)) syncPromos([saved, ...storeRef.current.flows.filter((entry) => entry.id !== saved.id)], true)
+        },
+      },
     })
+  }
+
+  /** The list as it is once `flow` is saved over it. */
+  const withFlow = (flow: Flow) => {
+    const list = storeRef.current.flows
+    return list.some((entry) => entry.id === flow.id) ? list.map((entry) => (entry.id === flow.id ? flow : entry)) : [flow, ...list]
   }
 
   const turnOn = (flow: Flow) => {
@@ -300,14 +332,16 @@ export function AutomationsClient({
       setEditing({ flow, isNew: false })
       return
     }
-    store.setStatus(flow.id, 'live')
+    if (!store.setStatus(flow.id, 'live')) return
+    syncPromos(withFlow({ ...flow, status: 'live' }), true)
     toast.success(`${flow.name} is live`, {
       description: flow.purpose === 'marketing' && paused ? 'Marketing is paused, so it waits until you resume.' : undefined,
     })
   }
 
   const pause = (flow: Flow) => {
-    store.setStatus(flow.id, 'paused')
+    if (!store.setStatus(flow.id, 'paused')) return
+    syncPromos(withFlow({ ...flow, status: 'paused' }), false)
     toast(`${flow.name} is paused`, { description: 'Nothing more goes out from it until you turn it back on.' })
   }
 
@@ -328,12 +362,18 @@ export function AutomationsClient({
     setEditing({ flow, isNew: true })
   }
 
-  const saveFlow = (flow: Flow, what: string) => {
+  /** False when the browser couldn't store it: the builder then keeps the changes unsaved. */
+  const saveFlow = (flow: Flow, what: string): boolean => {
     const current = storeRef.current
-    if (current.byId(flow.id)) current.save(flow, what)
-    else current.create({ ...flow, history: flow.history?.length ? [{ at: nowIso, what }, ...flow.history].slice(0, 20) : [{ at: nowIso, what }] })
+    const ok = current.byId(flow.id)
+      ? current.save(flow, what)
+      : current.create({ ...flow, history: flow.history?.length ? [{ at: nowIso, what }, ...flow.history].slice(0, 20) : [{ at: nowIso, what }] })
+    if (!ok) return false
+    // Its codes work at checkout from now (or stop, when it was paused).
+    syncPromos(withFlow(flow), true)
     // Once saved it is no longer new: it can be deleted from the builder.
     setEditing((open) => (open && open.isNew && open.flow.id === flow.id ? { ...open, isNew: false } : open))
+    return true
   }
 
   /** A booking message, copied into an automation of its own (a booking message flow) and opened in the builder. */
@@ -430,20 +470,29 @@ export function AutomationsClient({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <Button asChild size="sm" variant="ghost">
-              <Link href="/dashboard/marketing/settings">Settings</Link>
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              leftIcon={<Play />}
-              onClick={() => {
-                marketing.setSettings({ ...marketing.settings, paused: false })
-                toast.success('Marketing is back on')
-              }}
-            >
-              Resume marketing
-            </Button>
+            {marketing.held.length > 0 ? (
+              // Campaigns waited while it was paused: Settings asks whether they go now or back to drafts.
+              <Button asChild size="sm" variant="secondary" leftIcon={<Play />}>
+                <Link href="/dashboard/marketing/settings">Resume in Settings</Link>
+              </Button>
+            ) : (
+              <>
+                <Button asChild size="sm" variant="ghost">
+                  <Link href="/dashboard/marketing/settings">Settings</Link>
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  leftIcon={<Play />}
+                  onClick={() => {
+                    marketing.setSettings({ ...marketing.settings, paused: false })
+                    toast.success('Marketing is back on')
+                  }}
+                >
+                  Resume marketing
+                </Button>
+              </>
+            )}
           </div>
         </div>
       ) : null}
@@ -668,11 +717,8 @@ export function AutomationsClient({
         <BookingMessages
           templates={bookingMessages}
           vars={ctx.vars}
-          hasEdits={messages.hasEdits}
-          onReset={() => {
-            messages.reset()
-            toast('Booking messages restored', { description: 'Back to the original wording and timing.' })
-          }}
+          hasEdits={messages.editedOf(bookingMessages.map((template) => template.key)).length > 0}
+          onReset={() => setConfirmRestore(true)}
           onToggle={(template, enabled) => {
             messages.update(template.key, { enabled })
             toast(enabled ? `${template.name} is on` : `${template.name} is off`)
@@ -737,6 +783,42 @@ export function AutomationsClient({
           }}
         />
       ) : null}
+
+      <Dialog open={confirmRestore} onOpenChange={setConfirmRestore}>
+        <DialogContent size="sm">
+          {(() => {
+            const edited = messages.editedOf(bookingMessages.map((template) => template.key)).length
+            return (
+              <DialogHeader>
+                <DialogTitle>Restore all booking messages?</DialogTitle>
+                <DialogDescription>
+                  Your wording, designs, timings and on or off for {edited} {edited === 1 ? 'message go' : 'messages go'} back to the originals. Your marketing automations
+                  stay as they are.
+                </DialogDescription>
+              </DialogHeader>
+            )
+          })()}
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setConfirmRestore(false)}>
+              Keep my changes
+            </Button>
+            <Button
+              variant="danger"
+              leftIcon={<RotateCcw />}
+              onClick={() => {
+                setConfirmRestore(false)
+                const removed = messages.reset(bookingMessages.map((template) => template.key))
+                toast('Booking messages restored', {
+                  description: 'Back to the original wording and timing.',
+                  action: { label: 'Undo', onClick: () => messages.restore(removed) },
+                })
+              }}
+            >
+              Restore
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
         <DialogContent size="sm">

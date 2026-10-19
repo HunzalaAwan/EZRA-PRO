@@ -8,9 +8,10 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmailFrame } from '@/components/dashboard/marketing/email-designer'
 import { findGuests, runFlow, type FlowExtras } from '@/lib/actions/flows'
-import { findStep } from '@/lib/flows/tree'
+import { findStep, forSimulation } from '@/lib/flows/tree'
 import type { Flow, GuestJourney, JourneyEvent } from '@/lib/flows/types'
 import { designFromText, fill, type EmailContext } from '@/lib/email-design'
+import { PLACEHOLDERS } from '@/lib/messaging'
 import { cn } from '@/lib/utils'
 
 /* ==========================================================================
@@ -41,6 +42,10 @@ const DOT: Partial<Record<JourneyEvent['kind'], string>> = {
   split: 'bg-info',
   action: 'bg-foreground',
 }
+
+/** Details that belong to one booking: never borrowed from the sample booking for a real guest. */
+const BOOKING_DETAILS = ['activity', 'date', 'time', 'meeting_point', 'party', 'reference', 'balance', 'manage_link']
+const DETAIL_LABEL = new Map(PLACEHOLDERS.map((p) => [p.token.slice(1, -1), p.label]))
 
 const when = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 
@@ -97,7 +102,7 @@ export function GuestPreview({
     if (!guest) return
     let live = true
     const timer = window.setTimeout(() => {
-      runFlow(tenantId, flowRef.current, extras, guest.id)
+      runFlow(tenantId, forSimulation(flowRef.current), extras, guest.id)
         .then((run) => live && setJourney(run.journeys.find((entry) => entry.guestId === guest.id) ?? null))
         .catch(() => live && setJourney(null))
     }, 400)
@@ -151,10 +156,15 @@ export function GuestPreview({
   }
 
   const firstName = guest.name.split(' ')[0] ?? guest.name
+  // Their own booking's details where the replay knows them; anything else reads as its label ("[Meeting point]").
+  const own: Record<string, string> = {}
+  for (const key of BOOKING_DETAILS) own[key] = journey?.vars?.[key] ?? `[${DETAIL_LABEL.get(key) ?? key.replace(/_/g, ' ')}]`
   const guestCtx: EmailContext = {
     ...ctx,
     vars: {
       ...ctx.vars,
+      ...own,
+      ...journey?.vars,
       first_name: firstName,
       ...(journey?.activityName ? { activity: journey.activityName } : {}),
       ...(journey?.reference ? { reference: journey.reference } : {}),
@@ -180,7 +190,7 @@ export function GuestPreview({
           {journey ? (
             <p className={cn('mt-1.5 text-[0.8125rem] font-medium', journey.state === 'skipped' || journey.state === 'holdout' ? 'text-warning' : 'text-foreground')}>
               {STATE_LABEL[journey.state]}
-              {journey.reason ? <span className="font-normal text-muted">: {journey.reason.replace(/^Left: /, '')}</span> : null}
+              {journey.reason && journey.state !== 'holdout' ? <span className="font-normal text-muted">: {journey.reason.replace(/^Left: /, '')}</span> : null}
             </p>
           ) : null}
         </div>

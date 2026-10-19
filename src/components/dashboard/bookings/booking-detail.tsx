@@ -46,6 +46,7 @@ import { useFlows } from '@/hooks/use-flows'
 import { useMarketing, useMarketingTenant } from '@/hooks/use-marketing'
 import { flowsForBooking, type FlowExtras } from '@/lib/actions/flows'
 import { PURPOSE_LABEL } from '@/lib/flows/catalog'
+import { forSimulation, simulationKey } from '@/lib/flows/tree'
 import type { Flow, JourneyEvent } from '@/lib/flows/types'
 import type { BookingDetailData } from '@/lib/actions/dashboard'
 import {
@@ -1297,7 +1298,10 @@ export function BookingDetail({ detail, className }: BookingDetailProps) {
 type AutomationTrail = { flowId: string; flowName: string; events: JourneyEvent[] }
 
 /** The moments worth showing on a booking; waits, paths and the like stay in the automation's own view. */
-const TRAIL_KINDS = new Set<JourneyEvent['kind']>(['entered', 'sent', 'scheduled', 'held', 'opened', 'clicked', 'booked', 'action', 'exited', 'skipped'])
+// Opens, clicks and replies are the replay's estimates, not things the guest really did: a booking
+// record lists only what happened (or will), so staff never act on a made-up open.
+const TRAIL_KINDS = new Set<JourneyEvent['kind']>(['entered', 'sent', 'scheduled', 'held', 'booked', 'action', 'exited', 'skipped'])
+const ESTIMATED_TEXT = new Set(['Replied to the text'])
 const TRAIL_PREVIEW = 6
 
 function MessagesCard({ detail, departure, partySize, onCompose }: { detail: BookingDetailContentProps['detail']; departure: { startsAt: string; endsAt: string }; partySize: number; onCompose: () => void }) {
@@ -1339,7 +1343,8 @@ function MessagesCard({ detail, departure, partySize, onCompose }: { detail: Boo
       audiences,
       nowIso,
     }
-    return { flows: live, extras, key: JSON.stringify([tenant.id, booking.reference, live, extras]) }
+    // Without the email designs: uploaded photos can be megabytes, over the server's upload limit.
+    return { flows: live.map(forSimulation), extras, key: JSON.stringify([tenant.id, booking.reference, simulationKey(live), live.map((flow) => flow.name), extras]) }
   }, [tenant.id, booking.reference, live, signups, settings, audiences, nowIso])
   React.useEffect(() => {
     // The effect only runs again when the key changes, so the request it closes over is the current one.
@@ -1468,7 +1473,7 @@ function AutomationTrailItem({ trail, flow }: { trail: AutomationTrail; flow?: F
   const events = React.useMemo(
     () =>
       trail.events
-        .filter((event) => TRAIL_KINDS.has(event.kind))
+        .filter((event) => TRAIL_KINDS.has(event.kind) && !ESTIMATED_TEXT.has(event.text))
         .slice()
         .sort((a, b) => a.at.localeCompare(b.at)),
     [trail.events],

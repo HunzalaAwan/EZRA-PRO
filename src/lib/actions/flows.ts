@@ -270,10 +270,16 @@ export async function flowsForBooking(
     const events: JourneyEvent[] = []
     for (const journey of run.journeys) {
       if (journey.state === 'skipped' || journey.state === 'holdout') continue
-      const about = journey.reference === reference
-      const creditedHere =
-        !journey.reference && journey.events.some((event) => event.kind === 'booked' && event.value === booking.total && new Date(event.at).getTime() === createdMs)
-      if (about || creditedHere) events.push(...journey.events)
+      if (journey.reference === reference) {
+        events.push(...journey.events)
+        continue
+      }
+      // A journey about another booking (or none) that led to this one: "Next trip" after their last
+      // trip, say. Its story up to the booking belongs on this record; what came after does not.
+      const credit = journey.events.findIndex((event) =>
+        event.kind !== 'booked' ? false : event.bookingId ? event.bookingId === booking.id : event.value === booking.total && new Date(event.at).getTime() === createdMs,
+      )
+      if (credit >= 0) events.push(...journey.events.slice(0, credit + 1))
     }
     if (events.length > 0) out.push({ flowId: flow.id, flowName: flow.name, events })
   }

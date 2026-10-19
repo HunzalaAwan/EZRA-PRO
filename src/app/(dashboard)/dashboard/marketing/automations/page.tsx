@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 
 import { NOW_ISO } from '@/components/dashboard/activities/activity-data'
 import { AutomationsClient } from '@/components/dashboard/marketing/automations-client'
-import { getMarketingData, getMessageSample } from '@/lib/data/guest-marketing'
+import { getMarketingBasics, getMessageSample } from '@/lib/data/guest-marketing'
 import { requireWorkspaceRoute } from '@/lib/workspace'
 
 export const metadata: Metadata = {
@@ -25,7 +25,8 @@ export default async function AutomationsPage({ searchParams }: { searchParams: 
     <AutomationsClient
       tenant={tenant}
       nowIso={NOW_ISO}
-      data={getMarketingData(tenant)}
+      // Not the guest list: nothing here counts guests, and it runs to megabytes for a big business.
+      data={getMarketingBasics(tenant)}
       sample={getMessageSample(tenant)}
       initialRecipe={one(search.recipe)}
       initialFlow={one(search.flow)}

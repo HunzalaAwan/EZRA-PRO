@@ -223,7 +223,7 @@ export function BranchEditor({
         {step.yes.length === 0 && step.no.length === 0
           ? 'Add steps under Yes and No on the canvas. Both sides carry on with the steps after this question.'
           : `${step.yes.length} ${step.yes.length === 1 ? 'step' : 'steps'} if yes, ${step.no.length} if no. Both sides then carry on with the steps after this question.`}
-        {stats && stats.reached > 0 ? ` In the last 60 days ${stats.yes ?? 0} went Yes and ${stats.no ?? 0} went No.` : ''}
+        {stats && stats.reached > 0 ? ` In the last 60 days ${(stats.yes ?? 0).toLocaleString("en-US")} went Yes and ${(stats.no ?? 0).toLocaleString("en-US")} went No.` : ''}
       </Consequence>
     </div>
   )

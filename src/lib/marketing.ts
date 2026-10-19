@@ -608,17 +608,31 @@ export function cleanCode(code: string): string {
  * `from`: when the message goes. The code then starts that day and stops
  * after `validDays` (a scheduled campaign's code does not work early). Leave
  * it out for codes that run on, like the sign-up pop-up's.
+ *
+ * A code another source owns (its note differs) is never taken over: the
+ * list comes back unchanged. `formerNote` is this source's note before a
+ * rename. Limits the owner set in Promo codes (activities, a minimum, a fixed
+ * amount) stay.
  */
-export function upsertOfferPromo(promos: PromoCode[], offer: MarketingOffer, note: string, activitySlugs: string[] = [], from?: string): PromoCode[] {
+export function upsertOfferPromo(
+  promos: PromoCode[],
+  offer: MarketingOffer,
+  note: string,
+  activitySlugs: string[] = [],
+  from?: string,
+  formerNote?: string,
+): PromoCode[] {
   const code = cleanCode(offer.code)
   if (!offer.enabled || !code) return promos
   const existing = promos.find((promo) => promo.code === code)
+  if (existing && existing.note !== note && (formerNote === undefined || existing.note !== formerNote)) return promos
   const window = from ? offerWindow(offer, from) : null
+  const percent = Math.min(100, Math.max(1, Math.round(offer.percent)))
   const next: PromoCode = {
     code,
-    kind: 'percent',
-    value: Math.min(100, Math.max(1, Math.round(offer.percent))),
-    activitySlugs,
+    kind: existing?.kind ?? 'percent',
+    value: existing && existing.kind !== 'percent' ? existing.value : percent,
+    activitySlugs: activitySlugs.length > 0 ? activitySlugs : (existing?.activitySlugs ?? []),
     minSubtotal: existing?.minSubtotal ?? 0,
     startsOn: window ? window.startsOn : existing?.startsOn,
     endsOn: window ? window.endsOn : existing?.endsOn,

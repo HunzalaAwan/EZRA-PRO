@@ -8,7 +8,7 @@ import { IconButton } from '@/components/ui/icon-button'
 import { Segmented } from '@/components/ui/segmented'
 import { Textarea } from '@/components/ui/textarea'
 import { SimpleTooltip } from '@/components/ui/tooltip'
-import { PURPOSE_HELP, PURPOSE_LABEL, exitFor, knowsBooking, mustBeMarketing, paletteItem, placeholdersForFlow, settingsFor, subjectsOf, triggerMeta } from '@/lib/flows/catalog'
+import { PURPOSE_HELP, PURPOSE_LABEL, exitFor, knowsBooking, mustBeMarketing, paletteItem, placeholdersForFlow, settingsFor, subjectOf, subjectsOf, triggerMeta } from '@/lib/flows/catalog'
 import { describeStep, describeWho, type DescribeLookups } from '@/lib/flows/describe'
 import { findStep, locateStep, updateStep } from '@/lib/flows/tree'
 import type { Flow, FlowPurpose, FlowRun, FlowSettings, FlowStep } from '@/lib/flows/types'
@@ -156,8 +156,11 @@ export function InspectorBody({ selection, tools }: { selection: Selection; tool
           audiences={tools.audiences}
           lookups={tools.lookups}
           onChange={(trigger) => {
-            // A start that reaches guests about something they haven't booked has to be marketing.
-            const purpose: FlowPurpose = mustBeMarketing(trigger) ? 'marketing' : flow.purpose
+            // A start that reaches guests about something they haven't booked has to be marketing. Back on
+            // "Guests booked on it", it is a booking message again (the choice says so), so a safety
+            // message isn't held back from booked guests without marketing consent.
+            const backToBooked = subjectOf(trigger) === 'departure' && mustBeMarketing(flow.trigger) && !mustBeMarketing(trigger)
+            const purpose: FlowPurpose = mustBeMarketing(trigger) ? 'marketing' : backToBooked ? 'booking' : flow.purpose
             let next: Flow = purpose === flow.purpose ? { ...flow, trigger } : withPurpose({ ...flow, trigger }, purpose)
             // "Once for each booking" means nothing without a booking: fall back to once.
             if (next.settings.reentry === 'per_booking' && !knowsBooking(trigger)) next = { ...next, settings: { ...next.settings, reentry: 'once' } }

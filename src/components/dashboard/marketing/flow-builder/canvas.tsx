@@ -21,7 +21,9 @@ import { FlowIcon, iconTone, stepIconName } from './icons'
    → "Ends early when". Questions and A/B tests split into two columns
    (Yes / No, A / B), each as wide as what is in it, centred under the
    question, that join again below. When nested questions make it wider
-   than the view, it zooms out to fit; the zoom buttons put it back.
+   than the view, it scrolls sideways, opened centred on the main line, at
+   full size so no text drops under 12px; the zoom buttons zoom out for an
+   overview when the owner asks for one, and put it back.
    Every card carries the simulator's numbers for the last 60 days.
    ========================================================================== */
 
@@ -75,10 +77,11 @@ export function Canvas(props: CanvasProps) {
   const lastStep = flow.steps[flow.steps.length - 1] as FlowStep | undefined
 
   const innerRef = React.useRef<HTMLDivElement>(null)
-  // null: fit to the view on its own. A number: the owner chose a zoom.
+  // null: full size. A number: the owner zoomed out for an overview.
   const [chosen, setChosen] = React.useState<number | null>(null)
-  const [fit, setFit] = React.useState(1)
-  const zoom = chosen ?? fit
+  // Wider than the view at full size: the zoom buttons show.
+  const [wide, setWide] = React.useState(false)
+  const zoom = chosen ?? 1
   // How wide the flow is: changes only when paths are added or removed.
   const shape = React.useMemo(() => JSON.stringify(flow.steps, (key, value) => (key === 'type' || key === 'steps' || key === 'yes' || key === 'no' || key === 'a' || key === 'b' || typeof value === 'object' ? value : undefined)), [flow.steps])
 
@@ -87,12 +90,13 @@ export function Canvas(props: CanvasProps) {
     const inner = innerRef.current
     if (!scroller || !inner) return
     const measure = () => {
-      // The on-screen width, undone by the zoom applied now; leave room for the side padding.
+      // The on-screen width, undone by the zoom applied now, against the room inside the side padding
+      // (the column is at least that wide, so it only counts as wider when its cards really are).
       const applied = Number(inner.style.zoom) || 1
       const natural = inner.getBoundingClientRect().width / applied
-      const room = scroller.clientWidth - 48
-      const next = natural > room ? Math.max(ZOOM_MIN, Math.floor((room / natural) * 100) / 100) : 1
-      setFit(next)
+      const style = rootRef.current ? window.getComputedStyle(rootRef.current) : null
+      const room = scroller.clientWidth - (style ? parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) : 48)
+      setWide(natural > room + 1)
     }
     measure()
     const observer = new ResizeObserver(measure)
@@ -108,7 +112,10 @@ export function Canvas(props: CanvasProps) {
     }
   }, [zoom])
 
-  const zoomBy = (delta: number) => setChosen(Math.min(1, Math.max(ZOOM_MIN, Math.round(((chosen ?? fit) + delta) * 100) / 100)))
+  const zoomBy = (delta: number) => {
+    const next = Math.min(1, Math.max(ZOOM_MIN, Math.round((zoom + delta) * 100) / 100))
+    setChosen(next >= 1 ? null : next)
+  }
 
   // Arrow keys walk the cards in reading order.
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -126,7 +133,7 @@ export function Canvas(props: CanvasProps) {
 
   return (
     <div ref={rootRef} className="relative w-max min-w-full px-4 py-8 sm:px-8" onKeyDown={onKeyDown}>
-      {fit < 1 || chosen !== null ? (
+      {wide || chosen !== null ? (
         <div className="sticky left-4 top-3 z-10 -mb-9 flex w-fit items-center gap-0.5 rounded-lg border border-line bg-surface p-0.5 shadow-xs">
           <button
             type="button"
@@ -140,10 +147,11 @@ export function Canvas(props: CanvasProps) {
           <button
             type="button"
             onClick={() => setChosen(null)}
-            aria-label="Fit to the screen"
-            className="h-8 min-w-14 rounded-md px-2 text-xs font-semibold tabular-nums text-muted transition-colors hover:bg-surface-sunken hover:text-foreground"
+            disabled={chosen === null}
+            aria-label="Back to full size"
+            className="h-8 min-w-14 rounded-md px-2 text-xs font-semibold tabular-nums text-muted transition-colors hover:bg-surface-sunken hover:text-foreground disabled:hover:bg-transparent"
           >
-            {chosen === null ? 'Fit' : `${Math.round(zoom * 100)}%`}
+            {`${Math.round(zoom * 100)}%`}
           </button>
           <button
             type="button"

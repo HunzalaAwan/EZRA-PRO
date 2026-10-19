@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import {
   Armchair,
@@ -42,7 +43,7 @@ import type { MarketingData } from '@/lib/data/guest-marketing'
 import type { MarketingOpportunities } from '@/lib/data/marketing-opportunities'
 import { PURPOSE_LABEL } from '@/lib/flows/catalog'
 import { describeTrigger } from '@/lib/flows/describe'
-import { messageSteps, walkSteps } from '@/lib/flows/tree'
+import { creditedTotals, forSimulation, messageSteps, simulationKey, walkSteps } from '@/lib/flows/tree'
 import type { Flow, FlowRun } from '@/lib/flows/types'
 import { audienceSize, campaignBreakdown, campaignStatsFor, type Campaign, type CampaignStats, type EarlierSend } from '@/lib/marketing'
 import { cn, formatCompactCurrency, formatCurrency, formatDateShort, formatNumber, formatTime, fromDateKey, toDateKey } from '@/lib/utils'
@@ -126,7 +127,8 @@ export function MarketingOverviewClient({
       audiences,
       nowIso,
     }
-    return { flows: live, extras, key: JSON.stringify([tenantRecord.id, live, extras]) }
+    // Without the email designs: uploaded photos can be megabytes, over the server's upload limit.
+    return { flows: live.map(forSimulation), extras, key: JSON.stringify([tenantRecord.id, simulationKey(live), extras]) }
   }, [tenantRecord.id, live, signups, settings, audiences, nowIso])
   React.useEffect(() => {
     let alive = true
@@ -192,10 +194,20 @@ export function MarketingOverviewClient({
     return out.sort((a, b) => b.sentAt.localeCompare(a.sentAt))
   }, [marketing.campaigns, marketing.audiences, marketing.settings, data.contacts, data.avgOrder, nowIso, nowMs, windowStart])
 
+  // A campaign that went on schedule keeps the numbers it had when it went: later audience edits don't rewrite them.
+  const { recordStats } = marketing
+  React.useEffect(() => {
+    const missing: Record<string, CampaignStats> = {}
+    for (const row of campaignRows) if (!row.campaign.stats) missing[row.campaign.id] = row.stats
+    if (Object.keys(missing).length > 0) recordStats(missing)
+  }, [campaignRows]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Bookings from automations, each counted once: a booking two automations both led to goes to the one whose message went last.
+  const credited = React.useMemo(() => creditedTotals(live.filter((flow) => flow.purpose === 'marketing').map((flow) => runs?.[flow.id])), [live, runs])
+
   /* ---- totals ---- */
   const totals = React.useMemo(() => {
-    let revenue = 0
-    let bookings = 0
+    const { revenue, bookings } = credited
     let messages = 0
     let active = 0
     let emailSent = 0
@@ -205,11 +217,7 @@ export function MarketingOverviewClient({
       if (!run) continue
       messages += run.messages
       active += run.active
-      // Booking messages go to everyone with a trip, who book anyway: only marketing earns bookings here.
-      if (flow.purpose === 'marketing') {
-        revenue += run.revenue
-        bookings += run.bookings
-      }
+      // Booking messages go to everyone with a trip, who book anyway: only marketing earns bookings (in `credited`).
       for (const step of messageSteps(flow.steps)) {
         if (step.type !== 'email') continue
         emailSent += run.perStep[step.id]?.sent ?? 0
@@ -220,7 +228,7 @@ export function MarketingOverviewClient({
     const campaignBookings = campaignRows.reduce((sum, row) => sum + row.stats.bookings, 0)
     const campaignMessages = campaignRows.reduce((sum, row) => sum + row.stats.delivered, 0)
     return { revenue, bookings, messages, active, emailSent, emailOpened, campaignRevenue, campaignBookings, campaignMessages }
-  }, [live, runs, campaignRows])
+  }, [live, runs, campaignRows, credited])
 
   /* ---- by week: the last 8 weeks, ending today ---- */
   const weeks = React.useMemo<Week[]>(() => {
@@ -244,12 +252,19 @@ export function MarketingOverviewClient({
         const week = key <= todayKey ? weekOf(key) : undefined
         if (!week) continue
         week.messages += count
-        // A booking counts towards the message before it, so it lands in about the week the message went.
-        if (flow.purpose === 'marketing' && total > 0) {
+        // An older server without credits: spread its bookings over the weeks its messages went.
+        if (flow.purpose === 'marketing' && !run.credits && total > 0) {
           week.automations += (run.revenue * count) / total
           week.bookings += (run.bookings * count) / total
         }
       }
+    }
+    // Each booking once, in the week it was made.
+    for (const credit of credited.credits) {
+      const week = weekOf(credit.at.slice(0, 10))
+      if (!week) continue
+      week.automations += credit.value
+      week.bookings += 1
     }
     for (const row of campaignRows) {
       const week = weekOf(toDateKey(new Date(row.sentAt)))
@@ -259,7 +274,7 @@ export function MarketingOverviewClient({
       week.messages += row.stats.delivered
     }
     return list.map((week) => ({ ...week, automations: Math.round(week.automations), campaigns: Math.round(week.campaigns) }))
-  }, [live, runs, campaignRows, nowMs])
+  }, [live, runs, campaignRows, nowMs, credited])
 
   /* ---- subscribers, each person once ---- */
   const subscribers = React.useMemo(() => {
@@ -286,16 +301,23 @@ export function MarketingOverviewClient({
             <Pause className="size-4 text-warning" aria-hidden="true" />
             All marketing is paused. Booking messages still go.
           </p>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => {
-              marketing.setSettings({ ...marketing.settings, paused: false })
-              toast.success('Marketing is back on')
-            }}
-          >
-            Resume
-          </Button>
+          {marketing.held.length > 0 ? (
+            // Campaigns waited while it was paused: Settings asks whether they go now or back to drafts.
+            <Button asChild size="sm" variant="secondary">
+              <Link href="/dashboard/marketing/settings">Resume in Settings</Link>
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => {
+                marketing.setSettings({ ...marketing.settings, paused: false })
+                toast.success('Marketing is back on')
+              }}
+            >
+              Resume
+            </Button>
+          )}
         </div>
       ) : null}
 
@@ -333,9 +355,9 @@ export function MarketingOverviewClient({
               label: 'Bookings from marketing',
               value: totals.bookings + totals.campaignBookings,
               format: 'number',
-              comparisonLabel: 'Made within 5 days of a message',
+              comparisonLabel: 'After a marketing message or click',
               sparkline: weeks.map((week) => week.bookings),
-              hint: 'Automations count real bookings guests made after a message. Campaign bookings are estimates.',
+              hint: 'Automations count real bookings guests made within a few days of a message (5 unless an automation says otherwise). Campaigns count bookings within 7 days of a click, and those are estimates.',
             }}
             footer={`Automations ${formatNumber(totals.bookings)} · Campaigns ${formatNumber(totals.campaignBookings)} (est.)`}
           />
@@ -901,8 +923,8 @@ interface Tool {
   text: string
   href: string
   icon: LucideIcon
-  /** A switch, or a plain state badge. */
-  toggle?: { checked: boolean; set: (value: boolean) => void; on: string; off: string }
+  /** A switch, or a plain state badge. `set` returns false when it did not change anything (and said why). */
+  toggle?: { checked: boolean; set: (value: boolean) => boolean | void; on: string; off: string }
   badge?: { text: string; on: boolean }
 }
 
@@ -911,6 +933,7 @@ function ToolsCard({ flows, campaignsSent, marketing }: { flows: Flow[]; campaig
   const scheduled = marketing.campaigns.filter((campaign) => campaign.status === 'scheduled').length
   const { forms, settings } = marketing
   const own = marketing.customAudiences.length
+  const router = useRouter()
 
   const tools: Tool[] = [
     {
@@ -934,11 +957,12 @@ function ToolsCard({ flows, campaignsSent, marketing }: { flows: Flow[]; campaig
       icon: Users,
     },
     {
+      // A link, not a switch: turning the pop-up on or off also moves its code in Promo codes, which the Forms page does.
       label: 'Storefront pop-up',
       text: forms.popup.offer.enabled ? `${forms.popup.offer.percent}% off a first trip` : 'Joins the list, no code',
       href: '/dashboard/marketing/forms',
       icon: MousePointerClick,
-      toggle: { checked: forms.popup.enabled, set: (value) => marketing.setForms({ ...forms, popup: { ...forms.popup, enabled: value } }), on: 'Pop-up on', off: 'Pop-up off' },
+      badge: { text: forms.popup.enabled ? 'On' : 'Off', on: forms.popup.enabled },
     },
     {
       label: 'Footer sign-up',
@@ -965,7 +989,22 @@ function ToolsCard({ flows, campaignsSent, marketing }: { flows: Flow[]; campaig
       text: 'Booking messages keep going',
       href: '/dashboard/marketing/settings',
       icon: Pause,
-      toggle: { checked: settings.paused, set: (value) => marketing.setSettings({ ...settings, paused: value }), on: 'Marketing paused', off: 'Marketing resumed' },
+      toggle: {
+        checked: settings.paused,
+        set: (value) => {
+          // Campaigns waited while it was paused: Settings asks whether they go now or back to drafts.
+          if (!value && marketing.held.length > 0) {
+            toast(`${marketing.held.length === 1 ? 'A campaign is' : `${marketing.held.length} campaigns are`} waiting`, {
+              description: 'Resume in Marketing settings, where you choose whether they go now or back to drafts.',
+              action: { label: 'Open settings', onClick: () => router.push('/dashboard/marketing/settings') },
+            })
+            return false
+          }
+          marketing.setSettings({ ...settings, paused: value })
+        },
+        on: 'Marketing paused',
+        off: 'Marketing resumed',
+      },
     },
   ]
 
@@ -992,7 +1031,7 @@ function ToolsCard({ flows, campaignsSent, marketing }: { flows: Flow[]; campaig
                 <Switch
                   checked={tool.toggle.checked}
                   onCheckedChange={(value) => {
-                    tool.toggle?.set(value)
+                    if (tool.toggle?.set(value) === false) return
                     toast(value ? tool.toggle!.on : tool.toggle!.off)
                   }}
                   aria-label={tool.label}

@@ -37,12 +37,16 @@ export interface FlowFromTemplateOptions {
   activities?: FlowActivity[]
 }
 
-/** The built-in flows, from the growth messages as they stand (pass the edited templates to keep the owner's changes). */
-export function defaultFlows(nowIso: string, activities: FlowActivity[], templates: MessageTemplate[] = DEFAULT_TEMPLATES): Flow[] {
+/**
+ * The built-in flows, from the growth messages as they stand (pass the edited templates to keep the
+ * owner's changes, and their audiences so a message aimed at one of them keeps it).
+ */
+export function defaultFlows(nowIso: string, activities: FlowActivity[], templates: MessageTemplate[] = DEFAULT_TEMPLATES, audiences: Audience[] = []): Flow[] {
   return BUILT_IN_KEYS.map((key) => {
     const template = templates.find((entry) => entry.key === key) ?? DEFAULT_TEMPLATES.find((entry) => entry.key === key)!
-    const flow = flowFromTemplate(template, { nowIso, activities })
-    return { ...flow, goal: BUILT_IN_GOAL[key], builtIn: true, history: [] }
+    const flow = flowFromTemplate(template, { nowIso, activities, audiences })
+    // Only a "Paused: …" note is worth keeping on a built-in: it says why it isn't live.
+    return { ...flow, goal: BUILT_IN_GOAL[key], builtIn: true, history: flow.history.filter((entry) => entry.what.startsWith('Paused:')) }
   })
 }
 
@@ -146,10 +150,17 @@ function builtInAudience(id: string, make: (field: ConditionField, op: Condition
   }
 }
 
-/** An own audience's filter (or its rules, once audiences have them), as plain conditions. */
-function audienceConditions(audience: Audience, make: (field: ConditionField, op: ConditionOp, value?: Condition['value']) => Condition): Condition[] {
-  const rules = (audience as Audience & { rules?: ConditionGroup }).rules
-  if (rules && rules.match === 'all') return rules.conditions.map((entry) => make(entry.field, entry.op, entry.value))
+/**
+ * An own audience's filter (or its rules), as plain conditions. Null when its rules only need one of
+ * them to hold ("any"): "who can enter" here is a list where every condition must hold, so they
+ * can't be carried over as they are.
+ */
+function audienceConditions(audience: Audience, make: (field: ConditionField, op: ConditionOp, value?: Condition['value']) => Condition): Condition[] | null {
+  const rules: ConditionGroup | undefined = audience.rules ?? audience.filter.rules
+  if (rules) {
+    if (rules.match === 'all' || rules.conditions.length <= 1) return rules.conditions.map((entry) => make(entry.field, entry.op, entry.value))
+    return null
+  }
   const { filter } = audience
   const out: Condition[] = []
   if (filter.segments.length > 0) out.push(make('guest.segment', 'any_of', [...filter.segments]))
@@ -188,17 +199,20 @@ export function flowFromTemplate(template: MessageTemplate, options: FlowFromTem
 
   /* ---- who can enter ---- */
   const who: Condition[] = []
-  let lostAudience = false
+  let lostAudience: string | null = null
   if (template.audienceId) {
     const own = options.audiences?.find((audience) => audience.id === template.audienceId)
     const builtIn = builtInAudience(template.audienceId, make)
+    const ownConditions = !builtIn && own ? audienceConditions(own, make) : null
     // "Not back in 4 months" says the same as a lapsed trigger; do not say it twice.
     if (builtIn && !(template.audienceId === 'aud_lapsed' && trigger.type === 'lapsed')) who.push(...builtIn)
-    else if (!builtIn && own) who.push(...audienceConditions(own, make))
+    else if (ownConditions) who.push(...ownConditions)
     else if (!builtIn) {
-      // An audience we cannot read here stays on the trigger, and the flow waits to be checked: without it, it would reach everyone.
+      // An audience we cannot read (or carry over) here stays on the trigger, and the flow waits to be checked: without it, it would reach everyone.
       trigger.audienceId = template.audienceId
-      lostAudience = true
+      lostAudience = own
+        ? `Paused: the “${own.name}” audience matches guests on any one of its rules, which can’t be carried over. Set who can enter.`
+        : 'Paused: the audience it was for could not be found'
     }
   }
   // Activities that no longer exist are dropped, but never so far that "only these" turns into "all of them".
@@ -269,7 +283,7 @@ export function flowFromTemplate(template: MessageTemplate, options: FlowFromTem
   const cooldown = Number.isFinite(rules.cooldownDays) ? Math.round(rules.cooldownDays) : base.settings.reentryDays
   const reentryDays = rules.repeat === 'cooldown' ? Math.max(1, cooldown) : rules.repeat === 'every' ? 1 : base.settings.reentryDays
   const history: Flow['history'] = [{ at: nowIso, what: 'Moved over from your earlier automations' }]
-  if (lostAudience && template.enabled) history.unshift({ at: nowIso, what: 'Paused: the audience it was for could not be found' })
+  if (lostAudience && template.enabled) history.unshift({ at: nowIso, what: lostAudience })
 
   return {
     ...base,

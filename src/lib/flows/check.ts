@@ -1,3 +1,6 @@
+import { formatCurrency } from '@/lib/utils'
+import type { CurrencyCode } from '@/types'
+
 import {
   ALL_PLACEHOLDERS,
   BOOKING_ONLY_TOKENS,
@@ -36,6 +39,8 @@ export interface CheckContext {
   hasSmsNumber: boolean
   /** Marketing is paused in Marketing settings. */
   marketingPaused: boolean
+  /** The business's currency, for money in the wording. */
+  currency: CurrencyCode
 }
 
 /* --------------------------------------------------------------------------
@@ -342,6 +347,18 @@ export function checkFlow(flow: Flow, ctx: Partial<CheckContext> = {}): FlowIssu
     }
   }
 
+  // An older automation's own audience that could not be carried over: the engine only reads an
+  // audience on seat and weather starts, so anywhere else it would quietly reach everyone.
+  if (flow.trigger.audienceId && subject !== 'departure') {
+    const audience = ctx.audiences?.find((entry) => entry.id === flow.trigger.audienceId)
+    add({
+      code: 'trigger-audience-lost',
+      severity: 'blocker',
+      text: `This was for ${audience ? `the “${audience.name}” audience` : 'an audience that no longer exists'}, which can’t be used with this start, so it would reach everyone. Set who can enter instead, then let the old audience go.`,
+      fix: { label: 'I’ve set who can enter: let it go', apply: (f) => ({ ...f, trigger: { ...f.trigger, audienceId: undefined } }) },
+    })
+  }
+
   if (mustBeMarketing(flow.trigger) && !marketing) {
     add({
       code: 'purpose-marketing',
@@ -437,11 +454,13 @@ export function checkFlow(flow: Flow, ctx: Partial<CheckContext> = {}): FlowIssu
               fix: { label: 'Remove that check', apply: removeCondition(c.id, branchId) },
             })
           } else if (range[0] > range[1]) {
+            // Money is stored in cents: say it the way the condition rows do.
+            const shown = (n: number) => (field.kind === 'money' ? (ctx.currency ? formatCurrency(n, ctx.currency) : (n / 100).toLocaleString('en-US')) : n.toLocaleString('en-US'))
             add({
               code: `condition-range-${c.id}`,
               severity: 'warning',
               stepId,
-              text: `${place} “${field.label}” between ${range[0]} and ${range[1]}: the smaller number should come first.`,
+              text: `${place} “${field.label}” between ${shown(range[0])} and ${shown(range[1])}: the smaller ${field.kind === 'money' ? 'amount' : 'number'} should come first.`,
               fix: { label: 'Swap them', apply: changeCondition(c.id, branchId, (cond) => ({ ...cond, value: [range[1], range[0]] as [number, number] })) },
             })
           }

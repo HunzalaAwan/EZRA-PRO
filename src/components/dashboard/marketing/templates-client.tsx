@@ -10,7 +10,7 @@ import { toast } from '@/components/ui/toaster'
 import { EmailDesigner, EmailFrame } from '@/components/dashboard/marketing/email-designer'
 import { brandColors, useEmailContext } from '@/hooks/use-email-context'
 import { useMarketing, useMarketingTenant } from '@/hooks/use-marketing'
-import type { MarketingData } from '@/lib/data/guest-marketing'
+import type { MarketingBasics } from '@/lib/data/guest-marketing'
 import { EMAIL_TEMPLATES, type EmailDesign, type SavedEmailTemplate } from '@/lib/email-design'
 import { formatDateTime } from '@/lib/utils'
 import type { Tenant } from '@/types'
@@ -22,7 +22,7 @@ import type { Tenant } from '@/types'
    designer.
    ========================================================================== */
 
-export function TemplatesClient({ tenant: tenantRecord, nowIso, data }: { tenant: Tenant; nowIso: string; data: MarketingData }) {
+export function TemplatesClient({ tenant: tenantRecord, nowIso, data }: { tenant: Tenant; nowIso: string; data: MarketingBasics }) {
   const tenant = useMarketingTenant(tenantRecord)
   const marketing = useMarketing(tenant, nowIso)
   const ctx = useEmailContext(tenantRecord, data.activities, { first_name: 'Maia', offer_code: 'WELCOME10', offer_percent: '10%', activity: data.activities[0]?.name ?? 'your trip' })

@@ -343,6 +343,8 @@ export interface JourneyEvent {
   text: string
   /** booked: the booking value, minor units. */
   value?: number
+  /** Optional. booked: the id of the booking credited. */
+  bookingId?: string
 }
 
 export interface GuestJourney {
@@ -357,6 +359,8 @@ export interface GuestJourney {
   stepId?: string
   reason?: string
   events: JourneyEvent[]
+  /** Optional: this guest's own details for filling messages (date, time, party, balance…), by placeholder key. */
+  vars?: Record<string, string>
 }
 
 export interface StepStats {
@@ -405,6 +409,21 @@ export interface FlowRun {
   journeys: GuestJourney[]
   /** Optional: why the numbers are empty, in plain words ("Your team starts this one by hand…"). */
   note?: string
+  /**
+   * Optional: each booking this run credited, with the message it is credited to. One booking can be
+   * credited by several flows; totals across flows use these to count it once (see creditedTotals).
+   */
+  credits?: FlowCredit[]
+}
+
+export interface FlowCredit {
+  bookingId: string
+  /** When the credited message went, local ISO. */
+  sentAt: string
+  /** When the booking was made, local ISO. */
+  at: string
+  /** Minor units. */
+  value: number
 }
 
 /* ---------- health check ---------- */

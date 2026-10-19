@@ -220,6 +220,14 @@ export function CampaignsClient({ tenant: tenantRecord, nowIso, data }: { tenant
     [breakdownFor, data.avgOrder, nowIso],
   )
 
+  // A campaign that went on schedule keeps the numbers it had when it went: later audience edits don't rewrite them.
+  const { recordStats } = marketing
+  React.useEffect(() => {
+    const missing: Record<string, CampaignStats> = {}
+    for (const campaign of marketing.campaigns) if (campaign.status === 'sent' && !campaign.stats) missing[campaign.id] = statsOf(campaign)!
+    if (Object.keys(missing).length > 0) recordStats(missing)
+  }, [marketing.campaigns, statsOf]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const sent = marketing.campaigns.filter((campaign) => campaign.status === 'sent')
   const totals = sent.reduce(
     (sum, campaign) => {
@@ -260,8 +268,18 @@ export function CampaignsClient({ tenant: tenantRecord, nowIso, data }: { tenant
     })
   }
 
+  /** A code no campaign or promo uses yet, from `code`: LOCALS20 → LOCALS202, LOCALS203… */
+  const freshCode = (code: string) => {
+    const taken = new Set([...pricing.promos.map((promo) => promo.code), ...marketing.campaigns.map((entry) => cleanCode(entry.offer.code))])
+    const base = cleanCode(code).slice(0, 18)
+    for (let n = 2; n < 100; n++) if (!taken.has(`${base}${n}`)) return `${base}${n}`
+    return ''
+  }
+
+  // A copy gets its own code: sharing one would move the first campaign's code to the copy's dates.
   const copyOf = (campaign: Campaign): Campaign => ({
     ...campaign,
+    offer: campaign.offer.enabled && campaign.offer.code ? { ...campaign.offer, code: freshCode(campaign.offer.code) } : campaign.offer,
     id: `cmp_${Date.now().toString(36)}`,
     name: `${campaign.name} (copy)`,
     status: 'draft',
@@ -284,7 +302,7 @@ export function CampaignsClient({ tenant: tenantRecord, nowIso, data }: { tenant
     const oldCode = original?.status === 'scheduled' && original.offer.enabled ? cleanCode(original.offer.code) : ''
     const newCode = next.offer.enabled && mode !== 'draft' ? cleanCode(next.offer.code) : ''
     if (oldCode && oldCode !== newCode) promos = retireOfferPromo(promos, oldCode, noteFor(original!))
-    if (newCode) promos = upsertOfferPromo(promos, next.offer, noteFor(next), [], next.sentAt ?? next.sendAt ?? nowIso)
+    if (newCode) promos = upsertOfferPromo(promos, next.offer, noteFor(next), [], next.sentAt ?? next.sendAt ?? nowIso, original ? noteFor(original) : undefined)
     if (promos !== pricing.promos) pricing.setPromos(promos)
 
     setEditing(null)
@@ -517,6 +535,9 @@ export function CampaignsClient({ tenant: tenantRecord, nowIso, data }: { tenant
               })}
             </ul>
           )}
+          {list.some((campaign) => campaign.status === 'sent') ? (
+            <p className="border-t border-line-subtle px-5 py-3 text-xs text-subtle">Opens, clicks, bookings and revenue are estimates until sending is connected.</p>
+          ) : null}
         </CardContent>
       </Card>
 
@@ -774,6 +795,7 @@ function CampaignEditor({
     unknown.length > 0 ? { step: 'message' as const, text: `These can't be filled in: ${unknown.join(', ')}. Use “Add personal detail” instead.` } : null,
     !draft.offer.enabled && /\{offer_(code|percent)\}/.test(allText) ? { step: 'offer' as const, text: 'The message mentions a discount code, but no code is set' } : null,
     draft.offer.enabled && code.length < 3 ? { step: 'offer' as const, text: 'Codes need at least 3 letters or numbers' } : null,
+    draft.offer.enabled && code.length >= 3 && clash ? { step: 'offer' as const, text: `${clash.code} is already used in Promo codes. Pick another code.` } : null,
     when === 'later' && (!draft.sendAt || new Date(draft.sendAt).getTime() <= now.getTime()) ? { step: 'when' as const, text: `Pick a time after now (${formatDateTime(now)})` } : null,
     when === 'now' && settings.paused ? { step: 'when' as const, text: 'Marketing is paused, so nothing can go now. Schedule it, or resume marketing in Settings.' } : null,
   ] as (Problem | null)[]).filter((problem): problem is Problem => problem !== null)
@@ -1083,7 +1105,7 @@ function CampaignEditor({
                   {clash ? (
                     <p className="flex items-start gap-1.5 text-xs text-warning">
                       <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-                      {clash.code} is already in Promo codes{clash.note ? ` (${clash.note.replace(/^From the /, 'from the ')})` : ''}. Sending this changes that code too. Pick another code to keep them apart.
+                      {clash.code} is already in Promo codes{clash.note ? ` (${clash.note.replace(/^From the /, 'from the ')})` : ''}. Pick another code, so that one keeps working as it is.
                     </p>
                   ) : null}
                   {!mentionsCode ? (

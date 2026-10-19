@@ -19,11 +19,11 @@ import { useMarketing, useMarketingTenant } from '@/hooks/use-marketing'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { runFlow, type FlowExtras } from '@/lib/actions/flows'
 import { textingNumber } from '@/lib/channels'
-import type { MarketingData } from '@/lib/data/guest-marketing'
+import type { MarketingBasics } from '@/lib/data/guest-marketing'
 import { STATUS_LABEL, newStep } from '@/lib/flows/catalog'
 import { canGoLive, checkFlow, issueCounts } from '@/lib/flows/check'
 import { describeFlow, type DescribeLookups } from '@/lib/flows/describe'
-import { countSteps, duplicateStep, findStep, insertStep, isParent, moveStep, removeStep, walkSteps, type StepPosition } from '@/lib/flows/tree'
+import { countSteps, duplicateStep, findStep, forSimulation, insertStep, isParent, locateStep, moveStep, removeStep, walkSteps, type StepPosition } from '@/lib/flows/tree'
 import type { ActionStep, Flow, FlowAction, FlowIssue, FlowRun, FlowStepType } from '@/lib/flows/types'
 import type { MessageContext } from '@/lib/messaging'
 import { cn, formatCurrency } from '@/lib/utils'
@@ -53,11 +53,14 @@ export interface FlowBuilderProps {
   flow: Flow
   isNew: boolean
   onClose: () => void
-  /** Save the automation. `what` says what changed, for its history. The builder stays open. */
-  onSave: (flow: Flow, what: string) => void
+  /**
+   * Save the automation. `what` says what changed, for its history. The builder stays open.
+   * Return false when nothing could be stored (a full browser store): the draft then stays unsaved.
+   */
+  onSave: (flow: Flow, what: string) => boolean | void
   onDelete?: () => void
   tenant: Tenant
-  data: MarketingData
+  data: MarketingBasics
   sample: MessageContext
   nowIso: string
 }
@@ -209,8 +212,8 @@ export function FlowBuilder({ flow: initial, isNew, onClose, onSave, onDelete, t
 
   const issues = React.useMemo(
     // The same rule as the automations list, so "Turn on" agrees in both places.
-    () => checkFlow(draft, { audiences: marketing.audiences, activities: data.activities, hasSmsNumber, marketingPaused: marketing.settings.paused }),
-    [draft, marketing.audiences, data.activities, hasSmsNumber, marketing.settings.paused],
+    () => checkFlow(draft, { audiences: marketing.audiences, activities: data.activities, hasSmsNumber, marketingPaused: marketing.settings.paused, currency: tenant.currency }),
+    [draft, marketing.audiences, data.activities, hasSmsNumber, marketing.settings.paused, tenant.currency],
   )
   const counts = issueCounts(issues)
   const live = canGoLive(issues)
@@ -219,11 +222,11 @@ export function FlowBuilder({ flow: initial, isNew, onClose, onSave, onDelete, t
   const savedBlockers = React.useMemo(
     () =>
       new Set(
-        checkFlow(baseline, { audiences: marketing.audiences, activities: data.activities, hasSmsNumber, marketingPaused: marketing.settings.paused })
+        checkFlow(baseline, { audiences: marketing.audiences, activities: data.activities, hasSmsNumber, marketingPaused: marketing.settings.paused, currency: tenant.currency })
           .filter((issue) => issue.severity === 'blocker')
           .map((issue) => issue.id),
       ),
-    [baseline, marketing.audiences, data.activities, hasSmsNumber, marketing.settings.paused],
+    [baseline, marketing.audiences, data.activities, hasSmsNumber, marketing.settings.paused, tenant.currency],
   )
   const newBlockers = issues.filter((issue) => issue.severity === 'blocker' && !savedBlockers.has(issue.id)).length
   const severities = React.useMemo(() => {
@@ -239,11 +242,11 @@ export function FlowBuilder({ flow: initial, isNew, onClose, onSave, onDelete, t
 
   /* ---------- live numbers ---------- */
 
-  // Only what the replay reads: renaming it or editing its description doesn't ask the server again.
-  const simKey = React.useMemo(
-    () => JSON.stringify([draft.id, draft.purpose, draft.trigger, draft.who, draft.steps, draft.exit, draft.settings]),
-    [draft.id, draft.purpose, draft.trigger, draft.who, draft.steps, draft.exit, draft.settings],
-  )
+  // Only what the replay reads: renaming it, editing its description or an email's design doesn't ask the server again.
+  const simKey = React.useMemo(() => {
+    const slim = forSimulation(draft)
+    return JSON.stringify([slim.id, slim.purpose, slim.trigger, slim.who, slim.steps, slim.exit, slim.settings])
+  }, [draft])
   const draftRef = React.useRef(draft)
   draftRef.current = draft
   const [run, setRun] = React.useState<FlowRun | null>(null)
@@ -252,7 +255,8 @@ export function FlowBuilder({ flow: initial, isNew, onClose, onSave, onDelete, t
     let current = true
     setRunning(true)
     const timer = window.setTimeout(() => {
-      runFlow(tenant.id, draftRef.current, extras)
+      // Without the designs: photos in them can be megabytes, and the replay never reads them.
+      runFlow(tenant.id, forSimulation(draftRef.current), extras)
         .then((result) => {
           if (!current) return
           setRun(result)
@@ -291,15 +295,29 @@ export function FlowBuilder({ flow: initial, isNew, onClose, onSave, onDelete, t
 
   const remove = (id: string) => {
     const step = findStep(draft.steps, id)
-    if (!step) return
+    const at = locateStep(draft.steps, id)
+    if (!step || !at) return
     const inside = isParent(step) ? countSteps([step]) - 1 : 0
     update({ ...draft, steps: removeStep(draft.steps, id) })
     setSelection(null)
-    toast(inside > 0 ? `Removed, with the ${inside} ${inside === 1 ? 'step' : 'steps'} inside it` : 'Step removed', { action: { label: 'Undo', onClick: () => undo() } })
+    // Undo puts this step back where it was, even after other changes, instead of taking back the latest one.
+    const putBack = () => {
+      const current = draftRef.current
+      if (findStep(current.steps, step.id)) return
+      if (at.parentId && !findStep(current.steps, at.parentId)) {
+        toast.error('Can’t put it back', { description: 'The question or test it was in has been removed since.' })
+        return
+      }
+      update({ ...current, steps: insertStep(current.steps, at, step) })
+      setSelection({ kind: 'step', id: step.id })
+      focusCard(step.id)
+    }
+    toast(inside > 0 ? `Removed, with the ${inside} ${inside === 1 ? 'step' : 'steps'} inside it` : 'Step removed', { action: { label: 'Undo', onClick: putBack } })
   }
 
-  const commit = (next: Flow, what: string) => {
-    onSave(next, what)
+  /** Save `next`. False when the browser could not store it: the draft then stays unsaved. */
+  const commit = (next: Flow, what: string): boolean => {
+    if (onSave(next, what) === false) return false
     // Keep the history the store will show, so "Changes" is current without a reload.
     const local: Flow = { ...next, updatedAt: nowIso, history: [{ at: nowIso, what }, ...next.history].slice(0, 20) }
     setBaseline(local)
@@ -307,6 +325,7 @@ export function FlowBuilder({ flow: initial, isNew, onClose, onSave, onDelete, t
     // Not an undo step, and the saved status and history carry into the undo stack:
     // undo takes back edits, it never quietly turns a live automation back into a draft.
     rebase(local, (entry) => ({ ...entry, status: local.status, updatedAt: local.updatedAt, history: local.history }))
+    return true
   }
 
   const save = () => {
@@ -316,7 +335,7 @@ export function FlowBuilder({ flow: initial, isNew, onClose, onSave, onDelete, t
       toast.error('Fix the problems first', { description: 'It is live, so a change that would break it can’t be saved. Fix it, or pause the automation to save a work in progress.' })
       return false
     }
-    commit(draft, saved ? whatChanged(baseline, draft) : 'Saved')
+    if (!commit(draft, saved ? whatChanged(baseline, draft) : 'Saved')) return false
     toast.success(`${draft.name} saved`)
     return true
   }
@@ -326,12 +345,12 @@ export function FlowBuilder({ flow: initial, isNew, onClose, onSave, onDelete, t
       setSelection({ kind: 'health' })
       return
     }
-    commit({ ...draft, status: 'live' }, draft.status === 'paused' ? 'Turned back on' : 'Turned on')
+    if (!commit({ ...draft, status: 'live' }, draft.status === 'paused' ? 'Turned back on' : 'Turned on')) return
     toast.success(`${draft.name} is live`, { description: 'Guests start entering from now on.' })
   }
 
   const pause = () => {
-    commit({ ...draft, status: 'paused' }, 'Paused')
+    if (!commit({ ...draft, status: 'paused' }, 'Paused')) return
     toast(`${draft.name} is paused`, { description: 'Nobody new enters, and nothing more goes until you turn it back on.' })
   }
 
@@ -351,8 +370,14 @@ export function FlowBuilder({ flow: initial, isNew, onClose, onSave, onDelete, t
 
   const fix = (issue: FlowIssue) => {
     if (!issue.fix) return
-    update(issue.fix.apply(draft))
-    toast.success('Fixed', { description: issue.fix.label, action: { label: 'Undo', onClick: () => undo() } })
+    const fixed = issue.fix.apply(draft)
+    update(fixed)
+    // Undo here only takes back the fix while it is still the latest change; after that, the top bar's Undo steps back.
+    const takeBack = () => {
+      if (draftRef.current === fixed) undo()
+      else toast('Other changes came after the fix', { description: 'Use Undo at the top to step back through them.' })
+    }
+    toast.success('Fixed', { description: issue.fix.label, action: { label: 'Undo', onClick: takeBack } })
   }
 
   // A selected step that went away (undo, a fix) closes its panel.
@@ -382,8 +407,53 @@ export function FlowBuilder({ flow: initial, isNew, onClose, onSave, onDelete, t
   }, [])
 
   React.useEffect(() => {
-    if (mounted) rootRef.current?.focus()
+    if (!mounted) return
+    rootRef.current?.focus()
+    // A modal: the page behind can't be tabbed to or clicked while the builder is open. Toasts stay
+    // usable (their Undo buttons), and menus the builder opens later portal in above it.
+    const inerted: HTMLElement[] = []
+    for (const el of Array.from(document.body.children)) {
+      if (!(el instanceof HTMLElement) || el === rootRef.current || el.inert) continue
+      if (el.tagName === 'SCRIPT' || el.querySelector('[data-sonner-toaster]') || (el.tagName === 'SECTION' && el.getAttribute('aria-label')?.startsWith('Notifications'))) continue
+      el.inert = true
+      inerted.push(el)
+    }
+    return () => {
+      for (const el of inerted) el.inert = false
+    }
   }, [mounted])
+
+  // Browser Back closes the builder like its own Back button does, asking first when there are unsaved changes.
+  const backGuard = React.useRef({ dirty: false, onClose, setConfirm })
+  const alive = React.useRef(false)
+  React.useEffect(() => {
+    alive.current = true
+    const marker = { flowBuilder: initial.id }
+    const marked = () => (window.history.state as { flowBuilder?: string } | null)?.flowBuilder === initial.id
+    // A development double mount finds its own entry still there: don't add a second one.
+    if (!marked()) window.history.pushState({ ...window.history.state, ...marker }, '')
+    const onPop = (event: PopStateEvent) => {
+      // A development double mount can land back on this entry: nothing to do.
+      if ((event.state as { flowBuilder?: string } | null)?.flowBuilder === initial.id) return
+      const guard = backGuard.current
+      if (guard.dirty) {
+        window.history.pushState({ ...window.history.state, ...marker }, '')
+        guard.setConfirm('close')
+      } else guard.onClose()
+    }
+    window.addEventListener('popstate', onPop)
+    return () => {
+      window.removeEventListener('popstate', onPop)
+      alive.current = false
+      // Closed from inside: take back the entry it added, so Back then leaves the page as usual.
+      // Deferred, so a development double mount (unmount, mount again at once) keeps its entry.
+      window.setTimeout(() => {
+        if (!alive.current && marked()) window.history.back()
+      }, 0)
+    }
+  }, [initial.id])
+
+  backGuard.current = { dirty, onClose, setConfirm }
 
   React.useEffect(() => {
     if (!dirty) return
@@ -401,18 +471,22 @@ export function FlowBuilder({ flow: initial, isNew, onClose, onSave, onDelete, t
     if (event.defaultPrevented) return
     const root = rootRef.current
     if (!root) return
-    // Another layer is on top (the email designer, a dialog, a menu, the phone panel): leave its keys alone.
-    // Radix dialogs and popovers don't set aria-modal, so look for any open dialog or list too.
-    const layers = document.querySelectorAll('[aria-modal="true"], [role="dialog"][data-state="open"], [role="alertdialog"], [role="listbox"]')
-    if (Array.from(layers).some((el) => el !== root)) return
-    const target = event.target as HTMLElement | null
-    const editing = Boolean(target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)))
     const mod = event.metaKey || event.ctrlKey
     const key = event.key.toLowerCase()
+    // Another layer is on top (the email designer, a dialog, a menu, the phone panel): leave its keys alone.
+    // Radix dialogs and popovers don't set aria-modal, so look for any open dialog or list too.
+    const layers = Array.from(document.querySelectorAll('[aria-modal="true"], [role="dialog"][data-state="open"], [role="alertdialog"], [role="listbox"]')).filter((el) => el !== root)
     if (mod && key === 's') {
+      // Never the browser's "Save page". Save straight away unless something else is open on top;
+      // the phone panel is part of the builder, so it doesn't count.
       event.preventDefault()
-      save()
-    } else if (mod && key === 'z' && !editing) {
+      if (layers.every((el) => el.closest('[data-flow-inspector]'))) save()
+      return
+    }
+    if (layers.length > 0) return
+    const target = event.target as HTMLElement | null
+    const editing = Boolean(target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)))
+    if (mod && key === 'z' && !editing) {
       event.preventDefault()
       if (event.shiftKey) redo()
       else undo()
@@ -633,7 +707,7 @@ export function FlowBuilder({ flow: initial, isNew, onClose, onSave, onDelete, t
 
       {!wide ? (
         <Sheet open={Boolean(panel)} onOpenChange={(open) => !open && setSelection(null)}>
-          <SheetContent side="bottom" size="xl" showCloseButton={false} className="h-[88dvh]" aria-describedby={undefined}>
+          <SheetContent side="bottom" size="xl" showCloseButton={false} className="h-[88dvh]" aria-describedby={undefined} data-flow-inspector="">
             <SheetTitle className="sr-only">{head?.title ?? 'Details'}</SheetTitle>
             {panel}
           </SheetContent>

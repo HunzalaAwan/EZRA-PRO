@@ -1,5 +1,5 @@
 import { newId } from './catalog'
-import type { BranchStep, EmailStep, FlowStep, SmsStep, SplitStep } from './types'
+import type { BranchStep, EmailStep, Flow, FlowCredit, FlowRun, FlowStep, SmsStep, SplitStep } from './types'
 
 /* ==========================================================================
    Flow tree — pure helpers over the nested steps of an automation. Steps
@@ -205,6 +205,60 @@ export function pathTo(steps: FlowStep[], id: string): ParentStep[] {
     }
   }
   return []
+}
+
+/**
+ * A flow as the simulator reads it, for the server actions. Email designs are left out (uploaded
+ * photos are data URLs that can run to megabytes, over the server's upload limit), and so are the
+ * preheader, the description and the history: the replay never reads them.
+ */
+export function forSimulation(flow: Flow): Flow {
+  const steps = mapSteps(flow.steps, (step) => {
+    if (step.type !== 'email' || (step.design === undefined && step.preheader === undefined)) return step
+    const slim: EmailStep = { id: step.id, type: 'email', subject: step.subject, body: step.body }
+    if (step.subjectB !== undefined) slim.subjectB = step.subjectB
+    return slim
+  })
+  return { ...flow, steps, description: '', history: [] }
+}
+
+/** What a list of flows reads to the simulator, as one string: changes only when a replay would. */
+export function simulationKey(flows: Flow[]): string {
+  return JSON.stringify(
+    flows.map((flow) => {
+      const slim = forSimulation(flow)
+      return [slim.id, slim.purpose, slim.trigger, slim.who, slim.steps, slim.exit, slim.settings]
+    }),
+  )
+}
+
+/**
+ * Bookings and revenue across several flows, each booking counted once: a guest who got two
+ * automations' messages and then booked is credited to the one whose message went last before it.
+ * Runs without credits (an older server) fall back to their own totals.
+ */
+export function creditedTotals(runs: (Pick<FlowRun, 'bookings' | 'revenue' | 'credits'> | undefined)[]): { bookings: number; revenue: number; credits: FlowCredit[] } {
+  const best = new Map<string, FlowCredit>()
+  let bookings = 0
+  let revenue = 0
+  for (const run of runs) {
+    if (!run) continue
+    if (!run.credits) {
+      bookings += run.bookings
+      revenue += run.revenue
+      continue
+    }
+    for (const credit of run.credits) {
+      const seen = best.get(credit.bookingId)
+      if (!seen || credit.sentAt > seen.sentAt) best.set(credit.bookingId, credit)
+    }
+  }
+  const credits = [...best.values()]
+  for (const credit of credits) {
+    bookings += 1
+    revenue += credit.value
+  }
+  return { bookings, revenue, credits }
 }
 
 /** How deep a step sits: 0 at the top level, -1 when not found. */

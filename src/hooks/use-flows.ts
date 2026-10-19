@@ -147,12 +147,12 @@ export function useFlows(tenant: { id: string; slug: string }, nowIso: string, a
     return Array.isArray(list) ? list.map((entry) => normalize(entry, nowIso)).filter((flow): flow is Flow => flow !== null) : null
   }, [raw, nowIso])
 
-  // Only read before the first save, and only for moving older automations over.
-  const audiences = React.useMemo(() => (stored ? [] : storedAudiences(marketingRaw)), [stored, marketingRaw])
+  // For moving older automations over, and for built-in messages the owner aimed at one of their audiences.
+  const audiences = React.useMemo(() => storedAudiences(marketingRaw), [marketingRaw])
 
   const flows = React.useMemo<Flow[]>(() => {
     const templates = storedTemplates(templatesRaw)
-    const builtIn = defaultFlows(nowIso, known, templates)
+    const builtIn = defaultFlows(nowIso, known, templates, audiences)
     if (stored) {
       // Built-in flows cannot be deleted, so one missing from the saved list is new since the save: add it.
       const ids = new Set(stored.map((flow) => flow.id))
@@ -163,16 +163,20 @@ export function useFlows(tenant: { id: string; slug: string }, nowIso: string, a
     return [...builtIn, ...moved]
   }, [stored, templatesRaw, nowIso, known, audiences])
 
+  /** Store the list. False when the browser wouldn't keep it, so callers don't say it was saved. */
   const write = React.useCallback(
-    (next: Flow[] | null) => {
+    (next: Flow[] | null): boolean => {
+      let ok = true
       try {
         if (next) window.localStorage.setItem(keyFor(slug), JSON.stringify(next))
         else window.localStorage.removeItem(keyFor(slug))
       } catch {
         // Usually a full browser store: big uploaded photos. Say so rather than lose the change quietly.
         toast.error('Could not save', { description: 'The browser storage is full. Use smaller photos or image links.' })
+        ok = false
       }
       window.dispatchEvent(new Event(FLOWS_EVENT))
+      return ok
     },
     [slug],
   )
@@ -191,13 +195,13 @@ export function useFlows(tenant: { id: string; slug: string }, nowIso: string, a
       /** Has the business saved anything yet? */
       hasEdits: stored !== null,
       byId,
-      /** Save a change: bumps the updated time and notes what changed. */
-      save: (flow: Flow, what = 'Saved') => write(upsert(stamp(flow, what))),
+      /** Save a change: bumps the updated time and notes what changed. False when it couldn't be stored. */
+      save: (flow: Flow, what = 'Saved'): boolean => write(upsert(stamp(flow, what))),
       /** Add a new flow at the top. A flow that already says how it started (a recipe, a copy) keeps that as its first line. */
-      create: (flow: Flow) => {
+      create: (flow: Flow): boolean => {
         const history = flow.history?.length ? flow.history.slice(0, MAX_HISTORY) : [{ at: nowIso, what: 'Created' }]
         const made: Flow = { ...flow, createdAt: flow.createdAt || nowIso, updatedAt: nowIso, history }
-        write([made, ...flows.filter((entry) => entry.id !== flow.id)])
+        return write([made, ...flows.filter((entry) => entry.id !== flow.id)])
       },
       /** Delete one of the business's own flows. Built-in ones can only be paused. */
       remove: (id: string) => {
@@ -222,14 +226,15 @@ export function useFlows(tenant: { id: string; slug: string }, nowIso: string, a
           history: [{ at: nowIso, what: `Copied from “${flow.name}”` }],
         }
         const index = flows.findIndex((entry) => entry.id === id)
-        write([...flows.slice(0, index + 1), copy, ...flows.slice(index + 1)])
+        if (!write([...flows.slice(0, index + 1), copy, ...flows.slice(index + 1)])) return undefined
         return copy
       },
-      setStatus: (id: string, status: FlowStatus) => {
+      /** False when it couldn't be stored. */
+      setStatus: (id: string, status: FlowStatus): boolean => {
         const flow = byId(id)
-        if (!flow || flow.status === status) return
+        if (!flow || flow.status === status) return true
         const what = status === 'live' ? (flow.status === 'paused' ? 'Turned back on' : 'Turned on') : status === 'paused' ? 'Paused' : 'Moved back to draft'
-        write(upsert(stamp({ ...flow, status }, what)))
+        return write(upsert(stamp({ ...flow, status }, what)))
       },
       /** Back to the built-in flows. Older automations are moved over again. */
       reset: () => write(null),

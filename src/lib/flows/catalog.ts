@@ -484,9 +484,9 @@ export const JOIN_SOURCE_LABEL: Record<NonNullable<FlowTrigger['sources']>[numbe
 
 export type ConditionFieldKind = 'list' | 'number' | 'money' | 'days' | 'bool' | 'enum'
 
-export type ConditionFieldGroup = 'About the guest' | 'About the booking' | 'About the departure' | 'What they did in this automation'
+export type ConditionFieldGroup = 'About the guest' | 'About the booking' | 'About the trip or visit' | 'What they did in this automation'
 
-export const CONDITION_FIELD_GROUPS: ConditionFieldGroup[] = ['About the guest', 'About the booking', 'About the departure', 'What they did in this automation']
+export const CONDITION_FIELD_GROUPS: ConditionFieldGroup[] = ['About the guest', 'About the booking', 'About the trip or visit', 'What they did in this automation']
 
 /** Where a list field's choices come from. The fixed ones resolve with `optionsFor`. */
 export type ConditionOptionSource = 'activities' | 'tags' | 'countries' | 'channels' | 'segments' | 'kinds' | 'locations' | 'addOns'
@@ -808,11 +808,11 @@ export const CONDITION_FIELDS: ConditionFieldMeta[] = [
     defaultOp: 'yes',
     help: 'This is the first time they have booked with you.',
   },
-  /* ---------- About the departure ---------- */
+  /* ---------- About the trip or visit (seat and weather starts) ---------- */
   {
     field: 'departure.fill',
     label: 'How full it is',
-    group: 'About the departure',
+    group: 'About the trip or visit',
     subjects: ['departure'],
     kind: 'number',
     ops: RANGE_OPS,
@@ -824,7 +824,7 @@ export const CONDITION_FIELDS: ConditionFieldMeta[] = [
   {
     field: 'departure.weather',
     label: 'Weather forecast',
-    group: 'About the departure',
+    group: 'About the trip or visit',
     subjects: ['departure'],
     kind: 'enum',
     ops: LIST_OPS,

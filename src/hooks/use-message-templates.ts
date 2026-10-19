@@ -75,11 +75,31 @@ export function useMessageTemplates(tenantId: string) {
       delete next[key]
       write(next)
     },
-    /** Back to the default wording and timing. The business's own automations stay. */
-    reset: () => {
-      const own = Object.fromEntries(Object.entries(edits).filter(([key]) => key.startsWith('custom_')))
-      write(Object.keys(own).length > 0 ? own : null)
+    /**
+     * Back to the default wording and timing. The business's own automations stay. Pass `keys` to
+     * restore only those messages (the booking messages, say) and keep every other edit. Returns the
+     * edits it took away, for an undo.
+     */
+    reset: (keys?: TemplateKey[]): Partial<Record<TemplateKey, Partial<MessageTemplate>>> => {
+      const only = keys ? new Set<string>(keys) : null
+      const goes = (key: string) => !key.startsWith('custom_') && (!only || only.has(key))
+      const removed = Object.fromEntries(Object.entries(edits).filter(([key]) => goes(key)))
+      const kept = Object.fromEntries(Object.entries(edits).filter(([key]) => !goes(key)))
+      write(Object.keys(kept).length > 0 ? kept : null)
+      return removed
+    },
+    /** Put back edits a reset took away, over whatever is stored now. */
+    restore: (saved: Partial<Record<TemplateKey, Partial<MessageTemplate>>>) => {
+      let current: Partial<Record<TemplateKey, Partial<MessageTemplate>>> = {}
+      try {
+        current = JSON.parse(read(tenantId) || '{}')
+      } catch {
+        current = {}
+      }
+      write({ ...current, ...saved })
     },
     hasEdits: Object.keys(edits).some((key) => !key.startsWith('custom_')),
+    /** Which of these messages the business has changed. */
+    editedOf: (keys: TemplateKey[]) => keys.filter((key) => !key.startsWith('custom_') && edits[key] !== undefined),
   }
 }

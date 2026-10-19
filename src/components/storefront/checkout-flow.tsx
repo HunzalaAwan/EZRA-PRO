@@ -59,7 +59,7 @@ import {
 import { CheckoutPickup, EMPTY_PICKUP, PICKUP_OTHER, validatePickup, type PickupChoice } from '@/components/storefront/checkout-pickup'
 import { TicketQr, ticketPayload } from '@/components/ui/ticket-qr'
 import { CheckoutDiscounts } from '@/components/storefront/checkout-discounts'
-import { applyRules, giftProblem, promoDiscount, promoProblem } from '@/lib/pricing'
+import { applyRules, findPromo, giftProblem, promoDiscount, promoProblem } from '@/lib/pricing'
 import { guestDetailsOf } from '@/lib/guest-requirements'
 import { CheckoutOptIn, useCheckoutOptIn } from '@/components/storefront/storefront-marketing'
 import type { RentalMode } from '@/lib/activity-kinds'
@@ -407,7 +407,7 @@ export function CheckoutFlow({
   const todayKey = (nowIso ?? departure.startsAt).slice(0, 10)
   const [promoCode, setPromoCode] = React.useState<string | null>(null)
   const [giftCode, setGiftCode] = React.useState<string | null>(null)
-  const promo = pricing.promos.find((entry) => entry.code === promoCode)
+  const promo = findPromo(pricing.promos, promoCode)
   const card = pricing.giftCards.find((entry) => entry.code === giftCode)
   const itemsSubtotal = [...quote.ticketLines, ...quote.addOnLines].reduce((sum, line) => sum + line.total, 0)
   const promoOff = promo && !promoProblem(promo, { activitySlug: activity.slug, subtotal: itemsSubtotal, todayKey }) ? promoDiscount(promo, itemsSubtotal) : 0

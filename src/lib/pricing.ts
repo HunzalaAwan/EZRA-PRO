@@ -38,6 +38,13 @@ export interface PromoCode {
   used: number
   active: boolean
   note?: string
+  /**
+   * A family of codes made one per guest: checkout also takes CODE-XXXX (an automation gives each
+   * guest WELCOME10-7QK2, so a code can't be passed around as one).
+   */
+  perGuest?: boolean
+  /** The automation that made it, when one did. */
+  flowId?: string
 }
 
 export interface GiftCard {
@@ -170,6 +177,16 @@ export function ruleSummary(rule: PricingRule): string {
 /* --------------------------------------------------------------------------
    Promo codes and gift cards
    -------------------------------------------------------------------------- */
+
+/** The promo a typed code is: the code itself, or a guest's own CODE-XXXX from a per-guest family. */
+export function findPromo(promos: PromoCode[], typed: string | null | undefined): PromoCode | undefined {
+  if (!typed) return undefined
+  const code = typed.trim().toUpperCase()
+  const exact = promos.find((promo) => promo.code === code)
+  if (exact) return exact
+  const match = /^([A-Z0-9]+)-[A-Z0-9]{4,}$/.exec(code)
+  return match ? promos.find((promo) => promo.perGuest && promo.code === match[1]) : undefined
+}
 
 export function promoProblem(promo: PromoCode | undefined, context: { activitySlug: string; subtotal: number; todayKey: string }): string | null {
   if (!promo || !promo.active) return 'That code is not valid'

@@ -4,6 +4,7 @@ import { formatCurrency, toDateKey } from '@/lib/utils'
 import type { CurrencyCode, Customer } from '@/types'
 
 import { evaluate, segmentFor, type BookingFacts, type DepartureFacts, type Facts, type FlowFacts, type GuestFacts } from './conditions'
+import { codePrefix } from './promos'
 import type {
   ActionStep,
   ConditionGroup,
@@ -411,6 +412,15 @@ export function createWorld(data: FlowWorldData): FlowWorld {
   const contacts = new Map<string, MarketingContact>()
   for (const g of guests.values()) {
     const own = bookingsByGuest.get(g.id) ?? []
+    // The same rule as the marketing guest list: their next confirmed or pending trip after now.
+    let nextTripMs = Infinity
+    let nextTripAt: string | null = null
+    for (const b of own) {
+      if ((b.status === 'confirmed' || b.status === 'pending') && !b.recoveredCart && b.startMs > nowMs && b.startMs < nextTripMs) {
+        nextTripMs = b.startMs
+        nextTripAt = b.departureAt
+      }
+    }
     contacts.set(g.id, {
       id: g.id,
       firstName: g.firstName,
@@ -426,6 +436,7 @@ export function createWorld(data: FlowWorldData): FlowWorld {
       smsOptIn: g.smsOptIn,
       segment: g.segment,
       activitySlugs: [...new Set(own.map((b) => b.activitySlug))],
+      nextTripAt,
     })
   }
 
@@ -482,21 +493,26 @@ function guestFactsAt(world: FlowWorld, guest: IGuest, at: number, tags?: string
   const own = world.bookingsByGuest.get(guest.id)
   let count = 0
   let spend = 0
-  let last = -Infinity
+  let lastMade = -Infinity
+  // Their latest trip that stood, by its date. A trip still to come counts as now: they haven't lapsed.
+  let lastTrip = -Infinity
   let upcoming = false
   const slugs: string[] = []
   if (own) {
     for (const b of own) {
       if (b.createdMs > at) break
-      if (b.createdMs > last) last = b.createdMs
+      if (b.createdMs > lastMade) lastMade = b.createdMs
       if (!slugs.includes(b.activitySlug)) slugs.push(b.activitySlug)
       const cancelled = !standing(b.status) && (b.cancelledMs ?? b.createdMs) <= at
       if (cancelled) continue
       count++
       spend += b.total
       if (b.startMs > at) upcoming = true
+      lastTrip = Math.max(lastTrip, Math.min(b.startMs, at))
     }
   }
+  // Only cancelled bookings: fall back to when they last booked.
+  const last = lastTrip === -Infinity ? lastMade : lastTrip
   const days = last === -Infinity ? Infinity : (at - last) / DAY
   return {
     tags: tags ?? guest.tags,
@@ -682,7 +698,7 @@ function pseudoGuest(id: string, name: string, email: string, phone: string, at:
     createdMs: at,
     joinSource: source,
     pseudo: true,
-    canEmail: true,
+    canEmail: Boolean(email),
     canText: Boolean(phone),
   }
 }
@@ -748,8 +764,12 @@ function collectEntries(flow: Flow, world: FlowWorld, fromMs: number, toMs: numb
       for (const [guestId, own] of world.bookingsByGuest) {
         const guest = world.guests.get(guestId)
         if (!guest) continue
+        // The clock runs from their latest trip that stood (or the booking, when that is later),
+        // so a guest who booked far ahead lapses after the trip, not before it.
+        let lastTripMs = -Infinity
         for (let i = 0; i < own.length; i++) {
-          const at = own[i].createdMs + offset
+          if (standing(own[i].status) && !own[i].recoveredCart) lastTripMs = Math.max(lastTripMs, own[i].endMs)
+          const at = Math.max(own[i].createdMs, lastTripMs) + offset
           const next = own[i + 1]
           if (next && next.createdMs <= at) continue
           if (!inWindow(at)) continue
@@ -808,7 +828,8 @@ function collectEntries(flow: Flow, world: FlowWorld, fromMs: number, toMs: numb
         const email = bought ? '' : card.recipientEmail
         let guest = (email ? world.guestByEmail.get(email.toLowerCase()) : undefined) ?? world.guestByName.get(person.toLowerCase())
         if (!guest) {
-          guest = pseudoGuest(`gift:${card.code}:${bought ? 'buyer' : 'recipient'}`, person, email, '', at, true)
+          // Not on the guest list: buying or getting a gift card is not a yes to marketing.
+          guest = pseudoGuest(`gift:${card.code}:${bought ? 'buyer' : 'recipient'}`, person, email, '', at, false)
           pseudo.set(guest.id, guest)
         }
         entries.push({
@@ -853,7 +874,7 @@ function collectEntries(flow: Flow, world: FlowWorld, fromMs: number, toMs: numb
         if (audience) {
           for (const guest of world.guests.values()) {
             const contact = world.contacts.get(guest.id)
-            if (contact && matchesAudience(contact, audience.filter, world.data.nowIso)) audienceMembers.push(guest)
+            if (contact && matchesAudience(contact, audience.filter, world.data.nowIso, { homeCountry: world.data.homeCountry })) audienceMembers.push(guest)
           }
         }
       }
@@ -985,6 +1006,8 @@ interface Journey {
   clicks: number[]
   replies: number[]
   sends: Send[]
+  /** Every send time this journey added to the guest's list (sent or scheduled), for smart sending. */
+  pushed: number[]
   tags: string[] | null
   unsubscribed: boolean
   code: { code: string; percent: number } | null
@@ -1086,7 +1109,9 @@ export function simulate(flow: Flow, world: FlowWorld, opts: SimulateOptions = {
     upcoming: {},
     daily: {},
     journeys: [],
+    credits: [],
   }
+  const credits = run.credits!
 
   const skipped = new Map<string, number>()
   const skip = (reason: string, counts: boolean) => {
@@ -1124,7 +1149,12 @@ export function simulate(flow: Flow, world: FlowWorld, opts: SimulateOptions = {
   const sendsByGuest = new Map<string, number[]>()
   const lastEntry = new Map<string, number>()
   const seenKeys = new Set<string>()
+  /** When a guest was taken off marketing by "Stop marketing to them": it holds for every later journey too. */
+  const unsubscribedAt = new Map<string, number>()
+  const stoppedBy = (guestId: string, at: number) => (unsubscribedAt.get(guestId) ?? Infinity) <= at
   const lift = { inGuests: 0, inBookings: 0, outGuests: 0, outBookings: 0 }
+  /** Lift counts each guest once, from their first entry, so frequent guests don't count many times. */
+  const liftSeen = new Set<string>()
   const kept: GuestJourney[] = []
 
   /* ---- helpers that read the journey ---- */
@@ -1288,9 +1318,10 @@ export function simulate(flow: Flow, world: FlowWorld, opts: SimulateOptions = {
 
   /** The channel a message goes on for this guest, or why it cannot go. */
   const channelFor = (j: Journey, wanted: 'email' | 'sms'): { channel: 'email' | 'sms' } | { reason: string } => {
+    const stopped = isMarketing && (j.unsubscribed || stoppedBy(j.guest.id, j.clock))
     const can = (channel: 'email' | 'sms') => {
       if (isMarketing) {
-        if (j.unsubscribed) return false
+        if (stopped) return false
         return channel === 'email' ? j.guest.emailOptIn && j.guest.canEmail : j.guest.smsOptIn && j.guest.canText
       }
       return channel === 'email' ? j.guest.canEmail : j.guest.canText
@@ -1298,7 +1329,7 @@ export function simulate(flow: Flow, world: FlowWorld, opts: SimulateOptions = {
     if (can(wanted)) return { channel: wanted }
     const other = wanted === 'email' ? 'sms' : 'email'
     if (flow.settings.channelFallback && can(other)) return { channel: other }
-    if (isMarketing && j.unsubscribed) return { reason: 'Stopped marketing to them' }
+    if (stopped) return { reason: 'Stopped marketing to them' }
     if (isMarketing) return { reason: 'No marketing consent' }
     return { reason: wanted === 'email' ? 'No email address' : 'No mobile number' }
   }
@@ -1350,14 +1381,16 @@ export function simulate(flow: Flow, world: FlowWorld, opts: SimulateOptions = {
 
     if (isMarketing && flow.settings.smartSending) {
       const sends = sendsByGuest.get(j.guest.id) ?? []
-      if (sends.some((ms) => Math.abs(ms - j.clock) < 16 * HOUR)) {
+      // This journey's own messages at the same moment (an email and a text sent together) are one message, not two.
+      const together = j.pushed.filter((ms) => Math.abs(ms - j.clock) < 5 * MINUTE).length
+      if (sends.filter((ms) => Math.abs(ms - j.clock) < 16 * HOUR).length > together) {
         if (past) {
           record(j, j.clock, 'skipped', () => `Skipped ${label()}: got another message within 16 hours`, step.id)
           skipMessage(j, 'Got another message within 16 hours')
         }
         return
       }
-      if (marketing.frequencyCap.enabled && sends.filter((ms) => ms <= j.clock && ms > j.clock - 7 * DAY).length >= marketing.frequencyCap.perWeek) {
+      if (marketing.frequencyCap.enabled && sends.filter((ms) => ms <= j.clock && ms > j.clock - 7 * DAY).length - together >= marketing.frequencyCap.perWeek) {
         if (past) {
           record(j, j.clock, 'skipped', () => `Skipped ${label()}: already had ${marketing.frequencyCap.perWeek} this week`, step.id)
           skipMessage(j, 'Hit the weekly limit')
@@ -1382,13 +1415,13 @@ export function simulate(flow: Flow, world: FlowWorld, opts: SimulateOptions = {
         const key = toDateKey(new Date(j.clock))
         run.upcoming[key] = (run.upcoming[key] ?? 0) + 1
       }
-      if (isMarketing) pushSend(j.guest.id, j.clock)
+      if (isMarketing) pushSend(j, j.clock)
       return
     }
 
     record(j, j.clock, 'sent', () => `Got ${sentLabel()}`, step.id)
     j.sends.push({ ms: j.clock, stepId: step.id })
-    if (isMarketing) pushSend(j.guest.id, j.clock)
+    if (isMarketing) pushSend(j, j.clock)
     if (j.counts) {
       stats.sent++
       run.messages++
@@ -1433,10 +1466,11 @@ export function simulate(flow: Flow, world: FlowWorld, opts: SimulateOptions = {
     }
   }
 
-  const pushSend = (guestId: string, ms: number) => {
-    const list = sendsByGuest.get(guestId)
+  const pushSend = (j: Journey, ms: number) => {
+    j.pushed.push(ms)
+    const list = sendsByGuest.get(j.guest.id)
     if (list) list.push(ms)
-    else sendsByGuest.set(guestId, [ms])
+    else sendsByGuest.set(j.guest.id, [ms])
   }
 
   const waitStep = (j: Journey, step: WaitStep) => {
@@ -1542,7 +1576,8 @@ export function simulate(flow: Flow, world: FlowWorld, opts: SimulateOptions = {
           .toString(36)
           .toUpperCase()
           .padStart(4, 'X')
-        j.code = { code: `${(code.prefix || 'CODE').toUpperCase()}-${suffix}`, percent: code.percent }
+        // The same prefix Promo codes knows the family by, so checkout takes the guest's code.
+        j.code = { code: `${codePrefix(code.prefix)}-${suffix}`, percent: code.percent }
         text = `Got a ${code.percent}% code, ${j.code.code}, good for ${code.validDays} ${code.validDays === 1 ? 'day' : 'days'}`
         break
       }
@@ -1553,6 +1588,7 @@ export function simulate(flow: Flow, world: FlowWorld, opts: SimulateOptions = {
         break
       case 'unsubscribe':
         j.unsubscribed = true
+        if (!stoppedBy(j.guest.id, j.clock)) unsubscribedAt.set(j.guest.id, j.clock)
         break
     }
     if (past) record(j, j.clock, 'action', text, step.id)
@@ -1631,11 +1667,14 @@ export function simulate(flow: Flow, world: FlowWorld, opts: SimulateOptions = {
       if (!credit) continue
       used.add(b.id)
       record(j, b.createdMs, 'booked', () => `Booked ${b.activityName} · ${formatCurrency(b.total, currency)}`, credit.stepId, b.total)
+      if (j.events) j.events[j.events.length - 1].bookingId = b.id
       if (j.counts) {
         perStep[credit.stepId].bookings++
         perStep[credit.stepId].revenue += b.total
         run.bookings++
         run.revenue += b.total
+        // Only marketing is credited with bookings in totals, so only marketing sends its list.
+        if (isMarketing) credits.push({ bookingId: b.id, sentAt: iso(credit.ms), at: b.createdAt, value: b.total })
       }
     }
   }
@@ -1651,14 +1690,17 @@ export function simulate(flow: Flow, world: FlowWorld, opts: SimulateOptions = {
     return false
   }
 
+  /** Bookings within the conversion window after `fromMs`, not the one the entry is about. */
   const bookingsAfter = (guestId: string, fromMs: number, excludeId?: string) => {
+    const until = Math.min(nowMs, fromMs + conversionMs)
     let count = 0
-    for (const b of ownBookings(guestId)) if (b.createdMs > fromMs && b.createdMs <= nowMs && b.id !== excludeId && standing(b.status)) count++
+    for (const b of ownBookings(guestId)) if (b.createdMs > fromMs && b.createdMs <= until && b.id !== excludeId && standing(b.status)) count++
     return count
   }
 
   const consentNeeded = isMarketing && channels.size > 0
-  const reachable = (guest: IGuest) => {
+  const reachable = (guest: IGuest, at: number) => {
+    if (stoppedBy(guest.id, at)) return false
     for (const channel of channels) {
       if (channel === 'email' && guest.emailOptIn && guest.canEmail) return true
       if (channel === 'sms' && guest.smsOptIn && guest.canText) return true
@@ -1683,6 +1725,10 @@ export function simulate(flow: Flow, world: FlowWorld, opts: SimulateOptions = {
     if (activityName) journey.activityName = activityName
     if (state === 'waiting' && j.waitingAt) journey.stepId = j.waitingAt
     if (reason) journey.reason = reason
+    // Their own details, so "Preview as a guest" fills messages with this booking, not a sample one.
+    const vars: Record<string, string> = {}
+    for (const [key, value] of Object.entries(messageContext(j))) if (typeof value === 'string' && value) vars[key] = value
+    journey.vars = vars
     return journey
   }
 
@@ -1700,6 +1746,7 @@ export function simulate(flow: Flow, world: FlowWorld, opts: SimulateOptions = {
       clicks: [],
       replies: [],
       sends: [],
+      pushed: [],
       tags: null,
       unsubscribed: false,
       code: null,
@@ -1719,7 +1766,8 @@ export function simulate(flow: Flow, world: FlowWorld, opts: SimulateOptions = {
 
     if (hasWho && !entry.whoChecked && !evaluate(flow.who, factsAt(entry, flow.who, entry.at))) return keepOut("Didn't match who can enter")
     if (isMarketing && marketing.paused) return keepOut('Marketing is paused')
-    if (consentNeeded && !reachable(entry.guest)) return keepOut('No marketing consent')
+    if (consentNeeded && stoppedBy(entry.guest.id, entry.at)) return keepOut('Stopped marketing to them')
+    if (consentNeeded && !reachable(entry.guest, entry.at)) return keepOut('No marketing consent')
 
     if (!entry.preview) {
       const reentry = flow.settings.reentry
@@ -1737,12 +1785,15 @@ export function simulate(flow: Flow, world: FlowWorld, opts: SimulateOptions = {
     if (flow.settings.holdoutPercent > 0 && chance(`${flow.id}|${entry.guest.id}|holdout`) * 100 < flow.settings.holdoutPercent) {
       if (counts) {
         run.holdout++
-        lift.outGuests++
-        lift.outBookings += bookingsAfter(entry.guest.id, entry.at, entry.booking?.id)
+        if (!liftSeen.has(entry.guest.id)) {
+          liftSeen.add(entry.guest.id)
+          lift.outGuests++
+          lift.outBookings += bookingsAfter(entry.guest.id, entry.at, entry.booking?.id)
+        }
       }
       if (keep) {
         record(j, entry.at, 'skipped', 'Kept out to measure what the automation adds')
-        kept.push(journeyOf(j, 'holdout', 'Kept out to measure (holdout)'))
+        kept.push(journeyOf(j, 'holdout', 'One of the guests kept out so you can see what it adds'))
       }
       return
     }
@@ -1753,8 +1804,11 @@ export function simulate(flow: Flow, world: FlowWorld, opts: SimulateOptions = {
     })
     if (counts) {
       run.entered++
-      lift.inGuests++
-      lift.inBookings += bookingsAfter(entry.guest.id, entry.at, entry.booking?.id)
+      if (!liftSeen.has(entry.guest.id)) {
+        liftSeen.add(entry.guest.id)
+        lift.inGuests++
+        lift.inBookings += bookingsAfter(entry.guest.id, entry.at, entry.booking?.id)
+      }
     }
     walk(j, flow.steps)
     attribute(j)
