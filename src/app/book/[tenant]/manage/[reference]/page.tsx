@@ -5,6 +5,7 @@ import { BOOKINGS, NOW, getBookingDetail, getLocationById, getStorefront, getWai
 import { getSeedThreads } from '@/lib/inbox'
 import { buildDays } from '@/lib/storefront-availability'
 import { ManageBooking } from '@/components/storefront/manage-booking'
+import { changesOf, paymentOf } from '@/lib/booking-policy'
 
 export const metadata: Metadata = {
   title: 'Your booking',
@@ -58,8 +59,9 @@ export default async function ManageBookingPage({ params }: { params: Promise<{ 
         image: activity.media.find((media) => media.isPrimary)?.url ?? activity.media[0]?.url ?? '',
         meetingPoint: siteMeeting ?? activity.meetingPoint,
         locationName: site?.name,
-        freeCancellationHours: activity.cancellationPolicy.freeCancellationHours,
-        lateRefundPercent: activity.cancellationPolicy.lateRefundPercent,
+        policy: activity.cancellationPolicy,
+        changes: changesOf(activity),
+        payment: paymentOf(activity),
         pricePerGuest: activity.priceTiers[0]?.price ?? 0,
         guestQuestions: activity.guestQuestions ?? [],
         kind: activity.kind ?? 'trip',

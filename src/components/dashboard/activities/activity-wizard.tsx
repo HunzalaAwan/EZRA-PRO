@@ -35,10 +35,13 @@ import {
 } from 'lucide-react'
 import { z } from 'zod'
 
-import type { Activity, ActivityKind, ActivityTheme, BookingSettings, CurrencyCode, PackageConfig, DifficultyLevel, GuestDetailsConfig, GuestQuestion, Location, VerticalKey } from '@/types'
+import type { Activity, ActivityKind, ActivityTheme, BookingSettings, ChangeRules, CurrencyCode, PackageConfig, PaymentTerms, DifficultyLevel, GuestDetailsConfig, GuestQuestion, Location, VerticalKey } from '@/types'
 import { DEFAULT_GUEST_FIELDS, guestDetailsOf } from '@/lib/guest-requirements'
 import { DEFAULT_BOOKING, METHOD_LABEL, bookingOf } from '@/lib/booking-method'
 import { EMPTY_PACKAGE, PackagePartsEditor, packageSeats, type PackageOption } from './package-parts-editor'
+import { PaymentTermsEditor } from './payment-terms-editor'
+import { ChangesPolicyEditor, type DraftCancellation } from './changes-policy-editor'
+import { DEFAULT_CHANGES, DEFAULT_PAYMENT, changesOf, changesSummary, depositLabel, paymentOf, policySummary, presetOf } from '@/lib/booking-policy'
 import { BookingSettingsEditor } from './booking-settings-editor'
 import { saveActivityOverride } from '@/lib/activity-overrides'
 import {
@@ -75,6 +78,7 @@ import { MediaManager, type DraftMedia } from './media-manager'
 import {
   GuestPricePreview,
   PricingTierEditor,
+  NO_LIMIT,
   blankTier,
   type DraftTier,
 } from './pricing-tier-editor'
@@ -222,6 +226,12 @@ export interface ActivityDraft {
   bring: string[]
   /** Packages: the activities inside it and the times guests can pick. */
   package: PackageConfig
+  /** How guests pay: in full, a deposit, or on the day. */
+  payment: PaymentTerms
+  /** The cancellation policy. */
+  cancellation: DraftCancellation
+  /** What guests can change themselves. */
+  changes: ChangeRules
 }
 
 const STORAGE_KEY = 'ezra:activity-wizard:v13'
@@ -279,6 +289,9 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
     accessibility: [],
     bring: [],
     package: { ...EMPTY_PACKAGE },
+    payment: { ...DEFAULT_PAYMENT },
+    cancellation: { preset: 'flexible', freeCancellationHours: 24, lateRefundPercent: 0, keepDeposit: false },
+    changes: { ...DEFAULT_CHANGES },
     freeCancellationHours: 24,
     crewIds: [],
     dining,
@@ -565,6 +578,14 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
       ? { enabled: true, distance: activity.route.distance, unit: activity.route.unit, track: activity.route.track ?? '', elevationM: activity.route.elevationM ?? 0 }
       : emptyRoute(),
     package: activity.package ?? { ...EMPTY_PACKAGE },
+    payment: paymentOf(activity),
+    cancellation: {
+      preset: presetOf(activity.cancellationPolicy),
+      freeCancellationHours: activity.cancellationPolicy.freeCancellationHours,
+      lateRefundPercent: activity.cancellationPolicy.lateRefundPercent,
+      keepDeposit: Boolean(activity.cancellationPolicy.keepDeposit),
+    },
+    changes: changesOf(activity),
     kindSettings: (() => {
       const blank = defaultKindSettings()
       const rental = activity.rental
@@ -1612,6 +1633,26 @@ export function ActivityWizard({
           customRequests: Boolean((draft.booking ?? DEFAULT_BOOKING).customQuote),
           booking: draft.booking ?? DEFAULT_BOOKING,
           tips: Boolean(draft.tips),
+          priceTiers: draft.tiers.map((tier) => ({
+            id: tier.id,
+            label: tier.label,
+            price: tier.price,
+            ...(tier.compareAtPrice ? { compareAtPrice: tier.compareAtPrice } : {}),
+            minQuantity: tier.minQuantity,
+            // Seats or stock decide how many can book; a tier has no limit of its own.
+            maxQuantity: NO_LIMIT,
+            ...(tier.description.trim() ? { description: tier.description.trim() } : {}),
+            countsTowardCapacity: tier.countsTowardCapacity,
+          })),
+          addOns: draft.addOns.map((addOn) => ({ id: addOn.id, label: addOn.label, price: addOn.price, description: addOn.description, maxPerBooking: addOn.maxPerBooking, required: addOn.required, ...(addOn.icon ? { icon: addOn.icon } : {}) })),
+          payment: draft.payment ?? DEFAULT_PAYMENT,
+          changes: draft.changes ?? DEFAULT_CHANGES,
+          cancellationPolicy: (() => {
+            const cancel = isDining(draft)
+              ? { preset: 'custom' as const, freeCancellationHours: draft.freeCancellationHours, lateRefundPercent: 0, keepDeposit: false }
+              : (draft.cancellation ?? { preset: 'flexible' as const, freeCancellationHours: 24, lateRefundPercent: 0, keepDeposit: false })
+            return { ...cancel, summary: policySummary(cancel, draft.payment) }
+          })(),
           priceCap: draft.priceCap ?? 0,
           noticeHours: draft.noticeHours ?? 0,
           customCategory: draft.customCategory?.trim() || null,
@@ -1679,6 +1720,17 @@ export function ActivityWizard({
   const unscheduled = (draft.booking?.method ?? 'instant') !== 'instant' && draft.booking?.scheduled === false
   const currentStep = steps[step]
   const isLast = step === steps.length - 1
+  const policyEditor = (
+    <ChangesPolicyEditor
+      cancellation={draft.cancellation ?? { preset: 'flexible', freeCancellationHours: 24, lateRefundPercent: 0, keepDeposit: false }}
+      onCancellation={(cancellation) => patch({ cancellation, freeCancellationHours: cancellation.freeCancellationHours })}
+      changes={draft.changes ?? DEFAULT_CHANGES}
+      onChanges={(changes) => patch({ changes })}
+      payment={draft.payment ?? DEFAULT_PAYMENT}
+      currency={currency}
+      wholeGroup={(draft.kind ?? 'trip') === 'charter'}
+    />
+  )
 
   return (
     <div className="flex flex-col gap-5">
@@ -1906,6 +1958,16 @@ export function ActivityWizard({
                         <Switch checked={Boolean(draft.tips)} onCheckedChange={(tips) => patch({ tips })} aria-label="Offer tips at checkout" />
                       </label>
 
+                      {dining ? null : (
+                        <PaymentTermsEditor
+                          value={draft.payment ?? DEFAULT_PAYMENT}
+                          onChange={(payment) => patch({ payment })}
+                          currency={currency}
+                          examplePrice={Math.max(0, ...draft.tiers.map((tier) => tier.price))}
+                          wholeGroup={(draft.kind ?? 'trip') === 'charter' || (draft.kind ?? 'trip') === 'rental'}
+                        />
+                      )}
+
                       {(draft.kind ?? 'trip') === 'rental' && !dining ? null : <GuestPricePreview
                         tiers={draft.tiers}
                         addOns={draft.addOns}
@@ -1924,7 +1986,10 @@ export function ActivityWizard({
                         errors={errors}
                       />
                     ) : (draft.kind ?? 'trip') === 'package' ? (
-                      <PackageBookingNote config={draft.package} options={packageOptions} onEdit={() => goTo(0, -1)} />
+                      <div className="flex flex-col gap-6">
+                        <PackageBookingNote config={draft.package} options={packageOptions} onEdit={() => goTo(0, -1)} />
+                        {policyEditor}
+                      </div>
                     ) : (
                       <div className="flex flex-col gap-6">
                         <BookingSettingsEditor
@@ -1935,6 +2000,7 @@ export function ActivityWizard({
                           businessPhone={businessPhone}
                           groupWord={(draft.kind ?? 'trip') === 'rental' ? 'items' : 'guests'}
                         />
+                        {policyEditor}
                         {locations.length > 0 ? (
                           <LocationsEditor
                             pickOnly={unscheduled}
@@ -2940,6 +3006,21 @@ function ReviewStep({
           step: 4,
         },
         {
+          label: 'How guests pay',
+          value: (() => {
+            const pay = draft.payment ?? DEFAULT_PAYMENT
+            if (pay.collect === 'later') return 'On the day, card kept to hold the booking'
+            if (pay.collect === 'full') return 'In full at checkout'
+            return `${depositLabel(pay, (minor) => formatCurrency(minor, currency))} deposit, the rest ${pay.balanceDueDays === 0 ? 'on the day' : `${pay.balanceDueDays} ${pluralize(pay.balanceDueDays, 'day')} before`}`
+          })(),
+          step: 3,
+        },
+        {
+          label: 'Cancellations',
+          value: `${policySummary(draft.cancellation ?? { freeCancellationHours: 24, lateRefundPercent: 0, keepDeposit: false }, draft.payment)} ${changesSummary(draft.changes ?? DEFAULT_CHANGES, (minor) => formatCurrency(minor, currency))}`,
+          step: 4,
+        },
+        {
           label: 'Schedule',
           value: (draft.booking?.method ?? 'instant') !== 'instant' && draft.booking?.scheduled === false ? 'No set schedule, arranged with each guest' : describeSchedule(draft.schedule, seatsFor(draft)),
           step: 4,
@@ -3038,9 +3119,9 @@ function ReviewStep({
             />
           </label>
 
-          <Separator />
+          {dining ? <Separator /> : null}
 
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          {dining ? <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="min-w-0">
               <span className="block text-[0.8125rem] font-medium">Free cancellation window</span>
               <span className="block text-xs text-muted">
@@ -3066,7 +3147,7 @@ function ReviewStep({
                 </button>
               ))}
             </div>
-          </div>
+          </div> : null}
         </div>
       </div>
 

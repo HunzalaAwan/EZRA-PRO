@@ -24,6 +24,8 @@ import {
   Star,
   Users,
   X,
+  CalendarClock,
+  Wallet,
 } from 'lucide-react'
 
 import {
@@ -48,6 +50,7 @@ import { StaggerGroup, StaggerItem } from '@/components/motion/stagger'
 import { bookingOf } from '@/lib/booking-method'
 import { BookingWidget, type AvailabilityDay } from '@/components/storefront/booking-widget'
 import type { PackagePartView } from '@/lib/packages'
+import { changesOf, changesSummary, depositLabel, hoursLabel, paymentOf } from '@/lib/booking-policy'
 import { StickyRail } from '@/components/storefront/sticky-rail'
 import { StarRow } from '@/components/storefront/storefront-hero'
 import { TrustBar } from '@/components/storefront/trust-bar'
@@ -605,14 +608,35 @@ export function ActivityDetailView({
                   <ShieldCheck className="mt-0.5 size-5 shrink-0 text-success" aria-hidden="true" />
                   <div>
                     <p className="text-sm font-semibold text-foreground">
-                      Free cancellation up to{' '}
-                      {activity.cancellationPolicy.freeCancellationHours} hours before departure
+                      {activity.cancellationPolicy.freeCancellationHours > 0
+                        ? `Free cancellation up to ${hoursLabel(activity.cancellationPolicy.freeCancellationHours)} before`
+                        : 'Non-refundable'}
                     </p>
                     <p className="mt-1.5 text-sm leading-relaxed text-muted">
                       {activity.cancellationPolicy.summary}
                     </p>
                   </div>
                 </div>
+
+                <ul className="mt-4 flex list-none flex-col gap-2.5 border-t border-line-subtle p-0 pt-4 text-sm text-muted">
+                  <li className="flex items-start gap-2.5">
+                    <CalendarClock className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+                    {changesSummary(changesOf(activity), (minor) => formatCurrency(minor, tenant.currency))}
+                  </li>
+                  {(() => {
+                    const pay = paymentOf(activity)
+                    if (pay.collect === 'full') return null
+                    const money = (minor: number) => formatCurrency(minor, tenant.currency)
+                    return (
+                      <li className="flex items-start gap-2.5">
+                        <Wallet className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+                        {pay.collect === 'later'
+                          ? 'Nothing to pay today: your card holds the booking and you pay on the day.'
+                          : `Book with a ${depositLabel(pay, money)} deposit; the rest is charged ${pay.balanceDueDays === 0 ? 'on the day' : `${pay.balanceDueDays} ${pay.balanceDueDays === 1 ? 'day' : 'days'} before`}.`}
+                      </li>
+                    )
+                  })()}
+                </ul>
 
                 <p className="mt-4 flex items-start gap-2.5 border-t border-line-subtle pt-4 text-sm text-muted">
                   <Check className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />

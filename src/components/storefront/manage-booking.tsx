@@ -37,7 +37,10 @@ import { sendGuestMessage, useInbox } from '@/hooks/use-inbox'
 import type { InboxThread } from '@/lib/inbox'
 import { answerProblem } from '@/lib/guest-requirements'
 import { cn, formatCurrency, formatDateLong, formatRelative, formatTime, pluralize } from '@/lib/utils'
-import type { ActivityKind, BookingStatus, CurrencyCode, GuestQuestion, WaiverTemplate } from '@/types'
+import { useBookingLedger } from '@/hooks/use-booking-ledger'
+import { changeBooking, withLedger } from '@/lib/booking-ledger'
+import { changesSummary, hoursLabel, refundFor, splitPayment } from '@/lib/booking-policy'
+import type { ActivityKind, BookingStatus, CancellationPolicy, ChangeRules, CurrencyCode, GuestQuestion, PaymentTerms, WaiverTemplate } from '@/types'
 
 /* ==========================================================================
    MANAGE BOOKING — the guest's own page, from the link in every message.
@@ -113,8 +116,9 @@ export function ManageBooking(
           image: string
           meetingPoint: string
           locationName?: string
-          freeCancellationHours: number
-          lateRefundPercent: number
+          policy: Pick<CancellationPolicy, 'freeCancellationHours' | 'lateRefundPercent' | 'keepDeposit' | 'summary'>
+          changes: ChangeRules
+          payment: PaymentTerms
           pricePerGuest: number
           guestQuestions: GuestQuestion[]
           kind: ActivityKind
@@ -143,19 +147,33 @@ export function ManageBooking(
 
 type InnerProps = Exclude<Parameters<typeof ManageBooking>[0], { notFoundReference: string }>
 
-function ManageBookingInner({ tenant, booking, guest, activity, departure, waiver, days, thread, nowIso }: InnerProps) {
+function ManageBookingInner({ tenant, booking, guest, activity, departure, waiver, days: rawDays, thread, nowIso }: InnerProps) {
   const [state, update] = useManageState(tenant.slug, booking.reference)
   const [open, setOpen] = React.useState<'waiver' | 'details' | 'move' | 'guests' | 'cancel' | null>(null)
   const now = React.useMemo(() => new Date(nowIso), [nowIso])
   const currency = tenant.currency
+  const money = (minor: number) => formatCurrency(minor, currency)
 
-  const startsAt = state.movedTo ?? departure.startsAt
+  // Moves, cancellations and added guests live in the shared booking ledger, so the
+  // dashboard and every availability count see them the moment the guest makes them.
+  const ledger = useBookingLedger(tenant.slug)
+  const change = ledger.changes[booking.reference]
+  const start = { fromDepartureId: departure.id, fromStartsAt: departure.startsAt, fromParty: booking.partySize }
+  const days = React.useMemo(() => rawDays.map((day) => ({ ...day, slots: day.slots.map((slot) => withLedger(slot, ledger.delta)) })), [rawDays, ledger.delta])
+  const currentDepartureId = change?.movedTo?.departureId ?? departure.id
+  const startsAt = change?.movedTo?.startsAt ?? departure.startsAt
   const hoursToGo = (new Date(startsAt).getTime() - now.getTime()) / 3_600_000
   const past = hoursToGo < 0
-  const cancelled = state.cancelled || booking.status === 'cancelled' || booking.status === 'refunded'
-  const freeWindow = hoursToGo >= activity.freeCancellationHours
-  const partySize = booking.partySize + state.addedGuests
-  const extra = state.addedGuests * activity.pricePerGuest
+  const cancelled = Boolean(change?.cancelled) || booking.status === 'cancelled' || booking.status === 'refunded'
+  const rules = activity.changes
+  const moves = change?.moves ?? 0
+  const canMove = rules.reschedule && hoursToGo >= rules.rescheduleHours && (rules.maxReschedules === 0 || moves < rules.maxReschedules)
+  const freeWindow = activity.policy.freeCancellationHours > 0 && hoursToGo >= activity.policy.freeCancellationHours
+  const partySize = change?.party ?? booking.partySize
+  const added = Math.max(0, partySize - booking.partySize)
+  const extra = added * activity.pricePerGuest
+  const seatsLeftNow = Math.max(0, departure.seatsLeft - (ledger.delta[currentDepartureId] ?? 0))
+  const deposit = activity.payment.collect === 'deposit' ? splitPayment(activity.payment, booking.total, booking.partySize).now : 0
   const balance = state.balancePaid ? 0 : Math.max(0, booking.total + extra - booking.amountPaid)
   const unsigned = state.waiversSigned ? 0 : booking.participants.filter((participant) => !participant.waiverSigned).length
   const missingDetails = state.detailsDone
@@ -164,7 +182,7 @@ function ManageBookingInner({ tenant, booking, guest, activity, departure, waive
         (sum, participant) => sum + activity.guestQuestions.filter((question) => question.scope === 'guest' && answerProblem(question, participant.answers[question.id])).length,
         0,
       )
-  const refund = Math.round(booking.amountPaid * (freeWindow ? 1 : activity.lateRefundPercent / 100))
+  const refund = refundFor(activity.policy, booking.amountPaid, hoursToGo, deposit)
 
   /* waiver + details forms */
   const [waiverState, setWaiverState] = React.useState<WaiverState>(EMPTY_WAIVER)
@@ -177,7 +195,7 @@ function ManageBookingInner({ tenant, booking, guest, activity, departure, waive
   /* reschedule */
   const [moveDay, setMoveDay] = React.useState<string>('')
   const [moveSlot, setMoveSlot] = React.useState<string>('')
-  const bookable = days.filter((day) => day.slots.some((slot) => !slot.soldOut && slot.seatsLeft >= partySize && slot.departureId !== departure.id))
+  const bookable = days.filter((day) => day.slots.some((slot) => !slot.soldOut && slot.seatsLeft >= partySize && slot.departureId !== currentDepartureId))
   const dayChoice = days.find((day) => day.dateKey === moveDay)
 
   /* add guests */
@@ -235,7 +253,7 @@ function ManageBookingInner({ tenant, booking, guest, activity, departure, waive
               <div>
                 <dt className="text-xs text-subtle">When</dt>
                 <dd className="font-medium">{formatDateLong(new Date(startsAt))} · {formatTime(startsAt)}</dd>
-                {state.movedTo ? <dd className="text-xs text-success">Moved from {formatDateLong(new Date(departure.startsAt))}</dd> : null}
+                {change?.movedTo ? <dd className="text-xs text-success">Moved from {formatDateLong(new Date(departure.startsAt))} · {formatTime(departure.startsAt)}</dd> : null}
               </div>
             </div>
             <div className="flex items-start gap-2">
@@ -264,7 +282,7 @@ function ManageBookingInner({ tenant, booking, guest, activity, departure, waive
 
       {cancelled ? (
         <div role="status" className="mt-6 rounded-2xl border border-line bg-surface-sunken px-5 py-4 text-sm">
-          This booking is cancelled{state.refunded ? `. ${formatCurrency(state.refunded, currency)} is on its way back to your card.` : '.'} We hope to see you another time.
+          This booking is cancelled{change?.refund ? `. ${formatCurrency(change.refund, currency)} is on its way back to your card.` : '.'} We hope to see you another time.
         </div>
       ) : null}
 
@@ -353,18 +371,35 @@ function ManageBookingInner({ tenant, booking, guest, activity, departure, waive
       {!cancelled && !past ? (
         <section className={cn(section, 'mt-6')}>
           <h2 className="text-sm font-semibold text-foreground">Change your booking</h2>
-          <p className="mt-0.5 text-xs text-subtle">
-            {freeWindow
-              ? `Free changes and cancellation until ${activity.freeCancellationHours} hours before the start.`
-              : `Inside ${activity.freeCancellationHours} hours, changes go through the crew: call ${tenant.phone} or send a message below.`}
-          </p>
+          <ul className="mt-1.5 flex list-none flex-col gap-0.5 p-0 text-xs text-subtle">
+            <li>{activity.policy.summary}</li>
+            <li>
+              {changesSummary(rules, money)}
+              {rules.reschedule && rules.maxReschedules > 0 ? ` Moved ${moves} of ${rules.maxReschedules}.` : ''}
+            </li>
+          </ul>
           <div className="mt-3 flex flex-wrap gap-2">
-            <Button variant="secondary" leftIcon={<CalendarDays />} disabled={!freeWindow} onClick={() => setOpen(open === 'move' ? null : 'move')}>Reschedule</Button>
-            {activity.kind !== 'charter' ? (
-              <Button variant="secondary" leftIcon={<Users />} disabled={departure.seatsLeft <= 0} onClick={() => setOpen(open === 'guests' ? null : 'guests')}>Add guests</Button>
+            {rules.reschedule ? (
+              <Button variant="secondary" leftIcon={<CalendarDays />} disabled={!canMove} onClick={() => setOpen(open === 'move' ? null : 'move')}>
+                {rules.rescheduleFee > 0 ? `Move for ${money(rules.rescheduleFee)}` : 'Move to another time'}
+              </Button>
             ) : null}
-            <Button variant="ghost" leftIcon={<XCircle />} onClick={() => setOpen(open === 'cancel' ? null : 'cancel')}>Cancel booking</Button>
+            {rules.addGuests && activity.kind !== 'charter' ? (
+              <Button variant="secondary" leftIcon={<Users />} disabled={seatsLeftNow <= 0} onClick={() => setOpen(open === 'guests' ? null : 'guests')}>Add guests</Button>
+            ) : null}
+            {rules.cancelOnline ? (
+              <Button variant="ghost" leftIcon={<XCircle />} onClick={() => setOpen(open === 'cancel' ? null : 'cancel')}>Cancel booking</Button>
+            ) : null}
           </div>
+          {rules.reschedule && !canMove ? (
+            <p className="mt-2 text-xs text-muted">
+              {rules.maxReschedules > 0 && moves >= rules.maxReschedules
+                ? 'This booking has been moved as many times as allowed.'
+                : `Moves close ${hoursLabel(rules.rescheduleHours)} before the start.`}{' '}
+              Call {tenant.phone} or send a message below and the team will help.
+            </p>
+          ) : null}
+          {!rules.cancelOnline ? <p className="mt-2 text-xs text-muted">To cancel, call {tenant.phone} or send a message below.</p> : null}
 
           {open === 'move' ? (
             <div className="mt-4 flex flex-col gap-3 border-t border-line-subtle pt-4">
@@ -385,15 +420,16 @@ function ManageBookingInner({ tenant, booking, guest, activity, departure, waive
               {dayChoice ? (
                 <div className="flex flex-wrap gap-2">
                   {dayChoice.slots
-                    .filter((slot) => !slot.soldOut && slot.seatsLeft >= partySize && slot.departureId !== departure.id)
+                    .filter((slot) => !slot.soldOut && slot.seatsLeft >= partySize && slot.departureId !== currentDepartureId)
                     .map((slot) => (
                       <button
                         key={slot.departureId}
                         type="button"
-                        onClick={() => setMoveSlot(slot.startsAt)}
-                        className={cn('rounded-xl border px-3 py-2 text-sm font-medium', moveSlot === slot.startsAt ? 'border-primary bg-primary-soft/40' : 'border-line')}
+                        onClick={() => setMoveSlot(slot.departureId)}
+                        className={cn('rounded-xl border px-3 py-2 text-sm font-medium', moveSlot === slot.departureId ? 'border-primary bg-primary-soft/40' : 'border-line')}
                       >
                         {formatTime(slot.startsAt)}
+                        <span className="block text-xs font-normal text-subtle">{slot.seatsLeft} left</span>
                       </button>
                     ))}
                 </div>
@@ -402,12 +438,21 @@ function ManageBookingInner({ tenant, booking, guest, activity, departure, waive
                 <Button
                   disabled={!moveSlot}
                   onClick={() => {
-                    update({ movedTo: moveSlot })
+                    const slot = days.flatMap((day) => day.slots).find((entry) => entry.departureId === moveSlot)
+                    if (!slot) return
+                    changeBooking(
+                      tenant.slug,
+                      booking.reference,
+                      start,
+                      { movedTo: { departureId: slot.departureId, startsAt: slot.startsAt }, moves: moves + 1, fee: (change?.fee ?? 0) + rules.rescheduleFee },
+                      { by: 'guest', what: `Moved to ${formatDateLong(new Date(slot.startsAt))} at ${formatTime(slot.startsAt)}` },
+                    )
                     setOpen(null)
-                    toast.success('Booking moved', { description: `${formatDateLong(new Date(moveSlot))} at ${formatTime(moveSlot)}. A new confirmation is on its way.` })
+                    setMoveSlot('')
+                    toast.success('Booking moved', { description: `${formatDateLong(new Date(slot.startsAt))} at ${formatTime(slot.startsAt)}.${rules.rescheduleFee > 0 ? ` ${money(rules.rescheduleFee)} charged.` : ''} A new confirmation is on its way.` })
                   }}
                 >
-                  Move my booking
+                  {rules.rescheduleFee > 0 ? `Move and pay ${money(rules.rescheduleFee)}` : 'Move my booking'}
                 </Button>
               </div>
             </div>
@@ -418,12 +463,13 @@ function ManageBookingInner({ tenant, booking, guest, activity, departure, waive
               <div className="flex items-center gap-3">
                 <IconButton aria-label="Fewer guests" size="sm" variant="outline" disabled={adding <= 1} onClick={() => setAdding((n) => n - 1)}><Minus aria-hidden="true" /></IconButton>
                 <span className="w-6 text-center text-base font-semibold tabular-nums">{adding}</span>
-                <IconButton aria-label="More guests" size="sm" variant="outline" disabled={adding >= departure.seatsLeft} onClick={() => setAdding((n) => n + 1)}><Plus aria-hidden="true" /></IconButton>
-                <span className="text-sm text-muted">more at {formatCurrency(activity.pricePerGuest, currency)} each · {departure.seatsLeft} seats left</span>
+                <IconButton aria-label="More guests" size="sm" variant="outline" disabled={adding >= seatsLeftNow} onClick={() => setAdding((n) => n + 1)}><Plus aria-hidden="true" /></IconButton>
+                <span className="text-sm text-muted">more at {formatCurrency(activity.pricePerGuest, currency)} each · {seatsLeftNow} seats left</span>
               </div>
               <Button
                 onClick={() => {
-                  update({ addedGuests: state.addedGuests + adding, balancePaid: true })
+                  changeBooking(tenant.slug, booking.reference, start, { party: partySize + adding }, { by: 'guest', what: `Added ${adding} ${pluralize(adding, 'guest')}` })
+                  update({ balancePaid: true })
                   setOpen(null)
                   toast.success(`${adding} ${pluralize(adding, 'guest')} added`, { description: `Paid ${formatCurrency(adding * activity.pricePerGuest, currency)}. Add their details above.` })
                 }}
@@ -436,12 +482,14 @@ function ManageBookingInner({ tenant, booking, guest, activity, departure, waive
           {open === 'cancel' ? (
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line-subtle pt-4">
               <p className="text-sm text-muted">
-                {refund > 0 ? `You get ${formatCurrency(refund, currency)} back${freeWindow ? ', the full amount' : ` (${activity.lateRefundPercent}% inside ${activity.freeCancellationHours} hours)`}.` : `Inside ${activity.freeCancellationHours} hours there is no refund, but you can still move to another day by messaging the crew.`}
+                {refund > 0
+                  ? `You get ${formatCurrency(refund, currency)} back${freeWindow ? (deposit > 0 && activity.policy.keepDeposit ? ', everything but the deposit' : ', the full amount') : ` (${activity.policy.lateRefundPercent}% this close to the start)`}.`
+                  : `There is no refund now.${canMove ? ' You can still move to another time instead.' : ''}`}
               </p>
               <Button
                 variant="danger"
                 onClick={() => {
-                  update({ cancelled: true, refunded: refund })
+                  changeBooking(tenant.slug, booking.reference, start, { cancelled: true, refund }, { by: 'guest', what: refund > 0 ? `Cancelled, ${money(refund)} refunded` : 'Cancelled, no refund' })
                   setOpen(null)
                   toast('Booking cancelled', { description: refund > 0 ? `${formatCurrency(refund, currency)} refunded to your card.` : undefined })
                 }}

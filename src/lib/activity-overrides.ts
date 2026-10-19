@@ -66,6 +66,12 @@ export interface ActivityOverride {
   accessibility?: string[]
   bring?: string[]
   ride?: RideConfig
+  /** Prices and extras; absent on edits saved before they were kept. */
+  priceTiers?: Activity['priceTiers']
+  addOns?: Activity['addOns']
+  payment?: Activity['payment']
+  changes?: Activity['changes']
+  cancellationPolicy?: Activity['cancellationPolicy']
   /** null clears the route. */
   route?: RouteInfo | null
   updatedAt: string
@@ -140,6 +146,13 @@ export function applyActivityOverride<T extends Activity>(activity: T, override?
     charter: override.charter ?? activity.charter,
     lesson: override.lesson ?? activity.lesson,
     pass: override.pass ?? activity.pass,
+    package: override.package ?? activity.package,
+    priceTiers: override.priceTiers && override.priceTiers.length > 0 ? override.priceTiers : activity.priceTiers,
+    basePrice: override.priceTiers && override.priceTiers.length > 0 ? override.priceTiers[0].price : activity.basePrice,
+    addOns: override.addOns ?? activity.addOns,
+    payment: override.payment ?? activity.payment,
+    changes: override.changes ?? activity.changes,
+    cancellationPolicy: override.cancellationPolicy ?? activity.cancellationPolicy,
     guestQuestions: override.guestQuestions ?? activity.guestQuestions,
     waiverId: override.waiverId === undefined ? activity.waiverId : (override.waiverId ?? undefined),
     pickup: override.pickup === undefined ? activity.pickup : (override.pickup ?? undefined),

@@ -1048,23 +1048,8 @@ export function RentalRatesEditor({
                     {(control) => <Input {...control} type="number" min={0} placeholder="None" leftIcon={<span className="text-sm font-medium">{currencySymbol}</span>} value={item.cap ? item.cap / 100 : ''} onChange={(e) => setItem(tier.id, { cap: money(e.target.value) })} />}
                   </Field>
                 ) : null}
-                <Field label="Deposit" labelSize="sm" optional>
+                <Field label="Security deposit" labelSize="sm" optional description="Held at pick-up, given back on return.">
                   {(control) => <Input {...control} type="number" min={0} placeholder="None" leftIcon={<span className="text-sm font-medium">{currencySymbol}</span>} value={item.deposit ? item.deposit / 100 : ''} onChange={(e) => setItem(tier.id, { deposit: money(e.target.value) })} />}
-                </Field>
-                <Field label="Max per booking" labelSize="sm" optional>
-                  {(control) => (
-                    <Input
-                      {...control}
-                      type="number"
-                      min={1}
-                      placeholder="Any"
-                      value={tier.maxQuantity >= 99 ? '' : tier.maxQuantity}
-                      onChange={(e) => {
-                        const parsed = Number.parseInt(e.target.value, 10)
-                        setTier(tier.id, { maxQuantity: Number.isFinite(parsed) && parsed > 0 ? parsed : 99 })
-                      }}
-                    />
-                  )}
                 </Field>
               </div>
             </li>

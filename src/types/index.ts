@@ -247,6 +247,39 @@ export interface CancellationPolicy {
   /** Percent refunded inside the window (0-100). */
   lateRefundPercent: number
   summary: string
+  /** Which standard policy this is; custom when the numbers are the business's own. */
+  preset?: 'flexible' | 'moderate' | 'strict' | 'none' | 'custom'
+  /** With a deposit: the deposit is never refunded, even inside the free window. */
+  keepDeposit?: boolean
+}
+
+/** How guests pay: all now, part now and the rest before the day, or on the day. */
+export interface PaymentTerms {
+  collect: 'full' | 'deposit' | 'later'
+  /** A percent of the total, or a set amount per guest or per booking. */
+  depositType: 'percent' | 'per_guest' | 'per_booking'
+  /** Percent, or minor units for the set amounts. */
+  depositValue: number
+  /** The rest is charged this many days before the start, to the saved card. 0: on the day. */
+  balanceDueDays: number
+  /** Guests can pay everything now instead. */
+  allowPayInFull: boolean
+}
+
+/** What guests can change themselves from their booking page. */
+export interface ChangeRules {
+  /** Guests can move to another time. */
+  reschedule: boolean
+  /** Until this many hours before the start. */
+  rescheduleHours: number
+  /** How many times one booking can be moved. 0: no limit. */
+  maxReschedules: number
+  /** Charged per move, minor units. 0: free. */
+  rescheduleFee: number
+  /** Guests can add people while there is room. */
+  addGuests: boolean
+  /** Guests can cancel online; off, they call or message the business. */
+  cancelOnline: boolean
 }
 
 /* ==========================================================================
@@ -675,6 +708,10 @@ export interface Activity {
   /** Colour key used to tint this activity on the calendar. */
   colorKey: 'lagoon' | 'coral' | 'sunset' | 'reef' | 'info' | 'success'
   cancellationPolicy: CancellationPolicy
+  /** How guests pay. Absent: in full at checkout. */
+  payment?: Partial<PaymentTerms>
+  /** What guests can change themselves. Absent: the standard rules. */
+  changes?: Partial<ChangeRules>
   /** Resources (boats, kayaks, tables, guides) each departure consumes. */
   requiredResourceIds: string[]
   rating: number

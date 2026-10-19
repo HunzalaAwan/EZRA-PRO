@@ -34,9 +34,11 @@ export function TrustBar({
   ...props
 }: TrustBarProps) {
   const cancellation =
-    freeCancellationHours >= 48
-      ? `Free cancellation up to ${Math.round(freeCancellationHours / 24)} days before`
-      : `Free cancellation up to ${freeCancellationHours} hours before`
+    freeCancellationHours <= 0
+      ? 'Non-refundable once booked'
+      : freeCancellationHours >= 48
+        ? `Free cancellation up to ${Math.round(freeCancellationHours / 24)} days before`
+        : `Free cancellation up to ${freeCancellationHours} hours before`
 
   const items = [
     {
@@ -135,7 +137,7 @@ export function TrustSeal({ freeCancellationHours = 24, byRequest = false, class
       {...props}
     >
       <BadgeCheck className="size-3.5 shrink-0 text-success" aria-hidden="true" />
-      Free cancellation up to {freeCancellationHours}h before · {byRequest ? 'confirmed by the team' : 'instant confirmation'} · secure
+      {freeCancellationHours > 0 ? `Free cancellation up to ${freeCancellationHours >= 48 ? `${Math.round(freeCancellationHours / 24)} days` : `${freeCancellationHours}h`} before` : 'Non-refundable'} · {byRequest ? 'confirmed by the team' : 'instant confirmation'} · secure
       payment
     </p>
   )

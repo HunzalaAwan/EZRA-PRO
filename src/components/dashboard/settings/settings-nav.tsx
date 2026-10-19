@@ -77,7 +77,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
   {
     href: '/dashboard/settings/booking',
     label: 'Booking flow',
-    description: 'Cancellation, deposits and guest details',
+    description: 'Calendar window and waitlists',
     icon: TicketCheck,
   },
   {

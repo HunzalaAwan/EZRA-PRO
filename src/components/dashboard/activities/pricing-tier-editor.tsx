@@ -127,25 +127,6 @@ export function MoneyInput({
   )
 }
 
-/** A maximum that may be left empty: empty means no limit of its own. */
-function OptionalLimitField({ value, onValueChange, ariaLabel }: { value: number; onValueChange: (value: number) => void; ariaLabel: string }) {
-  return (
-    <Input
-      type="number"
-      value={value >= NO_LIMIT ? '' : value}
-      min={1}
-      size="sm"
-      placeholder="No limit"
-      aria-label={ariaLabel}
-      inputClassName="tabular"
-      onChange={(event) => {
-        const parsed = Number.parseInt(event.target.value, 10)
-        onValueChange(Number.isFinite(parsed) && parsed > 0 ? parsed : NO_LIMIT)
-      }}
-    />
-  )
-}
-
 function NumberField({
   value,
   onValueChange,
@@ -252,7 +233,7 @@ export function PricingTierEditor({
                 </p>
               ) : null}
 
-              <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+              <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                 <Field label="Price" labelSize="sm">
                   <MoneyInput
                     value={tier.price}
@@ -275,18 +256,11 @@ export function PricingTierEditor({
                     ariaLabel={`Compare-at price for ${tier.label || `tier ${index + 1}`}`}
                   />
                 </Field>
-                <Field label="Min per booking" labelSize="sm" description="Every booking needs at least this many. 0 for none.">
+                <Field label="At least" labelSize="sm" description="Each booking includes this many. 0 for none. The most is the seats left.">
                   <NumberField
                     value={tier.minQuantity}
                     onValueChange={(minQuantity) => update(index, { minQuantity: Math.max(0, minQuantity) })}
                     ariaLabel={`Minimum per booking for ${tier.label || `tier ${index + 1}`}`}
-                  />
-                </Field>
-                <Field label="Max per booking" labelSize="sm" optional description="Empty: only the seats limit it.">
-                  <OptionalLimitField
-                    value={tier.maxQuantity}
-                    onValueChange={(maxQuantity) => update(index, { maxQuantity })}
-                    ariaLabel={`Maximum per booking for ${tier.label || `tier ${index + 1}`}`}
                   />
                 </Field>
               </div>

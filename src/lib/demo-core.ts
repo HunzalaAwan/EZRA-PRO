@@ -73,7 +73,10 @@ import type {
   User,
   WaiverTemplate,
   WeatherSnapshot,
+  ChangeRules,
+  PaymentTerms,
 } from '@/types'
+import { DEFAULT_PAYMENT, policySummary, presetOf } from '@/lib/booking-policy'
 
 import {
   addDays,
@@ -482,6 +485,27 @@ const PICKUP_BY_SLUG: Record<string, ActivityPickup> = {
    ========================================================================== */
 
 /** How guests book, where it is not simply online: request, call, no set schedule, or exceptions. */
+/** How guests pay, where it is not in full at checkout. */
+const PAYMENT_BY_SLUG: Record<string, Partial<PaymentTerms>> = {
+  'private-sportfishing-charter': { collect: 'deposit', depositType: 'percent', depositValue: 30, balanceDueDays: 7, allowPayInFull: true },
+  'private-catamaran-charter': { collect: 'deposit', depositType: 'per_booking', depositValue: 50000, balanceDueDays: 14, allowPayInFull: true },
+  'molokai-channel-crossing': { collect: 'deposit', depositType: 'percent', depositValue: 50, balanceDueDays: 30, allowPayInFull: true },
+  'maui-bucket-list': { collect: 'deposit', depositType: 'per_guest', depositValue: 5000, balanceDueDays: 2, allowPayInFull: true },
+  'island-jeep-rental': { collect: 'later', allowPayInFull: true },
+}
+
+/** What guests can change themselves, where it differs from the standard rules. */
+const CHANGES_BY_SLUG: Record<string, Partial<ChangeRules>> = {
+  'private-sportfishing-charter': { reschedule: true, rescheduleHours: 72, maxReschedules: 1, rescheduleFee: 0, cancelOnline: false },
+  'private-catamaran-charter': { reschedule: true, rescheduleHours: 168, maxReschedules: 1, cancelOnline: false },
+  'night-manta-ray-dive': { rescheduleHours: 12, maxReschedules: 0, rescheduleFee: 1500 },
+  'beginner-surf-lesson': { rescheduleHours: 6, maxReschedules: 0 },
+  'molokai-channel-crossing': { rescheduleHours: 336, maxReschedules: 1, addGuests: false },
+}
+
+/** The policy preset for an activity, and whether a deposit is kept. */
+const KEEP_DEPOSIT = new Set(['private-sportfishing-charter', 'molokai-channel-crossing'])
+
 const BOOKING_BY_SLUG: Record<string, Partial<BookingSettings>> = {
   'private-sportfishing-charter': { method: 'request', scheduled: true, replyHours: 4, customQuote: true },
   'private-catamaran-charter': { method: 'request', scheduled: true, callHours: 'Every day, 7am to 7pm' },
@@ -3608,7 +3632,8 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     price,
     compareAtPrice: undefined,
     minQuantity: min,
-    maxQuantity: max,
+    // Seats or stock decide how many can book; tiers carry no limit of their own.
+    maxQuantity: Math.max(99, max),
     description: note,
     countsTowardCapacity: !/infant|ride-along|support crew|spectator/i.test(label),
   }))
@@ -3684,6 +3709,8 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     ...(spec.priceCap ? { priceCap: spec.priceCap } : {}),
     ...(spec.noticeHours ? { noticeHours: spec.noticeHours } : {}),
     ...(BOOKING_BY_SLUG[spec.slug] ? { booking: BOOKING_BY_SLUG[spec.slug] } : {}),
+    ...(PAYMENT_BY_SLUG[spec.slug] ? { payment: PAYMENT_BY_SLUG[spec.slug] } : {}),
+    ...(CHANGES_BY_SLUG[spec.slug] ? { changes: CHANGES_BY_SLUG[spec.slug] } : {}),
     // Guided trips and rides offer a tip; rentals and passes do not.
     ...(['trip', 'activity', 'charter', 'lesson'].includes(spec.kind ?? 'trip') ? { tips: true } : {}),
     ...(spec.ride ? { ride: spec.ride } : {}),
@@ -3715,14 +3742,10 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     addOns,
     media: buildMedia(spec.slug, spec.name, spec.photos),
     colorKey: spec.colorKey,
-    cancellationPolicy: {
-      freeCancellationHours: freeHours,
-      lateRefundPercent: lateRefund,
-      summary:
-        lateRefund > 0
-          ? `Free cancellation up to ${freeHours} hours before departure. Inside ${freeHours} hours we refund ${lateRefund}%.`
-          : `Free cancellation up to ${freeHours} hours before departure. No refund inside ${freeHours} hours.`,
-    },
+    cancellationPolicy: (() => {
+      const policy = { freeCancellationHours: freeHours, lateRefundPercent: lateRefund, keepDeposit: KEEP_DEPOSIT.has(spec.slug) }
+      return { ...policy, preset: presetOf(policy), summary: policySummary(policy, PAYMENT_BY_SLUG[spec.slug] ? { ...DEFAULT_PAYMENT, ...PAYMENT_BY_SLUG[spec.slug] } : undefined) }
+    })(),
     requiredResourceIds: spec.resources,
     rating: spec.rating,
     reviewCount: spec.reviewCount,

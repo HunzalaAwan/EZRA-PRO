@@ -65,6 +65,8 @@ import { CheckoutOptIn, useCheckoutOptIn } from '@/components/storefront/storefr
 import type { RentalMode } from '@/lib/activity-kinds'
 import { usePricing } from '@/hooks/use-pricing'
 import { recordBooking } from '@/lib/booking-ledger'
+import { depositLabel, hoursLabel, paymentOf, splitPayment } from '@/lib/booking-policy'
+import type { PaymentTerms } from '@/types'
 
 /* ==========================================================================
    TYPES
@@ -425,6 +427,20 @@ export function CheckoutFlow({
     if (giftOff > 0 && card) lines.push({ id: 'gift', label: `Gift card …${card.code.slice(-4)}`, kind: 'addon' as const, quantity: 1, unitPrice: -giftOff, total: -giftOff })
     return { ...withPickup, addOnLines: lines, subtotal: withPickup.subtotal + tip, total: Math.max(0, withPickup.total + tip - promoOff - giftOff) }
   }, [withPickup, promoOff, giftOff, promo, card, tip, tipChoice])
+  /* ---------- how they pay: in full, a deposit, or on the day ---------- */
+  const offered = paymentOf(activity)
+  // Booked after the balance would be due: everything is paid now.
+  const lateForDeposit =
+    offered.collect === 'deposit' && new Date(departure.startsAt).getTime() - offered.balanceDueDays * 86_400_000 <= new Date(nowIso ?? departure.startsAt).getTime()
+  const terms = lateForDeposit ? { ...offered, collect: 'full' as const } : offered
+  const [payInFull, setPayInFull] = React.useState(false)
+  const split = splitPayment(terms, displayQuote.total, Math.max(1, quote.party), payInFull)
+  const balanceDate = (() => {
+    const date = new Date(departure.startsAt)
+    if (terms.collect === 'deposit') date.setDate(date.getDate() - terms.balanceDueDays)
+    return date.toISOString()
+  })()
+  const balanceWhen = terms.collect === 'later' || terms.balanceDueDays === 0 ? 'on the day' : `on ${formatDateLong(balanceDate)}`
   const optIn = useCheckoutOptIn(tenant)
   const finishPayment = () => {
     // Take the seats: one entry per part for a package, so each activity's own count drops.
@@ -446,7 +462,7 @@ export function CheckoutFlow({
         email: guest.email,
         phone: guest.phone,
         total: index === 0 ? displayQuote.total : 0,
-        paidNow: index === 0 ? displayQuote.total : 0,
+        paidNow: index === 0 ? split.now : 0,
         currency: tenant.currency,
         createdAt: nowIso ?? new Date().toISOString().slice(0, 19),
       })),
@@ -533,6 +549,8 @@ export function CheckoutFlow({
   if (confirmed) {
     return (
       <Confirmation
+        paid={split}
+        balanceWhen={balanceWhen}
         tenant={tenant}
         activity={activity}
         departure={departure}
@@ -656,15 +674,30 @@ export function CheckoutFlow({
                 />
               </div>
             ) : null}
+            {terms.collect !== 'full' && displayQuote.total > 0 ? (
+              <div className="border-t border-line-subtle pt-10">
+                <PayWhenStep
+                  terms={terms}
+                  total={displayQuote.total}
+                  split={splitPayment(terms, displayQuote.total, Math.max(1, quote.party), false)}
+                  payInFull={payInFull}
+                  setPayInFull={setPayInFull}
+                  balanceWhen={balanceWhen}
+                  currency={tenant.currency}
+                />
+              </div>
+            ) : null}
             <div className="border-t border-line-subtle pt-10">
               <PaymentStep
+                later={split.later}
+                balanceWhen={balanceWhen}
                 payment={payment}
                 setPayment={setPayment}
                 errors={errors}
                 brand={brand}
                 activity={activity}
                 tenant={tenant}
-                total={displayQuote.total}
+                total={split.now}
                 submitting={submitting}
                 onExpressPay={expressPay}
               />
@@ -689,7 +722,9 @@ export function CheckoutFlow({
               leftIcon={<Lock aria-hidden="true" />}
               className="sm:min-w-52"
             >
-              Pay {formatCurrency(displayQuote.total, tenant.currency, { decimals: true })}
+              {split.now > 0
+                ? `Pay ${formatCurrency(split.now, tenant.currency, { decimals: true })}${split.later > 0 ? ' now' : ''}`
+                : 'Confirm booking'}
             </Button>
           </div>
         </div>
@@ -702,6 +737,8 @@ export function CheckoutFlow({
               tenant={tenant}
               departure={departure}
               quote={displayQuote}
+              split={split}
+              balanceWhen={balanceWhen}
             />
             {activity.customRequests ? <CustomQuoteCard activity={activity} tenantSlug={tenant.slug} departure={departure} guest={guest} /> : null}
           </div>
@@ -1008,7 +1045,12 @@ function PaymentStep({
   total,
   submitting,
   onExpressPay,
+  later = 0,
+  balanceWhen = 'later',
 }: {
+  /** What is left to pay after today, and when. */
+  later?: number
+  balanceWhen?: string
   payment: PaymentState
   setPayment: React.Dispatch<React.SetStateAction<PaymentState>>
   errors: Errors
@@ -1164,13 +1206,21 @@ function PaymentStep({
       <div className="rounded-2xl bg-surface-sunken p-4">
         <p className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <ShieldCheck className="size-4 text-success" aria-hidden="true" />
-          Free cancellation up to {activity.cancellationPolicy.freeCancellationHours} hours before
+          {activity.cancellationPolicy.freeCancellationHours > 0
+            ? `Free cancellation up to ${hoursLabel(activity.cancellationPolicy.freeCancellationHours)} before`
+            : 'Non-refundable'}
         </p>
         <p className="mt-1.5 text-xs leading-relaxed text-muted">
-          {activity.cancellationPolicy.summary} Your card is charged{' '}
-          {formatCurrency(total, tenant.currency, { decimals: true })} in {tenant.currency} by{' '}
-          {tenant.legalName}. By paying you accept the liability waiver on behalf of everyone in your
-          party.
+          {activity.cancellationPolicy.summary}{' '}
+          {total > 0 ? (
+            <>
+              Your card is charged {formatCurrency(total, tenant.currency, { decimals: true })} today
+              {later > 0 ? ` and ${formatCurrency(later, tenant.currency, { decimals: true })} ${balanceWhen}` : ''} in {tenant.currency} by {tenant.legalName}.
+            </>
+          ) : (
+            <>Nothing is charged today; the card holds the booking and {formatCurrency(later, tenant.currency, { decimals: true })} is paid {balanceWhen}.</>
+          )}{' '}
+          By booking you accept the liability waiver on behalf of everyone in your party.
         </p>
       </div>
     </section>
@@ -1271,11 +1321,16 @@ function OrderSummary({
   tenant,
   departure,
   quote,
+  split,
+  balanceWhen = 'later',
 }: {
   activity: Activity
   tenant: Tenant
   departure: CheckoutDeparture
   quote: QuoteShape
+  /** What is paid today and what is left, when not everything is paid now. */
+  split?: { now: number; later: number }
+  balanceWhen?: string
 }) {
   const media = activity.media.find((m) => m.isPrimary) ?? activity.media[0]
 
@@ -1349,12 +1404,24 @@ function OrderSummary({
 
       <div className="p-4">
         <SummaryLines quote={quote} tenant={tenant} />
+        {split && split.later > 0 ? (
+          <dl className="mt-3 space-y-1 border-t border-line-subtle pt-3 text-sm">
+            <div className="flex justify-between gap-3">
+              <dt className="font-semibold text-foreground">Due today</dt>
+              <dd className="font-semibold tabular text-foreground">{formatCurrency(split.now, tenant.currency, { decimals: true })}</dd>
+            </div>
+            <div className="flex justify-between gap-3 text-muted">
+              <dt>Due {balanceWhen}</dt>
+              <dd className="tabular">{formatCurrency(split.later, tenant.currency, { decimals: true })}</dd>
+            </div>
+          </dl>
+        ) : null}
       </div>
 
       <div className="flex items-center gap-2 border-t border-line-subtle bg-surface-sunken px-4 py-3">
         <ShieldCheck className="size-4 shrink-0 text-success" aria-hidden="true" />
         <p className="text-xs leading-relaxed text-muted">
-          Free cancellation up to {activity.cancellationPolicy.freeCancellationHours}h before ·
+          {activity.cancellationPolicy.freeCancellationHours > 0 ? `Free cancellation up to ${hoursLabel(activity.cancellationPolicy.freeCancellationHours)} before` : 'Non-refundable'} ·
           instant confirmation
         </p>
       </div>
@@ -1461,6 +1528,8 @@ function icsStamp(localIso: string) {
 }
 
 function Confirmation({
+  paid,
+  balanceWhen = 'later',
   tenant,
   activity,
   departure,
@@ -1480,6 +1549,8 @@ function Confirmation({
   basePath: string
   onCopy: () => void
   reducedMotion: boolean
+  paid?: { now: number; later: number }
+  balanceWhen?: string
 }) {
   const download = (filename: string, mime: string, content: string) => {
     const blob = new Blob([content], { type: mime })
@@ -1673,10 +1744,11 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
           </div>
           <div>
             <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">
-              Paid
+              {paid && paid.later > 0 ? 'Paid today' : 'Paid'}
             </dt>
             <dd className="mt-1 text-sm font-medium tabular text-foreground">
-              {formatCurrency(quote.total, tenant.currency, { decimals: true })}
+              {formatCurrency(paid ? paid.now : quote.total, tenant.currency, { decimals: true })}
+              {paid && paid.later > 0 ? <span className="block text-xs font-normal text-subtle">{formatCurrency(paid.later, tenant.currency, { decimals: true })} due {balanceWhen}</span> : null}
             </dd>
           </div>
           <div className="sm:col-span-2">
@@ -1809,4 +1881,61 @@ function riderQuestions(activity: Activity): GuestQuestion[] {
     })
   }
   return out
+}
+
+/* ==========================================================================
+   WHEN YOU PAY — a deposit now and the rest later, or pay on the day, with
+   the choice to settle it all now when the activity allows it.
+   ========================================================================== */
+
+function PayWhenStep({
+  terms,
+  total,
+  split,
+  payInFull,
+  setPayInFull,
+  balanceWhen,
+  currency,
+}: {
+  terms: PaymentTerms
+  total: number
+  split: { now: number; later: number }
+  payInFull: boolean
+  setPayInFull: (value: boolean) => void
+  balanceWhen: string
+  currency: Tenant['currency']
+}) {
+  const money = (minor: number) => formatCurrency(minor, currency, { decimals: true })
+  const options = [
+    {
+      key: 'split',
+      on: !payInFull,
+      title: terms.collect === 'later' ? 'Pay on the day' : `Pay a ${depositLabel(terms, (minor) => formatCurrency(minor, currency))} deposit`,
+      text: terms.collect === 'later' ? `Nothing today. ${money(total)} is paid ${balanceWhen}.` : `${money(split.now)} today, ${money(split.later)} ${balanceWhen} to the same card.`,
+    },
+    ...(terms.allowPayInFull ? [{ key: 'full', on: payInFull, title: 'Pay in full now', text: `${money(total)} today, nothing later.` }] : []),
+  ]
+  return (
+    <section className="space-y-4">
+      <div>
+        <h2 className="font-display text-xl font-semibold tracking-tight text-foreground">When you pay</h2>
+        <p className="mt-1 text-sm text-muted">Your place is held either way.</p>
+      </div>
+      <div role="radiogroup" aria-label="When you pay" className="grid gap-2 sm:grid-cols-2">
+        {options.map((option) => (
+          <button
+            key={option.key}
+            type="button"
+            role="radio"
+            aria-checked={option.on}
+            onClick={() => setPayInFull(option.key === 'full')}
+            className={cn('rounded-xl border px-4 py-3 text-left transition-colors', option.on ? 'border-primary bg-primary-soft/30' : 'border-line hover:border-line-strong')}
+          >
+            <span className="block text-sm font-semibold text-foreground">{option.title}</span>
+            <span className="mt-0.5 block text-xs text-muted">{option.text}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  )
 }
