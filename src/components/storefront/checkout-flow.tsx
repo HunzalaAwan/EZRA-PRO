@@ -141,6 +141,8 @@ export interface CheckoutFlowProps {
   rentalLength?: string
   /** Charters: the group size. */
   party?: number
+  /** The private option: one group price, the whole time to themselves. */
+  privateBooking?: boolean
   basePath: string
   /** Deterministic confirmation code, generated on the server. */
   reference: string
@@ -307,6 +309,7 @@ export function CheckoutFlow({
   rentalHours,
   rentalLength,
   party,
+  privateBooking = false,
   basePath,
   reference,
 }: CheckoutFlowProps) {
@@ -322,9 +325,10 @@ export function CheckoutFlow({
     () => buildQuote(activity, tenant.slug, selection, departure.priceMultiplier * ruleResult.multiplier, {
       days: rentalDays,
       party,
+      private: privateBooking,
       ...(rentalMode ? { rentalMode, hours: rentalHours, lengthId: rentalLength } : {}),
     }),
-    [activity, tenant.slug, selection, departure.priceMultiplier, ruleResult.multiplier, rentalDays, party, rentalMode, rentalHours, rentalLength],
+    [activity, tenant.slug, selection, departure.priceMultiplier, ruleResult.multiplier, rentalDays, party, rentalMode, rentalHours, rentalLength, privateBooking],
   )
 
   const [errors, setErrors] = React.useState<Errors>({})
@@ -455,7 +459,8 @@ export function CheckoutFlow({
         departureId: leg.departureId,
         startsAt: leg.startsAt,
         endsAt: leg.endsAt,
-        party: Math.max(1, quote.party),
+        // A private booking takes the whole time, so nobody else can book onto it.
+        party: privateBooking ? Math.max(quote.party, departure.seatsLeft) : Math.max(1, quote.party),
         source: 'storefront' as const,
         ...(departure.legs ? { packageSlug: activity.slug, packageName: activity.name } : {}),
         name: `${guest.firstName} ${guest.lastName}`.trim(),

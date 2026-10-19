@@ -35,12 +35,13 @@ import {
 } from 'lucide-react'
 import { z } from 'zod'
 
-import type { Activity, ActivityKind, ActivityTheme, BookingSettings, ChangeRules, CurrencyCode, PackageConfig, PaymentTerms, DifficultyLevel, GuestDetailsConfig, GuestQuestion, Location, VerticalKey } from '@/types'
+import type { Activity, ActivityKind, ActivityTheme, BookingSettings, ChangeRules, CurrencyCode, PackageConfig, PaymentTerms, PrivateOption, DifficultyLevel, GuestDetailsConfig, GuestQuestion, Location, VerticalKey } from '@/types'
 import { DEFAULT_GUEST_FIELDS, guestDetailsOf } from '@/lib/guest-requirements'
 import { DEFAULT_BOOKING, METHOD_LABEL, bookingOf } from '@/lib/booking-method'
 import { EMPTY_PACKAGE, PackagePartsEditor, packageSeats, type PackageOption } from './package-parts-editor'
 import { PaymentTermsEditor } from './payment-terms-editor'
 import { ActivityMessagesEditor } from './activity-messages-editor'
+import { KIND_PRICING, KindPricingExtras } from './kind-pricing-extras'
 import { ChangesPolicyEditor, type DraftCancellation } from './changes-policy-editor'
 import { DEFAULT_CHANGES, DEFAULT_PAYMENT, changesOf, changesSummary, depositLabel, paymentOf, policySummary, presetOf } from '@/lib/booking-policy'
 import { BookingSettingsEditor } from './booking-settings-editor'
@@ -79,6 +80,7 @@ import { MediaManager, type DraftMedia } from './media-manager'
 import {
   GuestPricePreview,
   PricingTierEditor,
+  KIND_TIER_PRESETS,
   NO_LIMIT,
   blankTier,
   type DraftTier,
@@ -235,6 +237,11 @@ export interface ActivityDraft {
   changes: ChangeRules
   /** Added to this activity's confirmation and reminder. */
   guestNote: string
+  /** Trips, activities and lessons: a whole time for one group. */
+  privateOption: PrivateOption
+  /** Charters: guests the price covers, and each one over. */
+  charterIncluded: number
+  charterExtra: number
 }
 
 const STORAGE_KEY = 'ezra:activity-wizard:v13'
@@ -296,6 +303,9 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
     cancellation: { preset: 'flexible', freeCancellationHours: 24, lateRefundPercent: 0, keepDeposit: false },
     changes: { ...DEFAULT_CHANGES },
     guestNote: '',
+    privateOption: { enabled: false, price: 0, includedGuests: 6, extraGuest: 0 },
+    charterIncluded: 0,
+    charterExtra: 0,
     freeCancellationHours: 24,
     crewIds: [],
     dining,
@@ -364,6 +374,7 @@ function kindOverride(draft: ActivityDraft) {
         // Asked for on the Booking step now.
         requestToBook: (draft.booking?.method ?? 'instant') === 'request',
         noticeHours: draft.noticeHours ?? 0,
+        ...(draft.charterIncluded > 0 && draft.charterExtra > 0 ? { includedGuests: draft.charterIncluded, extraGuestPrice: draft.charterExtra } : {}),
         ...(rest.vessel === 'other' ? { vesselLabel: vesselLabel.trim() || 'Charter', crewLabel: crewLabel.trim() || 'Crew' } : {}),
       },
     }
@@ -548,6 +559,7 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
       maxQuantity: tier.maxQuantity,
       description: tier.description ?? '',
       countsTowardCapacity: tier.countsTowardCapacity,
+      ...(tier.seats ? { seats: tier.seats } : {}),
     })),
     addOns: activity.addOns.map((addOn) => ({
       id: addOn.id,
@@ -591,6 +603,9 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
     },
     changes: changesOf(activity),
     guestNote: activity.guestNote ?? '',
+    privateOption: activity.privateOption ?? { enabled: false, price: 0, includedGuests: Math.min(6, activity.maxCapacity || 6), extraGuest: 0 },
+    charterIncluded: activity.charter?.includedGuests ?? 0,
+    charterExtra: activity.charter?.extraGuestPrice ?? 0,
     kindSettings: (() => {
       const blank = defaultKindSettings()
       const rental = activity.rental
@@ -1651,7 +1666,9 @@ export function ActivityWizard({
             maxQuantity: NO_LIMIT,
             ...(tier.description.trim() ? { description: tier.description.trim() } : {}),
             countsTowardCapacity: tier.countsTowardCapacity,
+            ...(tier.countsTowardCapacity && (tier.seats ?? 1) > 1 ? { seats: tier.seats } : {}),
           })),
+          privateOption: ['trip', 'activity', 'lesson'].includes(draft.kind ?? 'trip') && draft.privateOption?.enabled ? draft.privateOption : undefined,
           addOns: draft.addOns.map((addOn) => ({ id: addOn.id, label: addOn.label, price: addOn.price, description: addOn.description, maxPerBooking: addOn.maxPerBooking, required: addOn.required, ...(addOn.icon ? { icon: addOn.icon } : {}) })),
           payment: draft.payment ?? DEFAULT_PAYMENT,
           guestNote: (draft.guestNote ?? '').trim(),
@@ -1888,20 +1905,22 @@ export function ActivityWizard({
                       </section>
                       ) : (
                       <section>
-                        <h3 className="text-sm font-semibold">{dining ? 'Menu prices per guest' : 'Price tiers'}</h3>
+                        <h3 className="text-sm font-semibold">{dining ? 'Menu prices per guest' : KIND_PRICING[draft.kind ?? 'trip'].title}</h3>
                         <p className="mt-0.5 mb-3 text-xs text-muted">
                           {dining
                             ? draft.dining.bookingMode === 'card_hold'
                               ? 'Optional for à la carte. Add menus here if guests choose one when they reserve.'
                               : 'Each guest picks a menu when the table is reserved. The first sets the “from” price.'
-                            : 'The first tier sets the “from” price on every storefront tile.'}
+                            : KIND_PRICING[draft.kind ?? 'trip'].text(normalizeKindSettings(draft.kindSettings).lesson.sessions)}
                         </p>
                         <PricingTierEditor
                           tiers={draft.tiers}
                           onChange={(tiers) => patch({ tiers })}
                           currency={currency}
                           errors={errors}
-                          presets={dining ? DINING_TIER_PRESETS : undefined}
+                          kind={dining ? 'trip' : (draft.kind ?? 'trip')}
+                          hidePlaces={dining}
+                          presets={dining ? DINING_TIER_PRESETS : KIND_TIER_PRESETS[draft.kind ?? 'trip']}
                         />
                         {errors.tiers ? (
                           <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-danger">
@@ -1910,6 +1929,20 @@ export function ActivityWizard({
                           </p>
                         ) : null}
                       </section>
+                      )}
+
+                      {dining ? null : (
+                        <KindPricingExtras
+                          kind={draft.kind ?? 'trip'}
+                          currency={currency}
+                          privateOption={draft.privateOption ?? { enabled: false, price: 0, includedGuests: 6, extraGuest: 0 }}
+                          onPrivateOption={(privateOption) => patch({ privateOption })}
+                          maxGuests={(draft.kind ?? 'trip') === 'charter' ? normalizeKindSettings(draft.kindSettings).charter.maxGuests : draft.maxCapacity}
+                          charterIncluded={draft.charterIncluded ?? 0}
+                          charterExtra={draft.charterExtra ?? 0}
+                          onCharter={(charterIncluded, charterExtra) => patch({ charterIncluded, charterExtra })}
+                          leadPrice={draft.tiers[0]?.price ?? 0}
+                        />
                       )}
 
                       <Separator />
@@ -1981,12 +2014,15 @@ export function ActivityWizard({
                           value={draft.payment ?? DEFAULT_PAYMENT}
                           onChange={(payment) => patch({ payment })}
                           currency={currency}
-                          examplePrice={Math.max(0, ...draft.tiers.map((tier) => tier.price))}
+                          examplePrice={draft.tiers[0]?.price ?? 0}
                           wholeGroup={(draft.kind ?? 'trip') === 'charter' || (draft.kind ?? 'trip') === 'rental'}
                         />
                       )}
 
+
+
                       {(draft.kind ?? 'trip') === 'rental' && !dining ? null : <GuestPricePreview
+                        kind={dining ? 'trip' : (draft.kind ?? 'trip')}
                         tiers={draft.tiers}
                         addOns={draft.addOns}
                         currency={currency}

@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { ArrowDown, ArrowUp, GripVertical, Plus, Tag, Trash2, Users } from 'lucide-react'
 
-import type { CurrencyCode } from '@/types'
+import type { CurrencyCode, ActivityKind } from '@/types'
 import { cn, currencySymbol, formatCurrency } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
@@ -28,6 +28,8 @@ export interface DraftTier {
   maxQuantity: number
   description: string
   countsTowardCapacity: boolean
+  /** Places one ticket takes: 2 for a tandem, 4 for a family ticket. Absent: 1. */
+  seats?: number
 }
 
 /** A tier with no maximum: the seats left decide how many can book. */
@@ -55,6 +57,8 @@ export interface TierPreset {
   price: number
   description: string
   counts?: boolean
+  /** Places one ticket takes. */
+  seats?: number
 }
 
 const TIER_PRESETS: TierPreset[] = [
@@ -62,8 +66,37 @@ const TIER_PRESETS: TierPreset[] = [
   { label: 'Child (4–12)', price: 8900, description: 'Must be accompanied by an adult' },
   { label: 'Senior (65+)', price: 12900, description: '' },
   { label: 'Infant (under 4)', price: 0, description: 'Lap seat, no equipment', counts: false },
-  { label: 'Private charter', price: 89900, description: 'Exclusive use of the vessel' },
+  { label: 'Family (2 adults, 2 children)', price: 44900, description: 'One ticket for four', seats: 4 },
 ]
+
+/** Starting points that fit how each kind is sold. */
+export const KIND_TIER_PRESETS: Partial<Record<ActivityKind, TierPreset[]>> = {
+  activity: [
+    { label: 'Single rider', price: 11900, description: '' },
+    { label: 'Tandem (two together)', price: 19900, description: 'Two people, one ride', seats: 2 },
+    { label: 'Child rider', price: 8900, description: 'With an adult' },
+    { label: 'Ride-along', price: 3900, description: 'Comes along, does not ride', counts: false },
+  ],
+  charter: [
+    { label: 'Half day (4 hours)', price: 89900, description: '' },
+    { label: 'Full day (8 hours)', price: 149900, description: '' },
+    { label: 'Sunset (2 hours)', price: 59900, description: '' },
+  ],
+  lesson: [
+    { label: 'Student', price: 12900, description: '' },
+    { label: 'Junior (8–15)', price: 9900, description: 'With a parent on the beach' },
+  ],
+  pass: [
+    { label: 'Day ticket', price: 4900, description: '' },
+    { label: 'Child ticket', price: 2900, description: 'Ages 3 to 12' },
+    { label: 'Family (2 adults, 2 children)', price: 14900, description: 'One ticket for four', seats: 4 },
+    { label: 'Infant', price: 0, description: 'Under 3, free', counts: false },
+  ],
+  package: [
+    { label: 'Adult', price: 22900, description: 'Ages 13 and over' },
+    { label: 'Child', price: 18900, description: 'With an adult' },
+  ],
+}
 
 /* ==========================================================================
    MONEY INPUT — stores minor units, edits in major units
@@ -169,6 +202,10 @@ export interface PricingTierEditorProps {
   errors?: Record<string, string>
   /** One-click starting points; defaults to the tour-operator set. */
   presets?: TierPreset[]
+  /** Charters price per group: no places per ticket, no "at least". */
+  kind?: ActivityKind
+  /** Menus and other lists where a place is not counted per ticket. */
+  hidePlaces?: boolean
   className?: string
 }
 
@@ -178,8 +215,11 @@ export function PricingTierEditor({
   currency,
   errors,
   presets = TIER_PRESETS,
+  kind = 'trip',
+  hidePlaces = false,
   className,
 }: PricingTierEditorProps) {
+  const perGroup = kind === 'charter' || hidePlaces
   const update = (index: number, patch: Partial<DraftTier>) => {
     onChange(tiers.map((tier, i) => (i === index ? { ...tier, ...patch } : tier)))
   }
@@ -256,13 +296,13 @@ export function PricingTierEditor({
                     ariaLabel={`Compare-at price for ${tier.label || `tier ${index + 1}`}`}
                   />
                 </Field>
-                <Field label="At least" labelSize="sm" description="Each booking includes this many. 0 for none. The most is the seats left.">
+                {kind === 'charter' ? null : <Field label="At least" labelSize="sm" description="Each booking includes this many. 0 for none. The most is the seats left.">
                   <NumberField
                     value={tier.minQuantity}
                     onValueChange={(minQuantity) => update(index, { minQuantity: Math.max(0, minQuantity) })}
                     ariaLabel={`Minimum per booking for ${tier.label || `tier ${index + 1}`}`}
                   />
-                </Field>
+                </Field>}
               </div>
 
               <div className="mt-3 flex flex-col gap-2.5 sm:flex-row sm:items-center">
@@ -274,15 +314,27 @@ export function PricingTierEditor({
                   size="sm"
                   className="flex-1"
                 />
-                <label className="flex shrink-0 cursor-pointer items-center gap-2 text-xs text-muted">
-                  <Switch
-                    checked={tier.countsTowardCapacity}
-                    onCheckedChange={(checked) => update(index, { countsTowardCapacity: checked })}
-                    size="sm"
-                    aria-label={`Count ${tier.label || `tier ${index + 1}`} toward capacity`}
-                  />
-                  Counts toward capacity
-                </label>
+                {perGroup ? null : (
+                  <label className="flex shrink-0 items-center gap-2 text-xs text-muted">
+                    Takes
+                    <select
+                      value={tier.countsTowardCapacity ? Math.max(1, tier.seats ?? 1) : 0}
+                      onChange={(event) => {
+                        const places = Number(event.target.value)
+                        update(index, { countsTowardCapacity: places > 0, seats: Math.max(1, places) })
+                      }}
+                      aria-label={`Places one ${tier.label || `tier ${index + 1}`} ticket takes`}
+                      className="h-8 rounded-lg border border-line bg-surface px-2 text-xs text-foreground"
+                    >
+                      <option value={0}>no place</option>
+                      {[1, 2, 3, 4, 5, 6].map((places) => (
+                        <option key={places} value={places}>
+                          {places} {places === 1 ? 'place' : 'places'}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
               </div>
             </div>
 
@@ -348,6 +400,7 @@ export function PricingTierEditor({
               const tier = blankTier(preset.label, preset.price)
               tier.description = preset.description
               tier.countsTowardCapacity = preset.counts ?? true
+              if (preset.seats) tier.seats = preset.seats
               onChange([...tiers, tier])
             }}
             className={cn(
@@ -375,15 +428,19 @@ export interface GuestPricePreviewProps {
   tiers: DraftTier[]
   addOns: DraftAddOn[]
   currency: CurrencyCode
+  /** Decides the unit and the example order. */
+  kind?: ActivityKind
   className?: string
 }
 
-export function GuestPricePreview({ tiers, addOns, currency, className }: GuestPricePreviewProps) {
+const PREVIEW_UNIT: Partial<Record<ActivityKind, string>> = { charter: 'per charter, from', lesson: 'per student, from', pass: 'per ticket, from', activity: 'per rider, from', package: 'per person, from' }
+
+export function GuestPricePreview({ tiers, addOns, currency, kind = 'trip', className }: GuestPricePreviewProps) {
   const priced = tiers.filter((tier) => tier.label.trim().length > 0)
-  // A representative cart: two of the lead tier, one of the next.
+  // A representative cart: two of the lead tier, one of the next. A charter is one option for one group.
   const sample = priced.map((tier, index) => ({
     tier,
-    quantity: index === 0 ? 2 : index === 1 ? 1 : 0,
+    quantity: kind === 'charter' ? (index === 0 ? 1 : 0) : index === 0 ? 2 : index === 1 ? 1 : 0,
   }))
   const requiredAddOns = addOns.filter((addOn) => addOn.required && addOn.label.trim().length > 0)
 
@@ -416,7 +473,7 @@ export function GuestPricePreview({ tiers, addOns, currency, className }: GuestP
             {formatCurrency(compareAt, currency)}
           </span>
         ) : null}
-        <span className="text-xs text-muted">per guest, from</span>
+        <span className="text-xs text-muted">{PREVIEW_UNIT[kind] ?? 'per guest, from'}</span>
       </div>
 
       <ul className="mt-3 flex list-none flex-col gap-1.5 p-0 text-sm">

@@ -195,6 +195,19 @@ export interface PriceTier {
   description?: string
   /** Counts against the activity capacity. Comp tickets may not. */
   countsTowardCapacity: boolean
+  /** Places one ticket takes: 2 for a tandem or a couple, 4 for a family ticket. Absent: 1. */
+  seats?: number
+}
+
+/** Book a whole time for one group: a private tour, a private lesson. */
+export interface PrivateOption {
+  enabled: boolean
+  /** The price for the group, minor units. */
+  price: number
+  /** Guests the price covers. */
+  includedGuests: number
+  /** Each guest above that, minor units. 0: the group cannot be bigger. */
+  extraGuest: number
 }
 
 export interface AddOn {
@@ -605,6 +618,10 @@ export interface CharterConfig {
   durations?: { tierId: string; minutes: number }[]
   /** Most guests one charter carries. */
   maxGuests: number
+  /** Guests the charter price covers. Absent: all of them. */
+  includedGuests?: number
+  /** Each guest above that, minor units. */
+  extraGuestPrice?: number
   /** Guests send a request and get a quote instead of paying on the spot. */
   requestToBook: boolean
   /** Hours of notice needed before a charter can start. */
@@ -712,6 +729,8 @@ export interface Activity {
   cancellationPolicy: CancellationPolicy
   /** How guests pay. Absent: in full at checkout. */
   payment?: Partial<PaymentTerms>
+  /** Trips, activities and lessons: guests can book a whole time for their group. */
+  privateOption?: PrivateOption
   /** What guests can change themselves. Absent: the standard rules. */
   changes?: Partial<ChangeRules>
   /** Resources (boats, kayaks, tables, guides) each departure consumes. */

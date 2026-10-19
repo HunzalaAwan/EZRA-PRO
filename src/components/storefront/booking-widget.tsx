@@ -32,7 +32,8 @@ import {
   fromDateKey,
   pluralize,
 } from '@/lib/utils'
-import type { Activity, CurrencyCode, DepartureStatus, Location, VerticalKey } from '@/types'
+import type { Activity, CurrencyCode, DepartureStatus, Location, PriceTier, VerticalKey } from '@/types'
+import { Switch } from '@/components/ui/switch'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -168,7 +169,14 @@ export interface QuoteOptions {
   hours?: number
   /** Length rentals: which length was picked. */
   lengthId?: string
+  /** The private option: one price for the group, the whole time to themselves. */
+  private?: boolean
 }
+
+/** Places one ticket takes on the departure: 0 for a ticket that takes none. */
+export const placesOf = (tier: Pick<PriceTier, 'countsTowardCapacity' | 'seats'>) => (tier.countsTowardCapacity ? Math.max(1, tier.seats ?? 1) : 0)
+/** People one ticket is for. */
+export const peopleOf = (tier: Pick<PriceTier, 'seats'>) => Math.max(1, tier.seats ?? 1)
 
 /** Deterministic, integer-only money maths — minor units in, minor units out. */
 export function buildQuote(
@@ -216,8 +224,30 @@ export function buildQuote(
       total,
     })
     subtotal += total
-    headcount += qty
-    if (tier.countsTowardCapacity) seats += qty
+    headcount += qty * peopleOf(tier)
+    seats += qty * placesOf(tier)
+  }
+
+  // Private: one price for the group in place of the tickets, plus anyone over what it covers.
+  const priv = activity.privateOption
+  if (options.private && priv?.enabled && headcount > 0) {
+    ticketLines.length = 0
+    const groupPrice = Math.round(priv.price * priceMultiplier)
+    ticketLines.push({ id: 'private', label: `Private · up to ${priv.includedGuests}`, kind: 'ticket', quantity: 1, unitPrice: groupPrice, total: groupPrice })
+    const extra = Math.max(0, headcount - priv.includedGuests)
+    if (extra > 0 && priv.extraGuest > 0) ticketLines.push({ id: 'private-extra', label: 'Extra guests', kind: 'ticket', quantity: extra, unitPrice: priv.extraGuest, total: priv.extraGuest * extra })
+    subtotal = ticketLines.reduce((sum, line) => sum + line.total, 0)
+    capped = 0
+  }
+
+  // Charters: the price covers so many guests; each one over pays a set amount.
+  const charterParty = Math.max(1, options.party ?? headcount)
+  const included = activity.charter?.includedGuests ?? 0
+  const extraPrice = activity.charter?.extraGuestPrice ?? 0
+  if ((activity.kind ?? 'trip') === 'charter' && included > 0 && extraPrice > 0 && charterParty > included && ticketLines.length > 0) {
+    const extra = charterParty - included
+    ticketLines.push({ id: 'charter-extra', label: `Extra guests over ${included}`, kind: 'ticket', quantity: extra, unitPrice: extraPrice, total: extraPrice * extra })
+    subtotal += extraPrice * extra
   }
 
   // The booking's cap: tickets or items never come to more than this. Add-ons are on top.
@@ -503,11 +533,13 @@ function BookingWidgetInner({
     return seed
   })
 
-  const seatsUsed = activity.priceTiers.reduce(
-    (total, tier) => total + (tier.countsTowardCapacity ? (tierQty[tier.id] ?? 0) : 0),
-    0,
-  )
-  const headcount = activity.priceTiers.reduce((total, tier) => total + (tierQty[tier.id] ?? 0), 0)
+  const seatsUsed = activity.priceTiers.reduce((total, tier) => total + placesOf(tier) * (tierQty[tier.id] ?? 0), 0)
+  const headcount = activity.priceTiers.reduce((total, tier) => total + peopleOf(tier) * (tierQty[tier.id] ?? 0), 0)
+  /* ---------- private: the whole time for one group, while nobody else is on it ---------- */
+  const privateOffer = activity.privateOption?.enabled ? activity.privateOption : undefined
+  const privateOpen = Boolean(privateOffer && slot && slot.seatsLeft >= slot.capacity && slot.capacity > 0)
+  const [privateOn, setPrivateOn] = React.useState(false)
+  const goPrivate = privateOn && privateOpen
   /** Day rentals: a unit is free only if it is free every day of the span. */
   const spanLeft = React.useMemo(() => {
     if (!dayRental || !slot) return slot?.seatsLeft ?? 0
@@ -597,9 +629,10 @@ function BookingWidgetInner({
       buildQuote(activity, tenantSlug, selection, (slot?.priceMultiplier ?? 1) * ruleResult.multiplier, {
         days: dayRental ? rentDays : 1,
         party,
+        private: goPrivate,
         ...(rated ? { rentalMode, hours: rentHours, lengthId: byLength ? length?.id : undefined } : {}),
       }),
-    [activity, tenantSlug, selection, slot, ruleResult.multiplier, dayRental, rentDays, party, rated, rentalMode, rentHours, byLength, length],
+    [activity, tenantSlug, selection, slot, ruleResult.multiplier, dayRental, rentDays, party, rated, rentalMode, rentHours, byLength, length, goPrivate],
   )
 
   // Per-person kinds: every tier's minimum per booking has to be met. Charters and rentals pick one option.
@@ -621,6 +654,7 @@ function BookingWidgetInner({
         h: hourRental ? rentHours : undefined,
         l: byLength ? length?.id : undefined,
         g: kind === 'charter' ? party : undefined,
+        p: goPrivate ? 1 : undefined,
       }),
     )
   }
@@ -1248,13 +1282,32 @@ function BookingWidgetInner({
             ) : null}
           </div>
 
+          {privateOffer ? (
+            <label className={cn('mt-3 flex items-start justify-between gap-3 rounded-xl border px-3.5 py-3', privateOn && privateOpen ? 'border-primary bg-primary-soft/30' : 'border-line', !privateOpen && 'opacity-60')}>
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-foreground">Make it private</span>
+                <span className="block text-xs text-subtle">
+                  {privateOpen
+                    ? `Just your group: ${formatCurrency(Math.round(privateOffer.price * (slot?.priceMultiplier ?? 1)), currency)} for up to ${privateOffer.includedGuests}${privateOffer.extraGuest > 0 ? `, then ${formatCurrency(privateOffer.extraGuest, currency)} each` : ''}.`
+                    : slot
+                      ? 'Others are already booked on this time. Pick an empty time to go private.'
+                      : 'Pick a time first.'}
+                </span>
+              </span>
+              <Switch checked={privateOn && privateOpen} disabled={!privateOpen} onCheckedChange={setPrivateOn} aria-label="Make it private" />
+            </label>
+          ) : null}
+
           <div className="mt-3 divide-y divide-line-subtle rounded-xl border border-line">
             {activity.priceTiers.map((tier) => {
               const qty = tierQty[tier.id] ?? 0
               const unit = Math.round(tier.price * (slot?.priceMultiplier ?? 1))
-              const seatRoom = tier.countsTowardCapacity
-                ? seatsLeft - (seatsUsed - qty)
-                : tier.maxQuantity
+              const places = placesOf(tier)
+              // Private: the group can be as big as the time, or as the price allows.
+              const roomLeft = goPrivate
+                ? Math.min(slot?.capacity ?? seatsLeft, privateOffer && privateOffer.extraGuest === 0 ? privateOffer.includedGuests : Number.POSITIVE_INFINITY) - (seatsUsed - qty * places)
+                : seatsLeft - (seatsUsed - qty * places)
+              const seatRoom = places > 0 ? Math.floor(roomLeft / places) : tier.maxQuantity
               const max = Math.min(tier.maxQuantity, Math.max(0, seatRoom))
 
               return (
@@ -1268,6 +1321,8 @@ function BookingWidgetInner({
                       {tier.description ? <span className="truncate">· {tier.description}</span> : null}
                       {!tier.countsTowardCapacity ? (
                         <span className="text-faint">· does not use a seat</span>
+                      ) : (tier.seats ?? 1) > 1 ? (
+                        <span className="text-faint">· for {tier.seats}</span>
                       ) : null}
                     </p>
                   </div>

@@ -75,6 +75,7 @@ import type {
   WeatherSnapshot,
   ChangeRules,
   PaymentTerms,
+  PrivateOption,
 } from '@/types'
 import { DEFAULT_PAYMENT, policySummary, presetOf } from '@/lib/booking-policy'
 
@@ -501,6 +502,19 @@ const CHANGES_BY_SLUG: Record<string, Partial<ChangeRules>> = {
   'night-manta-ray-dive': { rescheduleHours: 12, maxReschedules: 0, rescheduleFee: 1500 },
   'beginner-surf-lesson': { rescheduleHours: 6, maxReschedules: 0 },
   'molokai-channel-crossing': { rescheduleHours: 336, maxReschedules: 1, addGuests: false },
+}
+
+/** Private bookings: one price for a group that has a whole time to itself. */
+const PRIVATE_BY_SLUG: Record<string, PrivateOption> = {
+  'family-reef-snorkel': { enabled: true, price: 99000, includedGuests: 8, extraGuest: 9900 },
+  'beginner-surf-lesson': { enabled: true, price: 24900, includedGuests: 1, extraGuest: 12900 },
+  'upcountry-horseback-ride': { enabled: true, price: 79900, includedGuests: 6, extraGuest: 0 },
+}
+
+/** Charters: guests the price covers, and each one over. */
+const CHARTER_EXTRA_BY_SLUG: Record<string, { includedGuests: number; extraGuestPrice: number }> = {
+  'private-catamaran-charter': { includedGuests: 12, extraGuestPrice: 4500 },
+  'private-sportfishing-charter': { includedGuests: 4, extraGuestPrice: 15000 },
 }
 
 /** The policy preset for an activity, and whether a deposit is kept. */
@@ -2290,7 +2304,6 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     tiers: [
       ['Group lesson', 9900, 0, 8, '3:1 student to instructor'],
       ['Semi-private (2 students)', 16900, 0, 2, 'You and one other, one instructor'],
-      ['Private lesson', 24900, 0, 1, 'One-on-one, video review included'],
     ],
     addOns: [
       ['Board rental, extra hour', 2500, 'Keep the board after your lesson.', 4, 'Clock'],
@@ -3636,6 +3649,10 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     maxQuantity: Math.max(99, max),
     description: note,
     countsTowardCapacity: !/infant|ride-along|support crew|spectator/i.test(label),
+    // "Family pass (2+2)": one ticket for four.
+    ...(/\((\d)\+(\d)\)/.test(label) ? { seats: label.match(/\((\d)\+(\d)\)/)!.slice(1, 3).reduce((sum, n) => sum + Number(n), 0) } : {}),
+    // "Tandem flight (2)": one ticket, two places.
+    ...(/\((\d)\)\s*$/.test(label) ? { seats: Number(label.match(/\((\d)\)\s*$/)![1]) } : {}),
   }))
   const addOns: AddOn[] = spec.addOns.map(([label, price, note, max, icon]) => ({
     id: `add_${spec.slug}_${label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`,
@@ -3699,6 +3716,7 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
           return {
             charter: {
               ...rest,
+              ...(CHARTER_EXTRA_BY_SLUG[spec.slug] ?? {}),
               ...(minutes ? { durations: priceTiers.map((tier, index) => ({ tierId: tier.id, minutes: minutes[index] ?? spec.durationMinutes })) } : {}),
             },
           }
@@ -3710,6 +3728,7 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     ...(spec.noticeHours ? { noticeHours: spec.noticeHours } : {}),
     ...(BOOKING_BY_SLUG[spec.slug] ? { booking: BOOKING_BY_SLUG[spec.slug] } : {}),
     ...(PAYMENT_BY_SLUG[spec.slug] ? { payment: PAYMENT_BY_SLUG[spec.slug] } : {}),
+    ...(PRIVATE_BY_SLUG[spec.slug] ? { privateOption: PRIVATE_BY_SLUG[spec.slug] } : {}),
     ...(CHANGES_BY_SLUG[spec.slug] ? { changes: CHANGES_BY_SLUG[spec.slug] } : {}),
     // Guided trips and rides offer a tip; rentals and passes do not.
     ...(['trip', 'activity', 'charter', 'lesson'].includes(spec.kind ?? 'trip') ? { tips: true } : {}),

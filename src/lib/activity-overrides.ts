@@ -73,6 +73,7 @@ export interface ActivityOverride {
   changes?: Activity['changes']
   cancellationPolicy?: Activity['cancellationPolicy']
   guestNote?: string
+  privateOption?: Activity['privateOption']
   /** null clears the route. */
   route?: RouteInfo | null
   updatedAt: string
@@ -154,6 +155,7 @@ export function applyActivityOverride<T extends Activity>(activity: T, override?
     payment: override.payment ?? activity.payment,
     changes: override.changes ?? activity.changes,
     cancellationPolicy: override.cancellationPolicy ?? activity.cancellationPolicy,
+    privateOption: "privateOption" in override ? override.privateOption : activity.privateOption,
     guestNote: override.guestNote === undefined ? activity.guestNote : override.guestNote || undefined,
     guestQuestions: override.guestQuestions ?? activity.guestQuestions,
     waiverId: override.waiverId === undefined ? activity.waiverId : (override.waiverId ?? undefined),

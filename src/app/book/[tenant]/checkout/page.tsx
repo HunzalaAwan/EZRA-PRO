@@ -20,7 +20,7 @@ import {
   CheckoutFlow,
   type CheckoutDeparture,
 } from '@/components/storefront/checkout-flow'
-import type { QuoteSelection } from '@/components/storefront/booking-widget'
+import { placesOf, type QuoteSelection } from '@/components/storefront/booking-widget'
 
 interface TenantParams {
   tenant: string
@@ -75,11 +75,12 @@ function resolveSelection(
   const tiers = activity.priceTiers.map((tier) => {
     // The minimum per booking is required; a link without it gets it added.
     const wanted = Math.max(requestedTiers.get(tier.id) ?? 0, perPerson ? tier.minQuantity : 0)
-    const room = tier.countsTowardCapacity ? Math.max(0, seatsLeft - seatsUsed) : tier.maxQuantity
+    const places = placesOf(tier)
+    const room = places > 0 ? Math.floor(Math.max(0, seatsLeft - seatsUsed) / places) : tier.maxQuantity
     // Each rental item is capped by its own count, not just the total.
     const itemRoom = itemsLeft ? (itemsLeft[tier.id] ?? 0) : Number.POSITIVE_INFINITY
     const qty = clamp(wanted, 0, Math.min(tier.maxQuantity, room, itemRoom))
-    if (tier.countsTowardCapacity) seatsUsed += qty
+    seatsUsed += qty * places
     return { tierId: tier.id, qty }
   })
 
@@ -278,6 +279,7 @@ export default async function CheckoutPage({
       rentalHours={rentalHours}
       rentalLength={rentalLength?.id}
       party={party}
+      privateBooking={query.p === '1' && Boolean(activity.privateOption?.enabled) && Boolean(slotRow && slotRow.seatsLeft >= slotRow.capacity)}
       basePath={`/book/${tenant.slug}`}
       reference={reference}
       nowIso={`${NOW.getFullYear()}-${String(NOW.getMonth() + 1).padStart(2, '0')}-${String(NOW.getDate()).padStart(2, '0')}T${String(NOW.getHours()).padStart(2, '0')}:${String(NOW.getMinutes()).padStart(2, '0')}:00`}
