@@ -322,7 +322,7 @@ function TierLengths({
     <ul className="flex list-none flex-col gap-2 p-0">
       {tiers.map((tier) => (
         <li key={tier.id} className="flex items-center gap-3 rounded-lg border border-line-subtle bg-surface px-3 py-2">
-          <span className="min-w-0 flex-1 truncate text-sm">{tier.label || 'Untitled tier'}</span>
+          <span className="min-w-0 flex-1 truncate text-sm">{tier.label || 'Untitled'}</span>
           <Select value={String(minutes[tier.id] ?? fallback)} onValueChange={(value) => onChange({ ...minutes, [tier.id]: Number(value) })}>
             <SelectTrigger className="w-48" size="sm" aria-label={`Length of ${tier.label}`}>
               <SelectValue />
@@ -449,9 +449,9 @@ export function KindFields({
     const ride = settings.activity
     return shell(
       <>
-        <Section title="Each time slot" hint="Guests pick a slot and turn up. How often slots start is set in the Schedule step.">
+        <Section title="Each time" hint="Guests pick a time and turn up. Which times are offered is set on the Booking step.">
           <DurationField
-            label="Each slot lasts"
+            label="Each time lasts"
             error={errors.durationMinutes}
             minutes={shared.durationMinutes}
             unit={shared.durationUnit === 'days' ? 'minutes' : shared.durationUnit}
@@ -460,7 +460,7 @@ export function KindFields({
             allowFlexible={false}
           />
           <div className="grid gap-4 sm:grid-cols-3">
-            <Field label="Riders per slot" required error={errors.maxCapacity} description="Everyone who can go at once.">
+            <Field label="Most guests per time" required error={errors.maxCapacity} description="Everyone booked on one time, together.">
               {(control) => <Input {...control} type="number" min={1} value={shared.maxCapacity || ''} placeholder="8" onChange={(e) => onShared({ maxCapacity: num(e.target.value) })} />}
             </Field>
             <Field label="Intensity">
@@ -481,7 +481,7 @@ export function KindFields({
           </div>
         </Section>
 
-        <Section title="Rider limits" hint="Optional. Each limit adds a question for every rider at checkout, and stops the booking if it is not met.">
+        <Section title="Height and weight limits" hint="Optional. Each guest is asked at checkout, and the booking stops if a limit is not met.">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Minimum height" description="0 for no limit.">
               {(control) => <Input {...control} type="number" min={0} suffix="cm" value={ride.minHeightCm} onChange={(e) => set('activity', { minHeightCm: num(e.target.value) })} />}
@@ -659,7 +659,7 @@ export function KindFields({
           </p>
         </Section>
 
-        <Section title="Returns" hint="What you lend out, how many you have and what each costs are set per item in the Pricing step.">
+        <Section title="Between rentals" hint="Your items, how many you have and their prices are set on the Pricing step.">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Gap between rentals" optional description="Time to clean, check or refuel before it goes out again.">
               {(control) => <Input {...control} type="number" min={0} step={5} suffix="min" placeholder="None" value={rental.bufferMinutes || ''} onChange={(e) => set('rental', { bufferMinutes: num(e.target.value) })} />}
@@ -804,17 +804,17 @@ export function KindFields({
 
         <Section title="The group" hint="One group per charter. The price is for the whole group.">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Field label="Most guests" required error={errors['charter.maxGuests']} description="The boat, vehicle or guide's limit.">
+            <Field label="Most guests" required error={errors['charter.maxGuests']} description="What the boat, vehicle or guide can take.">
               {(control) => <Input {...control} type="number" min={1} value={charter.maxGuests} onChange={(e) => set('charter', { maxGuests: num(e.target.value) })} />}
             </Field>
-            <Field label="Fewest guests" error={errors.minParticipants} description="Below this, you do not go out.">
+            <Field label="Fewest guests" error={errors.minParticipants} description="If fewer book, you can call it off.">
               {(control) => <Input {...control} type="number" min={1} value={shared.minParticipants} onChange={(e) => onShared({ minParticipants: num(e.target.value, 1) })} />}
             </Field>
             {ageField(shared, onShared, errors)}
           </div>
         </Section>
 
-        <Section title="How long it runs">
+        <Section title="How long it lasts">
           <DurationField
             label="Charter length"
             error={errors.durationMinutes}
@@ -827,9 +827,9 @@ export function KindFields({
           />
         </Section>
 
-        <Section title="Languages" hint="How guests book (online, request or call) and the notice you need are set on the Booking step.">
+        <Section title="Languages" hint="How guests book (online or by request) and the notice you need are set on the Booking step.">
           <div>
-            <p className="mb-2 text-xs font-medium text-muted">Languages on board</p>
+            <p className="mb-2 text-xs font-medium text-muted">Languages spoken</p>
             <LanguagePicker value={shared.languages} onChange={(languages) => onShared({ languages })} />
           </div>
         </Section>
@@ -873,7 +873,7 @@ export function KindFields({
           />
         </Section>
 
-        <Section title="Class size" hint="Places sold in each class. The schedule step uses this number.">
+        <Section title="Class size" hint="How many can book one class. Every class time on the Booking step uses this number.">
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <Field label="Students per class" required error={errors.maxCapacity}>
               {(control) => <Input {...control} type="number" min={1} value={shared.maxCapacity || ''} placeholder="8" onChange={(e) => onShared({ maxCapacity: num(e.target.value) })} />}
@@ -881,7 +881,7 @@ export function KindFields({
             <Field label="Students per instructor" required error={errors['lesson.ratio']}>
               {(control) => <Input {...control} type="number" min={1} value={lesson.ratio} onChange={(e) => set('lesson', { ratio: num(e.target.value) })} />}
             </Field>
-            <Field label="Fewest to run" error={errors.minParticipants} description="Below this, the class is cancelled.">
+            <Field label="Fewest to go ahead" error={errors.minParticipants} description="If fewer book, you can cancel that class.">
               {(control) => <Input {...control} type="number" min={1} value={shared.minParticipants} onChange={(e) => onShared({ minParticipants: num(e.target.value, 1) })} />}
             </Field>
             {ageField(shared, onShared, errors)}
@@ -1014,7 +1014,7 @@ export function RentalRatesEditor({
                 <Field label="In stock" labelSize="sm" error={errors[`item.${tier.id}.stock`]}>
                   {(control) => <Input {...control} type="number" min={1} value={item.stock || ''} onChange={(e) => setItem(tier.id, { stock: whole(e.target.value) })} />}
                 </Field>
-                <Field label="Fits" labelSize="sm">
+                <Field label="People per item" labelSize="sm">
                   {(control) => <Input {...control} type="number" min={1} suffix={item.holds === 1 ? 'person' : 'people'} value={item.holds || ''} onChange={(e) => setItem(tier.id, { holds: whole(e.target.value, 1) })} />}
                 </Field>
                 {hourly ? (

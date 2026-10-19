@@ -145,7 +145,7 @@ import {
 export type ArrivalMode = 'meet' | 'venue' | 'pickup'
 
 export const ARRIVAL_OPTIONS: { value: ArrivalMode; label: string; description: string; icon: typeof MapPin }[] = [
-  { value: 'meet', label: 'Meeting point', description: 'A guide or skipper meets guests at a set place.', icon: MapPin },
+  { value: 'meet', label: 'Meeting point', description: 'Someone from your team meets guests at a set place.', icon: MapPin },
   { value: 'venue', label: 'Guests come to you', description: 'They arrive at your shop, ranch, park or rental desk during opening hours.', icon: DoorOpen },
   { value: 'pickup', label: 'Pick up', description: 'You collect guests from their hotel or a stop. Set the zones and prices below.', icon: Route },
 ]
@@ -419,7 +419,7 @@ function rentalHoursFor(draft: ActivityDraft): { hourly: boolean; daily: boolean
   return { hourly: modes.includes('hour'), daily: modes.includes('day') }
 }
 
-/** What one departure, day or date sells, in the kind's own words. Set once, in Basics. */
+/** What one start time, day or date takes, in the kind's own words. Set once, in Basics. */
 export function seatsFor(draft: ActivityDraft): ScheduleSeats {
   const kind = draft.kind ?? 'trip'
   const settings = normalizeKindSettings(draft.kindSettings)
@@ -435,8 +435,8 @@ export function seatsFor(draft: ActivityDraft): ScheduleSeats {
   }
   if (kind === 'lesson') return { capacity: n, one: 'place', many: 'places', summary: `${n} ${pluralize(n, 'student')} per class`, varies: true }
   if (kind === 'pass') return { capacity: n, one: 'ticket', many: 'tickets', summary: n > 0 ? `${n} tickets per day` : 'No ticket limit', varies: true }
-  if (kind === 'activity') return { capacity: n, one: 'place', many: 'places', summary: `${n} ${pluralize(n, 'rider')} per time slot`, varies: true }
-  return { capacity: n, one: 'seat', many: 'seats', summary: n > 0 ? `${n} seats per departure` : 'No seat limit', varies: true }
+  if (kind === 'activity') return { capacity: n, one: 'guest', many: 'guests', summary: `${n} ${pluralize(n, 'guest')} per time`, varies: true }
+  return { capacity: n, one: 'guest', many: 'guests', summary: n > 0 ? `${n} ${pluralize(n, 'guest')} per start time` : 'No limit on guests', varies: true }
 }
 
 /**
@@ -737,8 +737,8 @@ const DIFFICULTY_OPTIONS: {
 const TOUR_STEPS = [
   { id: 'basics', label: 'Basics', hint: 'What you sell and its setup', icon: Compass },
   { id: 'description', label: 'Description', hint: 'The copy guests read', icon: FileText },
-  { id: 'media', label: 'Media', hint: 'Photography', icon: Images },
-  { id: 'pricing', label: 'Pricing', hint: 'Tiers and add-ons', icon: Tag },
+  { id: 'media', label: 'Media', hint: 'Photos and video', icon: Images },
+  { id: 'pricing', label: 'Pricing', hint: 'Prices and extras', icon: Tag },
   { id: 'schedule', label: 'Booking', hint: 'How and when guests book', icon: CalendarClock },
   { id: 'guests', label: 'Guests', hint: 'Arrival and checkout', icon: MapPin },
   { id: 'review', label: 'Review', hint: 'Publish', icon: Rocket },
@@ -784,11 +784,11 @@ const TOUR_COPY_SCHEMAS = [
         .max(43200, 'Keep it under 30 days')
         .refine((minutes) => minutes === 0 || minutes >= 15, 'Give it at least 15 minutes, or leave it flexible'),
       minAge: z.number().int().min(0).max(99),
-      maxCapacity: z.number().int().min(0).max(500, 'Keep seats per departure under 500, or remove the limit'),
+      maxCapacity: z.number().int().min(0).max(500, 'Keep it under 500 guests per time, or remove the limit'),
       minParticipants: z.number().int().min(1, 'At least one guest must be required'),
     })
     .refine((draft) => draft.maxCapacity === 0 || draft.minParticipants <= draft.maxCapacity, {
-      message: 'Minimum participants cannot exceed the seat limit',
+      message: 'The fewest guests cannot be more than the most guests',
       path: ['minParticipants'],
     }),
 
@@ -835,7 +835,7 @@ const TOUR_SCHEMA_LIST = [
       .array(
         z
           .object({
-            label: z.string().trim().min(2, 'Name this tier'),
+            label: z.string().trim().min(2, 'Name this price'),
             price: z.number().int().min(0),
             minQuantity: z.number().int().min(0),
             maxQuantity: z.number().int().min(1),
@@ -845,9 +845,9 @@ const TOUR_SCHEMA_LIST = [
             path: ['maxQuantity'],
           }),
       )
-      .min(1, 'Keep at least one price tier'),
+      .min(1, 'Keep at least one price'),
     addOns: z.array(
-      z.object({ label: z.string().trim().min(2, 'Name this add-on, or remove it') }),
+      z.object({ label: z.string().trim().min(2, 'Name this extra, or remove it') }),
     ),
   }),
 
@@ -870,7 +870,7 @@ const TOUR_SCHEMA_LIST = [
     })
     .superRefine(({ schedule }, ctx) => {
       const issue = (key: string, message: string) => ctx.addIssue({ code: 'custom', path: ['schedule', key], message })
-      if (schedule.locations.length === 0) issue('locations', 'Tick at least one location this runs from')
+      if (schedule.locations.length === 0) issue('locations', 'Tick at least one place it starts from')
       if (schedule.locations.length > 1) {
         // Each location carries its own rule; the shared one below is not used.
         for (const site of schedule.locations) {
@@ -1083,8 +1083,8 @@ function validateStep(step: number, draft: ActivityDraft): FieldErrors {
   if (kind === 'rental' && settings.rental.modes.includes('day') && settings.rental.maxDays > 0 && settings.rental.maxDays < settings.rental.minDays) errors['rental.maxDays'] = 'Most days cannot be fewer than the fewest'
   if (kind === 'rental' && settings.rental.modes.includes('hour') && settings.rental.maxHours > 0 && settings.rental.maxHours < settings.rental.minHours) errors['rental.maxHours'] = 'Most hours cannot be fewer than the fewest'
   if (kind === 'lesson' && draft.maxCapacity < 1) errors.maxCapacity = 'A class needs at least one place'
-  if (kind === 'activity' && draft.maxCapacity < 1) errors.maxCapacity = 'A slot needs at least one rider'
-  if (kind === 'activity' && draft.durationMinutes < 5) errors.durationMinutes = 'Give each slot a length'
+  if (kind === 'activity' && draft.maxCapacity < 1) errors.maxCapacity = 'Each time needs at least one guest'
+  if (kind === 'activity' && draft.durationMinutes < 5) errors.durationMinutes = 'Say how long it lasts'
   if (kind === 'lesson' && draft.durationMinutes < 15) errors.durationMinutes = 'Give each session at least 15 minutes'
   if (kind === 'charter' && settings.charter.maxGuests < 1) errors['charter.maxGuests'] = 'A charter carries at least one guest'
   if (kind === 'package') {
@@ -1407,7 +1407,7 @@ function StorefrontPreview({
           </span>
           <span className="inline-flex items-center gap-1.5">
             <Users className="size-3.5 text-faint" aria-hidden="true" />
-            {dining ? `Parties of ${draft.dining.minPartySize}–${draft.dining.maxPartySize}` : draft.maxCapacity > 0 ? `Up to ${draft.maxCapacity}` : 'No seat limit'}
+            {dining ? `Parties of ${draft.dining.minPartySize}–${draft.dining.maxPartySize}` : draft.maxCapacity > 0 ? `Up to ${draft.maxCapacity}` : 'No limit on guests'}
           </span>
           {dining ? (
             <span className="inline-flex items-center gap-1.5">
@@ -1829,10 +1829,10 @@ export function ActivityWizard({
                     <BasicsStep draft={draft} patch={patch} errors={errors} currency={currency} tenantSlug={tenantSlug} packageOptions={packageOptions.filter((option) => option.id !== activityId)} />
                   ) : null}
                   {currentStep.id === 'basics' && ownPackage ? (
-                    <section className="mt-6 flex flex-col gap-5 border-t border-line-subtle pt-6">
+                    <section className="mt-6 flex flex-col gap-5 rounded-xl border border-line p-4">
                       <div>
-                        <h3 className="text-sm font-semibold">When the package runs</h3>
-                        <p className="mt-0.5 text-xs text-subtle">Its own days and start times. Each start time is one run, with the places and booking limit set above.</p>
+                        <h3 className="text-sm font-semibold">When the package happens</h3>
+                        <p className="mt-0.5 text-xs text-subtle">Its own days and start times. Every start time takes the guests and bookings set above.</p>
                       </div>
                       {locations.length > 0 ? (
                         <LocationsEditor
@@ -1997,7 +1997,7 @@ export function ActivityWizard({
                       <Separator />
 
                       <section>
-                        <h3 className="text-sm font-semibold">{dining ? 'Pairings and extras' : 'Add-ons'}</h3>
+                        <h3 className="text-sm font-semibold">{dining ? 'Pairings and extras' : 'Extras'}</h3>
                         <p className="mt-0.5 mb-3 text-xs text-muted">
                           {dining
                             ? 'Offered once the table is picked: pairings, a bottle on arrival, a cake for the birthday.'
@@ -2043,7 +2043,7 @@ export function ActivityWizard({
                         <span>
                           <span className="block text-sm font-medium">Offer tips at checkout</span>
                           <span className="block text-xs text-subtle">
-                            Guests can add a tip for the {dining ? 'team' : 'crew'} before paying: 5%, 10%, 15%, 20%, 25% or an amount of their own. Tips are optional and never discounted.
+                            Guests can add a tip for your team before paying: 5%, 10%, 15%, 20%, 25% or an amount of their own. Tips are optional and never discounted.
                           </span>
                           {draft.tips ? (
                             <span className="mt-2 flex flex-wrap gap-1.5" aria-hidden="true">
@@ -2103,7 +2103,6 @@ export function ActivityWizard({
                           businessPhone={businessPhone}
                           groupWord={(draft.kind ?? 'trip') === 'rental' ? 'items' : 'guests'}
                         />
-                        {policyEditor}
                         {ownPackage ? (
                           <p className="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">
                             Where it starts, its days, start times and places are set with the package on Basics.{' '}
@@ -2138,6 +2137,7 @@ export function ActivityWizard({
                             errors={errors}
                           />
                         )}
+                        {policyEditor}
                       </div>
                     )
                   ) : null}
@@ -2231,11 +2231,11 @@ export function ActivityWizard({
 }
 
 const STEP_COPY: Record<string, string> = {
-  basics: 'What you sell, who it is for, and the settings that kind of product needs.',
+  basics: 'What you sell, who it suits, and how many can book each time.',
   description: 'The copy guests read before they book. Specific beats clever.',
   media: 'Photography does most of the selling. Landscape frames, no logos, no text overlays.',
   pricing: 'What it costs, and the extras you offer once a time is picked.',
-  schedule: 'How guests book, and the days and times it runs.',
+  schedule: 'How guests book, when it happens, and the rules for changes and cancellations.',
   guests: 'Where guests go, and what checkout asks of them.',
   review: 'One last read-through, then publish.',
 }
@@ -2322,8 +2322,8 @@ function kindFacts(draft: ActivityDraft): string[] {
   const routeFact = route.enabled && route.distance > 0 ? [`${route.distance} ${route.unit}${route.track.trim() ? ` · ${route.track.trim()}` : ''}`] : []
   if (kind === 'activity') {
     return [
-      `${formatDuration(draft.durationMinutes)} slots`,
-      `${draft.maxCapacity} per slot`,
+      `${formatDuration(draft.durationMinutes)} each`,
+      `${draft.maxCapacity} per time`,
       draft.difficulty.charAt(0).toUpperCase() + draft.difficulty.slice(1),
       age,
       ...(s.activity.minHeightCm > 0 ? [`${s.activity.minHeightCm} cm+`] : []),
@@ -2342,7 +2342,7 @@ function kindFacts(draft: ActivityDraft): string[] {
   return [
     draft.difficulty.charAt(0).toUpperCase() + draft.difficulty.slice(1),
     draft.durationMinutes > 0 ? formatDuration(draft.durationMinutes) : 'Flexible length',
-    draft.maxCapacity > 0 ? `${draft.minParticipants}–${draft.maxCapacity} guests` : 'No seat limit',
+    draft.maxCapacity > 0 ? `${draft.minParticipants}–${draft.maxCapacity} guests` : 'No limit on guests',
     age,
     ...routeFact,
     ...(langs ? [langs] : []),
@@ -2547,7 +2547,7 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
         description="One line that earns the click."
       >
         <Input
-          placeholder={dining ? 'Seven courses as the caldera goes gold' : 'First boat on the water, before the crowds and the wind'}
+          placeholder={dining ? 'Seven courses as the caldera goes gold' : 'Out early, before the crowds and the heat'}
           value={draft.tagline}
           maxLength={120}
           onChange={(event) => patch({ tagline: event.target.value })}
@@ -2642,23 +2642,23 @@ function TourBasicsFields({ draft, patch, errors }: StepProps) {
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Field
-          label="Seats per departure"
+          label="Most guests per time"
           error={errors.maxCapacity}
-          description="Empty for no limit. The schedule uses this."
+          description="Everyone booked on one start time, together. Empty: no limit."
         >
           <Input
             type="number"
             min={1}
             value={draft.maxCapacity > 0 ? draft.maxCapacity : ''}
             placeholder="16"
-            suffix="seats"
+            suffix="guests"
             onChange={(event) => patch({ maxCapacity: Number.parseInt(event.target.value, 10) || 0 })}
           />
         </Field>
         <Field
-          label="Fewest to run"
+          label="Fewest guests to go ahead"
           error={errors.minParticipants}
-          description="Below this, the departure does not run."
+          description="If fewer book, you can call that time off."
         >
           <Input
             type="number"
@@ -2713,9 +2713,9 @@ function CrewPicker({
 }) {
   return (
     <section className="mt-6 border-t border-line-subtle pt-6">
-      <p className="text-[0.8125rem] font-medium">Who runs it</p>
+      <p className="text-[0.8125rem] font-medium">Who leads it</p>
       <p className="mt-0.5 mb-2.5 text-xs text-muted">
-        Assigned to every {dining ? 'service' : 'departure'} by default and shown on the manifest. Change it for any
+        Put on every {dining ? 'service' : 'start time'} by default and shown on the guest list. Change it for any
         single day from the calendar.
       </p>
       <div className="grid gap-1.5 sm:grid-cols-2">
@@ -2746,7 +2746,7 @@ function CrewPicker({
         })}
       </div>
       <p className="mt-2 text-xs text-subtle">
-        {selected.length === 0 ? 'Nobody yet. Leave it empty to assign crew departure by departure.' : `${selected.length} ${pluralize(selected.length, 'person', 'people')} on every one.`}
+        {selected.length === 0 ? 'Nobody yet. Leave it empty to pick people for each time on the calendar.' : `${selected.length} ${pluralize(selected.length, 'person', 'people')} on every one.`}
       </p>
     </section>
   )
@@ -2909,8 +2909,7 @@ function DescriptionStep({
           <fieldset>
             <legend className="text-[0.8125rem] font-medium">Where guests go</legend>
             <p className="mt-0.5 mb-2.5 text-xs text-muted">
-              A guided trip has a meeting point. A rental desk, a park or a time-slot activity has guests come to you. Pick up
-              collects them from their hotel.
+              Meet guests at a set place, have them come to your shop, desk or venue, or pick them up from their hotel.
             </p>
             <RadioGroup
               value={draft.arrivalMode}
@@ -3027,7 +3026,7 @@ function ReviewStep({
   onJump: (index: number) => void
 }) {
   const crewNames = crew.filter((member) => draft.crewIds.includes(member.id)).map((member) => member.name)
-  const crewRow = { label: 'Crew', value: crewNames.length > 0 ? crewNames.join(', ') : 'Assigned per departure', step: 4 }
+  const crewRow = { label: 'Team', value: crewNames.length > 0 ? crewNames.join(', ') : 'Picked for each time', step: 4 }
   const priced = draft.tiers.filter((tier) => tier.label.trim().length > 0)
   // Free tiers (infants, ride-alongs) are not the "from" price.
   const paid = priced.filter((tier) => tier.price > 0)
@@ -3101,7 +3100,7 @@ function ReviewStep({
         { label: 'Media', value: `${draft.media.length} ${pluralize(draft.media.length, 'image')}`, step: 2 },
         {
           label: 'Pricing',
-          value: `${priced.length} ${pluralize(priced.length, 'tier')} from ${formatCurrency(fromPrice, currency)} · ${draft.addOns.length} ${pluralize(draft.addOns.length, 'add-on')}`,
+          value: `${priced.length} ${pluralize(priced.length, 'price')} from ${formatCurrency(fromPrice, currency)} · ${draft.addOns.length} ${pluralize(draft.addOns.length, 'extra')}`,
           step: 3,
         },
         ...(locations.length > 0
@@ -3152,12 +3151,12 @@ function ReviewStep({
       ]
     : [
         {
-          label: draft.schedule.mode === 'hours' ? 'Open days · next 14 days' : draft.schedule.mode === 'dates' ? 'Dates listed' : 'Departures · next 14 days',
+          label: draft.schedule.mode === 'hours' ? 'Open days · next 14 days' : draft.schedule.mode === 'dates' ? 'Dates listed' : 'Start times · next 14 days',
           value: departures.toString(),
           icon: CalendarClock,
         },
         {
-          label: `${seatsFor(draft).many.charAt(0).toUpperCase()}${seatsFor(draft).many.slice(1)} on sale`,
+          label: `${seatsFor(draft).many.charAt(0).toUpperCase()}${seatsFor(draft).many.slice(1)} it can take · next 14 days`,
           value: seatsFor(draft).capacity > 0 ? previewDepartures({ ...draft.schedule, capacity: seatsFor(draft).capacity }, nowIso, 14).reduce((acc, day) => acc + day.seats, 0).toString() : 'No limit',
           icon: Users,
         },
@@ -3181,7 +3180,7 @@ function ReviewStep({
         })}
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_17rem]">
+      <div className="grid gap-5">
         <div className="min-w-0 overflow-hidden rounded-xl border border-line">
           <dl className="divide-y divide-line-subtle">
             {rows.map((row) => (
@@ -3205,7 +3204,7 @@ function ReviewStep({
           </dl>
         </div>
 
-        <div className="lg:hidden xl:block">
+        <div className="lg:hidden">
           <StorefrontPreview
             draft={draft}
             currency={currency}
@@ -3243,7 +3242,7 @@ function ReviewStep({
               <span className="block text-xs text-muted">
                 {dining
                   ? 'Guests get their deposit back up to this many hours before the sitting.'
-                  : 'Guests get a full refund up to this many hours before departure.'}
+                  : 'Guests get a full refund up to this many hours before the start.'}
               </span>
             </span>
             <div className="flex gap-1.5">
@@ -3276,7 +3275,7 @@ function ReviewStep({
           <span className="font-medium text-foreground">
             {tenantSlug}.ezrapro.com/{slugify(draft.name) || 'new-activity'}
           </span>
-          . {dining ? 'Sittings are generated from your services' : 'Departures are generated from your schedule rule'} for the next 180 days and appear on the
+          . {dining ? 'Sittings are added from your services' : 'Start times are added from your schedule'} for the next 180 days and appear on the
           calendar straight away.
         </p>
       </div>

@@ -103,7 +103,6 @@ export function AddonEditor({ addOns, onChange, currency, errors, presets = ADDO
   }
 
   const used = new Set(addOns.map((addOn) => addOn.label.toLowerCase()))
-  const attachRate = addOns.length === 0 ? 0 : Math.min(12 + addOns.length * 6, 34)
 
   return (
     <div className={cn('flex flex-col gap-3', className)}>
@@ -130,7 +129,7 @@ export function AddonEditor({ addOns, onChange, currency, errors, presets = ADDO
                   <Input
                     value={addOn.label}
                     onChange={(event) => update(index, { label: event.target.value })}
-                    placeholder="Add-on name, e.g. Photo package"
+                    placeholder="Extra, e.g. Photo package"
                     aria-label={`Add-on ${index + 1} name`}
                     size="sm"
                     className="flex-1"
@@ -164,7 +163,7 @@ export function AddonEditor({ addOns, onChange, currency, errors, presets = ADDO
 
                 <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2.5">
                   <span className="flex items-center gap-2 text-xs text-muted">
-                    Max per booking
+                    Limit per booking
                     <Input
                       type="number"
                       min={1}
@@ -211,7 +210,7 @@ export function AddonEditor({ addOns, onChange, currency, errors, presets = ADDO
                 </div>
               </div>
 
-              <SimpleTooltip label="Remove add-on">
+              <SimpleTooltip label="Remove extra">
                 <IconButton
                   type="button"
                   aria-label={`Remove ${addOn.label || `add-on ${index + 1}`}`}
@@ -236,7 +235,7 @@ export function AddonEditor({ addOns, onChange, currency, errors, presets = ADDO
           leftIcon={<Plus />}
           onClick={() => onChange([...addOns, blankAddOn()])}
         >
-          Add an add-on
+          Add an extra
         </Button>
         {presets.filter((preset) => !used.has(preset.label.toLowerCase())).map((preset) => {
           const Icon = preset.icon
@@ -263,13 +262,6 @@ export function AddonEditor({ addOns, onChange, currency, errors, presets = ADDO
           )
         })}
       </div>
-
-      {addOns.length > 0 ? (
-        <p className="text-xs text-faint">
-          Projected attach rate ≈ {attachRate}% of bookings, based on operators selling a comparable
-          mix.
-        </p>
-      ) : null}
     </div>
   )
 }

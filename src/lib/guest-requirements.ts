@@ -192,7 +192,7 @@ export function shortOption(option: string): string {
 export const GUEST_FIELD_ORDER: GuestFieldKey[] = ['name', 'email', 'phone', 'dateOfBirth', 'country']
 
 export const GUEST_FIELDS: Record<GuestFieldKey, { label: string; hint: string }> = {
-  name: { label: 'Full name', hint: 'First and last name, for the manifest and check-in.' },
+  name: { label: 'Full name', hint: 'First and last name, for the guest list and check-in.' },
   email: { label: 'Email', hint: 'Each guest gets their own ticket and reminders.' },
   phone: { label: 'Mobile', hint: 'For day-of updates and emergencies.' },
   dateOfBirth: { label: 'Date of birth', hint: 'Works out who is under age for the waiver.' },

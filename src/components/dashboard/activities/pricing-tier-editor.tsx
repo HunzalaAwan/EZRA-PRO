@@ -236,6 +236,17 @@ export function PricingTierEditor({
 
   return (
     <div className={cn('flex flex-col gap-3', className)}>
+      {tiers.length > 0 && !perGroup ? (
+        <p className="-mt-1 text-xs text-subtle">
+          <span className="font-medium text-muted">Was</span> is shown crossed out, for a sale.{' '}
+          <span className="font-medium text-muted">At least</span> is how many every booking must include.{' '}
+          <span className="font-medium text-muted">Counts as</span> is how many guests one ticket is: 2 for a pair, 4 for a family, none for a free infant.
+        </p>
+      ) : tiers.length > 0 ? (
+        <p className="-mt-1 text-xs text-subtle">
+          <span className="font-medium text-muted">Was</span> is shown crossed out, for a sale.
+        </p>
+      ) : null}
       {tiers.map((tier, index) => (
         <div
           key={tier.id}
@@ -254,7 +265,7 @@ export function PricingTierEditor({
                 <Input
                   value={tier.label}
                   onChange={(event) => update(index, { label: event.target.value })}
-                  placeholder="Tier name, e.g. Adult"
+                  placeholder="Price name, e.g. Adult"
                   aria-label={`Tier ${index + 1} name`}
                   size="sm"
                   className="flex-1"
@@ -283,7 +294,7 @@ export function PricingTierEditor({
                     ariaLabel={`Price for ${tier.label || `tier ${index + 1}`}`}
                   />
                 </Field>
-                <Field label="Compare at" labelSize="sm">
+                <Field label="Was" labelSize="sm">
                   <MoneyInput
                     value={tier.compareAtPrice ?? 0}
                     onValueChange={(price) =>
@@ -296,7 +307,7 @@ export function PricingTierEditor({
                     ariaLabel={`Compare-at price for ${tier.label || `tier ${index + 1}`}`}
                   />
                 </Field>
-                {kind === 'charter' ? null : <Field label="At least" labelSize="sm" description="Each booking includes this many. 0 for none. The most is the seats left.">
+                {kind === 'charter' ? null : <Field label="At least" labelSize="sm">
                   <NumberField
                     value={tier.minQuantity}
                     onValueChange={(minQuantity) => update(index, { minQuantity: Math.max(0, minQuantity) })}
@@ -309,27 +320,27 @@ export function PricingTierEditor({
                 <Input
                   value={tier.description}
                   onChange={(event) => update(index, { description: event.target.value })}
-                  placeholder="Short note shown under the tier (optional)"
+                  placeholder="Short note shown under the price (optional)"
                   aria-label={`Description for ${tier.label || `tier ${index + 1}`}`}
                   size="sm"
                   className="flex-1"
                 />
                 {perGroup ? null : (
                   <label className="flex shrink-0 items-center gap-2 text-xs text-muted">
-                    Takes
+                    Counts as
                     <select
                       value={tier.countsTowardCapacity ? Math.max(1, tier.seats ?? 1) : 0}
                       onChange={(event) => {
                         const places = Number(event.target.value)
                         update(index, { countsTowardCapacity: places > 0, seats: Math.max(1, places) })
                       }}
-                      aria-label={`Places one ${tier.label || `tier ${index + 1}`} ticket takes`}
+                      aria-label={`How many guests one ${tier.label || `price ${index + 1}`} ticket counts as`}
                       className="h-8 rounded-lg border border-line bg-surface px-2 text-xs text-foreground"
                     >
-                      <option value={0}>no place</option>
+                      <option value={0}>no one (free, no place)</option>
                       {[1, 2, 3, 4, 5, 6].map((places) => (
                         <option key={places} value={places}>
-                          {places} {places === 1 ? 'place' : 'places'}
+                          {places} {places === 1 ? 'guest' : 'guests'}
                         </option>
                       ))}
                     </select>
@@ -363,7 +374,7 @@ export function PricingTierEditor({
                   <ArrowDown />
                 </IconButton>
               </SimpleTooltip>
-              <SimpleTooltip label="Remove tier">
+              <SimpleTooltip label="Remove price">
                 <IconButton
                   type="button"
                   aria-label={`Remove ${tier.label || `tier ${index + 1}`}`}
@@ -389,7 +400,7 @@ export function PricingTierEditor({
           leftIcon={<Plus />}
           onClick={() => onChange([...tiers, blankTier()])}
         >
-          Add tier
+          Add a price
         </Button>
         <span className="text-xs text-faint">or start from</span>
         {presets.filter((preset) => !usedPresets.has(preset.label.toLowerCase())).map((preset) => (

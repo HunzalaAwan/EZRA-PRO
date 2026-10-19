@@ -83,7 +83,7 @@ export function GuestQuestionsEditor({
       <CardHeader className="flex flex-col items-start gap-1">
         <CardTitle>Guest details</CardTitle>
         <CardDescription>
-          What checkout asks before guests arrive. Answers show on the booking and the manifest; sizes add up on the gear list.
+          What checkout asks before guests arrive. Answers show on the booking and the guest list; sizes add up on the gear list.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">

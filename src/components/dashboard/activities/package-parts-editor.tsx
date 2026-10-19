@@ -36,13 +36,13 @@ export const EMPTY_PACKAGE: PackageConfig = { timing: 'parts', parts: [], gapMin
 const TIMINGS: { value: NonNullable<PackageConfig['timing']>; title: string; text: string }[] = [
   {
     value: 'parts',
-    title: "On each activity's own times",
-    text: 'Guests join times you already run and pick one for each part. Places are shared with guests booking the activity on its own.',
+    title: 'Join times you already sell',
+    text: 'Guests pick a time for each activity from the times it already has. They share the places with everyone else booked on those times.',
   },
   {
     value: 'own',
-    title: 'On its own schedule',
-    text: 'You run the parts back to back just for package guests, at the package times. It has its own places and does not touch the activities’ times.',
+    title: 'Its own set times',
+    text: 'The activities run one after another at start times set just for this package. Only package guests are on them.',
   },
 ]
 
@@ -103,12 +103,11 @@ export function PackagePartsEditor({
     <section className="flex flex-col gap-4 rounded-xl border border-line p-4">
       <div>
         <h3 className="text-sm font-semibold">What&rsquo;s in the package</h3>
-        <p className="mt-0.5 text-xs text-subtle">
-          Pick two or more of your activities, then say when they run: on the times you already sell them, or as a day of their own for package guests only.
-        </p>
+        <p className="mt-0.5 text-xs text-subtle">Two or more of your activities, sold together as one booking.</p>
       </div>
 
-      <div role="radiogroup" aria-label="When the parts run" className="grid gap-2 sm:grid-cols-2">
+      <p className="-mb-2 text-[0.8125rem] font-medium">How guests join</p>
+      <div role="radiogroup" aria-label="How guests join" className="grid gap-2 sm:grid-cols-2">
         {TIMINGS.map((timing) => {
           const on = (value.timing ?? 'parts') === timing.value
           return (
@@ -127,6 +126,7 @@ export function PackagePartsEditor({
         })}
       </div>
 
+      <p className="-mb-2 text-[0.8125rem] font-medium">Activities, in the order they happen</p>
       <ol className="flex list-none flex-col gap-3 p-0">
         {value.parts.map((part, index) => {
           const option = options.find((entry) => entry.id === part.activityId)
@@ -170,14 +170,14 @@ export function PackagePartsEditor({
 
               {option && own ? (
                 <p className="mt-2 pl-8 text-xs text-subtle">
-                  Starts {(starts[index] ?? 0) === 0 ? 'when the package starts' : `${offsetLabel(starts[index] ?? 0).slice(1)} after the start`} · {formatDuration(option.durationMinutes)}
+                  {(starts[index] ?? 0) === 0 ? 'Starts at the package start time' : `Starts ${offsetLabel(starts[index] ?? 0).slice(1)} after the package start time`} · lasts {formatDuration(option.durationMinutes)}
                 </p>
               ) : null}
               {option && !own ? (
                 <div className="mt-3 flex flex-col gap-3 pl-8">
                   <div>
                     <p className="text-[0.8125rem] font-medium">Times guests can pick</p>
-                    <p className="text-xs text-subtle">None picked: any time it runs that day.</p>
+                    <p className="text-xs text-subtle">Leave all off to offer every time it has that day.</p>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {option.times.map((time) => {
                         const on = part.times.includes(time)
@@ -228,23 +228,26 @@ export function PackagePartsEditor({
       ) : null}
       {error ? <p className="text-xs font-medium text-danger">{error}</p> : null}
 
-      <div className="grid gap-4 border-t border-line-subtle pt-4 sm:grid-cols-2">
-        <Field label="Time between parts" description={own ? "The break between one part ending and the next starting: travel, lunch, changing." : "Travel, changing, a meal. Times closer than this are not offered together."}>
-          {(control) => <Input {...control} type="number" min={0} step={15} suffix="minutes" value={value.gapMinutes} onChange={(event) => set({ gapMinutes: Math.max(0, Math.floor(Number(event.target.value)) || 0) })} />}
+      <div className={cn('grid gap-4 border-t border-line-subtle pt-4', own ? 'sm:grid-cols-3' : 'sm:grid-cols-2')}>
+        <Field
+          label="Break between activities"
+          description={own ? 'From one ending to the next starting: travel, lunch, changing.' : 'Times closer together than this are not offered together.'}
+        >
+          {(control) => <Input {...control} type="number" min={0} step={15} suffix="min" value={value.gapMinutes} onChange={(event) => set({ gapMinutes: Math.max(0, Math.floor(Number(event.target.value)) || 0) })} />}
         </Field>
         {own ? (
-          <div className="flex flex-col gap-4">
-            <Field label="Places on each run" description="Guests on one run: what the guide, vehicle or boat takes.">
+          <>
+            <Field label="Guests per start time" description="The most people booked on one start time, in all bookings together.">
               {(control) => <Input {...control} type="number" min={1} suffix="guests" value={capacity || ''} onChange={(event) => onCapacity(Math.max(1, Math.floor(Number(event.target.value)) || 1))} />}
             </Field>
-            <Field label="Most bookings on each run" optional description="Empty: no limit. Useful when each group needs its own guide.">
+            <Field label="Bookings per start time" optional description="How many separate groups one start time takes, for example one per guide.">
               {(control) => (
                 <Input
                   {...control}
                   type="number"
                   min={1}
-                  placeholder="No limit"
-                  suffix="bookings"
+                  placeholder="Any number"
+                  suffix="groups"
                   value={value.maxBookingsPerRun || ''}
                   onChange={(event) => {
                     const next = Math.max(0, Math.floor(Number(event.target.value)) || 0)
@@ -253,22 +256,22 @@ export function PackagePartsEditor({
                 />
               )}
             </Field>
-          </div>
+          </>
         ) : (
-        <div className="flex flex-col gap-2">
-          <label className="flex items-start justify-between gap-3">
-            <span>
-              <span className="block text-sm font-medium">All on one day</span>
-              <span className="block text-xs text-subtle">Off: guests can spread the parts over a few days.</span>
-            </span>
-            <Switch checked={value.sameDay} onCheckedChange={(sameDay) => set({ sameDay })} aria-label="All on one day" />
-          </label>
-          {value.sameDay ? null : (
-            <Field label="Within" labelSize="sm">
-              {(control) => <Input {...control} type="number" min={2} max={14} suffix="days" className="sm:w-40" value={value.withinDays} onChange={(event) => set({ withinDays: Math.min(14, Math.max(2, Math.floor(Number(event.target.value)) || 2)) })} />}
-            </Field>
-          )}
-        </div>
+          <div className="flex flex-col gap-2">
+            <label className="flex items-start justify-between gap-3">
+              <span>
+                <span className="block text-sm font-medium">All on the same day</span>
+                <span className="block text-xs text-subtle">Off: guests can book the activities on different days.</span>
+              </span>
+              <Switch checked={value.sameDay} onCheckedChange={(sameDay) => set({ sameDay })} aria-label="All on the same day" />
+            </label>
+            {value.sameDay ? null : (
+              <Field label="All within" labelSize="sm">
+                {(control) => <Input {...control} type="number" min={2} max={14} suffix="days" className="sm:w-40" value={value.withinDays} onChange={(event) => set({ withinDays: Math.min(14, Math.max(2, Math.floor(Number(event.target.value)) || 2)) })} />}
+              </Field>
+            )}
+          </div>
         )}
       </div>
 
@@ -276,8 +279,8 @@ export function PackagePartsEditor({
         <p className="flex items-start gap-2 rounded-lg bg-surface-sunken px-3 py-2 text-xs text-muted">
           <Info className="mt-0.5 size-3.5 shrink-0 text-info" aria-hidden="true" />
           {own
-            ? `Runs ${formatDuration(totalMinutes)} from start to finish. Set where it starts, its days and start times just below. Booked apart, these cost ${formatCurrency(apart, currency)} per person; set the package price on the Pricing step.`
-            : `Up to ${seats} people per booking, the size of the smallest part. Booked apart, these cost ${formatCurrency(apart, currency)} per person; set the package price on the Pricing step.`}
+            ? `${formatDuration(totalMinutes)} from start to finish. Booked one by one, these cost ${formatCurrency(apart, currency)} per person; set the package price on the Pricing step.`
+            : `Up to ${seats} people per booking, the most the smallest activity takes. Booked one by one, these cost ${formatCurrency(apart, currency)} per person; set the package price on the Pricing step.`}
         </p>
       ) : null}
     </section>

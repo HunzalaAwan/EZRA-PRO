@@ -100,9 +100,9 @@ export const WEEKDAY_LABEL: Record<number, string> = {
 }
 
 export const SCHEDULE_MODES: { value: ScheduleMode; label: string; description: string; icon: typeof Clock }[] = [
-  { value: 'times', label: 'Set start times', description: 'Departures at fixed times, each with its own manifest. Boats, tours, classes.', icon: Clock },
-  { value: 'hours', label: 'Open hours', description: 'Guests come any time you are open. Parks, rentals, self-guided rides, walk-ins.', icon: DoorOpen },
-  { value: 'dates', label: 'Specific dates', description: 'Runs only on the dates you list. Events, workshops, one-off dinners.', icon: CalendarDays },
+  { value: 'times', label: 'Set start times', description: 'Guests book a set time, like 9:00 or 1:30. Tours, classes, rides, trips.', icon: Clock },
+  { value: 'hours', label: 'Open hours', description: 'Guests come any time you are open, or at arrival times you set. Parks, rentals, visits.', icon: DoorOpen },
+  { value: 'dates', label: 'Specific dates', description: 'Only on the dates you list. Events, workshops, one-off days.', icon: CalendarDays },
 ]
 
 export function defaultSchedule(nowIso: string): DraftSchedule {
@@ -241,8 +241,8 @@ export interface ScheduleSeats {
 
 /** One line for the review step. */
 export function describeSchedule(schedule: DraftSchedule, nouns?: Pick<ScheduleSeats, 'one' | 'many'>): string {
-  const many = nouns?.many ?? 'seats'
-  const one = nouns?.one ?? 'seat'
+  const many = nouns?.many ?? 'guests'
+  const one = nouns?.one ?? 'guest'
   const limits = Object.entries(schedule.dayCapacity ?? {}).filter(([day, value]) => value > 0 && schedule.weekdays.includes(Number(day)))
   const base = schedule.capacity > 0 ? `${schedule.capacity} ${schedule.capacity === 1 ? one : many}` : `no ${one} limit`
   const unit = schedule.dayLimitUnit === 'bookings' ? 'bookings' : many
@@ -251,7 +251,7 @@ export function describeSchedule(schedule: DraftSchedule, nouns?: Pick<ScheduleS
   for (const [day, value] of limits) groups.set(value, [...(groups.get(value) ?? []), WEEKDAY_LABEL[Number(day)]])
   const seats = limits.length > 0 ? `${base} (daily max ${[...groups].map(([value, names]) => `${value} ${unit} ${names.join(', ')}`).join('; ')})` : base
   if (schedule.mode === 'hours') {
-    const arrival = schedule.entryInterval > 0 ? `arrival slots every ${schedule.entryInterval} min` : 'arrive any time'
+    const arrival = schedule.entryInterval > 0 ? `arrival times every ${schedule.entryInterval} min` : 'arrive any time'
     return `Open ${formatClock(schedule.opensAt)}–${formatClock(schedule.closesAt)} on ${plural(schedule.weekdays.length, 'day')} a week · ${arrival} · ${seats} a day`
   }
   if (schedule.mode === 'dates') {
@@ -283,7 +283,7 @@ export interface ScheduleEditorProps {
 export function ModePicker({
   value,
   onChange,
-  hint = 'Pick the one that matches how the day actually works. You can change it later.',
+  hint = 'Pick the one that matches how your day works. You can change it later.',
 }: {
   value: ScheduleMode
   onChange: (mode: ScheduleMode) => void
@@ -291,7 +291,7 @@ export function ModePicker({
 }) {
   return (
       <fieldset>
-        <legend className="text-[0.8125rem] font-medium">How it goes on sale</legend>
+        <legend className="text-[0.8125rem] font-medium">How guests pick a time</legend>
         <p className="mt-0.5 mb-2.5 text-xs text-muted">
           {hint}
         </p>
@@ -318,14 +318,17 @@ export function ScheduleEditor({ schedule: given, onChange, nowIso, errors, show
   const schedule = seats ? { ...given, capacity: seats.capacity } : given
   const set = (patch: Partial<DraftSchedule>) => onChange({ ...schedule, ...patch })
   const unlimited = schedule.capacity === 0
-  const many = seats?.many ?? 'seats'
+  const many = seats?.many ?? 'guests'
 
   const preview = React.useMemo(() => previewDepartures(schedule, nowIso), [schedule, nowIso])
+  // A week is enough to check the pattern; the rest is one click away.
+  const [showAll, setShowAll] = React.useState(false)
+  const shown = showAll ? preview : preview.slice(0, 7)
   const totalDepartures = preview.reduce((acc, day) => acc + (day.open ? 1 : day.times.length), 0)
   const totalSeats = preview.reduce((acc, day) => acc + day.seats, 0)
 
   const countLabel =
-    schedule.mode === 'hours' ? 'open days' : schedule.mode === 'dates' ? 'dates' : 'departures'
+    schedule.mode === 'hours' ? 'open days' : schedule.mode === 'dates' ? 'dates' : 'start times'
 
   return (
     <div className={cn('flex flex-col gap-6', className)}>
@@ -333,11 +336,11 @@ export function ScheduleEditor({ schedule: given, onChange, nowIso, errors, show
 
       {schedule.mode !== 'dates' ? (
         <WeekdayPicker
-          title={schedule.mode === 'hours' ? 'Open on' : 'Runs on'}
+          title={schedule.mode === 'hours' ? 'Open on' : 'Days'}
           hint={
             schedule.mode === 'hours'
               ? 'Guests can book any of these days, between the start and end dates if you set them.'
-              : 'Departures are generated for every selected day, between the start and end dates if you set them.'
+              : 'The start times below are offered on each of these days, between the start and end dates if you set them.'
           }
           schedule={schedule}
           onChange={onChange}
@@ -370,7 +373,7 @@ export function ScheduleEditor({ schedule: given, onChange, nowIso, errors, show
         <div>
           <div className="flex items-baseline justify-between gap-3">
             <p className="text-[0.8125rem] font-medium">
-              {schedule.mode === 'hours' ? 'Seats per day' : schedule.mode === 'dates' ? 'Seats per date' : 'Seats per departure'}
+              {schedule.mode === 'hours' ? 'Guests per day' : schedule.mode === 'dates' ? 'Guests per date' : 'Guests per start time'}
             </p>
             <span className="font-display text-sm font-semibold tabular">
               {unlimited ? 'No limit' : schedule.capacity}
@@ -382,7 +385,7 @@ export function ScheduleEditor({ schedule: given, onChange, nowIso, errors, show
             max={schedule.mode === 'hours' ? 500 : 60}
             step={1}
             value={[unlimited ? 16 : schedule.capacity]}
-            thumbLabels={['Seats']}
+            thumbLabels={['Guests']}
             onValueChange={([capacity]) => set({ capacity })}
             aria-disabled={unlimited}
           />
@@ -407,10 +410,10 @@ export function ScheduleEditor({ schedule: given, onChange, nowIso, errors, show
                 size="sm"
                 checked={unlimited}
                 onCheckedChange={(value) => set({ capacity: value ? 0 : 16 })}
-                aria-label="No seat limit"
+                aria-label="No limit on guests"
               />
               <InfinityIcon className="size-3.5" aria-hidden="true" />
-              No seat limit
+              No limit
             </label>
           </div>
           {errors?.capacity ? <p className="mt-1.5 text-xs font-medium text-danger">{errors.capacity}</p> : null}
@@ -461,7 +464,7 @@ export function ScheduleEditor({ schedule: given, onChange, nowIso, errors, show
             </Badge>
             <Badge size="sm" variant="primary">
               <Users className="size-3" aria-hidden="true" />
-              {unlimited ? `No ${seats?.one ?? 'seat'} limit` : `${totalSeats} ${many}`}
+              {unlimited ? 'No limit' : `${totalSeats} ${many}`}
             </Badge>
           </div>
         </div>
@@ -472,11 +475,11 @@ export function ScheduleEditor({ schedule: given, onChange, nowIso, errors, show
               ? 'No dates yet — add the first one above.'
               : schedule.mode === 'hours'
                 ? 'Nothing open yet — pick at least one day.'
-                : 'This rule generates nothing yet — pick at least one weekday and one start time.'}
+                : 'Nothing to book yet: pick at least one day and one start time.'}
           </p>
         ) : (
           <ul className="mt-3 flex list-none flex-col gap-1.5 p-0">
-            {preview.map((day) => (
+            {shown.map((day) => (
               <li
                 key={day.dateKey}
                 className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg bg-surface px-3 py-2"
@@ -493,7 +496,7 @@ export function ScheduleEditor({ schedule: given, onChange, nowIso, errors, show
                     </span>
                     {schedule.entryInterval > 0 ? (
                       <span className="text-xs text-faint">
-                        {day.times.length} arrival {day.times.length === 1 ? 'slot' : 'slots'}
+                        {day.times.length} arrival {day.times.length === 1 ? 'time' : 'times'}
                       </span>
                     ) : (
                       <span className="text-xs text-faint">arrive any time</span>
@@ -512,12 +515,17 @@ export function ScheduleEditor({ schedule: given, onChange, nowIso, errors, show
                   </span>
                 )}
                 <span className="ml-auto shrink-0 text-xs text-faint tabular">
-                  {day.seats > 0 ? `${day.seats} ${day.seats === 1 ? (seats?.one ?? 'seat') : many}` : 'no limit'}
+                  {day.seats > 0 ? `${day.seats} ${day.seats === 1 ? (seats?.one ?? 'guest') : many}` : 'no limit'}
                 </span>
               </li>
             ))}
           </ul>
         )}
+        {preview.length > 7 ? (
+          <button type="button" onClick={() => setShowAll((value) => !value)} className="mt-2 text-xs font-medium text-primary hover:underline">
+            {showAll ? 'Show the first week only' : `Show all ${preview.length} days`}
+          </button>
+        ) : null}
       </div>
     </div>
   )
@@ -595,7 +603,7 @@ function StartTimes({
       return
     }
     if (schedule.startTimes.includes(timeDraft)) {
-      toast('That time is already on the rule')
+      toast('That time is already on the list')
       return
     }
     onChange({ ...schedule, startTimes: [...schedule.startTimes, timeDraft].sort() })
@@ -604,7 +612,7 @@ function StartTimes({
   return (
     <div>
       <p className="text-[0.8125rem] font-medium">Start times</p>
-      <p className="mt-0.5 text-xs text-muted">Each time becomes its own departure with its own manifest.</p>
+      <p className="mt-0.5 text-xs text-muted">Each start time is booked on its own and has its own guest list.</p>
 
       <div className="mt-2.5 flex flex-wrap items-center gap-2">
         {schedule.startTimes.map((time) => (
@@ -616,7 +624,7 @@ function StartTimes({
             {formatClock(time)}
             <button
               type="button"
-              aria-label={`Remove the ${formatClock(time)} departure`}
+              aria-label={`Remove the ${formatClock(time)} start time`}
               onClick={() => onChange({ ...schedule, startTimes: schedule.startTimes.filter((value) => value !== time) })}
               className="grid size-5 place-items-center rounded-full text-faint transition-colors hover:bg-danger-soft hover:text-danger focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary"
             >
@@ -699,9 +707,9 @@ function OpenHours({
         </p>
       ) : (
       <div>
-        <p className="text-[0.8125rem] font-medium">{rental ? 'Hourly start times' : 'Arrival'}</p>
+        <p className="text-[0.8125rem] font-medium">{rental ? 'Hourly start times' : 'Arrival times'}</p>
         <p className="mt-0.5 text-xs text-muted">
-          {rental ? 'When an hourly rental can start. The last start leaves time for the fewest hours before the return time.' : 'Any time suits a park or a rental. Slots suit anything with a briefing or a queue.'}
+          {rental ? 'When an hourly rental can start. The last start leaves time for the fewest hours before the return time.' : 'Any time suits a park or a visit. Set arrival times for anything with a briefing or a queue.'}
         </p>
         <Segmented
           className="mt-2"
@@ -885,11 +893,11 @@ export function LocationsEditor({ schedule, onChange, locations, nowIso, errors,
       <div>
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
           <div>
-            <p className="text-[0.8125rem] font-medium">Where it runs from</p>
+            <p className="text-[0.8125rem] font-medium">Where it starts</p>
             <p className="mt-0.5 text-xs text-muted">
               {pickOnly
-                ? 'Tick every location this runs from. Guests say which suits them when they ask.'
-                : 'Tick every location this runs from. With more than one, open each location to set its own days and times. Guests choose a location at checkout and only see its dates and times.'}
+                ? 'Tick every place it can start from. Guests say which suits them when they ask.'
+                : 'Tick every place it starts from. With more than one, open each place to set its own days and times; guests pick a place first and see only its times.'}
             </p>
           </div>
           <Link href="/dashboard/settings/locations" className="text-xs font-medium text-primary hover:underline">
@@ -1019,8 +1027,8 @@ function DayCapacity({
           </p>
           <p className="mt-0.5 text-xs text-muted">
             {on
-              ? `The most ${word} sold on a day, across every departure. Leave a day empty for no limit.`
-              : `Each departure sells up to ${one === 'charter' ? 'one group' : `its ${many}`}. Add a cap for the whole day, for example when only one crew is on.`}
+              ? `The most ${word} on one day, across all its start times. Leave a day empty for no limit.`
+              : `Each start time takes up to ${one === 'charter' ? 'one group' : `its ${many}`}. Add a limit for the whole day, for example when only one team is working.`}
           </p>
         </div>
         <Switch
@@ -1034,7 +1042,7 @@ function DayCapacity({
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <Segmented
               size="sm"
-              label="Count"
+              label="Limit by"
               value={unit}
               onValueChange={(value: 'tickets' | 'bookings') => set({ dayLimitUnit: value })}
               options={[
@@ -1078,7 +1086,7 @@ function DayCapacity({
                     size="sm"
                     min={1}
                     value={value || ''}
-                    placeholder="None"
+                    placeholder="Any"
                     aria-label={`Most ${word} on ${WEEKDAY_LABEL[day]}`}
                     onChange={(event) => setDay(day, Number.parseInt(event.target.value, 10) || 0)}
                   />
