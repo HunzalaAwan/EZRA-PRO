@@ -460,7 +460,7 @@ export function GuestPricePreview({ tiers, addOns, currency, kind = 'trip', clas
     (acc, row) => acc + (row.tier.countsTowardCapacity ? row.quantity : 0),
     0,
   )
-  const addOnTotal = requiredAddOns.reduce((acc, addOn) => acc + addOn.price * Math.max(guests, 1), 0)
+  const addOnTotal = requiredAddOns.reduce((acc, addOn) => acc + addOn.price * (addOn.per === 'booking' ? 1 : Math.max(guests, 1)), 0)
   const total = ticketTotal + addOnTotal
   const fromPrice = priced.length === 0 ? 0 : Math.min(...priced.map((tier) => tier.price || 0))
   const compareAt = priced.find((tier) => tier.compareAtPrice)?.compareAtPrice ?? null
@@ -510,7 +510,7 @@ export function GuestPricePreview({ tiers, addOns, currency, kind = 'trip', clas
               {addOn.label} <span className="text-faint">(required)</span>
             </span>
             <span className="shrink-0 tabular">
-              {formatCurrency(addOn.price * Math.max(guests, 1), currency)}
+              {formatCurrency(addOn.price * (addOn.per === 'booking' ? 1 : Math.max(guests, 1)), currency)}
             </span>
           </li>
         ))}

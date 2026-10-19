@@ -53,7 +53,7 @@ import { SimpleTooltip } from '@/components/ui/tooltip'
 import { TrustSeal } from '@/components/storefront/trust-bar'
 import { locationAddress } from '@/lib/locations'
 import { useBookingLedger } from '@/hooks/use-booking-ledger'
-import { peopleOf, placesOf } from '@/lib/places'
+import { addOnPer, addOnUnits, peopleOf, placesOf } from '@/lib/places'
 import { withLedger } from '@/lib/booking-ledger'
 import type { PackagePartView } from '@/lib/packages'
 import { PackageWidget } from '@/components/storefront/package-widget'
@@ -605,12 +605,10 @@ function BookingWidgetInner({
       tiers: activity.priceTiers.map((tier) => ({ tierId: tier.id, qty: tierQty[tier.id] ?? 0 })),
       addOns: activity.addOns.map((addOn) => ({
         addOnId: addOn.id,
-        qty: addOnOn[addOn.id]
-          ? clamp(Math.max(1, headcount), 1, addOn.maxPerBooking ?? Math.max(1, headcount))
-          : 0,
+        qty: addOnOn[addOn.id] ? addOnUnits(addOn, kind === 'charter' ? party : headcount) : 0,
       })),
     }),
-    [activity.priceTiers, activity.addOns, tierQty, addOnOn, headcount],
+    [activity.priceTiers, activity.addOns, tierQty, addOnOn, headcount, kind, party],
   )
 
   const { rules } = usePricing(tenantSlug)
@@ -1418,11 +1416,7 @@ function BookingWidgetInner({
             <div className="mt-3 space-y-2">
               {activity.addOns.map((addOn) => {
                 const checked = Boolean(addOnOn[addOn.id])
-                const qty = clamp(
-                  Math.max(1, headcount),
-                  1,
-                  addOn.maxPerBooking ?? Math.max(1, headcount),
-                )
+                const qty = addOnUnits(addOn, kind === 'charter' ? party : headcount)
                 const id = `addon-${addOn.id}`
                 return (
                   <label
@@ -1448,9 +1442,7 @@ function BookingWidgetInner({
                         <span className="text-sm font-medium text-foreground">{addOn.label}</span>
                         <span className="shrink-0 text-sm font-semibold tabular text-foreground">
                           {formatCurrency(addOn.price, currency)}
-                          {checked && qty > 1 ? (
-                            <span className="ml-1 text-xs font-medium text-subtle">× {qty}</span>
-                          ) : null}
+                          <span className="ml-1 text-xs font-medium text-subtle">{checked && qty > 1 ? `× ${qty}` : addOnPer(addOn)}</span>
                         </span>
                       </span>
                       <span className="mt-0.5 block text-xs leading-relaxed text-subtle">

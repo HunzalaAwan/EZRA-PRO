@@ -7,6 +7,7 @@ import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
+import { BeforeInput } from './changes-policy-editor'
 import type { BookingSettings } from '@/types'
 
 /* ==========================================================================
@@ -173,7 +174,12 @@ export function BookingSettingsEditor({
             onChange={(on) => onNotice(on ? 24 : 0)}
           >
             <Field label="Close online booking">
-              {(control) => <Input {...control} type="number" min={1} className="sm:w-48" suffix="hours before" value={noticeHours || ''} onChange={(e) => onNotice(Math.max(1, Math.floor(Number(e.target.value)) || 1))} />}
+              {({ id }) => (
+                <div className="flex items-center gap-2.5">
+                  <BeforeInput id={id} hours={noticeHours} onHours={(hours) => onNotice(Math.max(1, hours))} className="w-full sm:w-64" />
+                  <span className="shrink-0 text-sm text-muted">before the start</span>
+                </div>
+              )}
             </Field>
           </Row>
           <Row
@@ -192,7 +198,7 @@ export function BookingSettingsEditor({
             onChange={(on) => onNotice(on ? 24 : 0)}
           >
             <Field label="Hide times sooner than">
-              {(control) => <Input {...control} type="number" min={1} className="sm:w-48" suffix="hours" value={noticeHours || ''} onChange={(e) => onNotice(Math.max(1, Math.floor(Number(e.target.value)) || 1))} />}
+              {({ id }) => <BeforeInput id={id} hours={noticeHours} onHours={(hours) => onNotice(Math.max(1, hours))} className="w-full sm:w-64" />}
             </Field>
           </Row>
         </div>

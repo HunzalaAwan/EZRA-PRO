@@ -56,7 +56,7 @@ export interface WalkInActivity {
   kind: ActivityKind
   image: string
   tiers: { id: string; label: string; price: number; min: number; max: number; seat: boolean }[]
-  addOns: { id: string; label: string; price: number }[]
+  addOns: { id: string; label: string; price: number; per: 'guest' | 'booking' }[]
   slots: { id: string; startsAt: string; seatsLeft: number; itemsLeft?: Record<string, number> }[]
 }
 
@@ -233,7 +233,12 @@ function WalkInTill({
   const lines = activity
     ? [
         ...activity.tiers.filter((tier) => (qty[tier.id] ?? 0) > 0).map((tier) => ({ label: `${qty[tier.id]} × ${tier.label}`, total: Math.round(tier.price * rules.multiplier) * (qty[tier.id] ?? 0) })),
-        ...activity.addOns.filter((addOn) => extras[addOn.id]).map((addOn) => ({ label: `${Math.max(1, guests)} × ${addOn.label}`, total: addOn.price * Math.max(1, guests) })),
+        ...activity.addOns
+          .filter((addOn) => extras[addOn.id])
+          .map((addOn) => {
+            const units = addOn.per === 'booking' ? 1 : Math.max(1, guests)
+            return { label: units > 1 ? `${units} × ${addOn.label}` : addOn.label, total: addOn.price * units }
+          }),
       ]
     : []
   const subtotal = lines.reduce((sum, line) => sum + line.total, 0)
@@ -416,7 +421,7 @@ function WalkInTill({
                         <Checkbox checked={Boolean(extras[addOn.id])} onCheckedChange={(checked) => setExtras((e) => ({ ...e, [addOn.id]: checked === true }))} />
                         {addOn.label}
                       </span>
-                      <span className="text-subtle tabular-nums">{formatCurrency(addOn.price, currency)} each</span>
+                      <span className="text-subtle tabular-nums">{formatCurrency(addOn.price, currency)} {addOn.per === 'booking' ? 'per booking' : 'per guest'}</span>
                     </label>
                   ))}
                 </div>

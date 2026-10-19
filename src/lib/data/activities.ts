@@ -49,6 +49,7 @@ interface AddOnSpec {
   label: string
   price: number
   description: string
+  /** Old demo limit: 1 or 2 reads as one per booking, anything else per guest. */
   maxPerBooking?: number | null
   required?: boolean
   icon?: string
@@ -121,7 +122,7 @@ function buildAddOns(key: string, specs: AddOnSpec[]): AddOn[] {
     label: spec.label,
     price: spec.price,
     description: spec.description,
-    maxPerBooking: spec.maxPerBooking === undefined ? null : spec.maxPerBooking,
+    per: spec.maxPerBooking != null && spec.maxPerBooking <= 2 ? ('booking' as const) : ('guest' as const),
     required: spec.required ?? false,
     ...(spec.icon === undefined ? {} : { icon: spec.icon }),
   }))

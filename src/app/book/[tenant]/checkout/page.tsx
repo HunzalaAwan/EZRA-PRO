@@ -21,7 +21,7 @@ import {
   type CheckoutDeparture,
 } from '@/components/storefront/checkout-flow'
 import type { QuoteSelection } from '@/components/storefront/booking-widget'
-import { placesOf } from '@/lib/places'
+import { placesOf, addOnUnits, peopleOf } from '@/lib/places'
 
 interface TenantParams {
   tenant: string
@@ -67,6 +67,8 @@ function resolveSelection(
   seatsLeft: number,
   /** Rentals with items: what is left of each. */
   itemsLeft?: Record<string, number>,
+  /** Charters: the group size, which per-guest extras are charged on. */
+  party?: number,
 ): QuoteSelection {
   const requestedTiers = parsePairs(rawTiers)
   const requestedAddOns = parsePairs(rawAddOns)
@@ -96,14 +98,11 @@ function resolveSelection(
     tiers[0] = { tierId: lead.id, qty: fallback }
   }
 
-  const headcount = tiers.reduce((total, tier) => total + tier.qty, 0)
+  const headcount = party ?? tiers.reduce((total, tier) => total + tier.qty * peopleOf(activity.priceTiers.find((entry) => entry.id === tier.tierId) ?? {}), 0)
+  // An extra the guest picked: one for each guest, or one for the booking.
   const addOns = activity.addOns.map((addOn) => ({
     addOnId: addOn.id,
-    qty: clamp(
-      requestedAddOns.get(addOn.id) ?? 0,
-      0,
-      addOn.maxPerBooking ?? Math.max(1, headcount),
-    ),
+    qty: (requestedAddOns.get(addOn.id) ?? 0) > 0 || addOn.required ? addOnUnits(addOn, headcount) : 0,
   }))
 
   return { tiers, addOns }
@@ -252,6 +251,7 @@ export default async function CheckoutPage({
     query.a,
     Math.max(1, departure.seatsLeft),
     slotRow?.itemsLeft,
+    party,
   )
 
   /* ---------- confirmation code (deterministic, seeded) ---------- */

@@ -801,8 +801,7 @@ for (const [tenantId, specs] of SPEC_BY_TENANT) {
             for (const ad of activity.addOns) {
               if (addonPicks >= 2) break
               if (rng() < 0.19) {
-                const cap = ad.maxPerBooking ?? 4
-                const qty = clamp(rngInt(rng, 1, Math.min(cap, Math.max(1, size))), 1, cap)
+                const qty = ad.per === 'booking' ? 1 : Math.max(1, size)
                 const totalLine = qty * ad.price
                 lineItems.push({
                   id: `li_${bookingId}_${++li}`,

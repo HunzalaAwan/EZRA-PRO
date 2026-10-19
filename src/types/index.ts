@@ -215,8 +215,8 @@ export interface AddOn {
   label: string
   price: number
   description: string
-  /** Limit per booking; null = unlimited. */
-  maxPerBooking: number | null
+  /** Charged once for each guest, or once for the whole booking. Absent: per guest. */
+  per?: 'guest' | 'booking'
   required: boolean
   icon?: string
 }

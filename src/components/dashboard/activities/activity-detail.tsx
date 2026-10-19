@@ -602,9 +602,7 @@ function PricingTab({ detail }: { detail: ActivityDetailData }) {
                   </p>
                   <p className="mt-0.5 text-xs leading-relaxed text-muted">{addOn.description}</p>
                   <p className="mt-1.5 text-xs text-faint">
-                    {addOn.maxPerBooking === null
-                      ? 'No limit per booking'
-                      : `Up to ${addOn.maxPerBooking} per booking`}
+                    {addOn.per === 'booking' ? 'Per booking' : 'Per guest'}
                   </p>
                 </div>
                 <span className="shrink-0 font-display text-sm font-semibold tabular">

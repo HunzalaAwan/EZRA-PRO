@@ -38,11 +38,12 @@ function Toggle({ title, text, checked, onChange, children }: { title: string; t
 }
 
 /** A length of time before the start, typed in hours or days, kept in hours. */
-function BeforeInput({ id, hours, onHours }: { id?: string; hours: number; onHours: (hours: number) => void }) {
+/** A length before the start, typed in hours or days and stored in hours. */
+export function BeforeInput({ id, hours, onHours, className }: { id?: string; hours: number; onHours: (hours: number) => void; className?: string }) {
   const [unit, setUnit] = React.useState<'hours' | 'days'>(() => (hours >= 24 && hours % 24 === 0 ? 'days' : 'hours'))
   const shown = unit === 'days' ? hours / 24 : hours
   return (
-    <div className="flex gap-2">
+    <div className={cn('flex gap-2', className)}>
       <Input
         id={id}
         type="number"

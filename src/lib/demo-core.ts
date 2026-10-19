@@ -3659,7 +3659,7 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     label,
     price,
     description: note,
-    maxPerBooking: max,
+    per: max != null && max <= 2 ? ('booking' as const) : ('guest' as const),
     required: false,
     icon,
   }))

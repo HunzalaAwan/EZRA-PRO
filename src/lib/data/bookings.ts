@@ -718,8 +718,7 @@ function priceBooking(
   }
 
   for (const addOn of chosen) {
-    const cap = addOn.maxPerBooking === null ? partySize : Math.min(addOn.maxPerBooking, partySize)
-    const quantity = cap <= 1 ? 1 : rng() < 0.6 ? cap : rngInt(rng, 1, cap)
+    const quantity = addOn.per === 'booking' ? 1 : Math.max(1, partySize)
     items.push({
       id: `li_${bookingNumber}_${++seq}`,
       label: addOn.label,

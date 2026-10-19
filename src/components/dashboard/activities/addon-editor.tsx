@@ -23,8 +23,8 @@ export interface DraftAddOn {
   /** Minor units. */
   price: number
   description: string
-  /** null = unlimited. */
-  maxPerBooking: number | null
+  /** Charged once for each guest, or once for the booking. */
+  per: 'guest' | 'booking'
   required: boolean
   icon?: string
 }
@@ -38,7 +38,7 @@ export function blankAddOn(label = '', price = 0): DraftAddOn {
     label,
     price,
     description: '',
-    maxPerBooking: 4,
+    per: 'guest',
     required: false,
   }
 }
@@ -47,6 +47,8 @@ export interface AddOnPreset {
   label: string
   price: number
   description: string
+  /** Absent: per guest. */
+  per?: DraftAddOn['per']
   icon: typeof Camera
 }
 
@@ -55,30 +57,35 @@ const ADDON_PRESETS: AddOnPreset[] = [
     label: 'Photo package',
     price: 4500,
     description: 'Edited gallery delivered the same evening.',
+    per: 'booking',
     icon: Camera,
   },
   {
     label: 'Hotel pickup',
     price: 2500,
     description: 'Air-conditioned transfer from anywhere in the resort strip.',
+    per: 'guest',
     icon: Car,
   },
   {
     label: 'Lunch & drinks',
     price: 3200,
     description: 'Island plate, fruit and cold drinks on board.',
+    per: 'guest',
     icon: Sandwich,
   },
   {
     label: 'Wetsuit hire',
     price: 1500,
     description: 'Full-length 3mm suit, sized at the dock.',
+    per: 'guest',
     icon: Waves,
   },
   {
     label: 'Gift wrap',
     price: 900,
     description: 'Printed voucher in a keepsake envelope.',
+    per: 'booking',
     icon: Gift,
   },
 ]
@@ -162,35 +169,33 @@ export function AddonEditor({ addOns, onChange, currency, errors, presets = ADDO
                 />
 
                 <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2.5">
-                  <span className="flex items-center gap-2 text-xs text-muted">
-                    Limit per booking
-                    <Input
-                      type="number"
-                      min={1}
-                      max={99}
-                      size="sm"
-                      className="w-20"
-                      disabled={addOn.maxPerBooking === null}
-                      value={addOn.maxPerBooking ?? 1}
-                      aria-label={`Maximum per booking for ${addOn.label || `add-on ${index + 1}`}`}
-                      onChange={(event) => {
-                        const parsed = Number.parseInt(event.target.value, 10)
-                        update(index, { maxPerBooking: Number.isFinite(parsed) ? parsed : 1 })
-                      }}
-                    />
+                  <div
+                    role="radiogroup"
+                    aria-label={`How ${addOn.label || `add-on ${index + 1}`} is charged`}
+                    className="inline-flex h-8 items-center rounded-lg border border-line bg-surface-sunken p-0.5"
+                  >
+                    {([
+                      ['guest', 'Per guest'],
+                      ['booking', 'Per booking'],
+                    ] as const).map(([per, label]) => {
+                      const on = addOn.per === per
+                      return (
+                        <button
+                          key={per}
+                          type="button"
+                          role="radio"
+                          aria-checked={on}
+                          onClick={() => update(index, { per })}
+                          className={cn('h-full rounded-md px-2.5 text-xs font-medium transition-colors', on ? 'bg-surface text-foreground shadow-xs' : 'text-muted hover:text-foreground')}
+                        >
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <span className="text-xs text-subtle">
+                    {addOn.per === 'booking' ? 'Charged once, whatever the group size.' : 'Charged for every guest on the booking.'}
                   </span>
-
-                  <label className="flex cursor-pointer items-center gap-2 text-xs text-muted">
-                    <Switch
-                      size="sm"
-                      checked={addOn.maxPerBooking === null}
-                      onCheckedChange={(checked) =>
-                        update(index, { maxPerBooking: checked ? null : 4 })
-                      }
-                      aria-label={`No limit for ${addOn.label || `add-on ${index + 1}`}`}
-                    />
-                    No limit
-                  </label>
 
                   <label className="flex cursor-pointer items-center gap-2 text-xs text-muted">
                     <Switch
@@ -246,6 +251,7 @@ export function AddonEditor({ addOns, onChange, currency, errors, presets = ADDO
               onClick={() => {
                 const addOn = blankAddOn(preset.label, preset.price)
                 addOn.description = preset.description
+                addOn.per = preset.per ?? 'guest'
                 onChange([...addOns, addOn])
               }}
               className={cn(

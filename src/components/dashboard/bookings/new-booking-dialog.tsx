@@ -763,13 +763,13 @@ export function NewBookingDialog({ open, onOpenChange }: NewBookingDialogProps) 
                                   {addOn.description}
                                 </p>
                                 <p className="mt-1 text-xs font-medium text-foreground tabular-nums">
-                                  {formatCurrency(addOn.price, currency)} each
+                                  {formatCurrency(addOn.price, currency)} {addOn.per === 'booking' ? 'per booking' : 'per guest'}
                                 </p>
                               </div>
                               <Stepper
                                 value={qty}
                                 min={0}
-                                max={addOn.maxPerBooking ?? 12}
+                                max={addOn.per === 'booking' ? 1 : 99}
                                 label={addOn.label}
                                 onChange={(next) =>
                                   setAddOnQty((prev) => ({ ...prev, [addOn.id]: next }))

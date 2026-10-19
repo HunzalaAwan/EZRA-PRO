@@ -38,7 +38,7 @@ export default async function WalkInPage() {
       kind: activity.kind ?? 'trip',
       image: activity.media.find((media) => media.isPrimary)?.url ?? activity.media[0]?.url ?? '',
       tiers: activity.priceTiers.map((tier) => ({ id: tier.id, label: tier.label, price: tier.price, min: tier.minQuantity, max: tier.maxQuantity, seat: tier.countsTowardCapacity })),
-      addOns: activity.addOns.map((addOn) => ({ id: addOn.id, label: addOn.label, price: addOn.price })),
+      addOns: activity.addOns.map((addOn) => ({ id: addOn.id, label: addOn.label, price: addOn.price, per: addOn.per ?? 'guest' })),
       slots: buildDays(activity, 2).flatMap((day) =>
         day.slots
           .filter((slot) => slot.startsAt >= NOW_ISO.slice(0, 13) && !slot.soldOut)
