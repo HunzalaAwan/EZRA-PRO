@@ -7,6 +7,8 @@
  */
 
 import * as React from 'react'
+import { MessageComposer } from '@/components/dashboard/bookings/message-composer'
+import { CURRENT_TENANT, tenantById } from '@/lib/demo-core'
 import Image from 'next/image'
 import Link from 'next/link'
 import {
@@ -328,6 +330,24 @@ export function CustomerDetail({
   const [tags, setTags] = React.useState<string[]>(customer.tags)
   const [optIn, setOptIn] = React.useState(customer.marketingOptIn)
   const [messageOpen, setMessageOpen] = React.useState(false)
+  // Written to the guest's next booking, or their latest, so replies thread under it in the Inbox.
+  const messageRecipient = React.useMemo(() => {
+    const sorted = [...bookings].sort((x, y) => (x.departureAt < y.departureAt ? -1 : 1))
+    const todayKey = NOW.toISOString().slice(0, 10)
+    const pick = sorted.find((entry) => entry.departureAt.slice(0, 10) >= todayKey && entry.status !== 'cancelled') ?? sorted[sorted.length - 1]
+    return {
+      reference: pick?.reference ?? customer.id,
+      bookingId: pick?.id,
+      firstName: customer.firstName,
+      lastName: customer.lastName,
+      email: customer.email,
+      phone: customer.phone,
+      activityName: pick?.activityName ?? 'your trip',
+      startsAt: pick?.departureAt ?? NOW.toISOString().slice(0, 19),
+      meetingPoint: '',
+      party: pick?.partySize ?? 1,
+    }
+  }, [bookings, customer])
   const [messageBody, setMessageBody] = React.useState('')
   const [noteDraft, setNoteDraft] = React.useState('')
   const [notes, setNotes] = React.useState<{ id: string; author: string; body: string; at: string }[]>(
@@ -910,68 +930,15 @@ export function CustomerDetail({
         </div>
       </div>
 
-      {/* ================= MESSAGE SHEET ================= */}
-      <Sheet open={messageOpen} onOpenChange={setMessageOpen}>
-        <SheetContent side="right" className="flex flex-col">
-          <SheetHeader>
-            <SheetTitle>Message {customer.firstName}</SheetTitle>
-            <SheetDescription>
-              Goes out from your reservations inbox and threads into this guest’s timeline.
-            </SheetDescription>
-          </SheetHeader>
-
-          <SheetBody className="space-y-4">
-            <div className="flex items-center gap-3 rounded-xl border border-line bg-surface-sunken/60 p-3">
-              <Avatar name={fullName} src={customer.avatarUrl} size="md" />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-foreground">{fullName}</p>
-                <p className="truncate text-xs text-subtle">{customer.email}</p>
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="guest-message" size="sm" className="mb-1.5 block">
-                Message
-              </Label>
-              <Textarea
-                id="guest-message"
-                value={messageBody}
-                onChange={(event) => setMessageBody(event.currentTarget.value)}
-                rows={8}
-                placeholder={`Hi ${customer.firstName}, …`}
-              />
-            </div>
-
-            <div className="flex flex-wrap gap-1.5">
-              {[
-                `Hi ${customer.firstName}, conditions look perfect for your trip — see you at the dock 15 minutes early.`,
-                `Hi ${customer.firstName}, we’d love to have you back. Here’s 15% off your next charter.`,
-                `Hi ${customer.firstName}, your waiver is still outstanding — it takes about a minute.`,
-              ].map((template, index) => (
-                <button
-                  key={index}
-                  type="button"
-                  onClick={() => setMessageBody(template)}
-                  className="rounded-lg border border-line bg-surface px-2 py-1 text-xs text-muted transition-colors duration-200 hover:border-primary/50 hover:text-primary"
-                >
-                  Template {index + 1}
-                </button>
-              ))}
-            </div>
-          </SheetBody>
-
-          <SheetFooter>
-            <SheetClose asChild>
-              <Button variant="ghost" size="sm">
-                Cancel
-              </Button>
-            </SheetClose>
-            <Button size="sm" leftIcon={<Send className="size-4" />} onClick={sendMessage}>
-              Send message
-            </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+      {/* ================= MESSAGE ================= */}
+      <MessageComposer
+        open={messageOpen}
+        onOpenChange={setMessageOpen}
+        recipients={[messageRecipient]}
+        tenantId={customer.tenantId}
+        tenantSlug={(tenantById.get(customer.tenantId) ?? CURRENT_TENANT).slug}
+        business={(tenantById.get(customer.tenantId) ?? CURRENT_TENANT).name}
+      />
     </div>
   )
 }
