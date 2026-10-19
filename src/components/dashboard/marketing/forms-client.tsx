@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { ExternalLink, Tag, X } from 'lucide-react'
+import { AlertTriangle, ExternalLink, Tag, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -14,7 +14,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
 import { useMarketing, useMarketingTenant } from '@/hooks/use-marketing'
 import { usePricing } from '@/hooks/use-pricing'
-import { cleanCode, upsertOfferPromo, type SignupForms } from '@/lib/marketing'
+import { NumberInput } from '@/components/dashboard/marketing/number-input'
+import { cleanCode, offerCodeClash, retireOfferPromo, upsertOfferPromo, type MarketingOffer, type SignupForms } from '@/lib/marketing'
 import type { Tenant } from '@/types'
 
 /* ==========================================================================
@@ -24,6 +25,8 @@ import type { Tenant } from '@/types'
    off, in your own words. Changes show on the storefront straight away.
    ========================================================================== */
 
+const POPUP_NOTE = 'From the sign-up pop-up'
+
 export function FormsClient({ tenant: tenantRecord, nowIso }: { tenant: Tenant; nowIso: string }) {
   const tenant = useMarketingTenant(tenantRecord)
   const marketing = useMarketing(tenant, nowIso)
@@ -32,12 +35,47 @@ export function FormsClient({ tenant: tenantRecord, nowIso }: { tenant: Tenant; 
   const popup = forms.popup
   const bySource = (source: 'popup' | 'footer' | 'checkout') => marketing.signups.filter((signup) => signup.source === source).length
 
-  const save = (next: SignupForms, message?: string) => {
-    marketing.setForms(next)
-    if (next.popup.enabled && next.popup.offer.enabled) pricing.setPromos(upsertOfferPromo(pricing.promos, next.popup.offer, 'From the sign-up pop-up'))
-    if (message) toast(message)
-  }
+  // Words save as they are typed. The pop-up's code only reaches Promo codes once it is settled
+  // (on leaving the box, or a switch), so typing SUMMER15 never leaves S, SU, SUM… behind at checkout.
+  const save = (next: SignupForms) => marketing.setForms(next)
   const setPopup = (patch: Partial<SignupForms['popup']>) => save({ ...forms, popup: { ...popup, ...patch } })
+
+  /** Brings Promo codes in line with the pop-up: its live code on, the code it used before off. */
+  const syncPromo = (offer: MarketingOffer, enabled: boolean, previousCode: string) => {
+    let promos = pricing.promos
+    const code = cleanCode(offer.code)
+    if (previousCode && (previousCode !== code || !enabled || !offer.enabled)) promos = retireOfferPromo(promos, previousCode, POPUP_NOTE)
+    if (enabled && offer.enabled && code) {
+      // Already there as it should be: leave it, so a code switched off in Promo codes stays off (and is flagged below).
+      const live = promos.find((promo) => promo.code === code)
+      const same = live && live.note === POPUP_NOTE && live.kind === 'percent' && live.value === Math.round(offer.percent)
+      if (!same) promos = upsertOfferPromo(promos, { ...offer, code }, POPUP_NOTE)
+    }
+    if (promos !== pricing.promos) pricing.setPromos(promos)
+  }
+  const [codeDraft, setCodeDraft] = React.useState(popup.offer.code)
+  React.useEffect(() => setCodeDraft(popup.offer.code), [popup.offer.code])
+  const commitCode = () => {
+    const code = cleanCode(codeDraft)
+    if (code === popup.offer.code) {
+      setCodeDraft(code)
+      return syncPromo(popup.offer, popup.enabled, '')
+    }
+    if (code.length < 3) {
+      setCodeDraft(popup.offer.code)
+      return toast.error('Codes need at least 3 letters or numbers')
+    }
+    const offer = { ...popup.offer, code }
+    setPopup({ offer })
+    syncPromo(offer, popup.enabled, popup.offer.code)
+    toast.success(`${code} is live`, {
+      description: `Checkout takes it for ${offer.percent}% off.${popup.offer.code ? ` The old code ${popup.offer.code} is switched off.` : ''}`,
+    })
+  }
+  const clash = popup.offer.enabled ? offerCodeClash(pricing.promos, codeDraft, POPUP_NOTE) : undefined
+  // The pop-up promises a code that was switched off in Promo codes: say so, with the way back.
+  const livePromo = popup.enabled && popup.offer.enabled ? pricing.promos.find((promo) => promo.code === cleanCode(popup.offer.code) && promo.note === POPUP_NOTE) : undefined
+  const switchedOff = livePromo && !livePromo.active && cleanCode(codeDraft) === livePromo.code
   const setFooter = (patch: Partial<SignupForms['footer']>) => save({ ...forms, footer: { ...forms.footer, ...patch } })
   const setCheckout = (patch: Partial<SignupForms['checkout']>) => save({ ...forms, checkout: { ...forms.checkout, ...patch } })
 
@@ -59,7 +97,14 @@ export function FormsClient({ tenant: tenantRecord, nowIso }: { tenant: Tenant; 
             <CardTitle>Storefront pop-up</CardTitle>
             <CardDescription>Shows once to new visitors, offers a code for the first trip and adds them to the list. {bySource('popup') > 0 ? `${bySource('popup')} sign-ups so far.` : ''}</CardDescription>
           </div>
-          <Switch checked={popup.enabled} onCheckedChange={(enabled) => setPopup({ enabled })} aria-label="Storefront pop-up" />
+          <Switch
+            checked={popup.enabled}
+            onCheckedChange={(enabled) => {
+              setPopup({ enabled })
+              syncPromo(popup.offer, enabled, enabled ? '' : popup.offer.code)
+            }}
+            aria-label="Storefront pop-up"
+          />
         </CardHeader>
         {popup.enabled ? (
           <CardContent className="grid gap-6 lg:grid-cols-[1fr_22rem]">
@@ -86,17 +131,17 @@ export function FormsClient({ tenant: tenantRecord, nowIso }: { tenant: Tenant; 
                 </Field>
                 {popup.trigger === 'delay' ? (
                   <Field label="Wait">
-                    {(control) => <Input {...control} type="number" min={0} max={120} suffix="seconds" value={popup.delaySeconds} onChange={(e) => setPopup({ delaySeconds: Math.max(0, Number(e.target.value) || 0) })} />}
+                    {(control) => <NumberInput {...control} min={0} max={120} suffix="seconds" value={popup.delaySeconds} onValueChange={(delaySeconds) => setPopup({ delaySeconds })} />}
                   </Field>
                 ) : popup.trigger === 'scroll' ? (
                   <Field label="Scrolled">
-                    {(control) => <Input {...control} type="number" min={10} max={100} suffix="%" value={popup.scrollPercent} onChange={(e) => setPopup({ scrollPercent: Math.min(100, Math.max(10, Number(e.target.value) || 50)) })} />}
+                    {(control) => <NumberInput {...control} min={10} max={100} suffix="%" value={popup.scrollPercent} onValueChange={(scrollPercent) => setPopup({ scrollPercent })} />}
                   </Field>
                 ) : (
                   <p className="self-end pb-2 text-xs text-subtle">On a computer, when the mouse heads for the tab bar. On a phone, after 20 seconds.</p>
                 )}
                 <Field label="Show again after" description="For people who closed it.">
-                  {(control) => <Input {...control} type="number" min={1} suffix="days" value={popup.againAfterDays} onChange={(e) => setPopup({ againAfterDays: Math.max(1, Number(e.target.value) || 1) })} />}
+                  {(control) => <NumberInput {...control} min={1} max={365} suffix="days" value={popup.againAfterDays} onValueChange={(againAfterDays) => setPopup({ againAfterDays })} />}
                 </Field>
               </div>
               <label className="flex items-center justify-between gap-3 text-sm">
@@ -112,16 +157,72 @@ export function FormsClient({ tenant: tenantRecord, nowIso }: { tenant: Tenant; 
                     <Tag className="size-4 text-subtle" aria-hidden="true" />
                     First-trip code
                   </p>
-                  <Switch checked={popup.offer.enabled} onCheckedChange={(enabled) => setPopup({ offer: { ...popup.offer, enabled } })} aria-label="First-trip code" />
+                  <Switch
+                    checked={popup.offer.enabled}
+                    onCheckedChange={(enabled) => {
+                      const offer = { ...popup.offer, enabled }
+                      setPopup({ offer })
+                      syncPromo(offer, popup.enabled, enabled ? '' : popup.offer.code)
+                    }}
+                    aria-label="First-trip code"
+                  />
                 </div>
                 {popup.offer.enabled ? (
                   <div className="mt-3 grid gap-4 sm:grid-cols-2">
-                    <Field label="Code">
-                      {(control) => <Input {...control} className="font-mono" value={popup.offer.code} onChange={(e) => setPopup({ offer: { ...popup.offer, code: cleanCode(e.target.value) } })} />}
+                    <Field label="Code" description="Saved when you leave the box or press Enter. The old code stops working.">
+                      {(control) => (
+                        <Input
+                          {...control}
+                          className="font-mono"
+                          value={codeDraft}
+                          onChange={(e) => setCodeDraft(cleanCode(e.target.value))}
+                          onBlur={commitCode}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') e.currentTarget.blur()
+                          }}
+                        />
+                      )}
                     </Field>
                     <Field label="Discount">
-                      {(control) => <Input {...control} type="number" min={1} max={100} suffix="%" value={popup.offer.percent} onChange={(e) => setPopup({ offer: { ...popup.offer, percent: Math.min(100, Math.max(1, Number(e.target.value) || 1)) } })} />}
+                      {(control) => (
+                        <NumberInput
+                          {...control}
+                          min={1}
+                          max={100}
+                          suffix="%"
+                          value={popup.offer.percent}
+                          onValueChange={(percent) => {
+                            const offer = { ...popup.offer, percent }
+                            setPopup({ offer })
+                            syncPromo(offer, popup.enabled, '')
+                          }}
+                        />
+                      )}
                     </Field>
+                    {clash ? (
+                      <p className="flex items-start gap-1.5 text-xs text-warning sm:col-span-2">
+                        <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                        {clash.code} is already in Promo codes{clash.note ? ` (${clash.note.replace(/^From the /, 'from the ')})` : ''}. Saving it here changes that code&rsquo;s discount too. Pick another to keep them apart.
+                      </p>
+                    ) : null}
+                    {switchedOff ? (
+                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/40 bg-warning-soft/40 px-3 py-2.5 sm:col-span-2">
+                        <p className="flex items-start gap-1.5 text-xs text-foreground">
+                          <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning" aria-hidden="true" />
+                          {livePromo.code} is switched off in Promo codes, so new sign-ups get a code that does not work at checkout.
+                        </p>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => {
+                            pricing.setPromos(upsertOfferPromo(pricing.promos, popup.offer, POPUP_NOTE))
+                            toast.success(`${livePromo.code} works again`)
+                          }}
+                        >
+                          Switch it on
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
                 ) : (
                   <p className="mt-1 text-xs text-subtle">No code: the pop-up only asks them to join the list.</p>
@@ -140,7 +241,8 @@ export function FormsClient({ tenant: tenantRecord, nowIso }: { tenant: Tenant; 
                   <p className="mt-1.5 text-sm text-muted">{popup.text}</p>
                   <div className="mt-4 h-10 rounded-lg border border-line bg-surface px-3 text-sm leading-10 text-faint">Email address</div>
                   {popup.collectPhone ? <div className="mt-2 h-10 rounded-lg border border-line bg-surface px-3 text-sm leading-10 text-faint">Mobile (optional)</div> : null}
-                  <div className="mt-2 h-10 rounded-lg bg-primary text-center text-sm leading-10 font-semibold text-primary-foreground">{popup.button || 'Join'}</div>
+                  <div className="mt-2 h-10 rounded-lg bg-primary text-center text-sm leading-10 font-semibold text-on-primary">{popup.button || 'Join'}</div>
+                  {popup.collectPhone ? <p className="mt-2 text-xs text-subtle">{marketing.settings.smsConsent}</p> : null}
                   <p className="mt-2 text-center text-xs text-faint">No thanks</p>
                 </div>
               </div>

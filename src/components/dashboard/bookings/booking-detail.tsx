@@ -34,13 +34,19 @@ import {
   TriangleAlert,
   Users,
   Wallet,
+  Workflow,
   type LucideIcon,
 } from 'lucide-react'
 
 import type { BookingLineItem, Payment, User } from '@/types'
-import { CHANNEL_LABELS, CURRENT_TENANT, NOW, getUsersByTenant, tenantById } from '@/lib/demo-core'
-import { buildMessageLog, manageLink } from '@/lib/messaging'
+import { CHANNEL_LABELS, CURRENT_TENANT, NOW, getActivitiesByTenant, getUsersByTenant, tenantById } from '@/lib/demo-core'
+import { buildMessageLog, groupOf, manageLink } from '@/lib/messaging'
 import { useMessageTemplates } from '@/hooks/use-message-templates'
+import { useFlows } from '@/hooks/use-flows'
+import { useMarketing, useMarketingTenant } from '@/hooks/use-marketing'
+import { flowsForBooking, type FlowExtras } from '@/lib/actions/flows'
+import { PURPOSE_LABEL } from '@/lib/flows/catalog'
+import type { Flow, JourneyEvent } from '@/lib/flows/types'
 import type { BookingDetailData } from '@/lib/actions/dashboard'
 import {
   cn,
@@ -1283,7 +1289,16 @@ export function BookingDetail({ detail, className }: BookingDetailProps) {
 
 /* --------------------------------------------------------------------------
    Messages: what this booking has been sent, and the guest's own link.
+   Booking messages come from the message templates; anything an automation
+   sent, or will send, comes from replaying the live automations for this
+   guest on the server.
    -------------------------------------------------------------------------- */
+
+type AutomationTrail = { flowId: string; flowName: string; events: JourneyEvent[] }
+
+/** The moments worth showing on a booking; waits, paths and the like stay in the automation's own view. */
+const TRAIL_KINDS = new Set<JourneyEvent['kind']>(['entered', 'sent', 'scheduled', 'held', 'opened', 'clicked', 'booked', 'action', 'exited', 'skipped'])
+const TRAIL_PREVIEW = 6
 
 function MessagesCard({ detail, departure, partySize, onCompose }: { detail: BookingDetailContentProps['detail']; departure: { startsAt: string; endsAt: string }; partySize: number; onCompose: () => void }) {
   const { activity, customer } = detail
@@ -1296,10 +1311,64 @@ function MessagesCard({ detail, departure, partySize, onCompose }: { detail: Boo
   const written = (threads.find((thread) => thread.id === `thr_${booking.reference}`)?.messages ?? []).filter((entry) => entry.from === 'staff')
   const pad = (n: number) => String(n).padStart(2, '0')
   const nowIso = `${NOW.getFullYear()}-${pad(NOW.getMonth() + 1)}-${pad(NOW.getDate())}T${pad(NOW.getHours())}:${pad(NOW.getMinutes())}:00`
+  // Growth messages run as automations now: they show below, from the automations themselves.
+  const bookingTemplates = React.useMemo(() => templates.filter((template) => groupOf(template) !== 'growth'), [templates])
   const log = React.useMemo(
-    () => buildMessageLog({ booking, activity, customer, departure, templates, nowIso, tenantSlug: tenant.slug, business: tenant.name, currency: tenant.currency }),
-    [booking, activity, customer, departure, templates, nowIso, tenant],
+    () => buildMessageLog({ booking, activity, customer, departure, templates: bookingTemplates, nowIso, tenantSlug: tenant.slug, business: tenant.name, currency: tenant.currency }),
+    [booking, activity, customer, departure, bookingTemplates, nowIso, tenant],
   )
+
+  /* ---- automations that touched this booking ---- */
+  const activities = React.useMemo(
+    () => getActivitiesByTenant(tenant.id).filter((entry) => entry.status !== 'archived').map((entry) => ({ slug: entry.slug, name: entry.name })),
+    [tenant.id],
+  )
+  const { flows } = useFlows(tenant, nowIso, activities)
+  const live = React.useMemo(() => flows.filter((flow) => flow.status === 'live'), [flows])
+  const marketing = useMarketing(useMarketingTenant(tenant), nowIso)
+  const { signups, settings, audiences } = marketing
+  const [trails, setTrails] = React.useState<AutomationTrail[] | null>(null)
+  const [trailsFailed, setTrailsFailed] = React.useState(false)
+  // Keyed on what the replay reads, not on object identity: other marketing writes rebuild these
+  // lists without changing anything this booking would see.
+  const request = React.useMemo(() => {
+    const extras: FlowExtras = {
+      signups: signups.map((entry) => ({ email: entry.email, phone: entry.phone, source: entry.source, at: entry.at })),
+      settings: { paused: settings.paused, quietHours: settings.quietHours, frequencyCap: settings.frequencyCap, skipUpcoming: settings.skipUpcoming },
+      // The real home country lives on these: "Locals" depends on it.
+      audiences,
+      nowIso,
+    }
+    return { flows: live, extras, key: JSON.stringify([tenant.id, booking.reference, live, extras]) }
+  }, [tenant.id, booking.reference, live, signups, settings, audiences, nowIso])
+  React.useEffect(() => {
+    // The effect only runs again when the key changes, so the request it closes over is the current one.
+    const { flows: toRun, extras } = request
+    if (toRun.length === 0) {
+      setTrails([])
+      setTrailsFailed(false)
+      return
+    }
+    let alive = true
+    const timer = window.setTimeout(() => {
+      flowsForBooking(tenant.id, toRun, booking.reference, extras)
+        .then((result) => {
+          if (!alive) return
+          setTrails(result)
+          setTrailsFailed(false)
+        })
+        .catch(() => {
+          if (!alive) return
+          setTrails((current) => current ?? [])
+          setTrailsFailed(true)
+        })
+    }, 250)
+    return () => {
+      alive = false
+      window.clearTimeout(timer)
+    }
+  }, [tenant.id, booking.reference, request.key]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const link = manageLink(tenant.slug, booking.reference)
   const copy = async () => {
     try {
@@ -1309,7 +1378,9 @@ function MessagesCard({ detail, departure, partySize, onCompose }: { detail: Boo
       toast.error('Could not copy the link')
     }
   }
-  const sent = log.filter((entry) => entry.status !== 'scheduled').length
+  const automationSent = (trails ?? []).reduce((sum, trail) => sum + trail.events.filter((event) => event.kind === 'sent').length, 0)
+  const sent = log.filter((entry) => entry.status !== 'scheduled').length + automationSent
+  const flowById = new Map(flows.map((flow) => [flow.id, flow]))
   return (
     <SectionCard
       title={`Messages · ${sent}`}
@@ -1343,7 +1414,7 @@ function MessagesCard({ detail, departure, partySize, onCompose }: { detail: Boo
         </ol>
       ) : null}
       {log.length === 0 ? (
-        <p className="text-sm text-subtle">No messages for this booking.</p>
+        <p className="text-sm text-subtle">No booking messages for this booking.</p>
       ) : (
         <ol className="flex list-none flex-col gap-2.5 p-0">
           {log.map((entry) => (
@@ -1365,6 +1436,111 @@ function MessagesCard({ detail, departure, partySize, onCompose }: { detail: Boo
           ))}
         </ol>
       )}
+
+      <div className="mt-4 border-t border-line-subtle pt-4">
+        <p className="mb-2.5 flex items-center gap-2 text-xs font-semibold text-muted">
+          <Workflow className="size-3.5 text-subtle" aria-hidden="true" />
+          From automations
+        </p>
+        {trails === null ? (
+          <p className="text-xs text-subtle" role="status">
+            Checking which automations this booking went through…
+          </p>
+        ) : trailsFailed && trails.length === 0 ? (
+          <p className="text-xs text-subtle">Could not check the automations just now. Booking messages above are up to date.</p>
+        ) : trails.length === 0 ? (
+          <p className="text-xs text-subtle">{live.length === 0 ? 'No automation is on.' : 'No live automation has reached this booking.'}</p>
+        ) : (
+          <ul className="flex list-none flex-col gap-3 p-0">
+            {trails.map((trail) => (
+              <AutomationTrailItem key={trail.flowId} trail={trail} flow={flowById.get(trail.flowId)} />
+            ))}
+          </ul>
+        )}
+      </div>
     </SectionCard>
   )
+}
+
+/** One automation on the booking record: its name, then what it did in plain words. */
+function AutomationTrailItem({ trail, flow }: { trail: AutomationTrail; flow?: Flow }) {
+  const [open, setOpen] = React.useState(false)
+  const events = React.useMemo(
+    () =>
+      trail.events
+        .filter((event) => TRAIL_KINDS.has(event.kind))
+        .slice()
+        .sort((a, b) => a.at.localeCompare(b.at)),
+    [trail.events],
+  )
+  const shown = open ? events : events.slice(0, TRAIL_PREVIEW)
+  const scheduled = events.filter((event) => event.kind === 'scheduled').length
+  return (
+    <li className="rounded-xl border border-line-subtle bg-surface-sunken/40 px-3.5 py-3">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <Link href={`/dashboard/marketing/automations?flow=${encodeURIComponent(trail.flowId)}`} className="text-sm font-medium text-foreground hover:underline">
+          {trail.flowName}
+        </Link>
+        {flow ? (
+          <Badge variant={flow.purpose === 'marketing' ? 'primary' : 'neutral'} size="sm">
+            {PURPOSE_LABEL[flow.purpose]}
+          </Badge>
+        ) : null}
+        {scheduled > 0 ? <span className="text-xs text-subtle">{scheduled} still to go</span> : null}
+      </div>
+      {events.length === 0 ? (
+        <p className="mt-1.5 text-xs text-subtle">It is waiting for its next step.</p>
+      ) : (
+        <ol className="mt-2 flex list-none flex-col gap-1.5 p-0">
+          {shown.map((event, index) => {
+            const upcoming = event.kind === 'scheduled'
+            const Icon = TRAIL_ICON[event.kind] ?? Clock
+            return (
+              <li key={`${event.at}-${event.kind}-${index}`} className="flex items-start gap-2.5 text-xs">
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    'mt-px grid size-5 shrink-0 place-items-center rounded-full',
+                    upcoming ? 'border border-dashed border-line text-faint' : event.kind === 'booked' ? 'bg-success-soft text-success' : event.kind === 'exited' || event.kind === 'skipped' ? 'bg-surface text-subtle' : 'bg-surface text-muted',
+                  )}
+                >
+                  <Icon className="size-3" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className={cn('block', upcoming ? 'text-muted' : 'text-foreground')}>{event.text}</span>
+                  <span className="block tabular text-subtle">
+                    {upcoming ? 'Scheduled for ' : ''}
+                    {formatDateTime(event.at)}
+                  </span>
+                </span>
+              </li>
+            )
+          })}
+        </ol>
+      )}
+      {events.length > TRAIL_PREVIEW ? (
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+          className="mt-2 rounded-sm text-xs font-medium text-primary hover:underline focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+        >
+          {open ? 'Show less' : `Show all ${events.length}`}
+        </button>
+      ) : null}
+    </li>
+  )
+}
+
+const TRAIL_ICON: Partial<Record<JourneyEvent['kind'], LucideIcon>> = {
+  entered: ChevronRight,
+  sent: Send,
+  scheduled: Clock,
+  held: Clock,
+  opened: Mail,
+  clicked: ArrowUpRight,
+  booked: Check,
+  action: ClipboardList,
+  exited: Ban,
+  skipped: Ban,
 }

@@ -7,10 +7,28 @@ import { requireWorkspaceRoute } from '@/lib/workspace'
 
 export const metadata: Metadata = {
   title: 'Automations',
-  description: 'Emails and texts that go on their own: booking messages and the ones that bring guests back.',
+  description: 'Emails, texts and to-dos that run on their own: ready-made ideas, your own automations and the messages every booking gets.',
 }
 
-export default async function AutomationsPage() {
+type Search = Promise<Record<string, string | string[] | undefined>>
+
+const one = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value) || null
+
+/**
+ * ?recipe=<id> opens the ideas on that recipe and ?flow=<id> opens that
+ * automation, so the Overview can link straight to them.
+ */
+export default async function AutomationsPage({ searchParams }: { searchParams: Search }) {
   const { tenant } = await requireWorkspaceRoute('/dashboard/marketing/automations')
-  return <AutomationsClient tenant={tenant} nowIso={NOW_ISO} data={getMarketingData(tenant)} sample={getMessageSample(tenant)} />
+  const search = await searchParams
+  return (
+    <AutomationsClient
+      tenant={tenant}
+      nowIso={NOW_ISO}
+      data={getMarketingData(tenant)}
+      sample={getMessageSample(tenant)}
+      initialRecipe={one(search.recipe)}
+      initialFlow={one(search.flow)}
+    />
+  )
 }

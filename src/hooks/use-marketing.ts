@@ -107,7 +107,7 @@ export function defaultCampaigns(tenant: MarketingTenant, nowIso: string): Campa
       channel: 'sms',
       audienceId: 'aud_local',
       subject: '',
-      body: '{business}: locals week! {offer_percent} off every trip with {offer_code} until Sunday. {link}',
+      body: '{business}: locals week! {offer_percent} off every trip with {offer_code} until Sunday. {book_link}',
       offer: { enabled: true, percent: 20, validDays: 7, code: 'LOCALS20' },
       status: 'sent',
       sentAt: day(-12, 11),
@@ -155,21 +155,37 @@ export function defaultCampaigns(tenant: MarketingTenant, nowIso: string): Campa
   ]
 }
 
+/** Read-time send: scheduled and due becomes sent at the time it was set for. */
+function dueToSend(campaign: Campaign, nowIso: string, paused: boolean): Campaign {
+  if (campaign.status !== 'scheduled' || !campaign.sendAt || paused) return campaign
+  if (new Date(campaign.sendAt).getTime() > new Date(nowIso).getTime()) return campaign
+  return { ...campaign, status: 'sent', sentAt: campaign.sendAt }
+}
+
 export function useMarketing(tenant: MarketingTenant, nowIso: string) {
   const { slug } = tenant
   const raw = React.useSyncExternalStore(subscribe, () => read(keyFor(slug)), () => '')
   const signupsRaw = React.useSyncExternalStore(subscribe, () => read(signupsKey(slug)), () => '')
   const store = React.useMemo(() => parse<MarketingStore>(raw, {}), [raw])
 
-  const campaigns = React.useMemo(() => store.campaigns ?? defaultCampaigns(tenant, nowIso), [store.campaigns, tenant, nowIso])
+  const settings = React.useMemo(() => ({ ...defaultSettings(tenant.name, tenant.email), ...store.settings }), [store.settings, tenant.name, tenant.email])
+  // A scheduled campaign whose time has come reads as sent. Paused marketing holds it until resumed.
+  const campaigns = React.useMemo(
+    () => (store.campaigns ?? defaultCampaigns(tenant, nowIso)).map((campaign) => dueToSend(campaign, nowIso, settings.paused)),
+    [store.campaigns, tenant, nowIso, settings.paused],
+  )
   const audiences = React.useMemo(() => [...defaultAudiences(tenant.country), ...(store.audiences ?? [])], [store.audiences, tenant.country])
   const forms = React.useMemo(() => {
     const base = defaultForms(slug)
     const saved = store.forms
     return saved ? { popup: { ...base.popup, ...saved.popup }, footer: { ...base.footer, ...saved.footer }, checkout: { ...base.checkout, ...saved.checkout } } : base
   }, [store.forms, slug])
-  const settings = React.useMemo(() => ({ ...defaultSettings(tenant.name, tenant.email), ...store.settings }), [store.settings, tenant.name, tenant.email])
   const signups = React.useMemo(() => parse<Signup[]>(signupsRaw, []), [signupsRaw])
+  // Scheduled campaigns whose time came while marketing was paused: they wait for the owner to say.
+  const held = React.useMemo(
+    () => (settings.paused ? campaigns.filter((campaign) => campaign.status === 'scheduled' && campaign.sendAt && new Date(campaign.sendAt).getTime() <= new Date(nowIso).getTime()) : []),
+    [campaigns, settings.paused, nowIso],
+  )
 
   const write = React.useCallback(
     (patch: MarketingStore | null) => {
@@ -198,9 +214,20 @@ export function useMarketing(tenant: MarketingTenant, nowIso: string) {
       write({ emailTemplates: own.some((entry) => entry.id === template.id) ? own.map((entry) => (entry.id === template.id ? template : entry)) : [template, ...own] })
     },
     removeEmailTemplate: (id: string) => write({ emailTemplates: (store.emailTemplates ?? []).filter((entry) => entry.id !== id) }),
+    /** Back to drafts: a scheduled campaign that should not go yet. */
+    unscheduleCampaign: (id: string) =>
+      write({ campaigns: campaigns.map((entry) => (entry.id === id && entry.status === 'scheduled' ? { ...entry, status: 'draft' as const } : entry)) }),
     saveCampaign: (campaign: Campaign) =>
       write({ campaigns: campaigns.some((entry) => entry.id === campaign.id) ? campaigns.map((entry) => (entry.id === campaign.id ? campaign : entry)) : [campaign, ...campaigns] }),
     removeCampaign: (id: string) => write({ campaigns: campaigns.filter((entry) => entry.id !== id) }),
+    held,
+    /** On resuming marketing: send the held campaigns now, or move them back to drafts. */
+    releaseHeld: (mode: 'send' | 'draft') => {
+      const ids = new Set(held.map((campaign) => campaign.id))
+      write({
+        campaigns: campaigns.map((entry) => (!ids.has(entry.id) ? entry : mode === 'send' ? { ...entry, sendAt: nowIso } : { ...entry, status: 'draft' as const })),
+      })
+    },
     saveAudience: (audience: Audience) => {
       const own = store.audiences ?? []
       write({ audiences: own.some((entry) => entry.id === audience.id) ? own.map((entry) => (entry.id === audience.id ? audience : entry)) : [...own, audience] })
@@ -208,8 +235,12 @@ export function useMarketing(tenant: MarketingTenant, nowIso: string) {
     removeAudience: (id: string) => write({ audiences: (store.audiences ?? []).filter((entry) => entry.id !== id) }),
     setForms: (next: SignupForms) => write({ forms: next }),
     setSettings: (next: MarketingSettings) => write({ settings: next }),
-    reset: () => write(null),
+    /** Back to the default rules. Campaigns, audiences, forms and saved email templates stay. */
+    resetSettings: () => write({ settings: undefined }),
+    /** Everything back to the defaults, except saved email templates: those are the business's own work. */
+    reset: () => write(store.emailTemplates?.length ? { campaigns: undefined, audiences: undefined, forms: undefined, settings: undefined, emailTemplates: store.emailTemplates } : null),
     hasEdits: raw !== '',
+    settingsEdited: Boolean(store.settings),
   }
 }
 

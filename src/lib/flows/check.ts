@@ -32,7 +32,7 @@ import type { ActionStep, Condition, EmailStep, Flow, FlowIssue, FlowStep, SmsSt
 export interface CheckContext {
   audiences: { id: string; name: string }[]
   activities: { slug: string; name: string }[]
-  /** A texting number is set up in Settings → Domains & numbers. */
+  /** The business's own texting number is set up in Settings → Domains & numbers. Without it texts still go, from the shared number. */
   hasSmsNumber: boolean
   /** Marketing is paused in Marketing settings. */
   marketingPaused: boolean
@@ -481,8 +481,9 @@ export function checkFlow(flow: Flow, ctx: Partial<CheckContext> = {}): FlowIssu
   if (ctx.hasSmsNumber === false && messages.some((step) => step.type === 'sms')) {
     add({
       code: 'sms-number',
-      severity: 'blocker',
-      text: 'Texts can’t go yet because you don’t have a texting number. Set one up in Settings → Domains & numbers, or change the texts to emails.',
+      // Never a blocker: until the business's own number is approved, texts go from the shared one.
+      severity: 'tip',
+      text: 'Texts go from EZRA’s shared number until your own texting number is set up in Settings → Domains & numbers.',
     })
   }
 

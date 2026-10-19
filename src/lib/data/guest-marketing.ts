@@ -1,3 +1,5 @@
+import { NOW } from '@/lib/data/constants'
+import { isoLocal } from '@/lib/demo-core'
 import { COUNTRY_NAME_BY_CODE, getActivitiesByTenant, getBookingRows, getBookingsByCustomer, getCustomersByTenant } from '@/lib/demo'
 import { manageLink, type MessageContext } from '@/lib/messaging'
 import { steady, type MarketingContact } from '@/lib/marketing'
@@ -22,6 +24,7 @@ export interface MarketingData {
 export function getMarketingData(tenant: Tenant): MarketingData {
   const activities = getActivitiesByTenant(tenant.id).filter((activity) => activity.status !== 'archived')
   const slugById = new Map(activities.map((activity) => [activity.id, activity.slug]))
+  const nowIso = isoLocal(NOW)
   let paid = 0
   let paidCount = 0
   const contacts: MarketingContact[] = getCustomersByTenant(tenant.id).map((customer) => {
@@ -47,6 +50,11 @@ export function getMarketingData(tenant: Tenant): MarketingData {
       smsOptIn: customer.marketingOptIn && Boolean(customer.phone) && steady(`sms-${customer.id}`) > 0.45,
       segment: customer.segment,
       activitySlugs: [...new Set(bookings.map((booking) => slugById.get(booking.activityId)).filter((slug): slug is string => Boolean(slug)))],
+      nextTripAt:
+        bookings
+          .filter((booking) => (booking.status === 'confirmed' || booking.status === 'pending') && booking.departureAt >= nowIso)
+          .map((booking) => booking.departureAt)
+          .sort()[0] ?? null,
     }
   })
   return {

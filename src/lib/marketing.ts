@@ -1,12 +1,17 @@
-import type { Customer } from '@/types'
+import type { CurrencyCode, Customer } from '@/types'
 import type { PromoCode } from '@/lib/pricing'
 import type { EmailDesign } from '@/lib/email-design'
+import type { EmailSetup } from '@/lib/channels'
+import { formatCurrency } from '@/lib/utils'
+import { evaluate, guestFactsFromContact } from '@/lib/flows/conditions'
+import { describeGroup } from '@/lib/flows/describe'
+import type { Condition, ConditionGroup } from '@/lib/flows/types'
 
 /* ==========================================================================
-   Marketing — audiences, campaigns, sign-up forms, referrals and the rules
-   every marketing message follows. Browser-safe plain data: the stores live
-   in use-marketing, the automations themselves are message templates in
-   messaging.ts, and the numbers here are worked out from the guest list.
+   Marketing — audiences, campaigns, sign-up forms and the rules every
+   marketing message follows. Browser-safe plain data: the stores live in
+   use-marketing, automations are flows (src/lib/flows), and the campaign
+   numbers here are worked out from the guest list.
    ========================================================================== */
 
 /* --------------------------------------------------------------------------
@@ -30,6 +35,8 @@ export interface MarketingContact {
   segment: Customer['segment']
   /** Activities they have booked. */
   activitySlugs: string[]
+  /** Start of their next trip, local ISO, if one is booked. Campaigns skip guests travelling soon. */
+  nextTripAt?: string | null
 }
 
 /* --------------------------------------------------------------------------
@@ -50,6 +57,14 @@ export interface AudienceFilter {
   tags: string[]
   /** Only guests who agreed to hear from you on this channel. */
   consent: 'email' | 'sms' | 'either'
+  /**
+   * Rule-builder audiences keep a copy of their rules here too, so anything
+   * that matches on `audience.filter` sees the same guests. When set, the
+   * fixed fields above are ignored; consent still applies.
+   */
+  rules?: ConditionGroup
+  /** The business's country when the rules were saved, for "Lives locally". */
+  homeCountry?: string
 }
 
 export interface Audience {
@@ -57,8 +72,19 @@ export interface Audience {
   name: string
   description: string
   filter: AudienceFilter
+  /** Guest rules from the rule builder (guest fields only). When set they replace the fixed filter; consent still applies. */
+  rules?: ConditionGroup
   builtIn?: boolean
 }
+
+/** What audience helpers accept: a whole audience, or just its filter. */
+export type AudienceTarget = Audience | AudienceFilter
+
+const filterOf = (target: AudienceTarget): AudienceFilter => ('filter' in target ? target.filter : target)
+const rulesOf = (target: AudienceTarget): ConditionGroup | undefined => ('filter' in target ? (target.rules ?? target.filter.rules) : target.rules)
+
+/** Does this audience use the rule builder? */
+export const hasAudienceRules = (target: AudienceTarget) => rulesOf(target) !== undefined
 
 export const EMPTY_FILTER: AudienceFilter = { segments: [], activitySlugs: [], countries: [], tags: [], consent: 'either' }
 
@@ -79,10 +105,27 @@ export function defaultAudiences(homeCountry: string): Audience[] {
   ]
 }
 
-export function matchesAudience(contact: MarketingContact, filter: AudienceFilter, nowIso: string): boolean {
+export interface AudienceOptions {
+  /** The business's country, for "Lives locally". Falls back to the one saved with the rules. */
+  homeCountry?: string
+}
+
+/**
+ * Is this guest in the audience? Consent comes first, always. Rule-builder
+ * audiences then check their rules with the same facts automations use;
+ * older ones (and the ready-made ones) use the fixed filter.
+ */
+export function matchesAudience(contact: MarketingContact, target: AudienceTarget, nowIso: string, options: AudienceOptions = {}): boolean {
+  const filter = filterOf(target)
   if (filter.consent === 'email' && !contact.emailOptIn) return false
   if (filter.consent === 'sms' && !contact.smsOptIn) return false
   if (filter.consent === 'either' && !contact.emailOptIn && !contact.smsOptIn) return false
+  const rules = rulesOf(target)
+  if (rules) {
+    const hasUpcomingTrip = Boolean(contact.nextTripAt) && new Date(contact.nextTripAt!).getTime() > new Date(nowIso).getTime()
+    const guest = guestFactsFromContact(contact, nowIso, { homeCountry: options.homeCountry || filter.homeCountry, hasUpcomingTrip })
+    return evaluate(rules, { guest })
+  }
   if (filter.segments.length > 0 && !filter.segments.includes(contact.segment)) return false
   if (filter.activitySlugs.length > 0 && !filter.activitySlugs.some((slug) => contact.activitySlugs.includes(slug))) return false
   if (filter.countries.length > 0 && !filter.countries.includes(contact.country)) return false
@@ -97,8 +140,8 @@ export function matchesAudience(contact: MarketingContact, filter: AudienceFilte
   return true
 }
 
-export function audienceSize(contacts: MarketingContact[], filter: AudienceFilter, nowIso: string) {
-  const members = contacts.filter((contact) => matchesAudience(contact, filter, nowIso))
+export function audienceSize(contacts: MarketingContact[], target: AudienceTarget, nowIso: string, options: AudienceOptions = {}) {
+  const members = contacts.filter((contact) => matchesAudience(contact, target, nowIso, options))
   return {
     members,
     count: members.length,
@@ -107,18 +150,52 @@ export function audienceSize(contacts: MarketingContact[], filter: AudienceFilte
   }
 }
 
-/** A plain-English line for the rules, for lists and previews. */
-export function describeFilter(filter: AudienceFilter, activityName: (slug: string) => string): string {
+/**
+ * An older fixed filter as builder rules, so an audience made before the
+ * rule builder (or a copy of a ready-made one) opens with the same checks.
+ */
+export function filterToRules(filter: AudienceFilter): ConditionGroup {
+  if (filter.rules) return filter.rules
+  const conditions: Condition[] = []
+  const add = (condition: Omit<Condition, 'id'>) => conditions.push({ ...condition, id: `cond_f${conditions.length + 1}` })
+  if (filter.segments.length > 0) add({ field: 'guest.segment', op: 'any_of', value: [...filter.segments] })
+  if (filter.activitySlugs.length > 0) add({ field: 'guest.bookedActivity', op: 'any_of', value: [...filter.activitySlugs] })
+  if (filter.lastTrip) add({ field: 'guest.daysSinceLastTrip', op: filter.lastTrip.op === 'within' ? 'at_most' : 'at_least', value: filter.lastTrip.days })
+  if (filter.minBookings) add({ field: 'guest.bookings', op: 'at_least', value: filter.minBookings })
+  // Contacts keep spend in major units; rules use cents like the rest of flows.
+  if (filter.minSpend) add({ field: 'guest.spend', op: 'at_least', value: Math.round(filter.minSpend * 100) })
+  if (filter.countries.length > 0) add({ field: 'guest.country', op: 'any_of', value: [...filter.countries] })
+  if (filter.tags.length > 0) add({ field: 'guest.tags', op: 'any_of', value: [...filter.tags] })
+  return { match: 'all', conditions }
+}
+
+export const CONSENT_LABEL: Record<AudienceFilter['consent'], string> = { either: 'Email or text', email: 'Email only', sms: 'Text only' }
+
+/** A plain-English line for the rules, for lists and previews. Money shows in `currency` when given. */
+export function describeFilter(filter: AudienceFilter, activityName: (slug: string) => string, currency?: CurrencyCode): string {
   const parts: string[] = []
   if (filter.segments.length > 0) parts.push(filter.segments.map((segment) => SEGMENT_LABEL[segment]).join(' or '))
   if (filter.activitySlugs.length > 0) parts.push(`booked ${filter.activitySlugs.map(activityName).join(' or ')}`)
   if (filter.lastTrip) parts.push(filter.lastTrip.op === 'within' ? `last trip in the past ${filter.lastTrip.days} days` : `no trip in ${filter.lastTrip.days} days`)
   if (filter.minBookings) parts.push(`${filter.minBookings}+ bookings`)
-  if (filter.minSpend) parts.push(`spent ${filter.minSpend}+`)
+  if (filter.minSpend) parts.push(`spent ${currency ? formatCurrency(filter.minSpend * 100, currency) : filter.minSpend}+`)
   if (filter.countries.length > 0) parts.push(`from ${filter.countries.join(', ')}`)
   if (filter.tags.length > 0) parts.push(`tagged ${filter.tags.join(', ')}`)
   if (filter.consent !== 'either') parts.push(filter.consent === 'email' ? 'email subscribers' : 'text subscribers')
   return parts.length > 0 ? parts.join(' · ') : 'Every subscribed guest'
+}
+
+/**
+ * The audience's rules in one plain sentence: "They’ve booked 2 times and
+ * they live in Australia". Rule-builder audiences read their rules; older
+ * ones their filter. Consent is left to the caller to show.
+ */
+export function describeAudienceRules(target: AudienceTarget, lookups: { activities?: { slug: string; name: string }[]; currency?: CurrencyCode } = {}): string {
+  const rules = rulesOf(target)
+  if (rules) return describeGroup(rules, lookups, 'Every subscribed guest')
+  const filter = filterOf(target)
+  const activityName = (slug: string) => lookups.activities?.find((activity) => activity.slug === slug)?.name ?? slug
+  return describeFilter({ ...filter, consent: 'either' }, activityName, lookups.currency)
 }
 
 export const SEGMENT_LABEL: Record<Customer['segment'], string> = { new: 'First-timers', returning: 'Returning', vip: 'VIP', lapsed: 'Lapsed' }
@@ -137,6 +214,18 @@ export interface MarketingOffer {
 }
 
 export const NO_OFFER: MarketingOffer = { enabled: false, percent: 10, validDays: 14, code: '' }
+
+/** The days a code works for when it goes out at `fromIso`: from that day, for `validDays` days. */
+export function offerWindow(offer: Pick<MarketingOffer, 'validDays'>, fromIso: string): { startsOn: string; endsOn: string } {
+  const start = new Date(fromIso)
+  const end = new Date(start)
+  end.setDate(end.getDate() + Math.max(1, Math.round(offer.validDays)) - 1)
+  return { startsOn: dayKey(start), endsOn: dayKey(end) }
+}
+
+function dayKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
 
 /* --------------------------------------------------------------------------
    Campaigns — one-off emails and texts to an audience
@@ -167,10 +256,14 @@ export interface Campaign {
   /** Optional button in the email, to an activity or the storefront. */
   button: { enabled: boolean; label: string; activitySlug: string }
   offer: MarketingOffer
-  /** A second subject line sent to half the list; the winner goes to the rest. */
+  /** A second subject line: half the list gets each, and bookings decide which one did better. */
   abTest: { enabled: boolean; subjectB: string }
   /** The designed email. Without one, the body goes as a simple letter. */
   design?: EmailDesign
+  /**
+   * draft and scheduled are stored as such. A scheduled campaign whose time has
+   * passed is read back as sent (useMarketing derives it), unless marketing is paused.
+   */
   status: CampaignStatus
   sendAt?: string
   sentAt?: string
@@ -178,7 +271,125 @@ export interface Campaign {
   createdAt: string
 }
 
-export const CAMPAIGN_PLACEHOLDERS = ['{first_name}', '{business}', '{offer_code}', '{offer_percent}', '{link}']
+/** The personal details a campaign can carry, shown by label; the token goes into the text behind the scenes. */
+export const CAMPAIGN_DETAILS: { token: string; label: string; sample: string; needsOffer?: boolean }[] = [
+  { token: '{first_name}', label: 'First name', sample: 'Maya' },
+  { token: '{business}', label: 'Business name', sample: 'your business name' },
+  { token: '{book_link}', label: 'Booking page link', sample: 'a link to your booking page' },
+  { token: '{offer_code}', label: 'Discount code', sample: 'SPRING15', needsOffer: true },
+  { token: '{offer_percent}', label: 'Discount %', sample: '15%', needsOffer: true },
+]
+
+/** The note on a campaign's code in Promo codes; it is how the campaign knows the code is its own. */
+export function campaignPromoNote(campaign: Pick<Campaign, 'name'>): string {
+  return `From the “${campaign.name}” campaign`
+}
+
+/** The tokens alone, for older callers. */
+export const CAMPAIGN_PLACEHOLDERS = CAMPAIGN_DETAILS.map((detail) => detail.token)
+
+/** Older campaigns wrote the booking link as {link}; today it is {book_link}, the same token the designer and automations use. */
+export function normalizeCampaignTokens(text: string): string {
+  return text.replace(/\{link\}/g, '{book_link}')
+}
+
+/** "Hi {first_name}" → "Hi [First name]", for the text boxes. Unknown tokens stay as typed. */
+export function campaignTextForDisplay(text: string): string {
+  return normalizeCampaignTokens(text).replace(/\{([a-z_]+)\}/g, (match) => {
+    const detail = CAMPAIGN_DETAILS.find((entry) => entry.token === match)
+    return detail ? `[${detail.label}]` : match
+  })
+}
+
+/** The other way: "[First name]" typed or inserted in a text box becomes {first_name} again. */
+export function campaignTextFromDisplay(text: string): string {
+  return text.replace(/\[([^\]\n]{2,30})\]/g, (match, label: string) => {
+    const detail = CAMPAIGN_DETAILS.find((entry) => entry.label.toLowerCase() === label.trim().toLowerCase())
+    return detail ? detail.token : match
+  })
+}
+
+/** Tokens a text uses that a campaign cannot fill (a typo, or a booking detail). */
+export function unknownCampaignTokens(text: string): string[] {
+  const known = new Set(CAMPAIGN_DETAILS.map((detail) => detail.token))
+  return [...new Set([...normalizeCampaignTokens(text).matchAll(/\{([a-z_]+)\}/g)].map((match) => match[0]))].filter((token) => !known.has(token))
+}
+
+/* ---------- before it goes: who actually gets it ---------- */
+
+/** A campaign sent earlier, by who it reached, for the weekly limit. */
+export interface EarlierSend {
+  sentAt: string
+  /** Ids of the guests it went to. */
+  to: Set<string>
+}
+
+export interface SendBreakdown {
+  /** Everyone the audience matches. */
+  inAudience: number
+  /** Matched, but never said yes to this channel. */
+  noConsent: number
+  /** Booked on a trip starting within the skip window (Settings → Skip guests with a trip coming up). */
+  tripSoon: number
+  /** Already had the weekly limit of marketing messages from campaigns. */
+  weeklyLimit: number
+  /** Who it goes to. */
+  recipients: number
+  members: MarketingContact[]
+}
+
+/**
+ * The pre-send count, following the marketing rules in order: consent for the
+ * channel, a trip coming up, then the weekly limit. Each guest is counted
+ * under the first rule that holds them back.
+ */
+export function campaignBreakdown({
+  audienceMembers,
+  channel,
+  sendAt,
+  settings,
+  earlier,
+}: {
+  audienceMembers: MarketingContact[]
+  channel: Campaign['channel']
+  sendAt: string
+  settings: Pick<MarketingSettings, 'frequencyCap' | 'skipUpcoming'>
+  earlier: EarlierSend[]
+}): SendBreakdown {
+  const at = new Date(sendAt).getTime()
+  const weekAgo = at - 7 * 86_400_000
+  const recent = earlier.filter((send) => {
+    const sent = new Date(send.sentAt).getTime()
+    return sent >= weekAgo && sent < at
+  })
+  const tripWindow = settings.skipUpcoming.days * 86_400_000
+  let noConsent = 0
+  let tripSoon = 0
+  let weeklyLimit = 0
+  const members: MarketingContact[] = []
+  for (const contact of audienceMembers) {
+    if (channel === 'email' ? !contact.emailOptIn : !contact.smsOptIn) {
+      noConsent += 1
+      continue
+    }
+    if (settings.skipUpcoming.enabled && contact.nextTripAt) {
+      const trip = new Date(contact.nextTripAt).getTime()
+      if (trip >= at && trip - at <= tripWindow) {
+        tripSoon += 1
+        continue
+      }
+    }
+    if (settings.frequencyCap.enabled && recent.length >= settings.frequencyCap.perWeek) {
+      const had = recent.reduce((count, send) => count + (send.to.has(contact.id) ? 1 : 0), 0)
+      if (had >= settings.frequencyCap.perWeek) {
+        weeklyLimit += 1
+        continue
+      }
+    }
+    members.push(contact)
+  }
+  return { inAudience: audienceMembers.length, noConsent, tripSoon, weeklyLimit, recipients: members.length, members }
+}
 
 /* --------------------------------------------------------------------------
    Sign-up forms
@@ -236,7 +447,12 @@ export function defaultForms(slug: string): SignupForms {
 export interface MarketingSettings {
   /** Stops every marketing email and text. Booking messages still go. */
   paused: boolean
+  /**
+   * Kept for businesses that set it here before. The sender now lives in
+   * Settings → Domains & numbers; read it with marketingSender().
+   */
   senderName: string
+  /** As senderName. */
   replyTo: string
   quietHours: { enabled: boolean; from: string; to: string }
   /** At most this many marketing messages per guest per week. */
@@ -262,6 +478,47 @@ export function defaultSettings(business: string, email: string): MarketingSetti
     utm: { enabled: true, source: 'ezra', medium: 'email' },
     smsConsent: 'Msg & data rates may apply. Reply STOP to opt out, HELP for help.',
   }
+}
+
+/**
+ * Who marketing comes from. One place: Domains & numbers. A name or reply-to
+ * typed on the old marketing Settings card still counts while Domains &
+ * numbers is left on the business's defaults, so nothing changes under anyone.
+ */
+export function marketingSender(
+  settings: Pick<MarketingSettings, 'senderName' | 'replyTo'>,
+  channel: Pick<EmailSetup, 'senderName' | 'replyTo'>,
+  defaults: { name: string; email: string },
+): { name: string; replyTo: string; legacy: { name: boolean; replyTo: boolean } } {
+  const legacyName = channel.senderName === defaults.name && Boolean(settings.senderName.trim()) && settings.senderName !== defaults.name
+  const legacyReply = channel.replyTo === defaults.email && Boolean(settings.replyTo.trim()) && settings.replyTo !== defaults.email
+  return {
+    name: legacyName ? settings.senderName : channel.senderName || defaults.name,
+    replyTo: legacyReply ? settings.replyTo : channel.replyTo || defaults.email,
+    legacy: { name: legacyName, replyTo: legacyReply },
+  }
+}
+
+const minutesOf = (hhmm: string) => {
+  const [h, m] = hhmm.split(':').map(Number)
+  return (h || 0) * 60 + (m || 0)
+}
+
+/**
+ * When a marketing message sent at `at` really goes under quiet hours: null if
+ * it is outside them, or the moment they end (the same or the next day).
+ */
+export function quietHoursRelease(at: Date, quiet: MarketingSettings['quietHours']): Date | null {
+  if (!quiet.enabled || quiet.from === quiet.to) return null
+  const from = minutesOf(quiet.from)
+  const to = minutesOf(quiet.to)
+  const now = at.getHours() * 60 + at.getMinutes()
+  const inside = from < to ? now >= from && now < to : now >= from || now < to
+  if (!inside) return null
+  const release = new Date(at)
+  release.setHours(Math.floor(to / 60), to % 60, 0, 0)
+  if (release.getTime() <= at.getTime()) release.setDate(release.getDate() + 1)
+  return release
 }
 
 /* --------------------------------------------------------------------------
@@ -320,6 +577,19 @@ export function campaignStatsFor(id: string, recipients: number, avgOrder: numbe
   return { recipients, delivered, opened, clicked, bookings, revenue: Math.round(bookings * avgOrder), unsubscribed: Math.round(delivered * (0.002 + r * 0.004)) }
 }
 
+/**
+ * An estimate of how the two subject lines did: each side's opens worked out
+ * on its own, so either can come out ahead. Labelled as an estimate on screen.
+ */
+export function abTestEstimate(id: string, stats: CampaignStats): { a: number; b: number; winner: 'a' | 'b' | 'tie' } {
+  const half = Math.max(1, stats.delivered / 2)
+  const a = Math.round(half * (0.32 + steady(`${id}:subject-a`) * 0.24))
+  const b = Math.round(half * (0.32 + steady(`${id}:subject-b`) * 0.24))
+  const rateA = a / half
+  const rateB = b / half
+  return { a: rateA, b: rateB, winner: Math.abs(rateA - rateB) < 0.01 ? 'tie' : rateA > rateB ? 'a' : 'b' }
+}
+
 export function percent(value: number, digits = 0): string {
   return `${(value * 100).toFixed(digits)}%`
 }
@@ -332,21 +602,47 @@ export function cleanCode(code: string): string {
   return code.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 20)
 }
 
-/** The promo list with this offer's code added or brought up to date. */
-export function upsertOfferPromo(promos: PromoCode[], offer: MarketingOffer, note: string, activitySlugs: string[] = []): PromoCode[] {
+/**
+ * The promo list with this offer's code added or brought up to date.
+ *
+ * `from`: when the message goes. The code then starts that day and stops
+ * after `validDays` (a scheduled campaign's code does not work early). Leave
+ * it out for codes that run on, like the sign-up pop-up's.
+ */
+export function upsertOfferPromo(promos: PromoCode[], offer: MarketingOffer, note: string, activitySlugs: string[] = [], from?: string): PromoCode[] {
   const code = cleanCode(offer.code)
   if (!offer.enabled || !code) return promos
   const existing = promos.find((promo) => promo.code === code)
+  const window = from ? offerWindow(offer, from) : null
   const next: PromoCode = {
     code,
     kind: 'percent',
     value: Math.min(100, Math.max(1, Math.round(offer.percent))),
     activitySlugs,
     minSubtotal: existing?.minSubtotal ?? 0,
+    startsOn: window ? window.startsOn : existing?.startsOn,
+    endsOn: window ? window.endsOn : existing?.endsOn,
     maxUses: existing?.maxUses ?? 100000,
     used: existing?.used ?? 0,
     active: true,
     note,
   }
   return existing ? promos.map((promo) => (promo.code === code ? next : promo)) : [next, ...promos]
+}
+
+/**
+ * Switch off a code this source made, once it moves to a new code or stops
+ * offering one, so old codes don't linger at checkout. Codes another source
+ * owns are left alone. The row stays in Promo codes with its uses.
+ */
+export function retireOfferPromo(promos: PromoCode[], code: string, note: string): PromoCode[] {
+  const clean = cleanCode(code)
+  if (!clean) return promos
+  return promos.map((promo) => (promo.code === clean && promo.note === note ? { ...promo, active: false } : promo))
+}
+
+/** Another source already owns this code; saving would change its discount. */
+export function offerCodeClash(promos: PromoCode[], code: string, note: string): PromoCode | undefined {
+  const clean = cleanCode(code)
+  return clean ? promos.find((promo) => promo.code === clean && promo.note !== note) : undefined
 }
