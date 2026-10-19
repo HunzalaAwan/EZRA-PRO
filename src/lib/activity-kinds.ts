@@ -255,8 +255,7 @@ export function kindCardFacts(activity: Pick<Activity, 'kind' | 'difficulty' | '
     case 'activity':
       return [`${activity.maxCapacity} per slot`, activity.route ? routeLabel(activity.route) : DIFFICULTY_WORD[activity.difficulty], age]
     case 'rental': {
-      const meta = rentalCategoryMeta(activity.rental?.category)
-      const licence = activity.rental?.licence && activity.rental.licence !== 'none' ? `Licence, ${activity.minAge}+` : age
+      const licence = age
       const modes = activity.rental?.modes
       const how = modes && modes.length > 1 ? 'Hour or day' : modes?.[0] === 'day' || activity.rental?.billing === 'day' ? 'By the day' : 'By the hour'
       const kinds = activity.rental?.items?.length ?? 0
@@ -288,12 +287,9 @@ export function kindNote(activity: Pick<Activity, 'kind' | 'minAge' | 'rental' |
     }
     case 'rental': {
       const r = activity.rental
-      const meta = rentalCategoryMeta(r?.category)
       const parts = [
-        r?.licence && r.licence !== 'none' ? `Bring your ${LICENCE_LABEL[r.licence].toLowerCase()}; the main ${r.licence === 'driver' ? 'driver' : 'operator'} must be ${activity.minAge} or over.` : age,
+        age,
         (r?.modes?.includes('day') || r?.billing === 'day') && r?.pickupTime && r?.returnTime ? `Pick up after ${r.pickupTime}, return before ${r.returnTime}.` : null,
-        meta.fuel && r?.fuel ? `${FUEL_LABEL[r.fuel]}.` : null,
-        meta.mileage ? (r?.kmPerDay ? `${r.kmPerDay} km a day included.` : 'Unlimited kilometres.') : null,
       ]
       return { title: "Before you rent.", body: parts.filter(Boolean).join(' ') }
     }

@@ -98,9 +98,7 @@ import {
   ACTIVITY_THEMES,
   crewName,
   vesselName,
-  FUEL_LABEL,
   LESSON_LEVELS,
-  LICENCE_LABEL,
   defaultTheme,
   rentalCategoryMeta,
   themeLabel,
@@ -319,7 +317,6 @@ function kindOverride(draft: ActivityDraft) {
   const settings = normalizeKindSettings(draft.kindSettings)
   if (kind === 'rental') {
     const r = settings.rental
-    const meta = rentalCategoryMeta(r.category)
     const hourly = r.modes.includes('hour')
     const daily = r.modes.includes('day')
     const byLength = r.modes.includes('length')
@@ -356,9 +353,6 @@ function kindOverride(draft: ActivityDraft) {
         })),
         ...(byLength ? { lengths: r.lengths.map((length) => ({ ...length, label: length.label.trim() || `Up to ${length.hours} hours` })) } : {}),
         seatsPerUnit: Math.max(1, ...items.map((item) => item.holds)),
-        licence: r.licence,
-        ...(meta.fuel ? { fuel: r.fuel } : {}),
-        ...(meta.mileage ? { kmPerDay: r.kmPerDay } : {}),
         ...(hourly ? { minHours: r.minHours, maxHours: r.maxHours } : {}),
         ...(daily ? { minDays: r.minDays, maxDays: r.maxDays } : {}),
         pickupTime: hours.opensAt,
@@ -1845,7 +1839,6 @@ export function ActivityWizard({
                       waivers={waivers}
                       hidePresets={[
                         ...((draft.guestDetails?.enabled ?? false) && (draft.guestDetails?.fields ?? []).some((field) => field.key === 'dateOfBirth') ? (['dob'] as const) : []),
-                        ...((draft.kind ?? 'trip') === 'rental' && normalizeKindSettings(draft.kindSettings).rental.licence !== 'none' ? (['licence'] as const) : []),
                       ]}
                     />
                     {tenantId ? (
@@ -2225,16 +2218,12 @@ function kindFacts(draft: ActivityDraft): string[] {
   const langs = (draft.languages ?? []).length > 0 ? (draft.languages ?? []).join(', ') : null
   if (kind === 'rental') {
     const r = s.rental
-    const meta = rentalCategoryMeta(r.category)
     return [
       [r.modes.includes('length') && r.lengths.length > 0 ? `By length · ${r.lengths.map((length) => length.label).join(', ')}` : null, r.modes.includes('hour') ? `By the hour · ${r.maxHours ? `${r.minHours}–${r.maxHours} h` : `from ${r.minHours} h`}` : null, r.modes.includes('day') ? `By the day · ${r.maxDays ? `${r.minDays}–${r.maxDays} days` : `from ${r.minDays} ${r.minDays === 1 ? 'day' : 'days'}`}` : null].filter(Boolean).join(' or '),
       (() => {
         const total = draft.tiers.reduce((sum, tier) => sum + draftItemOf(r, tier.id).stock, 0)
         return `${draft.tiers.length} ${draft.tiers.length === 1 ? 'item' : 'items'} to choose from · ${total} in stock`
       })(),
-      r.licence === 'none' ? age : `${LICENCE_LABEL[r.licence]} · ${age.toLowerCase()}`,
-      ...(meta.fuel ? [FUEL_LABEL[r.fuel]] : []),
-      ...(meta.mileage ? [r.kmPerDay > 0 ? `${r.kmPerDay} km a day` : 'Unlimited km'] : []),
       ...(draft.tiers.some((tier) => draftItemOf(r, tier.id).deposit > 0) ? ['Refundable deposit held'] : []),
       ...(r.lateFee > 0 ? ['Late return fee'] : []),
     ]

@@ -14,10 +14,8 @@ import {
   ACTIVITY_KINDS,
   ACTIVITY_KIND_META,
   CHARTER_VESSELS,
-  FUEL_LABEL,
   LANGUAGES,
   LESSON_LEVELS,
-  LICENCE_LABEL,
   RENTAL_CATEGORIES,
   RENTAL_LENGTHS,
   crewName,
@@ -502,7 +500,6 @@ export function KindFields({
   /* ---------- rental ---------- */
   if (kind === 'rental') {
     const rental = settings.rental
-    const meta = rentalCategoryMeta(rental.category)
     const hourly = rental.modes.includes('hour')
     const daily = rental.modes.includes('day')
     const byDay = daily && !hourly
@@ -527,13 +524,10 @@ export function KindFields({
       const next = rentalCategoryMeta(category)
       set('rental', {
         category,
-        licence: next.licence,
         seatsPerUnit: next.seatsPerUnit,
         billing: next.billing,
         modes: category === 'vehicle' ? ['day'] : ['hour'],
-        fuel: category === 'vehicle' ? 'full_to_full' : 'included',
       })
-      if (next.licence !== 'none' && shared.minAge < 16) onShared({ minAge: category === 'vehicle' ? 21 : 16 })
     }
     return shell(
       <>
@@ -667,47 +661,6 @@ export function KindFields({
             <Field label={`Late return fee (${currencySymbol})`} optional description="Per hour. Shown to guests before they book.">
               {(control) => <Input {...control} type="number" min={0} placeholder="None" value={rental.lateFee ? Math.round(rental.lateFee / 100) : ''} onChange={(e) => set('rental', { lateFee: num(e.target.value) * 100 })} />}
             </Field>
-          </div>
-        </Section>
-
-        <Section title="Renter requirements" hint="A licence adds a licence number question to checkout.">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Licence needed">
-              <Select value={rental.licence} onValueChange={(value) => set('rental', { licence: value as DraftKindSettings['rental']['licence'] })}>
-                <SelectTrigger aria-label="Licence needed">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(Object.keys(LICENCE_LABEL) as (keyof typeof LICENCE_LABEL)[]).map((key) => (
-                    <SelectItem key={key} value={key}>
-                      {LICENCE_LABEL[key]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            {ageField(shared, onShared, errors, rental.licence === 'none' ? 'Minimum age' : 'Minimum renter age')}
-            {meta.fuel ? (
-              <Field label="Fuel">
-                <Select value={rental.fuel} onValueChange={(value) => set('rental', { fuel: value as DraftKindSettings['rental']['fuel'] })}>
-                  <SelectTrigger aria-label="Fuel">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(Object.keys(FUEL_LABEL) as (keyof typeof FUEL_LABEL)[]).map((key) => (
-                      <SelectItem key={key} value={key}>
-                        {FUEL_LABEL[key]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-            ) : null}
-            {meta.mileage ? (
-              <Field label="Kilometres a day" description="Included per day. 0 means unlimited.">
-                {(control) => <Input {...control} type="number" min={0} step={50} suffix="km" value={rental.kmPerDay} onChange={(e) => set('rental', { kmPerDay: num(e.target.value) })} />}
-              </Field>
-            ) : null}
           </div>
         </Section>
       </>,

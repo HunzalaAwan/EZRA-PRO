@@ -363,7 +363,7 @@ export function CheckoutFlow({
   const signing = activity.waiverSigning ?? 'booker'
   // With guest details off, each-guest questions are asked once, of the person booking.
   const questions = React.useMemo(() => {
-    const all = [...(activity.guestQuestions ?? []), ...licenceQuestions(activity), ...riderQuestions(activity)]
+    const all = [...(activity.guestQuestions ?? []), ...riderQuestions(activity)]
     return details.enabled ? all : all.map((question) => (question.scope === 'guest' ? { ...question, scope: 'booking' as const } : question))
   }, [activity, details.enabled])
   const [travellers, setTravellers] = React.useState<TravellerState[]>(() =>
@@ -1825,34 +1825,6 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
       </div>
     </div>
   )
-}
-
-/** A rental that needs a licence asks for it at checkout, whatever questions the operator added. */
-function licenceQuestions(activity: Activity): GuestQuestion[] {
-  const licence = (activity.kind ?? 'trip') === 'rental' ? activity.rental?.licence : undefined
-  if (!licence || licence === 'none') return []
-  const driver = licence === 'driver'
-  return [
-    {
-      id: 'q_licence_number',
-      label: driver ? "Main driver's licence number" : 'Boat licence or boater card number',
-      kind: 'text',
-      short: true,
-      scope: 'booking',
-      required: true,
-      help: 'Bring the licence itself to pick-up. We check it against this number.',
-    },
-    {
-      id: 'q_renter_age',
-      label: driver ? "Main driver's age" : "Operator's age",
-      kind: 'number',
-      scope: 'booking',
-      required: true,
-      unit: 'years',
-      min: activity.minAge || undefined,
-      limitMessage: activity.minAge ? `${driver ? 'Drivers' : 'Operators'} must be ${activity.minAge} or over.` : undefined,
-    },
-  ]
 }
 
 /** An activity with a height or weight limit asks every rider, and stops the booking outside it. */

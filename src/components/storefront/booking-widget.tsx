@@ -45,7 +45,7 @@ import { EnquiryPanel, RequestForm, type RequestContext } from '@/components/sto
 import type { BookingSettings } from '@/types'
 import { useRentalService } from '@/hooks/use-rental-service'
 import { priceUnit } from '@/lib/activity-kinds'
-import { crewName, FUEL_LABEL, LESSON_LEVELS, LICENCE_LABEL, isDayRental, partyLabel, rateFor, rentalCategoryMeta, rentalModes, routeLabel, type RentalMode } from '@/lib/activity-kinds'
+import { crewName, LESSON_LEVELS, isDayRental, partyLabel, rateFor, rentalCategoryMeta, rentalModes, routeLabel, type RentalMode } from '@/lib/activity-kinds'
 import { applyRules } from '@/lib/pricing'
 import { usePricing } from '@/hooks/use-pricing'
 import { IconButton } from '@/components/ui/icon-button'
@@ -744,9 +744,6 @@ function BookingWidgetInner({
     const per = dayRental ? ' a day' : hourRental ? ' an hour' : byLength && length ? ` · ${length.label.toLowerCase()}` : ''
     const lateFee = rental?.lateFee ?? 0
     const rules = [
-      rental?.licence && rental.licence !== 'none' ? `${LICENCE_LABEL[rental.licence]} needed${activity.minAge > 0 ? `, ${activity.minAge}+` : ''}` : null,
-      rental?.fuel && rentalMeta.fuel ? FUEL_LABEL[rental.fuel] : null,
-      rentalMeta.mileage ? (rental?.kmPerDay ? `${rental.kmPerDay} km a day included` : 'Unlimited km') : null,
       lateFee > 0 ? `Late return ${formatCurrency(lateFee, currency)} an hour` : null,
     ].filter((entry): entry is string => Boolean(entry))
     const setQty = (tierId: string, qty: number) => setTierQty((current) => ({ ...current, [tierId]: qty }))
@@ -886,10 +883,7 @@ function BookingWidgetInner({
     const deposit = rental?.damageDeposit ?? 0
     const lengthOf = (tierId: string) => rental?.durations.find((entry) => entry.tierId === tierId)?.minutes
     const rules = [
-      rental?.licence && rental.licence !== 'none' ? `${LICENCE_LABEL[rental.licence]} needed${activity.minAge > 0 ? `, ${activity.minAge}+` : ''}` : null,
       rental?.seatsPerUnit ? `${rental.seatsPerUnit} ${rental.seatsPerUnit === 1 ? 'person' : 'people'} per ${rentalMeta.unit}` : null,
-      rental?.fuel && rentalMeta.fuel ? FUEL_LABEL[rental.fuel] : null,
-      rentalMeta.mileage ? (rental?.kmPerDay ? `${rental.kmPerDay} km a day included` : 'Unlimited km') : null,
     ].filter((entry): entry is string => Boolean(entry))
     kindBlock = (
       <div>
