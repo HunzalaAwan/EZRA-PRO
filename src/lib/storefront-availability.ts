@@ -57,6 +57,10 @@ export function buildDays(activity: Activity, STRIP_DAYS = 21): AvailabilityDay[
     // Rentals with items: each item has its own count; the slot total is what is left across them.
     const left = holds ? rentalItemsLeftAt(activity, holds, departure.startsAt) : undefined
     const seatsLeft = left ? Math.min(event.seatsLeft, Object.values(left).reduce((sum, value) => sum + value, 0)) : event.seatsLeft
+    // A package on its own schedule can cap how many bookings one run takes.
+    const bookingCap = activity.kind === 'package' && activity.package?.timing === 'own' ? activity.package.maxBookingsPerRun ?? 0 : 0
+    const capReached =
+      bookingCap > 0 && getBookingsByDeparture(departure.id).filter((booking) => booking.status !== 'cancelled' && booking.status !== 'refunded').length >= bookingCap
     const slot: AvailabilitySlot = {
       departureId: departure.id,
       startsAt: departure.startsAt,
@@ -68,7 +72,7 @@ export function buildDays(activity: Activity, STRIP_DAYS = 21): AvailabilityDay[
       leadPrice: Math.round((departure.priceOverride ?? activity.basePrice) * multiplier),
       locationId: departure.locationId,
       ...(left ? { itemsLeft: left } : {}),
-      soldOut: seatsLeft <= 0 || departure.status === 'sold_out',
+      soldOut: capReached || seatsLeft <= 0 || departure.status === 'sold_out',
     }
     const list = byDay.get(key)
     if (list) list.push(slot)

@@ -49,8 +49,7 @@ export function presetOf(policy: Pick<CancellationPolicy, 'preset' | 'freeCancel
 /** "24 hours", "3 days", "1 week". */
 export function hoursLabel(hours: number) {
   if (hours <= 0) return 'any time'
-  if (hours === 168) return '1 week'
-  if (hours >= 48 && hours % 24 === 0) return `${hours / 24} days`
+  if (hours >= 24 && hours % 24 === 0) return hours === 24 ? '1 day' : `${hours / 24} days`
   return `${hours} ${hours === 1 ? 'hour' : 'hours'}`
 }
 

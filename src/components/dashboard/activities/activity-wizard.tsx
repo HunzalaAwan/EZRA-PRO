@@ -1021,12 +1021,30 @@ const DINING_STEP_SCHEMAS = [
 
 type FieldErrors = Record<string, string>
 
+/** A schema's problems, keyed the way the editors look them up. */
+function schemaIssues(schema: z.ZodTypeAny | undefined, draft: ActivityDraft): FieldErrors {
+  if (!schema) return {}
+  const result = schema.safeParse(draft)
+  if (result.success) return {}
+  const errors: FieldErrors = {}
+  for (const issue of result.error.issues) {
+    const path = issue.path.map(String)
+    const key = path[0] === 'schedule' ? path.slice(1).join('.') : path.join('.')
+    if (!errors[key || 'form']) errors[key || 'form'] = issue.message
+  }
+  return errors
+}
+
 function validateSchemaStep(step: number, draft: ActivityDraft): FieldErrors {
   const id = TOUR_STEPS[step]?.id
   // No set schedule: only where it runs from is checked.
   if (!isDining(draft) && id === 'schedule' && (draft.booking?.method ?? 'instant') !== 'instant' && draft.booking?.scheduled === false) return {}
-  // A package runs on its parts' times; it has no schedule of its own.
-  if (!isDining(draft) && id === 'schedule' && draft.kind === 'package' && (draft.package?.timing ?? 'parts') === 'parts') return {}
+  // A package runs on its parts' times, or sets its own schedule on Basics: nothing to check here.
+  if (!isDining(draft) && id === 'schedule' && draft.kind === 'package') return {}
+  // A package on its own schedule checks its schedule with Basics, where it is set.
+  if (!isDining(draft) && id === 'basics' && draft.kind === 'package' && draft.package?.timing === 'own') {
+    return { ...schemaIssues(STEP_SCHEMAS.basics, draft), ...schemaIssues(STEP_SCHEMAS.schedule, draft) }
+  }
   const schema = isDining(draft) ? DINING_STEP_SCHEMAS[step] : STEP_SCHEMAS[id ?? '']
   if (!schema) return {}
   const result = schema.safeParse(draft)
@@ -1746,6 +1764,8 @@ export function ActivityWizard({
   const unscheduled = (draft.booking?.method ?? 'instant') !== 'instant' && draft.booking?.scheduled === false
   const currentStep = steps[step]
   const isLast = step === steps.length - 1
+  /** A package on its own schedule: its days, times and place are set with the package on Basics. */
+  const ownPackage = !dining && draft.kind === 'package' && draft.package?.timing === 'own'
   const policyEditor = (
     <ChangesPolicyEditor
       cancellation={draft.cancellation ?? { preset: 'flexible', freeCancellationHours: 24, lateRefundPercent: 0, keepDeposit: false }}
@@ -1807,6 +1827,35 @@ export function ActivityWizard({
                 >
                   {currentStep.id === 'basics' ? (
                     <BasicsStep draft={draft} patch={patch} errors={errors} currency={currency} tenantSlug={tenantSlug} packageOptions={packageOptions.filter((option) => option.id !== activityId)} />
+                  ) : null}
+                  {currentStep.id === 'basics' && ownPackage ? (
+                    <section className="mt-6 flex flex-col gap-5 border-t border-line-subtle pt-6">
+                      <div>
+                        <h3 className="text-sm font-semibold">When the package runs</h3>
+                        <p className="mt-0.5 text-xs text-subtle">Its own days and start times. Each start time is one run, with the places and booking limit set above.</p>
+                      </div>
+                      {locations.length > 0 ? (
+                        <LocationsEditor
+                          rental={rentalHoursFor(draft)}
+                          seats={{ ...seatsFor(draft), onEdit: () => window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+                          schedule={draft.schedule}
+                          onChange={(schedule) => patch({ schedule })}
+                          locations={locations}
+                          nowIso={nowIso}
+                          errors={errors}
+                        />
+                      ) : null}
+                      {draft.schedule.locations.length > 1 ? null : (
+                        <ScheduleEditor
+                          rental={rentalHoursFor(draft)}
+                          seats={{ ...seatsFor(draft), onEdit: () => window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+                          schedule={draft.schedule}
+                          onChange={(schedule) => patch({ schedule })}
+                          nowIso={nowIso}
+                          errors={errors}
+                        />
+                      )}
+                    </section>
                   ) : null}
                   {currentStep.id === 'description' ? <DescriptionStep draft={draft} patch={patch} errors={errors} part={dining ? undefined : 'copy'} /> : null}
                   {currentStep.id === 'guests' ? (
@@ -2055,7 +2104,15 @@ export function ActivityWizard({
                           groupWord={(draft.kind ?? 'trip') === 'rental' ? 'items' : 'guests'}
                         />
                         {policyEditor}
-                        {locations.length > 0 ? (
+                        {ownPackage ? (
+                          <p className="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">
+                            Where it starts, its days, start times and places are set with the package on Basics.{' '}
+                            <button type="button" onClick={() => goTo(0, -1)} className="font-medium text-primary hover:underline">
+                              Change them
+                            </button>
+                          </p>
+                        ) : null}
+                        {!ownPackage && locations.length > 0 ? (
                           <LocationsEditor
                             pickOnly={unscheduled}
                             rental={rentalHoursFor(draft)}
@@ -2071,7 +2128,7 @@ export function ActivityWizard({
                           <p className="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">
                             No set schedule: every booking is arranged with the guest. Their requests arrive in Custom requests; confirm a time there and send the payment link.
                           </p>
-                        ) : draft.schedule.locations.length > 1 ? null : (
+                        ) : ownPackage || draft.schedule.locations.length > 1 ? null : (
                           <ScheduleEditor
                             rental={rentalHoursFor(draft)}
                             seats={{ ...seatsFor(draft), onEdit: () => goTo(0, -1) }}

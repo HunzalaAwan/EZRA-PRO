@@ -233,9 +233,27 @@ export function PackagePartsEditor({
           {(control) => <Input {...control} type="number" min={0} step={15} suffix="minutes" value={value.gapMinutes} onChange={(event) => set({ gapMinutes: Math.max(0, Math.floor(Number(event.target.value)) || 0) })} />}
         </Field>
         {own ? (
-          <Field label="Places on each run" description="Your own limit: the guide, the vehicle, the boat you send out for it.">
-            {(control) => <Input {...control} type="number" min={1} suffix="guests" value={capacity || ''} onChange={(event) => onCapacity(Math.max(1, Math.floor(Number(event.target.value)) || 1))} />}
-          </Field>
+          <div className="flex flex-col gap-4">
+            <Field label="Places on each run" description="Guests on one run: what the guide, vehicle or boat takes.">
+              {(control) => <Input {...control} type="number" min={1} suffix="guests" value={capacity || ''} onChange={(event) => onCapacity(Math.max(1, Math.floor(Number(event.target.value)) || 1))} />}
+            </Field>
+            <Field label="Most bookings on each run" optional description="Empty: no limit. Useful when each group needs its own guide.">
+              {(control) => (
+                <Input
+                  {...control}
+                  type="number"
+                  min={1}
+                  placeholder="No limit"
+                  suffix="bookings"
+                  value={value.maxBookingsPerRun || ''}
+                  onChange={(event) => {
+                    const next = Math.max(0, Math.floor(Number(event.target.value)) || 0)
+                    set({ maxBookingsPerRun: next > 0 ? next : undefined })
+                  }}
+                />
+              )}
+            </Field>
+          </div>
         ) : (
         <div className="flex flex-col gap-2">
           <label className="flex items-start justify-between gap-3">
@@ -258,7 +276,7 @@ export function PackagePartsEditor({
         <p className="flex items-start gap-2 rounded-lg bg-surface-sunken px-3 py-2 text-xs text-muted">
           <Info className="mt-0.5 size-3.5 shrink-0 text-info" aria-hidden="true" />
           {own
-            ? `Runs ${formatDuration(totalMinutes)} from start to finish. Set the start times and days on the Booking step. Booked apart, these cost ${formatCurrency(apart, currency)} per person; set the package price on the Pricing step.`
+            ? `Runs ${formatDuration(totalMinutes)} from start to finish. Set where it starts, its days and start times just below. Booked apart, these cost ${formatCurrency(apart, currency)} per person; set the package price on the Pricing step.`
             : `Up to ${seats} people per booking, the size of the smallest part. Booked apart, these cost ${formatCurrency(apart, currency)} per person; set the package price on the Pricing step.`}
         </p>
       ) : null}

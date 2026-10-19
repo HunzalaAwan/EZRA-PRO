@@ -483,6 +483,8 @@ export interface PackageConfig {
    * own places. Absent: parts.
    */
   timing?: 'parts' | 'own'
+  /** Own schedule: the most bookings one run takes, however many places are left. Absent: no limit. */
+  maxBookingsPerRun?: number
   parts: PackagePart[]
   /** Least minutes between one part ending and the next starting: travel, changing, lunch. */
   gapMinutes: number

@@ -42,7 +42,7 @@ const defaultRules = (tenant: Tenant): BookingRules => ({
 /** Where each setting that used to be here is set now. */
 const ON_EACH_ACTIVITY: { title: string; where: string; text: string }[] = [
   { title: 'How guests pay', where: 'Pricing step', text: 'In full, a deposit with the rest charged later, or pay on the day.' },
-  { title: 'Cancellation policy', where: 'Booking step', text: 'Flexible, moderate, strict, non-refundable or your own numbers.' },
+  { title: 'Cancellation policy', where: 'Booking step', text: 'Full refund until a set number of hours or days before, then a share back.' },
   { title: 'Changes guests can make', where: 'Booking step', text: 'Move to another time, add people, cancel online, with any fee.' },
   { title: 'Booking notice', where: 'Booking step', text: 'How long before the start online booking closes.' },
   { title: 'Guest details and waiver', where: 'Guests step', text: 'What each guest is asked and who signs.' },

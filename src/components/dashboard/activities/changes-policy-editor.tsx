@@ -5,7 +5,7 @@ import * as React from 'react'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { CANCEL_PRESETS, changesSummary, policySummary, type CancelPreset } from '@/lib/booking-policy'
+import { changesSummary, policySummary, type CancelPreset } from '@/lib/booking-policy'
 import { cn, formatCurrency } from '@/lib/utils'
 import type { ChangeRules, CurrencyCode, PaymentTerms } from '@/types'
 
@@ -33,6 +33,37 @@ function Toggle({ title, text, checked, onChange, children }: { title: string; t
         <Switch checked={checked} onCheckedChange={onChange} aria-label={title} />
       </label>
       {checked && children ? children : null}
+    </div>
+  )
+}
+
+/** A length of time before the start, typed in hours or days, kept in hours. */
+function BeforeInput({ id, hours, onHours }: { id?: string; hours: number; onHours: (hours: number) => void }) {
+  const [unit, setUnit] = React.useState<'hours' | 'days'>(() => (hours >= 24 && hours % 24 === 0 ? 'days' : 'hours'))
+  const shown = unit === 'days' ? hours / 24 : hours
+  return (
+    <div className="flex gap-2">
+      <Input
+        id={id}
+        type="number"
+        min={0}
+        step={unit === 'days' ? 0.5 : 1}
+        className="min-w-0 flex-1"
+        value={Number.isInteger(shown) ? shown : Number(shown.toFixed(1))}
+        onChange={(event) => {
+          const value = Math.max(0, Number(event.target.value) || 0)
+          onHours(Math.round(unit === 'days' ? value * 24 : value))
+        }}
+      />
+      <select
+        aria-label="Hours or days"
+        value={unit}
+        onChange={(event) => setUnit(event.target.value as 'hours' | 'days')}
+        className="h-10 shrink-0 rounded-lg border border-line bg-surface px-3 text-sm text-foreground"
+      >
+        <option value="hours">hours</option>
+        <option value="days">days</option>
+      </select>
     </div>
   )
 }
@@ -69,40 +100,14 @@ export function ChangesPolicyEditor({
 
       <div>
         <p className="text-[0.8125rem] font-medium">Cancellation policy</p>
-        <div role="radiogroup" aria-label="Cancellation policy" className="mt-2 grid gap-2 sm:grid-cols-3 lg:grid-cols-5">
-          {CANCEL_PRESETS.map((preset) => {
-            const on = cancellation.preset === preset.value
-            return (
-              <button
-                key={preset.value}
-                type="button"
-                role="radio"
-                aria-checked={on}
-                onClick={() =>
-                  setCancel(
-                    preset.value === 'custom'
-                      ? { preset: 'custom' }
-                      : { preset: preset.value, freeCancellationHours: preset.freeHours, lateRefundPercent: preset.lateRefund },
-                  )
-                }
-                className={cn('flex flex-col gap-1 rounded-xl border px-3 py-2.5 text-left transition-colors', on ? 'border-primary bg-primary-soft/30' : 'border-line hover:border-line-strong')}
-              >
-                <span className="text-sm font-medium text-foreground">{preset.label}</span>
-                <span className="text-xs text-subtle">{preset.text}</span>
-              </button>
-            )
-          })}
+        <div className="mt-2 grid gap-4 sm:grid-cols-2">
+          <Field label="Full refund until" description="Before the start. 0: no free cancellation.">
+            {({ id }) => <BeforeInput id={id} hours={cancellation.freeCancellationHours} onHours={(freeCancellationHours) => setCancel({ freeCancellationHours, preset: 'custom' })} />}
+          </Field>
+          <Field label="After that, refund" description="0: nothing back once the free window has passed.">
+            {(control) => <Input {...control} type="number" min={0} max={100} step={5} suffix="%" value={cancellation.lateRefundPercent} onChange={(event) => setCancel({ lateRefundPercent: Math.min(100, Math.max(0, Math.round(Number(event.target.value)) || 0)), preset: 'custom' })} />}
+          </Field>
         </div>
-        {cancellation.preset === 'custom' ? (
-          <div className="mt-3 grid gap-4 sm:grid-cols-2">
-            <Field label="Full refund until" description="0: no free cancellation.">
-              {(control) => <Input {...control} type="number" min={0} suffix="hours before" value={cancellation.freeCancellationHours} onChange={(event) => setCancel({ freeCancellationHours: Math.max(0, Math.floor(Number(event.target.value)) || 0) })} />}
-            </Field>
-            <Field label="After that, refund">
-              {(control) => <Input {...control} type="number" min={0} max={100} step={5} suffix="%" value={cancellation.lateRefundPercent} onChange={(event) => setCancel({ lateRefundPercent: Math.min(100, Math.max(0, Math.round(Number(event.target.value)) || 0)) })} />}
-            </Field>
-          </div>
-        ) : null}
         {payment.collect === 'deposit' ? (
           <label className="mt-3 flex items-start justify-between gap-3">
             <span>
@@ -118,8 +123,8 @@ export function ChangesPolicyEditor({
         <p className="pb-3 text-[0.8125rem] font-medium">What guests can do from their booking page</p>
         <Toggle title="Move to another time" text="They pick a new time with room for the group; the old seats go back on sale." checked={changes.reschedule} onChange={(reschedule) => setChanges({ reschedule })}>
           <div className="grid gap-4 sm:grid-cols-3">
-            <Field label="Until" labelSize="sm">
-              {(control) => <Input {...control} type="number" min={0} suffix="hours before" value={changes.rescheduleHours} onChange={(event) => setChanges({ rescheduleHours: Math.max(0, Math.floor(Number(event.target.value)) || 0) })} />}
+            <Field label="Until" labelSize="sm" description="Before the start.">
+              {({ id }) => <BeforeInput id={id} hours={changes.rescheduleHours} onHours={(rescheduleHours) => setChanges({ rescheduleHours })} />}
             </Field>
             <Field label="How many times" labelSize="sm" description="0: no limit.">
               {(control) => <Input {...control} type="number" min={0} value={changes.maxReschedules} onChange={(event) => setChanges({ maxReschedules: Math.max(0, Math.floor(Number(event.target.value)) || 0) })} />}
