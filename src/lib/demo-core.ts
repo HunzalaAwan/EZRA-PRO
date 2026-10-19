@@ -1554,7 +1554,7 @@ interface ActivitySpec {
   route?: RouteInfo
   pass?: { validDays: number; reentry: boolean }
   /** Packages: the activities inside, by slug, with the times guests can pick. */
-  package?: { parts: { slug: string; times: string[]; label?: string; location?: string }[]; gapMinutes: number; sameDay?: boolean; withinDays?: number }
+  package?: { timing?: 'parts' | 'own'; parts: { slug: string; times: string[]; label?: string; location?: string }[]; gapMinutes: number; sameDay?: boolean; withinDays?: number }
   slug: string
   name: string
   tagline: string
@@ -1600,6 +1600,46 @@ interface ActivitySpec {
 }
 
 const BLUE_HORIZON_SPECS: ActivitySpec[] = [
+  {
+    slug: 'maui-adventure-day',
+    kind: 'package',
+    package: {
+      timing: 'own',
+      parts: [
+        { slug: 'turtle-town-kayak-snorkel', times: [], label: 'Turtle Town kayak and snorkel' },
+        { slug: 'upcountry-horseback-ride', times: [], label: 'Afternoon ranch ride' },
+      ],
+      gapMinutes: 60,
+    },
+    name: 'Maui Adventure Day',
+    tagline: 'Our own guided day: a morning kayak with turtles, lunch, then a ranch ride. Just the group, start to finish.',
+    description:
+      'A full day run only for this package, with one guide from the first paddle to the last trail. Kayak out to Turtle Town in the morning, break for lunch, then ride the ranch loop in the afternoon. The times are set for the day, so everyone on it moves together.',
+    highlights: ['A guide with you all day', 'Kayak, snorkel and ranch ride in one day', 'Small group, up to 10', 'Lunch break built in'],
+    included: ['Kayak, snorkel gear and guide', '90-minute ranch ride', 'Transport between the two', 'Lunch'],
+    excluded: ['Photos', 'Gratuity'],
+    requirements: ['Ages 10 and over', 'Comfortable in the water', 'Closed-toe shoes for the ride'],
+    meetingPoint: 'Kihei Boat Ramp at 7:30, the guide meets you at the kayak trailer.',
+    difficulty: 'moderate',
+    durationMinutes: 330,
+    minAge: 10,
+    maxCapacity: 10,
+    tiers: [
+      ['Adult', 31900, 1, 10, 'Ages 16 and over'],
+      ['Teen (10 to 15)', 26900, 0, 6, 'With an adult'],
+    ],
+    addOns: [['Day photos', 7900, 'The guide shoots the whole day; gallery the same night.', 1, 'Camera']],
+    photos: ['photo-1544551763-46a013bb70d5', 'photo-1553284965-83fd3e82fa5a', 'photo-1507525428034-b723cf961d3e'],
+    colorKey: 'lagoon',
+    rating: 4.8,
+    reviewCount: 41,
+    resources: [],
+    times: ['07:30'],
+    weekdays: [2, 4, 6],
+    locations: [{ location: 'kihei' }],
+    popularity: 0.45,
+    freeCancelHours: 72,
+  },
   {
     slug: 'maui-bucket-list',
     kind: 'package',
@@ -3739,6 +3779,7 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     ...(spec.package
       ? {
           package: {
+            timing: spec.package.timing ?? 'parts',
             parts: spec.package.parts.map((part) => {
               const site = part.location ? getLocationsByTenant(tenant.id).find((entry) => entry.slug === part.location) : undefined
               return { activityId: `act_${part.slug}`, times: part.times, ...(part.label ? { label: part.label } : {}), ...(site ? { locationId: site.id } : {}) }

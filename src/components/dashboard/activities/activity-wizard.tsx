@@ -1026,7 +1026,7 @@ function validateSchemaStep(step: number, draft: ActivityDraft): FieldErrors {
   // No set schedule: only where it runs from is checked.
   if (!isDining(draft) && id === 'schedule' && (draft.booking?.method ?? 'instant') !== 'instant' && draft.booking?.scheduled === false) return {}
   // A package runs on its parts' times; it has no schedule of its own.
-  if (!isDining(draft) && id === 'schedule' && draft.kind === 'package') return {}
+  if (!isDining(draft) && id === 'schedule' && draft.kind === 'package' && (draft.package?.timing ?? 'parts') === 'parts') return {}
   const schema = isDining(draft) ? DINING_STEP_SCHEMAS[step] : STEP_SCHEMAS[id ?? '']
   if (!schema) return {}
   const result = schema.safeParse(draft)
@@ -1070,7 +1070,7 @@ function validateStep(step: number, draft: ActivityDraft): FieldErrors {
   if (kind === 'lesson' && draft.durationMinutes < 15) errors.durationMinutes = 'Give each session at least 15 minutes'
   if (kind === 'charter' && settings.charter.maxGuests < 1) errors['charter.maxGuests'] = 'A charter carries at least one guest'
   if (kind === 'package') {
-    delete errors.maxCapacity
+    if ((draft.package?.timing ?? 'parts') === 'parts') delete errors.maxCapacity
     delete errors.durationMinutes
     if ((draft.package?.parts ?? []).filter((part) => part.activityId).length < 2) errors.package = 'Add at least two activities'
   }
@@ -1324,7 +1324,7 @@ function StorefrontPreview({
   const fromPrice = paid.length === 0 ? 0 : Math.min(...paid.map((tier) => tier.price))
   // No set schedule: nothing to list; the preview says it is arranged instead.
   const unscheduledPreview = (draft.booking?.method ?? 'instant') !== 'instant' && draft.booking?.scheduled === false
-  const upcoming = unscheduledPreview || draft.kind === 'package' ? [] : previewDepartures(draft.schedule, nowIso, 10).slice(0, 3)
+  const upcoming = unscheduledPreview || (draft.kind === 'package' && (draft.package?.timing ?? 'parts') === 'parts') ? [] : previewDepartures(draft.schedule, nowIso, 10).slice(0, 3)
   const highlights = draft.highlights.filter((item) => item.trim().length > 0).slice(0, 3)
   const dining = isDining(draft)
 
@@ -2039,7 +2039,7 @@ export function ActivityWizard({
                         nowIso={nowIso}
                         errors={errors}
                       />
-                    ) : (draft.kind ?? 'trip') === 'package' ? (
+                    ) : (draft.kind ?? 'trip') === 'package' && (draft.package?.timing ?? 'parts') === 'parts' ? (
                       <div className="flex flex-col gap-6">
                         <PackageBookingNote config={draft.package} options={packageOptions} onEdit={() => goTo(0, -1)} />
                         {policyEditor}
@@ -2517,12 +2517,17 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
           value={draft.package ?? EMPTY_PACKAGE}
           options={packageOptions}
           currency={currency ?? 'USD'}
-          error={errors.package}
+          error={errors.package ?? errors.maxCapacity}
+          capacity={draft.maxCapacity}
+          onCapacity={(maxCapacity) => patch({ maxCapacity, schedule: { ...draft.schedule, capacity: maxCapacity } })}
           onChange={(next) => {
-            // Seats and length follow the parts: the smallest part, and the whole day end to end.
+            // Length follows the parts end to end. On their own times, places are the smallest part's;
+            // on the package's own schedule they are the business's own number.
             const parts = next.parts.map((part) => packageOptions.find((option) => option.id === part.activityId)).filter((option): option is PackageOption => Boolean(option))
             const minutes = parts.reduce((sum, option) => sum + option.durationMinutes, 0) + Math.max(0, parts.length - 1) * next.gapMinutes
-            patch({ package: next, maxCapacity: packageSeats(next, packageOptions), durationMinutes: minutes })
+            const own = next.timing === 'own'
+            const places = own ? draft.maxCapacity || packageSeats(next, packageOptions) : packageSeats(next, packageOptions)
+            patch({ package: next, maxCapacity: places, durationMinutes: minutes, ...(own ? { schedule: { ...draft.schedule, mode: 'times', capacity: places } } : {}) })
           }}
         />
       ) : null}

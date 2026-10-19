@@ -49,7 +49,7 @@ import { Reveal } from '@/components/motion/reveal'
 import { StaggerGroup, StaggerItem } from '@/components/motion/stagger'
 import { bookingOf } from '@/lib/booking-method'
 import { BookingWidget, type AvailabilityDay } from '@/components/storefront/booking-widget'
-import type { PackagePartView } from '@/lib/packages'
+import { itinerary, offsetLabel, type PackagePartView } from '@/lib/packages'
 import { changesOf, changesSummary, depositLabel, hoursLabel, paymentOf } from '@/lib/booking-policy'
 import { StickyRail } from '@/components/storefront/sticky-rail'
 import { StarRow } from '@/components/storefront/storefront-hero'
@@ -532,7 +532,11 @@ export function ActivityDetailView({
                           </a>
                           <span className="text-xs text-subtle">
                             {formatDuration(part.durationMinutes)}
-                            {part.times.length > 0 ? ` · ${part.times.map(clockLabel).join(' or ')}` : ''}
+                            {activity.package?.timing === 'own'
+                              ? ` · ${offsetLabel(itinerary(packageParts, activity.package.gapMinutes, undefined)[index].offset).toLowerCase()}`
+                              : part.times.length > 0
+                                ? ` · ${part.times.map(clockLabel).join(' or ')}`
+                                : ''}
                           </span>
                         </p>
                         {part.label !== part.name ? <p className="text-xs text-subtle">{part.name}</p> : null}
