@@ -1,4 +1,5 @@
-import type { Activity, BookingSettings, RequestReason } from '@/types'
+import { rentalCategoryMeta } from '@/lib/activity-kinds'
+import type { Activity, ActivityKind, BookingSettings, RentalCategory, RequestReason } from '@/types'
 
 /* ==========================================================================
    How guests book — one place that resolves an activity's booking settings,
@@ -30,6 +31,19 @@ export function bookingOf(activity: Pick<Activity, 'booking' | 'charter' | 'cust
     scheduled: method === 'instant' ? true : (saved.scheduled ?? true),
     customQuote: saved.customQuote ?? Boolean(activity.customRequests),
   }
+}
+
+/**
+ * What a big-group limit is counted in. Rentals count what is rented, in its
+ * own word (bikes, vehicles, spaces), or the people using it; every other
+ * kind counts people.
+ */
+export function groupUnit(kind: ActivityKind | undefined, category: RentalCategory | undefined, countBy: BookingSettings['groupCountBy']) {
+  if ((kind ?? 'trip') === 'rental' && countBy !== 'people') {
+    const meta = rentalCategoryMeta(category)
+    return { one: meta.unit, many: meta.units, byUnits: true }
+  }
+  return { one: 'person', many: 'people', byUnits: false }
 }
 
 /** True when the storefront shows the date and time picker. */

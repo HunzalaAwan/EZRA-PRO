@@ -40,7 +40,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { hasItems, rentalItemsOf } from '@/lib/rental-items'
-import { bookingOf, showsSchedule } from '@/lib/booking-method'
+import { bookingOf, groupUnit, showsSchedule } from '@/lib/booking-method'
 import { EnquiryPanel, RequestForm, type RequestContext } from '@/components/storefront/booking-request'
 import type { BookingSettings } from '@/types'
 import { useRentalService } from '@/hooks/use-rental-service'
@@ -641,7 +641,17 @@ function BookingWidgetInner({
     Boolean(slot) && !overCapacity && seatsUsed >= (kind === 'charter' || kind === 'rental' ? 1 : Math.max(1, activity.minParticipants)) && (kind !== 'charter' || party >= Math.max(1, activity.minParticipants))
 
   // Instant booking with a group limit: bigger groups send a request instead of paying.
-  const overGroup = settings.method === 'instant' && settings.groupLimit > 0 && headcount > settings.groupLimit
+  // Counted in the unit the business set it in: people, or for rentals what is rented.
+  const group = groupUnit(kind, activity.rental?.category, settings.groupCountBy)
+  const groupSize =
+    kind === 'charter'
+      ? party
+      : group.byUnits
+        ? activity.priceTiers.reduce((total, tier) => total + (tierQty[tier.id] ?? 0), 0)
+        : kind === 'rental'
+          ? activity.priceTiers.reduce((total, tier) => total + (activity.rental?.items?.find((item) => item.tierId === tier.id)?.holds ?? peopleOf(tier)) * (tierQty[tier.id] ?? 0), 0)
+          : headcount
+  const overGroup = settings.method === 'instant' && settings.groupLimit > 0 && groupSize > settings.groupLimit
 
   const reserve = () => {
     if (!slot || !canReserve) return
@@ -1559,7 +1569,7 @@ function BookingWidgetInner({
             <>
               {overGroup ? (
                 <p className="rounded-xl bg-surface-sunken px-3.5 py-2.5 text-sm text-muted">
-                  Groups of more than {settings.groupLimit} book by request. Send the details and we confirm with the price.
+                  Bookings of more than {settings.groupLimit} {group.many} go by request. Send the details and we confirm with the price.
                 </p>
               ) : null}
               <Button

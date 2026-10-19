@@ -402,6 +402,8 @@ export interface BookingSettings {
   scheduled: boolean
   /** Instant booking: groups bigger than this send a request instead. 0: off. */
   groupLimit: number
+  /** Rentals: the limit counts what is rented (bikes, boats) or the people using it. Absent: what is rented. Other kinds count people. */
+  groupCountBy?: 'units' | 'people'
   /** Guests can ask for a day or time that is not on the schedule. */
   otherDates: boolean
   /** Guests can ask for a custom quote: a private version, a special occasion. */

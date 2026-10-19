@@ -37,7 +37,7 @@ import { z } from 'zod'
 
 import type { Activity, ActivityKind, ActivityTheme, BookingSettings, ChangeRules, CurrencyCode, PackageConfig, PaymentTerms, PrivateOption, DifficultyLevel, GuestDetailsConfig, GuestQuestion, Location, VerticalKey } from '@/types'
 import { DEFAULT_GUEST_FIELDS, guestDetailsOf } from '@/lib/guest-requirements'
-import { DEFAULT_BOOKING, METHOD_LABEL, bookingOf } from '@/lib/booking-method'
+import { DEFAULT_BOOKING, METHOD_LABEL, bookingOf, groupUnit } from '@/lib/booking-method'
 import { EMPTY_PACKAGE, PackagePartsEditor, packageSeats, type PackageOption } from './package-parts-editor'
 import { PaymentTermsEditor } from './payment-terms-editor'
 import { ActivityMessagesEditor } from './activity-messages-editor'
@@ -2052,7 +2052,8 @@ export function ActivityWizard({
                           noticeHours={draft.noticeHours ?? 0}
                           onNotice={(noticeHours) => patch({ noticeHours })}
                           businessPhone={businessPhone}
-                          groupWord={(draft.kind ?? 'trip') === 'rental' ? 'items' : 'guests'}
+                          groupWord={groupUnit(draft.kind, normalizeKindSettings(draft.kindSettings).rental.category, draft.booking?.groupCountBy).many}
+                          rentedWord={(draft.kind ?? 'trip') === 'rental' ? rentalCategoryMeta(normalizeKindSettings(draft.kindSettings).rental.category).units : undefined}
                         />
                         {locations.length > 0 ? (
                           <LocationsEditor
@@ -3049,7 +3050,9 @@ function ReviewStep({
           value: (() => {
             const b = draft.booking ?? DEFAULT_BOOKING
             const extras = [
-              b.method === 'instant' && b.groupLimit > 0 ? `groups over ${b.groupLimit} ask first` : null,
+              b.method === 'instant' && b.groupLimit > 0
+                ? `over ${b.groupLimit} ${groupUnit(draft.kind, normalizeKindSettings(draft.kindSettings).rental.category, b.groupCountBy).many} ask first`
+                : null,
               b.method === 'instant' && b.otherDates ? 'other dates on request' : null,
               (draft.noticeHours ?? 0) > 0 ? `${draft.noticeHours}h notice` : null,
               b.method === 'instant' && b.customQuote ? 'custom quotes' : null,

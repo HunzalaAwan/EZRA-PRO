@@ -42,15 +42,18 @@ export function BookingSettingsEditor({
   noticeHours,
   onNotice,
   businessPhone,
-  groupWord = 'guests',
+  groupWord = 'people',
+  rentedWord,
 }: {
   value: BookingSettings
   onChange: (next: BookingSettings) => void
   noticeHours: number
   onNotice: (hours: number) => void
   businessPhone: string
-  /** "guests", "items": what a group is counted in. */
+  /** What the limit is counted in: "people", "bikes". */
   groupWord?: string
+  /** Rentals: the word for what is rented ("bikes"), so the limit can count those or people. */
+  rentedWord?: string
 }) {
   const set = (patch: Partial<BookingSettings>) => onChange({ ...value, ...patch })
   const instant = value.method === 'instant'
@@ -129,9 +132,33 @@ export function BookingSettingsEditor({
             checked={value.groupLimit > 0}
             onChange={(on) => set({ groupLimit: on ? 10 : 0 })}
           >
-            <Field label="Book online up to">
-              {(control) => <Input {...control} type="number" min={1} className="sm:w-48" suffix={groupWord} value={value.groupLimit || ''} onChange={(e) => set({ groupLimit: Math.max(1, Math.floor(Number(e.target.value)) || 1) })} />}
-            </Field>
+            <div className="flex flex-wrap items-end gap-3">
+              <Field label="Book online up to">
+                {(control) => <Input {...control} type="number" min={1} className="sm:w-48" suffix={groupWord} value={value.groupLimit || ''} onChange={(e) => set({ groupLimit: Math.max(1, Math.floor(Number(e.target.value)) || 1) })} />}
+              </Field>
+              {rentedWord ? (
+                <div role="radiogroup" aria-label="Count the group in" className="inline-flex h-10 items-center rounded-lg border border-line bg-surface-sunken p-0.5">
+                  {([
+                    ['units', rentedWord],
+                    ['people', 'people'],
+                  ] as const).map(([by, label]) => {
+                    const on = (value.groupCountBy ?? 'units') === by
+                    return (
+                      <button
+                        key={by}
+                        type="button"
+                        role="radio"
+                        aria-checked={on}
+                        onClick={() => set({ groupCountBy: by })}
+                        className={cn('h-full rounded-md px-3 text-sm font-medium capitalize transition-colors', on ? 'bg-surface text-foreground shadow-xs' : 'text-muted hover:text-foreground')}
+                      >
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : null}
+            </div>
           </Row>
           <Row
             title="Other dates on request"
