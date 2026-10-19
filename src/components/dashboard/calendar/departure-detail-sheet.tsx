@@ -8,7 +8,10 @@
 
 import * as React from 'react'
 import { useBookingLedger } from '@/hooks/use-booking-ledger'
-import { entriesOn } from '@/lib/booking-ledger'
+import { changeBooking, entriesOn } from '@/lib/booking-ledger'
+import { MessageComposer, sendToGuests, type MessageRecipient } from '@/components/dashboard/bookings/message-composer'
+import { useMessageTemplates } from '@/hooks/use-message-templates'
+import { CURRENT_TENANT, tenantById } from '@/lib/demo-core'
 import Image from 'next/image'
 import {
   Anchor,
@@ -187,6 +190,7 @@ export function DepartureDetailSheet({
   // Loaded through a Server Action so the bookings/customers indexes stay on
   // the server — this sheet never imports the dataset module itself.
   const [loaded, setLoaded] = React.useState<DepartureDetail | null>(null)
+  const { templates } = useMessageTemplates(loaded?.departure.tenantId ?? CURRENT_TENANT.id)
   React.useEffect(() => {
     if (!cachedId) return
     let cancelled = false
@@ -227,7 +231,51 @@ export function DepartureDetailSheet({
 
   if (!detail) return null
 
-  const { departure, activity, guests, crew, resources, gross, paid, outstanding, media } = detail
+  const { departure, activity, guests: seededGuests, crew, resources, gross, paid, outstanding, media } = detail
+  const tenant = tenantById.get(departure.tenantId) ?? CURRENT_TENANT
+  // Guests still on this time: not cancelled, not moved away (here or by the guest).
+  const guests = seededGuests.filter(({ booking }) => {
+    const change = ledger.changes[booking.reference]
+    if (booking.status === 'cancelled' || booking.status === 'refunded' || change?.cancelled) return false
+    return !change?.movedTo || change.movedTo.departureId === departure.id
+  })
+  const recipients: MessageRecipient[] = [
+    ...guests.map(({ booking, customer }) => ({
+      reference: booking.reference,
+      bookingId: booking.id,
+      firstName: customer.firstName,
+      lastName: customer.lastName,
+      email: customer.email,
+      phone: customer.phone,
+      activityName: activity.name,
+      startsAt: departure.startsAt,
+      meetingPoint: activity.meetingPoint,
+      party: ledger.changes[booking.reference]?.party ?? booking.partySize,
+    })),
+    ...detail.extra.map((entry) => {
+      const [firstName, ...rest] = entry.name.split(' ')
+      return { reference: entry.reference, firstName: firstName ?? entry.name, lastName: rest.join(' '), email: entry.email, phone: entry.phone ?? '', activityName: entry.packageName ?? activity.name, startsAt: departure.startsAt, meetingPoint: activity.meetingPoint, party: entry.party }
+    }),
+  ]
+  /** The business calls it off: every booking is cancelled with a full refund and told. */
+  const cancelEveryone = () => {
+    for (const { booking } of guests) {
+      changeBooking(
+        tenantSlug,
+        booking.reference,
+        { fromDepartureId: booking.departureId, fromStartsAt: booking.departureAt, fromParty: booking.partySize },
+        { cancelled: true, refund: booking.amountPaid },
+        { by: 'staff', what: `Cancelled: the whole time was called off, ${formatCurrency(booking.amountPaid, currency)} refunded` },
+      )
+    }
+    for (const entry of detail.extra) {
+      changeBooking(tenantSlug, entry.id, { fromDepartureId: entry.departureId, fromStartsAt: entry.startsAt, fromParty: entry.party }, { cancelled: true, refund: entry.paidNow }, { by: 'staff', what: 'Cancelled: the whole time was called off' })
+    }
+    const template = templates.find((entry) => entry.key === 'cancelled')
+    if (template) {
+      sendToGuests(recipients, { tenantSlug, business: tenant.name, subject: template.subject, body: template.body, extra: { refund_line: 'We have refunded everything you paid; it shows on your card in 5 to 10 days.' } })
+    }
+  }
   const weather = departure.weather
   const WeatherIcon = weather ? WEATHER_META[weather.condition].icon : Sun
   const start = new Date(departure.startsAt)
@@ -462,7 +510,7 @@ export function DepartureDetailSheet({
               <div>
                 <SectionTitle count={guests.length}>Guest manifest</SectionTitle>
                 <ul className="overflow-hidden rounded-xl border border-line">
-                  {guests.map(({ booking, customer }, index) => (
+                  {seededGuests.map(({ booking, customer }, index) => (
                     <li
                       key={booking.id}
                       className={cn(
@@ -482,6 +530,11 @@ export function DepartureDetailSheet({
                         <p className="truncate font-mono text-xs text-subtle">
                           {booking.reference} · {booking.channel.replace(/_/g, ' ')}
                         </p>
+                        {ledger.changes[booking.reference]?.cancelled ? (
+                          <p className="text-xs text-danger">Cancelled since</p>
+                        ) : ledger.changes[booking.reference]?.movedTo && ledger.changes[booking.reference]?.movedTo?.departureId !== departure.id ? (
+                          <p className="text-xs text-warning">Moved to {formatDateLong(new Date(ledger.changes[booking.reference]!.movedTo!.startsAt))} · {formatTime(ledger.changes[booking.reference]!.movedTo!.startsAt)}</p>
+                        ) : null}
                       </div>
                       <span className="tabular shrink-0 text-[0.75rem] font-semibold text-muted">
                         {booking.partySize}{' '}
@@ -621,7 +674,7 @@ export function DepartureDetailSheet({
             <DialogTitle>Cancel this departure?</DialogTitle>
             <DialogDescription>
               {guests.length > 0
-                ? `${guests.length} bookings covering ${departure.booked} guests will be notified and refunded under the ${activity.cancellationPolicy.freeCancellationHours}-hour policy.`
+                ? `${recipients.length} ${recipients.length === 1 ? 'booking' : 'bookings'} covering ${departure.booked} guests are cancelled, refunded in full because you called it off, and sent "Booking cancelled".`
                 : 'No guests are booked, so nothing will be refunded.'}
             </DialogDescription>
           </DialogHeader>
@@ -644,9 +697,10 @@ export function DepartureDetailSheet({
               variant="danger"
               size="sm"
               onClick={() => {
+                cancelEveryone()
                 setConfirmCancel(false)
                 toast.error('Departure cancelled', {
-                  description: `${activity.name} · ${formatTime(start)} — guests notified.`,
+                  description: `${activity.name} · ${formatTime(start)}: ${recipients.length} ${recipients.length === 1 ? 'booking' : 'bookings'} refunded in full and told.`,
                 })
               }}
             >
@@ -657,44 +711,15 @@ export function DepartureDetailSheet({
       </Dialog>
 
       {/* ------------------------------------------------------- compose --- */}
-      <Dialog open={composeOpen} onOpenChange={setComposeOpen}>
-        <DialogContent size="md">
-          <DialogHeader>
-            <DialogTitle>Message guests</DialogTitle>
-            <DialogDescription>
-              Goes to {guests.length} {guests.length === 1 ? 'booking' : 'bookings'} on{' '}
-              {formatTime(start)} {activity.name}.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogBody>
-            <Textarea
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              rows={5}
-              placeholder="Conditions are looking excellent for tomorrow — please arrive 15 minutes early for the safety brief."
-              aria-label="Message to guests"
-            />
-          </DialogBody>
-          <DialogFooter>
-            <Button variant="ghost" size="sm" onClick={() => setComposeOpen(false)}>
-              Discard
-            </Button>
-            <Button
-              size="sm"
-              disabled={message.trim().length === 0}
-              onClick={() => {
-                setComposeOpen(false)
-                setMessage('')
-                toast.success('Message queued', {
-                  description: `${guests.length} ${guests.length === 1 ? 'guest' : 'guests'} will receive it within a minute.`,
-                })
-              }}
-            >
-              Send to {guests.length}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <MessageComposer
+        open={composeOpen}
+        onOpenChange={setComposeOpen}
+        recipients={recipients}
+        tenantId={tenant.id}
+        tenantSlug={tenantSlug}
+        business={tenant.name}
+        title={`Message everyone on ${formatTime(start)} ${activity.name}`}
+      />
     </>
   )
 }

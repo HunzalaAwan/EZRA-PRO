@@ -20,6 +20,8 @@ export type BuiltInTemplateKey =
   | 'what_to_bring'
   | 'balance_due'
   | 'weather'
+  | 'rescheduled'
+  | 'cancelled'
   | 'review_request'
   | 'upsell'
   | 'cart_recovery'
@@ -50,6 +52,8 @@ export interface MessageTemplate {
   audienceId?: string
   /** Only for these activities. Empty: all. */
   activitySlugs?: string[]
+  /** Not sent for these activities, switched off on the activity itself. */
+  excludeSlugs?: string[]
   /** A code carried by the message. */
   offer?: MarketingOffer
   /** A second subject line for half the guests. */
@@ -212,6 +216,26 @@ export const DEFAULT_TEMPLATES: MessageTemplate[] = [
     channel: 'both',
     subject: 'Update on your {activity}',
     body: 'Hi {first_name}, an update on {activity} on {date}: the forecast is uncertain and we are watching it closely. We will confirm by two hours before. Your options: {manage_link}',
+    timing: { when: 'manual', hours: 0 },
+    enabled: true,
+  },
+  {
+    key: 'rescheduled',
+    name: 'Booking moved',
+    purpose: 'Sent when a booking moves to another time, by you or the guest.',
+    channel: 'both',
+    subject: 'Your {activity} is now on {date} at {time}',
+    body: 'Hi {first_name}, your booking {reference} for {activity} is now on {date} at {time} for {party}. Meet at {meeting_point}. Anything else to change: {manage_link}\n\n{business}',
+    timing: { when: 'manual', hours: 0 },
+    enabled: true,
+  },
+  {
+    key: 'cancelled',
+    name: 'Booking cancelled',
+    purpose: 'Sent when a booking is cancelled, with the refund if there is one.',
+    channel: 'both',
+    subject: 'Your {activity} on {date} is cancelled',
+    body: 'Hi {first_name}, your booking {reference} for {activity} on {date} is cancelled. {refund_line} We hope to see you another time: {book_link}\n\n{business}',
     timing: { when: 'manual', hours: 0 },
     enabled: true,
   },
@@ -383,6 +407,8 @@ export interface MessageContext {
   offer_code?: string
   offer_percent?: string
   book_link?: string
+  /** Cancellations: "We have refunded $120 to your card." */
+  refund_line?: string
 }
 
 export function renderTemplate(text: string, context: Partial<MessageContext>): string {
@@ -493,6 +519,7 @@ export function buildMessageLog({
     // Only the messages tied to this booking's own dates show on its record.
     if (template.timing.when !== 'on_booking' && template.timing.when !== 'before' && template.timing.when !== 'after') continue
     if (template.activitySlugs && template.activitySlugs.length > 0 && !template.activitySlugs.includes(activity.slug)) continue
+    if (template.excludeSlugs?.includes(activity.slug)) continue
     if (groupOf(template) === 'growth' && !customer.marketingOptIn) continue
     if (template.key === 'balance_due' && balance <= 0) continue
     if (template.key === 'review_request' && (cancelled || booking.status === 'no_show')) continue
@@ -505,6 +532,8 @@ export function buildMessageLog({
     if (template.timing.when === 'before' && at < created) continue
     if (cancelled && at > created + 60_000 && template.key !== 'confirmation') continue
     const channels: ('email' | 'sms')[] = template.channel === 'both' ? ['email', 'sms'] : [template.channel]
+    // The activity's own note rides along on the confirmation and the reminder.
+    const note = activity.guestNote && (template.key === 'confirmation' || template.key === 'reminder') ? ` ${activity.guestNote}` : ''
     for (const channel of channels) {
       const opened = (booking.reference.charCodeAt(4 + (seq % 4)) + seq) % 5
       out.push({
@@ -514,7 +543,7 @@ export function buildMessageLog({
         channel,
         sentAt: stamp(at),
         status: at > now ? 'scheduled' : channel === 'sms' ? 'delivered' : opened === 0 ? 'clicked' : opened < 3 ? 'opened' : 'delivered',
-        preview: renderTemplate(channel === 'email' ? template.subject : template.body, {
+        preview: renderTemplate(channel === 'email' ? template.subject : `${template.body}${note}`, {
           ...context,
           offer_code: offerOf(template).code,
           offer_percent: `${offerOf(template).percent}%`,

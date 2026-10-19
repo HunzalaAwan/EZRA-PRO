@@ -82,6 +82,11 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
 import { RefundDialog, type RefundResult } from '@/components/dashboard/bookings/refund-dialog'
+import { MessageComposer, type MessageRecipient } from '@/components/dashboard/bookings/message-composer'
+import { CancelBookingDialog, ChangeBookingDialog, type ChangeTarget } from '@/components/dashboard/bookings/booking-change-dialogs'
+import { useBookingLedger } from '@/hooks/use-booking-ledger'
+import { useInbox } from '@/hooks/use-inbox'
+import { changesOf, paymentOf } from '@/lib/booking-policy'
 import { ChannelBadge } from '@/components/dashboard/bookings/bookings-table'
 import { formatAnswer } from '@/lib/guest-requirements'
 
@@ -136,52 +141,6 @@ function DataRow({
       </span>
       <span className="min-w-0 text-right font-medium text-foreground">{children}</span>
     </div>
-  )
-}
-
-function ConfirmDialog({
-  open,
-  onOpenChange,
-  title,
-  description,
-  confirmLabel,
-  tone = 'danger',
-  onConfirm,
-  children,
-}: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  title: string
-  description: string
-  confirmLabel: string
-  tone?: 'danger' | 'primary'
-  onConfirm: () => void
-  children?: React.ReactNode
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent size="sm">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
-        {children ? <DialogBody>{children}</DialogBody> : null}
-        <DialogFooter divider>
-          <DialogClose asChild>
-            <Button variant="secondary">Keep as is</Button>
-          </DialogClose>
-          <Button
-            variant={tone === 'danger' ? 'danger' : 'primary'}
-            onClick={() => {
-              onConfirm()
-              onOpenChange(false)
-            }}
-          >
-            {confirmLabel}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   )
 }
 
@@ -250,6 +209,11 @@ export function BookingDetailContent({
   const [notesSaved, setNotesSaved] = React.useState(true)
   const [refundOpen, setRefundOpen] = React.useState(false)
   const [cancelOpen, setCancelOpen] = React.useState(false)
+  const [composeOpen, setComposeOpen] = React.useState(false)
+  const [changeOpen, setChangeOpen] = React.useState(false)
+  const tenant = tenantById.get(detail?.booking.tenantId ?? '') ?? CURRENT_TENANT
+  // Moves, guest-count changes and cancellations, by the team or by the guest.
+  const ledger = useBookingLedger(tenant.slug)
 
   // Re-seed local state when the sheet swaps to a different booking.
   React.useEffect(() => {
@@ -278,7 +242,39 @@ export function BookingDetailContent({
     )
   }
 
-  const { booking, activity, customer, departure, payments } = detail
+  const { booking: seeded, activity, customer, departure: bookedDeparture, payments } = detail
+  const change = ledger.changes[seeded.reference]
+  const booking = change
+    ? { ...seeded, partySize: change.party ?? seeded.partySize, status: change.cancelled ? ('cancelled' as const) : seeded.status, ...(change.cancelled ? { refundAmount: change.refund ?? 0 } : {}) }
+    : seeded
+  const lengthMinutes = Math.round((new Date(bookedDeparture.endsAt).getTime() - new Date(bookedDeparture.startsAt).getTime()) / 60_000)
+  const departure = change?.movedTo
+    ? { ...bookedDeparture, id: change.movedTo.departureId, startsAt: change.movedTo.startsAt, endsAt: shiftIso(change.movedTo.startsAt, lengthMinutes) }
+    : bookedDeparture
+  const nowIso = formatIsoLocal(NOW)
+  const target: ChangeTarget = {
+    reference: seeded.reference,
+    bookingId: seeded.id,
+    fromDepartureId: bookedDeparture.id,
+    fromStartsAt: bookedDeparture.startsAt,
+    fromParty: seeded.partySize,
+    departureId: departure.id,
+    startsAt: departure.startsAt,
+    party: booking.partySize,
+    moves: change?.moves ?? 0,
+  }
+  const recipient: MessageRecipient = {
+    reference: seeded.reference,
+    bookingId: seeded.id,
+    firstName: customer.firstName,
+    lastName: customer.lastName,
+    email: customer.email,
+    phone: customer.phone,
+    activityName: activity.name,
+    startsAt: departure.startsAt,
+    meetingPoint: activity.meetingPoint,
+    party: booking.partySize,
+  }
   const currency = booking.currency
   const guestName = `${customer.firstName} ${customer.lastName}`
   const hero = activity.media.find((m) => m.isPrimary) ?? activity.media[0]
@@ -402,6 +398,18 @@ export function BookingDetailContent({
     })
   }
 
+  for (const [index, event] of (change?.history ?? []).entries()) {
+    const cancelledEvent = event.what.startsWith('Cancelled')
+    timeline.push({
+      id: `change-${index}`,
+      at: event.at,
+      title: `${cancelledEvent ? 'Cancelled' : 'Changed'} by ${event.by === 'guest' ? 'the guest' : 'the team'}`,
+      body: event.what,
+      icon: cancelledEvent ? Ban : CalendarDays,
+      tone: cancelledEvent ? 'danger' : 'info',
+    })
+  }
+
   timeline.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0))
 
   /* ----------------------------------------------------------------------
@@ -423,18 +431,12 @@ export function BookingDetailContent({
   }
 
   const actions = {
-    message: () =>
-      toast.success('Message composer opened', {
-        description: `Drafting to ${customer.email}.`,
-      }),
+    message: () => setComposeOpen(true),
     resend: () =>
       toast.success('Confirmation resent', {
         description: `${booking.reference} sent to ${customer.email}.`,
       }),
-    modify: () =>
-      toast('Modify reservation', {
-        description: 'Change the departure, party size or add-ons, then re-price.',
-      }),
+    modify: () => setChangeOpen(true),
     refund: (result: RefundResult) =>
       toast.success(
         `Refund of ${formatCurrency(result.refunds.reduce((sum, r) => sum + r.amount, 0), currency)} queued`,
@@ -499,6 +501,11 @@ export function BookingDetailContent({
           <Button size="sm" variant="secondary" leftIcon={<MessageSquare />} onClick={actions.message}>
             Message guest
           </Button>
+          {!isClosed ? (
+            <Button size="sm" variant="secondary" leftIcon={<CalendarDays />} onClick={actions.modify}>
+              Change
+            </Button>
+          ) : null}
           <Button size="sm" variant="secondary" leftIcon={<Send />} onClick={actions.resend}>
             <span className="hidden sm:inline">Resend confirmation</span>
             <span className="sm:hidden">Resend</span>
@@ -511,9 +518,9 @@ export function BookingDetailContent({
               </IconButton>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem onSelect={actions.modify}>
+              <DropdownMenuItem onSelect={actions.modify} disabled={isClosed}>
                 <Pencil />
-                Modify reservation
+                Change time or guests
               </DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={() =>
@@ -767,7 +774,7 @@ export function BookingDetailContent({
           </SectionCard>
 
           {/* Order summary */}
-          <MessagesCard detail={detail} />
+          <MessagesCard detail={detail} departure={departure} partySize={booking.partySize} onCompose={() => setComposeOpen(true)} />
 
           <SectionCard title="Order summary" icon={Receipt}>
             <div className="overflow-x-auto">
@@ -1202,21 +1209,34 @@ export function BookingDetailContent({
         onConfirm={actions.refund}
       />
 
-      <ConfirmDialog
+      <CancelBookingDialog
         open={cancelOpen}
         onOpenChange={setCancelOpen}
-        title={`Cancel ${booking.reference}?`}
-        description={`${booking.partySize} ${
-          booking.partySize === 1 ? 'seat' : 'seats'
-        } will be released back to ${activity.name} on ${formatDateShort(departure.startsAt)}.`}
-        confirmLabel="Cancel reservation"
-        onConfirm={() => {
-          actions.cancel()
-          onRequestClose?.()
-        }}
-      >
-        <p className="text-sm text-muted">{activity.cancellationPolicy.summary}</p>
-      </ConfirmDialog>
+        target={target}
+        amountPaid={booking.amountPaid}
+        total={booking.total}
+        policy={activity.cancellationPolicy}
+        payment={paymentOf(activity)}
+        recipient={recipient}
+        tenantId={tenant.id}
+        tenantSlug={tenant.slug}
+        business={tenant.name}
+        currency={currency}
+        nowIso={nowIso}
+      />
+      <ChangeBookingDialog
+        open={changeOpen}
+        onOpenChange={setChangeOpen}
+        target={target}
+        activity={{ id: activity.id, name: activity.name, kind: activity.kind ?? 'trip', changes: changesOf(activity) }}
+        recipient={recipient}
+        tenantId={tenant.id}
+        tenantSlug={tenant.slug}
+        business={tenant.name}
+        currency={currency}
+        nowIso={nowIso}
+      />
+      <MessageComposer open={composeOpen} onOpenChange={setComposeOpen} recipients={[recipient]} tenantId={tenant.id} tenantSlug={tenant.slug} business={tenant.name} />
     </div>
   )
 }
@@ -1265,10 +1285,15 @@ export function BookingDetail({ detail, className }: BookingDetailProps) {
    Messages: what this booking has been sent, and the guest's own link.
    -------------------------------------------------------------------------- */
 
-function MessagesCard({ detail }: { detail: BookingDetailContentProps['detail'] }) {
-  const { booking, activity, customer, departure } = detail
+function MessagesCard({ detail, departure, partySize, onCompose }: { detail: BookingDetailContentProps['detail']; departure: { startsAt: string; endsAt: string }; partySize: number; onCompose: () => void }) {
+  const { activity, customer } = detail
+  // Scheduled messages follow the booking where it is now, with however many are coming.
+  const booking = React.useMemo(() => ({ ...detail.booking, partySize }), [detail.booking, partySize])
   const tenant = tenantById.get(booking.tenantId) ?? CURRENT_TENANT
   const { templates } = useMessageTemplates(tenant.id)
+  // What the team wrote by hand, from the guest's conversation in the Inbox.
+  const { threads } = useInbox(tenant.slug, [])
+  const written = (threads.find((thread) => thread.id === `thr_${booking.reference}`)?.messages ?? []).filter((entry) => entry.from === 'staff')
   const pad = (n: number) => String(n).padStart(2, '0')
   const nowIso = `${NOW.getFullYear()}-${pad(NOW.getMonth() + 1)}-${pad(NOW.getDate())}T${pad(NOW.getHours())}:${pad(NOW.getMinutes())}:00`
   const log = React.useMemo(
@@ -1291,6 +1316,7 @@ function MessagesCard({ detail }: { detail: BookingDetailContentProps['detail'] 
       icon={Mail}
       toolbar={
         <div className="flex items-center gap-1.5">
+          <Button variant="secondary" size="xs" leftIcon={<Send />} onClick={onCompose}>Write</Button>
           <Button variant="ghost" size="xs" onClick={copy}>Copy guest link</Button>
           <Button asChild variant="outline" size="xs">
             <a href={link} target="_blank" rel="noreferrer">Open guest page</a>
@@ -1298,6 +1324,24 @@ function MessagesCard({ detail }: { detail: BookingDetailContentProps['detail'] 
         </div>
       }
     >
+      {written.length > 0 ? (
+        <ol className="mb-3 flex list-none flex-col gap-2.5 border-b border-line-subtle p-0 pb-3">
+          {written.map((entry) => (
+            <li key={entry.id} className="flex items-start gap-3">
+              <span aria-hidden="true" className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full bg-primary-soft text-primary">
+                <Send className="size-3.5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm">
+                  <span className="font-medium text-foreground">Written by {entry.author ?? 'the team'}</span>
+                  <span className="ml-2 text-xs text-subtle">{formatDateTime(entry.at)}</span>
+                </p>
+                <p className="line-clamp-2 text-xs whitespace-pre-line text-muted">{entry.body}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      ) : null}
       {log.length === 0 ? (
         <p className="text-sm text-subtle">No messages for this booking.</p>
       ) : (

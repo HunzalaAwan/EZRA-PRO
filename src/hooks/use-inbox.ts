@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 
+import { NOW } from '@/lib/data/constants'
 import type { InboxMessage, InboxThread, ThreadStatus } from '@/lib/inbox'
 
 /* ==========================================================================
@@ -53,6 +54,24 @@ export function sendGuestMessage(slug: string, thread: Omit<InboxThread, 'messag
   writeInbox(slug, {
     messages: { ...store.messages, [thread.id]: [...(store.messages[thread.id] ?? []), { id: `m_${Date.now().toString(36)}`, from: 'guest', body, at: stamp() }] },
     status: { ...store.status, [thread.id]: 'open' },
+    threads,
+  })
+}
+
+/** The demo clock's day and hour, with the seconds of now so messages keep their order. */
+const demoStamp = () => {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const real = new Date()
+  return `${NOW.getFullYear()}-${pad(NOW.getMonth() + 1)}-${pad(NOW.getDate())}T${pad(NOW.getHours())}:${pad(real.getMinutes())}:${pad(real.getSeconds())}`
+}
+
+/** From the dashboard: a message to a booked guest, starting their thread if there is none yet. */
+export function sendStaffMessage(slug: string, thread: Omit<InboxThread, 'messages' | 'status'>, body: string, author: string) {
+  const store = readInbox(slug)
+  const threads = store.threads.some((entry) => entry.id === thread.id) ? store.threads : [...store.threads, thread]
+  writeInbox(slug, {
+    messages: { ...store.messages, [thread.id]: [...(store.messages[thread.id] ?? []), { id: `m_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`, from: 'staff', body, at: demoStamp(), author }] },
+    status: { ...store.status, [thread.id]: 'waiting' },
     threads,
   })
 }

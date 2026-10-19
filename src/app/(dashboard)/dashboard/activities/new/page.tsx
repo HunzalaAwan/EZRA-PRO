@@ -47,6 +47,7 @@ export default async function NewActivityPage() {
         locations={getLocationsByTenant(tenant.id)}
         waivers={getWaiversByTenant(tenant.id).map((waiver) => ({ id: waiver.id, title: waiver.title }))}
         packageOptions={packageOptionsFor(tenant.id)}
+        tenantId={tenant.id}
         pickupZones={getPickupZonesByTenant(tenant.id).map((zone) => ({ id: zone.id, name: zone.name, detail: `${zone.offsetMinutes} min before · ${zone.stops.length} stops`, fee: zone.fee }))}
       />
     </div>

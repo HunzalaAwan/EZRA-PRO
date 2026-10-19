@@ -1,6 +1,12 @@
 'use client'
 
 import * as React from 'react'
+import { useBookingLedger } from '@/hooks/use-booking-ledger'
+import { useMessageTemplates } from '@/hooks/use-message-templates'
+import { changeBooking } from '@/lib/booking-ledger'
+import { paymentOf, refundFor, splitPayment } from '@/lib/booking-policy'
+import { MessageComposer, sendToGuests, type MessageRecipient } from '@/components/dashboard/bookings/message-composer'
+import { CancelBookingDialog, type ChangeTarget } from '@/components/dashboard/bookings/booking-change-dialogs'
 import Link from 'next/link'
 import {
   CalendarCheck,
@@ -87,11 +93,23 @@ export interface BookingsPageClientProps {
 export function BookingsPageClient({ tenant, allRows: sourceRows, activities, locations, now: NOW, todayKey: TODAY_KEY }: BookingsPageClientProps) {
   /* Refunds and cancellations made at this desk, layered over the server rows. */
   const [adjustments, setAdjustments] = React.useState<Record<string, { refunded: number; cancelled: boolean }>>({})
+  // Moves, guest changes and cancellations made anywhere (here, the booking record, the guest's page).
+  const ledger = useBookingLedger(tenant.slug)
+  const { templates } = useMessageTemplates(tenant.id)
   const allRows = React.useMemo(
     () =>
       sourceRows.map((row) => {
-        const adj = adjustments[row.booking.id]
-        if (!adj) return row
+        const change = ledger.changes[row.booking.reference]
+        const moved = change
+          ? {
+              ...row,
+              booking: { ...row.booking, partySize: change.party ?? row.booking.partySize, departureAt: change.movedTo?.startsAt ?? row.booking.departureAt },
+              departure: change.movedTo ? { ...row.departure, id: change.movedTo.departureId, startsAt: change.movedTo.startsAt } : row.departure,
+            }
+          : row
+        const adj = change?.cancelled ? { refunded: (adjustments[row.booking.id]?.refunded ?? 0) + (change.refund ?? 0), cancelled: true } : adjustments[row.booking.id]
+        if (!adj) return moved
+        row = moved
         const refunded = (row.booking.refundAmount ?? 0) + adj.refunded
         return {
           ...row,
@@ -108,8 +126,37 @@ export function BookingsPageClient({ tenant, allRows: sourceRows, activities, lo
           },
         }
       }),
-    [sourceRows, adjustments],
+    [sourceRows, adjustments, ledger.changes],
   )
+  const [composeFor, setComposeFor] = React.useState<BookingRow[]>([])
+  const [cancelRow, setCancelRow] = React.useState<BookingRow | null>(null)
+  const recipientOf = (row: BookingRow): MessageRecipient => ({
+    reference: row.booking.reference,
+    bookingId: row.booking.id,
+    firstName: row.customer.firstName,
+    lastName: row.customer.lastName,
+    email: row.customer.email,
+    phone: row.customer.phone,
+    activityName: row.activity.name,
+    startsAt: row.departure.startsAt,
+    meetingPoint: row.activity.meetingPoint,
+    party: row.booking.partySize,
+  })
+  const targetOf = (row: BookingRow): ChangeTarget => {
+    const source = sourceRows.find((entry) => entry.booking.id === row.booking.id) ?? row
+    const change = ledger.changes[row.booking.reference]
+    return {
+      reference: row.booking.reference,
+      bookingId: row.booking.id,
+      fromDepartureId: source.departure.id,
+      fromStartsAt: source.departure.startsAt,
+      fromParty: source.booking.partySize,
+      departureId: row.departure.id,
+      startsAt: row.departure.startsAt,
+      party: row.booking.partySize,
+      moves: change?.moves ?? 0,
+    }
+  }
   const [refundTargets, setRefundTargets] = React.useState<BookingRow[]>([])
   const [refundOpen, setRefundOpen] = React.useState(false)
 
@@ -383,16 +430,10 @@ export function BookingsPageClient({ tenant, allRows: sourceRows, activities, lo
         openRefund([row])
         break
       case 'message':
-        toast.success(`Composer opened for ${row.customer.firstName} ${row.customer.lastName}`)
+        setComposeFor([row])
         break
       case 'cancel':
-        setAdjustments((prev) => ({
-          ...prev,
-          [row.booking.id]: { refunded: prev[row.booking.id]?.refunded ?? 0, cancelled: true },
-        }))
-        toast.error(`${row.booking.reference} cancelled`, {
-          description: `${row.booking.partySize} ${row.booking.partySize === 1 ? 'seat' : 'seats'} released. Refund separately if money was taken.`,
-        })
+        setCancelRow(row)
         break
     }
   }
@@ -411,18 +452,31 @@ export function BookingsPageClient({ tenant, allRows: sourceRows, activities, lo
         })
         break
       case 'message':
-        toast.success(`Composer opened for ${n} ${noun}`, {
-          description: 'Pick a template or write once and send to the whole selection.',
-        })
-        break
+        setComposeFor(allRows.filter((row) => ids.includes(row.booking.id)))
+        return
       case 'export':
         toast.success(`Exported ${n} ${noun}`, { description: 'reservations.csv is downloading.' })
         break
-      case 'cancel':
-        toast.error(`${n} ${noun} cancelled`, {
-          description: 'Seats released and refunds queued per each policy.',
+      case 'cancel': {
+        // Each booking is cancelled under its own activity's policy and told.
+        const rows = allRows.filter((row) => ids.includes(row.booking.id) && row.booking.status !== 'cancelled' && row.booking.status !== 'refunded')
+        let refunded = 0
+        for (const row of rows) {
+          const target = targetOf(row)
+          const hoursToGo = (new Date(row.departure.startsAt).getTime() - new Date(NOW).getTime()) / 3_600_000
+          const pay = paymentOf(row.activity)
+          const deposit = pay.collect === 'deposit' ? splitPayment(pay, row.booking.total, target.fromParty).now : 0
+          const refund = refundFor(row.activity.cancellationPolicy, row.booking.amountPaid, hoursToGo, deposit)
+          refunded += refund
+          changeBooking(tenant.slug, row.booking.reference, target, { cancelled: true, refund }, { by: 'staff', what: `Cancelled from the bookings list${refund > 0 ? `, ${formatCurrency(refund, tenant.currency)} refunded` : ', no refund'}` })
+        }
+        const template = templates.find((entry) => entry.key === 'cancelled')
+        if (template) sendToGuests(rows.map(recipientOf), { tenantSlug: tenant.slug, business: tenant.name, subject: template.subject, body: template.body, extra: { refund_line: 'Any refund due under the policy is on its way to your card.' } })
+        toast.error(`${rows.length} ${rows.length === 1 ? 'reservation' : 'reservations'} cancelled`, {
+          description: `Seats back on sale, ${formatCurrency(refunded, tenant.currency)} refunded by each policy, guests told.`,
         })
         break
+      }
     }
     setSelectedIds([])
   }
@@ -650,6 +704,35 @@ export function BookingsPageClient({ tenant, allRows: sourceRows, activities, lo
         currency={tenant.currency}
         onConfirm={handleRefund}
       />
+      <MessageComposer
+        open={composeFor.length > 0}
+        onOpenChange={(open) => {
+          if (!open) setComposeFor([])
+        }}
+        recipients={composeFor.map(recipientOf)}
+        tenantId={tenant.id}
+        tenantSlug={tenant.slug}
+        business={tenant.name}
+      />
+      {cancelRow ? (
+        <CancelBookingDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setCancelRow(null)
+          }}
+          target={targetOf(cancelRow)}
+          amountPaid={cancelRow.booking.amountPaid}
+          total={cancelRow.booking.total}
+          policy={cancelRow.activity.cancellationPolicy}
+          payment={paymentOf(cancelRow.activity)}
+          recipient={recipientOf(cancelRow)}
+          tenantId={tenant.id}
+          tenantSlug={tenant.slug}
+          business={tenant.name}
+          currency={tenant.currency}
+          nowIso={`${TODAY_KEY}T${String(new Date(NOW).getHours()).padStart(2, '0')}:${String(new Date(NOW).getMinutes()).padStart(2, '0')}:00`}
+        />
+      ) : null}
     </div>
   )
 }

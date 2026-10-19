@@ -693,6 +693,8 @@ export interface Activity {
   accessibility?: string[]
   /** What guests should bring; a sensible list is shown when empty. */
   bring?: string[]
+  /** A note added to this activity's confirmation and reminder: parking, what to wear, where to check in. */
+  guestNote?: string
   difficulty: DifficultyLevel
   /** Minutes. */
   durationMinutes: number

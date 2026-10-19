@@ -40,6 +40,7 @@ import { DEFAULT_GUEST_FIELDS, guestDetailsOf } from '@/lib/guest-requirements'
 import { DEFAULT_BOOKING, METHOD_LABEL, bookingOf } from '@/lib/booking-method'
 import { EMPTY_PACKAGE, PackagePartsEditor, packageSeats, type PackageOption } from './package-parts-editor'
 import { PaymentTermsEditor } from './payment-terms-editor'
+import { ActivityMessagesEditor } from './activity-messages-editor'
 import { ChangesPolicyEditor, type DraftCancellation } from './changes-policy-editor'
 import { DEFAULT_CHANGES, DEFAULT_PAYMENT, changesOf, changesSummary, depositLabel, paymentOf, policySummary, presetOf } from '@/lib/booking-policy'
 import { BookingSettingsEditor } from './booking-settings-editor'
@@ -232,6 +233,8 @@ export interface ActivityDraft {
   cancellation: DraftCancellation
   /** What guests can change themselves. */
   changes: ChangeRules
+  /** Added to this activity's confirmation and reminder. */
+  guestNote: string
 }
 
 const STORAGE_KEY = 'ezra:activity-wizard:v13'
@@ -292,6 +295,7 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
     payment: { ...DEFAULT_PAYMENT },
     cancellation: { preset: 'flexible', freeCancellationHours: 24, lateRefundPercent: 0, keepDeposit: false },
     changes: { ...DEFAULT_CHANGES },
+    guestNote: '',
     freeCancellationHours: 24,
     crewIds: [],
     dining,
@@ -586,6 +590,7 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
       keepDeposit: Boolean(activity.cancellationPolicy.keepDeposit),
     },
     changes: changesOf(activity),
+    guestNote: activity.guestNote ?? '',
     kindSettings: (() => {
       const blank = defaultKindSettings()
       const rental = activity.rental
@@ -1461,6 +1466,8 @@ export interface ActivityWizardProps {
   pickupZones?: PickupZoneOption[]
   /** The business's other activities, for building a package. */
   packageOptions?: PackageOption[]
+  /** For the messages each activity sends. */
+  tenantId?: string
 }
 
 export function ActivityWizard({
@@ -1475,6 +1482,7 @@ export function ActivityWizard({
   waivers = [],
   pickupZones = [],
   packageOptions = [],
+  tenantId = '',
   mode = 'create',
   activityId,
   activity,
@@ -1646,6 +1654,7 @@ export function ActivityWizard({
           })),
           addOns: draft.addOns.map((addOn) => ({ id: addOn.id, label: addOn.label, price: addOn.price, description: addOn.description, maxPerBooking: addOn.maxPerBooking, required: addOn.required, ...(addOn.icon ? { icon: addOn.icon } : {}) })),
           payment: draft.payment ?? DEFAULT_PAYMENT,
+          guestNote: (draft.guestNote ?? '').trim(),
           changes: draft.changes ?? DEFAULT_CHANGES,
           cancellationPolicy: (() => {
             const cancel = isDining(draft)
@@ -1822,6 +1831,15 @@ export function ActivityWizard({
                         ...((draft.kind ?? 'trip') === 'rental' && normalizeKindSettings(draft.kindSettings).rental.licence !== 'none' ? (['licence'] as const) : []),
                       ]}
                     />
+                    {tenantId ? (
+                      <ActivityMessagesEditor
+                        tenantId={tenantId}
+                        slug={activity?.slug ?? (slugify(draft.name) || 'new-activity')}
+                        note={draft.guestNote ?? ''}
+                        onNote={(guestNote) => patch({ guestNote })}
+                        takesDeposit={(draft.payment ?? DEFAULT_PAYMENT).collect !== 'full'}
+                      />
+                    ) : null}
                     </div>
                   ) : null}
 

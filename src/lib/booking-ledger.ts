@@ -1,3 +1,4 @@
+import { NOW } from '@/lib/data/constants'
 import type { CurrencyCode } from '@/types'
 
 /* ==========================================================================
@@ -92,7 +93,11 @@ export function writeLedger(slug: string, store: LedgerStore) {
 
 export const ledgerKey = keyFor
 
-const stamp = () => new Date().toISOString().slice(0, 19)
+/** Changes are stamped on the demo clock, so they sit in the right place on every timeline. */
+const stamp = () => {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${NOW.getFullYear()}-${pad(NOW.getMonth() + 1)}-${pad(NOW.getDate())}T${pad(NOW.getHours())}:${pad(NOW.getMinutes())}:${pad(new Date().getSeconds())}`
+}
 
 /** Record a new booking: one entry, or one per part of a package. */
 export function recordBooking(slug: string, entries: LedgerEntry[]) {
