@@ -28,6 +28,8 @@ import { z } from 'zod'
 
 import type { Activity, Customer } from '@/types'
 import { CURRENT_TENANT, getActivitiesByTenant } from '@/lib/demo-core'
+import { useBookingDefaults } from '@/hooks/use-booking-defaults'
+import { effectiveCancellation } from '@/lib/booking-defaults'
 import type { CalendarEvent } from '@/lib/demo'
 import { fetchStorefrontAvailability, searchCustomers } from '@/lib/actions/dashboard'
 import {
@@ -243,6 +245,7 @@ export interface NewBookingDialogProps {
 export function NewBookingDialog({ open, onOpenChange }: NewBookingDialogProps) {
   const reduceMotion = useReducedMotionSafe()
   const currency = CURRENT_TENANT.currency
+  const { defaults: bookingDefaults } = useBookingDefaults(CURRENT_TENANT.slug)
 
   const activities = React.useMemo(
     () => getActivitiesByTenant(CURRENT_TENANT.id).filter((a) => a.status === 'live'),
@@ -1051,7 +1054,7 @@ export function NewBookingDialog({ open, onOpenChange }: NewBookingDialogProps) 
                   </div>
 
                   <p className="text-xs text-faint">
-                    {activity.cancellationPolicy.summary}
+                    {effectiveCancellation(activity, bookingDefaults).summary}
                   </p>
                 </div>
               ) : null}

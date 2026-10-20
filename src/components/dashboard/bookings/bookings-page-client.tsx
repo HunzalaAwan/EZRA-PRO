@@ -2,9 +2,11 @@
 
 import * as React from 'react'
 import { useBookingLedger } from '@/hooks/use-booking-ledger'
+import { useBookingDefaults } from '@/hooks/use-booking-defaults'
+import { effectiveCancellation, effectivePayment } from '@/lib/booking-defaults'
 import { useMessageTemplates } from '@/hooks/use-message-templates'
 import { changeBooking } from '@/lib/booking-ledger'
-import { paymentOf, refundFor, splitPayment } from '@/lib/booking-policy'
+import { refundFor, splitPayment } from '@/lib/booking-policy'
 import { MessageComposer, sendToGuests, type MessageRecipient } from '@/components/dashboard/bookings/message-composer'
 import { CancelBookingDialog, type ChangeTarget } from '@/components/dashboard/bookings/booking-change-dialogs'
 import Link from 'next/link'
@@ -155,6 +157,7 @@ export function BookingsPageClient({ tenant, allRows: firstRows, activities, loc
   const [adjustments, setAdjustments] = React.useState<Record<string, { refunded: number; cancelled: boolean }>>({})
   // Moves, guest changes and cancellations made anywhere (here, the booking record, the guest's page).
   const ledger = useBookingLedger(tenant.slug)
+  const { defaults: bookingDefaults } = useBookingDefaults(tenant.slug)
   const { templates } = useMessageTemplates(tenant.id)
   const allRows = React.useMemo(
     () =>
@@ -527,9 +530,9 @@ export function BookingsPageClient({ tenant, allRows: firstRows, activities, loc
         for (const row of rows) {
           const target = targetOf(row)
           const hoursToGo = (new Date(row.departure.startsAt).getTime() - new Date(NOW).getTime()) / 3_600_000
-          const pay = paymentOf(row.activity)
+          const pay = effectivePayment(row.activity, bookingDefaults)
           const deposit = pay.collect === 'deposit' ? splitPayment(pay, row.booking.total, target.fromParty).now : 0
-          const refund = refundFor(row.activity.cancellationPolicy, row.booking.amountPaid, hoursToGo, deposit)
+          const refund = refundFor(effectiveCancellation(row.activity, bookingDefaults), row.booking.amountPaid, hoursToGo, deposit)
           refunded += refund
           changeBooking(tenant.slug, row.booking.reference, target, { cancelled: true, refund }, { by: 'staff', what: `Cancelled from the bookings list${refund > 0 ? `, ${formatCurrency(refund, tenant.currency)} refunded` : ', no refund'}` })
         }
@@ -766,8 +769,8 @@ export function BookingsPageClient({ tenant, allRows: firstRows, activities, loc
           target={targetOf(cancelRow)}
           amountPaid={cancelRow.booking.amountPaid}
           total={cancelRow.booking.total}
-          policy={cancelRow.activity.cancellationPolicy}
-          payment={paymentOf(cancelRow.activity)}
+          policy={effectiveCancellation(cancelRow.activity, bookingDefaults)}
+          payment={effectivePayment(cancelRow.activity, bookingDefaults)}
           recipient={recipientOf(cancelRow)}
           tenantId={tenant.id}
           tenantSlug={tenant.slug}

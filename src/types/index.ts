@@ -264,6 +264,8 @@ export interface CancellationPolicy {
   preset?: 'flexible' | 'moderate' | 'strict' | 'none' | 'custom'
   /** With a deposit: the deposit is never refunded, even inside the free window. */
   keepDeposit?: boolean
+  /** Follows the business default in Settings → Booking flow instead of numbers of its own. */
+  useDefault?: boolean
 }
 
 /** How guests pay: all now, part now and the rest before the day, or on the day. */
@@ -277,6 +279,8 @@ export interface PaymentTerms {
   balanceDueDays: number
   /** Guests can pay everything now instead. */
   allowPayInFull: boolean
+  /** Follows the business default in Settings → Booking flow instead of terms of its own. */
+  useDefault?: boolean
 }
 
 /** What guests can change themselves from their booking page. */

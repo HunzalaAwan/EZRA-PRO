@@ -20,6 +20,8 @@ export interface DraftCancellation {
   freeCancellationHours: number
   lateRefundPercent: number
   keepDeposit: boolean
+  /** Follows the business default in Settings → Booking flow. */
+  useDefault?: boolean
 }
 
 function Toggle({ title, text, checked, onChange, children }: { title: string; text: string; checked: boolean; onChange: (value: boolean) => void; children?: React.ReactNode }) {
@@ -77,6 +79,7 @@ export function ChangesPolicyEditor({
   payment,
   currency,
   wholeGroup = false,
+  cancellationDefault,
 }: {
   cancellation: DraftCancellation
   onCancellation: (next: DraftCancellation) => void
@@ -86,6 +89,8 @@ export function ChangesPolicyEditor({
   currency: CurrencyCode
   /** Charters: there is one group, so no "add people". */
   wholeGroup?: boolean
+  /** Offer the business default from Settings → Booking flow instead of numbers of its own. */
+  cancellationDefault?: { on: boolean; onChange: (on: boolean) => void }
 }) {
   const setCancel = (patch: Partial<DraftCancellation>) => onCancellation({ ...cancellation, ...patch })
   const setChanges = (patch: Partial<ChangeRules>) => onChanges({ ...changes, ...patch })
@@ -100,7 +105,23 @@ export function ChangesPolicyEditor({
       </div>
 
       <div>
-        <p className="text-[0.8125rem] font-medium">Cancellation policy</p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[0.8125rem] font-medium">Cancellation policy</p>
+          {cancellationDefault ? (
+            <label className="flex items-center gap-2 text-xs text-muted">
+              Use business default
+              <Switch checked={cancellationDefault.on} onCheckedChange={cancellationDefault.onChange} aria-label="Use the business default cancellation policy" />
+            </label>
+          ) : null}
+        </div>
+        {cancellationDefault?.on ? (
+          <p className="mt-2 rounded-lg bg-surface-sunken px-3 py-2.5 text-xs text-muted">
+            {policySummary(cancellation, payment)}{' '}
+            <a href="/dashboard/settings/booking" className="font-medium text-primary hover:underline">
+              Change the default
+            </a>
+          </p>
+        ) : (
         <div className="mt-2 grid gap-4 sm:grid-cols-2">
           <Field label="Full refund until" description="Before the start. 0: no free cancellation.">
             {({ id }) => <BeforeInput id={id} hours={cancellation.freeCancellationHours} onHours={(freeCancellationHours) => setCancel({ freeCancellationHours, preset: 'custom' })} />}
@@ -109,7 +130,8 @@ export function ChangesPolicyEditor({
             {(control) => <Input {...control} type="number" min={0} max={100} step={5} suffix="%" value={cancellation.lateRefundPercent} onChange={(event) => setCancel({ lateRefundPercent: Math.min(100, Math.max(0, Math.round(Number(event.target.value)) || 0)), preset: 'custom' })} />}
           </Field>
         </div>
-        {payment.collect === 'deposit' ? (
+        )}
+        {payment.collect === 'deposit' && !cancellationDefault?.on ? (
           <label className="mt-3 flex items-start justify-between gap-3">
             <span>
               <span className="block text-sm font-medium">Keep the deposit</span>

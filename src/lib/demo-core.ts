@@ -3763,7 +3763,9 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     colorKey: spec.colorKey,
     cancellationPolicy: (() => {
       const policy = { freeCancellationHours: freeHours, lateRefundPercent: lateRefund, keepDeposit: KEEP_DEPOSIT.has(spec.slug) }
-      return { ...policy, preset: presetOf(policy), summary: policySummary(policy, PAYMENT_BY_SLUG[spec.slug] ? { ...DEFAULT_PAYMENT, ...PAYMENT_BY_SLUG[spec.slug] } : undefined) }
+      // The standard 24-hour policy follows the business default in Settings → Booking flow; anything else is the activity's own.
+      const useDefault = freeHours === 24 && lateRefund === 0 && !policy.keepDeposit
+      return { ...policy, preset: presetOf(policy), summary: policySummary(policy, PAYMENT_BY_SLUG[spec.slug] ? { ...DEFAULT_PAYMENT, ...PAYMENT_BY_SLUG[spec.slug] } : undefined), ...(useDefault ? { useDefault: true } : {}) }
     })(),
     requiredResourceIds: spec.resources,
     rating: spec.rating,

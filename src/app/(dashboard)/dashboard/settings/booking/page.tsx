@@ -6,7 +6,7 @@ import { BookingFlowSettingsClient } from '@/components/dashboard/settings/booki
 
 export const metadata: Metadata = {
   title: 'Booking flow',
-  description: 'How far ahead guests can book and what happens when a time sells out.',
+  description: 'Checkout fields, default payment and cancellation terms, and the calendar window.',
 }
 
 export default async function BookingFlowSettingsPage() {

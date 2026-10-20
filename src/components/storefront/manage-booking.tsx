@@ -34,6 +34,8 @@ import {
   type WaiverState,
 } from '@/components/storefront/checkout-guest-details'
 import { sendGuestMessage, useInbox } from '@/hooks/use-inbox'
+import { useBookingDefaults } from '@/hooks/use-booking-defaults'
+import { resolveTerms } from '@/lib/booking-defaults'
 import type { InboxThread } from '@/lib/inbox'
 import { answerProblem } from '@/lib/guest-requirements'
 import { cn, formatCurrency, formatDateLong, formatRelative, formatTime, pluralize } from '@/lib/utils'
@@ -116,7 +118,7 @@ export function ManageBooking(
           image: string
           meetingPoint: string
           locationName?: string
-          policy: Pick<CancellationPolicy, 'freeCancellationHours' | 'lateRefundPercent' | 'keepDeposit' | 'summary'>
+          policy: Pick<CancellationPolicy, 'freeCancellationHours' | 'lateRefundPercent' | 'keepDeposit' | 'summary' | 'useDefault'>
           changes: ChangeRules
           payment: PaymentTerms
           pricePerGuest: number
@@ -147,7 +149,10 @@ export function ManageBooking(
 
 type InnerProps = Exclude<Parameters<typeof ManageBooking>[0], { notFoundReference: string }>
 
-function ManageBookingInner({ tenant, booking, guest, activity, departure, waiver, days: rawDays, thread, nowIso }: InnerProps) {
+function ManageBookingInner({ tenant, booking, guest, activity: given, departure, waiver, days: rawDays, thread, nowIso }: InnerProps) {
+  // Its own cancellation and payment terms, or the business defaults it follows.
+  const { defaults: bookingDefaults } = useBookingDefaults(tenant.slug)
+  const activity = React.useMemo(() => ({ ...given, ...resolveTerms({ policy: given.policy, payment: given.payment }, bookingDefaults) }), [given, bookingDefaults])
   const [state, update] = useManageState(tenant.slug, booking.reference)
   const [open, setOpen] = React.useState<'waiver' | 'details' | 'move' | 'guests' | 'cancel' | null>(null)
   const now = React.useMemo(() => new Date(nowIso), [nowIso])

@@ -32,6 +32,8 @@ import {
 } from '@/lib/utils'
 import type { Activity, GuestQuestion, PickupZone, Tenant, WaiverTemplate } from '@/types'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
+import { useActivityWithDefaults, useBookingDefaults } from '@/hooks/use-booking-defaults'
+import type { CheckoutFields } from '@/lib/booking-defaults'
 import { Button } from '@/components/ui/button'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -155,14 +157,19 @@ export interface CheckoutFlowProps {
 const EMAIL = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i
 const PHONE = /^[+()\-\s\d]{7,}$/
 
-const guestSchema = z.object({
-  firstName: z.string().trim().min(2, 'Tell us your first name'),
-  lastName: z.string().trim().min(2, 'Tell us your last name'),
-  email: z.string().trim().regex(EMAIL, 'That email does not look right'),
-  phone: z.string().trim().regex(PHONE, 'Add a number we can reach you on'),
-  country: z.string().min(2, 'Pick your country'),
-  requests: z.string().max(500, 'Keep it under 500 characters').optional(),
-})
+/** The guest form's checks, following Settings → Booking flow: required, optional (checked only when filled in) or not asked. */
+function guestSchemaFor(fields: CheckoutFields) {
+  const phone = z.string().trim().regex(PHONE, 'Add a number we can reach you on')
+  const requests = z.string().max(500, 'Keep it under 500 characters')
+  return z.object({
+    firstName: z.string().trim().min(2, 'Tell us your first name'),
+    lastName: z.string().trim().min(2, 'Tell us your last name'),
+    email: z.string().trim().regex(EMAIL, 'That email does not look right'),
+    phone: fields.phone === 'required' ? phone : fields.phone === 'optional' ? z.union([z.literal(''), phone]) : z.string(),
+    country: fields.country === 'required' ? z.string().min(2, 'Pick your country') : z.string(),
+    requests: fields.requests === 'required' ? requests.trim().min(2, 'Tell us a little here') : requests.optional(),
+  })
+}
 
 const paymentSchema = z.object({
   cardName: z.string().trim().min(3, 'Name as printed on the card'),
@@ -301,7 +308,7 @@ export function CheckoutFlow({
   nowIso,
   pickupZones = [],
   tenant,
-  activity,
+  activity: given,
   departure,
   selection,
   rentalDays = 1,
@@ -314,6 +321,10 @@ export function CheckoutFlow({
   reference,
 }: CheckoutFlowProps) {
   const reducedMotion = useReducedMotionSafe()
+  // The activity's own payment and cancellation terms, or the business defaults it follows, plus the business's own questions.
+  const activity = useActivityWithDefaults(given, tenant.slug)
+  const { defaults: bookingDefaults } = useBookingDefaults(tenant.slug)
+  const fields = bookingDefaults.checkout
 
   const pricing = usePricing(tenant.slug)
   const guestsSelected = selection.tiers.reduce((sum, tier) => sum + tier.qty, 0)
@@ -491,7 +502,7 @@ export function CheckoutFlow({
   /** Both schemas at once, so a guest sees every problem in one pass. */
   const validate = (scope: 'guest' | 'all'): boolean => {
     const next: Errors = {}
-    const guestResult = guestSchema.safeParse(guest)
+    const guestResult = guestSchemaFor(fields).safeParse(guest)
     if (!guestResult.success) Object.assign(next, collectErrors(guestResult.error.issues))
     Object.assign(
       next,
@@ -604,7 +615,7 @@ export function CheckoutFlow({
           {/* ---------- details, then payment, one page ---------- */}
           <div className="mt-8 space-y-10">
             <div className="space-y-4">
-              <GuestStep guest={guest} setGuest={setGuest} errors={errors} />
+              <GuestStep guest={guest} setGuest={setGuest} errors={errors} fields={fields} />
               <CheckoutOptIn optIn={optIn} />
             </div>
             <CheckoutDiscounts
@@ -930,10 +941,12 @@ function GuestStep({
   guest,
   setGuest,
   errors,
+  fields,
 }: {
   guest: GuestState
   setGuest: React.Dispatch<React.SetStateAction<GuestState>>
   errors: Errors
+  fields: CheckoutFields
 }) {
   const set = (key: keyof GuestState) => (value: string) =>
     setGuest((prev) => ({ ...prev, [key]: value }))
@@ -981,19 +994,22 @@ function GuestStep({
             placeholder="maia@example.com"
           />
         </Field>
-        <Field label="Mobile" error={errors.phone} description="For day-of updates only." required>
-          <Input
-            type="tel"
-            inputMode="tel"
-            value={guest.phone}
-            onChange={(e) => set('phone')(e.target.value)}
-            autoComplete="tel"
-            placeholder="+1 808 555 0134"
-          />
-        </Field>
+        {fields.phone === 'off' ? null : (
+          <Field label="Mobile" error={errors.phone} description="For day-of updates only." required={fields.phone === 'required'} optional={fields.phone === 'optional'}>
+            <Input
+              type="tel"
+              inputMode="tel"
+              value={guest.phone}
+              onChange={(e) => set('phone')(e.target.value)}
+              autoComplete="tel"
+              placeholder="+1 808 555 0134"
+            />
+          </Field>
+        )}
       </div>
 
-      <Field label="Country of residence" error={errors.country} required>
+      {fields.country === 'off' ? null : (
+      <Field label="Country of residence" error={errors.country} required={fields.country === 'required'} optional={fields.country === 'optional'}>
         {(control) => (
           <Select value={guest.country} onValueChange={set('country')}>
             <SelectTrigger id={control.id} aria-invalid={control['aria-invalid']}>
@@ -1009,10 +1025,13 @@ function GuestStep({
           </Select>
         )}
       </Field>
+      )}
 
+      {fields.requests === 'off' ? null : (
       <Field
         label="Anything we should know?"
-        optional
+        optional={fields.requests === 'optional'}
+        required={fields.requests === 'required'}
         error={errors.requests}
         description="Allergies, nervous swimmers, birthdays, accessibility needs."
         hint={`${guest.requests.length}/500`}
@@ -1024,6 +1043,7 @@ function GuestStep({
           placeholder="Celebrating our anniversary — no fuss needed, we're just happy to be here."
         />
       </Field>
+      )}
     </section>
   )
 }

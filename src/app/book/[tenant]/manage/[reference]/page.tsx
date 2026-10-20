@@ -61,7 +61,8 @@ export default async function ManageBookingPage({ params }: { params: Promise<{ 
         locationName: site?.name,
         policy: activity.cancellationPolicy,
         changes: changesOf(activity),
-        payment: paymentOf(activity),
+        // No terms of its own: it follows the business default, applied in the browser.
+        payment: activity.payment && !activity.payment.useDefault ? paymentOf(activity) : { ...paymentOf(activity), useDefault: true },
         pricePerGuest: activity.priceTiers[0]?.price ?? 0,
         guestQuestions: activity.guestQuestions ?? [],
         kind: activity.kind ?? 'trip',

@@ -5,6 +5,8 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { AnimatePresence, motion } from 'motion/react'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
+import { useBookingDefaults } from '@/hooks/use-booking-defaults'
+import { effectiveCancellation, effectivePayment } from '@/lib/booking-defaults'
 import {
   ArrowUpRight,
   BadgeCheck,
@@ -93,7 +95,7 @@ import { MessageComposer, type MessageRecipient } from '@/components/dashboard/b
 import { CancelBookingDialog, ChangeBookingDialog, type ChangeTarget } from '@/components/dashboard/bookings/booking-change-dialogs'
 import { useBookingLedger } from '@/hooks/use-booking-ledger'
 import { useInbox } from '@/hooks/use-inbox'
-import { changesOf, paymentOf } from '@/lib/booking-policy'
+import { changesOf } from '@/lib/booking-policy'
 import { ChannelBadge } from '@/components/dashboard/bookings/bookings-table'
 import { formatAnswer } from '@/lib/guest-requirements'
 
@@ -221,6 +223,7 @@ export function BookingDetailContent({
   const tenant = tenantById.get(detail?.booking.tenantId ?? '') ?? CURRENT_TENANT
   // Moves, guest-count changes and cancellations, by the team or by the guest.
   const ledger = useBookingLedger(tenant.slug)
+  const { defaults: bookingDefaults } = useBookingDefaults(tenant.slug)
 
   // Re-seed local state when the sheet swaps to a different booking.
   React.useEffect(() => {
@@ -1222,8 +1225,8 @@ export function BookingDetailContent({
         target={target}
         amountPaid={booking.amountPaid}
         total={booking.total}
-        policy={activity.cancellationPolicy}
-        payment={paymentOf(activity)}
+        policy={effectiveCancellation(activity, bookingDefaults)}
+        payment={effectivePayment(activity, bookingDefaults)}
         recipient={recipient}
         tenantId={tenant.id}
         tenantSlug={tenant.slug}

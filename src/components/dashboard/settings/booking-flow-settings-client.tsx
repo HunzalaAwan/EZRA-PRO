@@ -2,73 +2,234 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { ArrowRight, CalendarClock, ListChecks, Save } from 'lucide-react'
+import { ArrowRight, CalendarClock, CreditCard, FormInput, Lock, Plus, RotateCcw, Save, ShieldCheck, Trash2 } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Field } from '@/components/ui/field'
+import { IconButton } from '@/components/ui/icon-button'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Segmented } from '@/components/ui/segmented'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { toast } from '@/components/ui/toaster'
+import { BeforeInput } from '@/components/dashboard/activities/changes-policy-editor'
+import { PaymentTermsEditor } from '@/components/dashboard/activities/payment-terms-editor'
+import { useBookingDefaults } from '@/hooks/use-booking-defaults'
+import { DEFAULT_BOOKING_DEFAULTS, type BookingDefaults, type FieldMode } from '@/lib/booking-defaults'
+import { policySummary } from '@/lib/booking-policy'
 import type { BookingRow } from '@/lib/demo'
 import { cn } from '@/lib/utils'
-import type { Payment, Tenant } from '@/types'
+import type { GuestQuestion, GuestQuestionKind, Payment, Tenant } from '@/types'
 
 type SampleBooking = (BookingRow & { payments: Payment[] }) | undefined
 
 /* ==========================================================================
-   BOOKING FLOW — only what is truly business-wide: how far ahead the
-   calendar opens and what happens when a time sells out. Everything that
-   differs from one activity to the next (how guests pay, cancellations,
-   changes, notice, guest details, waivers) is set on the activity, once,
-   so there is never a business rule and an activity rule saying different
-   things. The card below says where each one lives now.
+   BOOKING FLOW — the business-wide rules: the calendar window and
+   waitlists, what checkout asks for (and your own questions), and the
+   default payment and cancellation terms. An activity can set its own
+   payment or cancellation terms; when it does, those win.
    ========================================================================== */
-
-interface BookingRules {
-  maxAdvanceDays: number
-  waitlistsEnabled: boolean
-  waitlistAutoPromote: boolean
-}
-
-const defaultRules = (tenant: Tenant): BookingRules => ({
-  maxAdvanceDays: 365,
-  waitlistsEnabled: tenant.features.waitlists,
-  waitlistAutoPromote: true,
-})
-
-/** Where each setting that used to be here is set now. */
-const ON_EACH_ACTIVITY: { title: string; where: string; text: string }[] = [
-  { title: 'How guests pay', where: 'Pricing step', text: 'In full, a deposit with the rest charged later, or pay on the day.' },
-  { title: 'Cancellation policy', where: 'Booking step', text: 'Full refund until a set number of hours or days before, then a share back.' },
-  { title: 'Changes guests can make', where: 'Booking step', text: 'Move to another time, add people, cancel online, with any fee.' },
-  { title: 'Booking notice', where: 'Booking step', text: 'How long before the start online booking closes.' },
-  { title: 'Guest details and waiver', where: 'Guests step', text: 'What each guest is asked and who signs.' },
-]
 
 export interface BookingFlowSettingsClientProps {
   tenant: Tenant
   sampleBooking: SampleBooking
 }
 
-export function BookingFlowSettingsClient({ tenant }: BookingFlowSettingsClientProps) {
-  const [rules, setRules] = React.useState<BookingRules>(() => defaultRules(tenant))
-  const [saving, setSaving] = React.useState(false)
-  const set = <K extends keyof BookingRules>(key: K, value: BookingRules[K]) => setRules((prev) => ({ ...prev, [key]: value }))
-  const dirty = JSON.stringify(rules) !== JSON.stringify(defaultRules(tenant))
+const MODES: { value: FieldMode; label: string }[] = [
+  { value: 'required', label: 'Required' },
+  { value: 'optional', label: 'Optional' },
+  { value: 'off', label: 'Off' },
+]
 
-  const save = () => {
-    setSaving(true)
-    window.setTimeout(() => {
-      setSaving(false)
-      toast.success('Booking flow saved', { description: 'Applies to every activity from now on.' })
-    }, 620)
+const QUESTION_KINDS: { value: GuestQuestionKind | 'long'; label: string }[] = [
+  { value: 'text', label: 'Short answer' },
+  { value: 'long', label: 'Long answer' },
+  { value: 'yesno', label: 'Yes or no' },
+  { value: 'choice', label: 'Pick one' },
+  { value: 'number', label: 'Number' },
+  { value: 'date', label: 'Date' },
+]
+
+const kindValue = (question: GuestQuestion) => (question.kind === 'text' && !question.short ? 'long' : question.kind)
+
+export function BookingFlowSettingsClient({ tenant }: BookingFlowSettingsClientProps) {
+  const { defaults, save } = useBookingDefaults(tenant.slug)
+  const [draft, setDraft] = React.useState<BookingDefaults>(defaults)
+  // The saved settings land just after the first paint: take them while nothing has been changed here.
+  const touched = React.useRef(false)
+  React.useEffect(() => {
+    if (!touched.current) setDraft(defaults)
+  }, [defaults])
+
+  const update = (next: BookingDefaults) => {
+    touched.current = true
+    setDraft(next)
   }
+  const set = <K extends keyof BookingDefaults>(key: K, value: BookingDefaults[K]) => update({ ...draft, [key]: value })
+  const dirty = JSON.stringify(draft) !== JSON.stringify(defaults)
+
+  const onSave = () => {
+    const clean = { ...draft, questions: draft.questions.filter((question) => question.label.trim()) }
+    if (save(clean)) {
+      touched.current = false
+      setDraft(clean)
+      toast.success('Booking flow saved', { description: 'Every activity that follows the defaults uses these from now on.' })
+    }
+  }
+
+  const addQuestion = () =>
+    set('questions', [...draft.questions, { id: `q_biz_${Date.now().toString(36)}`, label: '', kind: 'text', short: true, scope: 'booking', required: false }])
+  const setQuestion = (id: string, patch: Partial<GuestQuestion>) => set('questions', draft.questions.map((question) => (question.id === id ? { ...question, ...patch } : question)))
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
+      {/* ---------- checkout fields ---------- */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FormInput className="size-4 text-primary" aria-hidden="true" />
+            Checkout fields
+          </CardTitle>
+          <CardDescription>What guests fill in when they book. The same on every activity.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-5 pt-0">
+          <ul className="divide-y divide-line-subtle overflow-hidden rounded-xl border border-line">
+            <FixedRow label="First and last name" />
+            <FixedRow label="Email" note="The confirmation goes here" />
+            <ModeRow label="Mobile number" value={draft.checkout.phone} onChange={(phone) => set('checkout', { ...draft.checkout, phone })} />
+            <ModeRow label="Country" value={draft.checkout.country} onChange={(country) => set('checkout', { ...draft.checkout, country })} />
+            <ModeRow label="Anything we should know?" value={draft.checkout.requests} onChange={(requests) => set('checkout', { ...draft.checkout, requests })} />
+          </ul>
+
+          <div className="flex flex-col gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Your own questions</h3>
+              <p className="mt-0.5 text-xs text-subtle">Asked once per booking, on every activity. Questions for one activity only go on that activity’s Guests step.</p>
+            </div>
+            {draft.questions.length > 0 ? (
+              <ul className="flex flex-col gap-2">
+                {draft.questions.map((question) => (
+                  <li key={question.id} className="flex flex-col gap-3 rounded-xl border border-line p-3 sm:flex-row sm:items-start">
+                    <Input
+                      aria-label="Question"
+                      value={question.label}
+                      onChange={(event) => setQuestion(question.id, { label: event.target.value })}
+                      placeholder="e.g. How did you hear about us?"
+                      className="sm:flex-1"
+                    />
+                    <Select
+                      value={kindValue(question)}
+                      onValueChange={(value) =>
+                        setQuestion(question.id, value === 'long' ? { kind: 'text', short: false } : { kind: value as GuestQuestionKind, short: value === 'text' ? true : undefined })
+                      }
+                    >
+                      <SelectTrigger aria-label="Answer type" className="sm:w-40">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {QUESTION_KINDS.map((kind) => (
+                          <SelectItem key={kind.value} value={kind.value}>
+                            {kind.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {question.kind === 'choice' ? (
+                      <Input
+                        aria-label="Choices"
+                        value={(question.options ?? []).join(', ')}
+                        onChange={(event) => setQuestion(question.id, { options: event.target.value.split(',').map((option) => option.trimStart()) })}
+                        onBlur={() => setQuestion(question.id, { options: (question.options ?? []).map((option) => option.trim()).filter(Boolean) })}
+                        placeholder="Choices, separated by commas"
+                        className="sm:w-56"
+                      />
+                    ) : null}
+                    <label className="flex h-10 shrink-0 items-center gap-2 text-sm text-muted">
+                      <Switch checked={question.required} onCheckedChange={(required) => setQuestion(question.id, { required })} aria-label="Required" />
+                      Required
+                    </label>
+                    <IconButton
+                      variant="ghost"
+                      size="sm"
+                      aria-label="Remove question"
+                      className="self-end text-muted hover:text-danger sm:self-center"
+                      onClick={() => set('questions', draft.questions.filter((entry) => entry.id !== question.id))}
+                    >
+                      <Trash2 />
+                    </IconButton>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <Button size="sm" variant="secondary" leftIcon={<Plus />} className="self-start" onClick={addQuestion}>
+              Add a question
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ---------- payment ---------- */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CreditCard className="size-4 text-primary" aria-hidden="true" />
+            Payment and deposits
+          </CardTitle>
+          <CardDescription>The default for every activity. An activity can set its own on its Pricing step.</CardDescription>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <PaymentTermsEditor value={draft.payment} onChange={(payment) => set('payment', payment)} currency={tenant.currency} examplePrice={10000} businessWide />
+        </CardContent>
+      </Card>
+
+      {/* ---------- cancellation ---------- */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ShieldCheck className="size-4 text-primary" aria-hidden="true" />
+            Cancellation policy
+          </CardTitle>
+          <CardDescription>The default for every activity. An activity can set its own on its Booking step.</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4 pt-0">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Full refund until" description="Before the start. 0: no free cancellation.">
+              {({ id }) => <BeforeInput id={id} hours={draft.cancellation.freeCancellationHours} onHours={(freeCancellationHours) => set('cancellation', { ...draft.cancellation, freeCancellationHours })} />}
+            </Field>
+            <Field label="After that, refund" description="0: nothing back after the free window.">
+              {(control) => (
+                <Input
+                  {...control}
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={5}
+                  suffix="%"
+                  value={draft.cancellation.lateRefundPercent}
+                  onChange={(event) => set('cancellation', { ...draft.cancellation, lateRefundPercent: Math.min(100, Math.max(0, Math.round(Number(event.target.value)) || 0)) })}
+                />
+              )}
+            </Field>
+          </div>
+          {draft.payment.collect === 'deposit' ? (
+            <ToggleRow
+              title="Keep the deposit"
+              body="The deposit is not refunded, even when guests cancel in time."
+              checked={draft.cancellation.keepDeposit}
+              onCheckedChange={(keepDeposit) => set('cancellation', { ...draft.cancellation, keepDeposit })}
+            />
+          ) : null}
+          <p className="rounded-lg bg-surface-sunken px-3 py-2.5 text-xs text-muted">
+            <span className="font-semibold text-foreground">Guests read: </span>
+            {policySummary(draft.cancellation, draft.payment)}
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* ---------- calendar ---------- */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -80,7 +241,7 @@ export function BookingFlowSettingsClient({ tenant }: BookingFlowSettingsClientP
         <CardContent className="flex flex-col gap-5 pt-0">
           <Field label="Calendar opens" description="How far ahead guests can book." className="sm:max-w-sm">
             {({ id }) => (
-              <Select value={String(rules.maxAdvanceDays)} onValueChange={(value) => set('maxAdvanceDays', Number(value))}>
+              <Select value={String(draft.maxAdvanceDays)} onValueChange={(value) => set('maxAdvanceDays', Number(value))}>
                 <SelectTrigger id={id}>
                   <SelectValue />
                 </SelectTrigger>
@@ -97,61 +258,72 @@ export function BookingFlowSettingsClient({ tenant }: BookingFlowSettingsClientP
           <ToggleRow
             title="Waitlist on sold-out times"
             body="Guests join a list instead of leaving. You keep the demand."
-            checked={rules.waitlistsEnabled}
-            onCheckedChange={(value) => set('waitlistsEnabled', value)}
+            checked={draft.waitlists && tenant.features.waitlists}
+            disabled={!tenant.features.waitlists}
+            onCheckedChange={(value) => set('waitlists', value)}
             badge={tenant.features.waitlists ? undefined : <Badge variant="warning" size="sm">Growth plan</Badge>}
           />
           <ToggleRow
             title="Offer freed spots to the waitlist"
             body="When someone cancels or moves, the next guest on the list gets 30 minutes to take the spot."
-            checked={rules.waitlistAutoPromote}
-            disabled={!rules.waitlistsEnabled}
+            checked={draft.waitlistAutoPromote}
+            disabled={!draft.waitlists || !tenant.features.waitlists}
             onCheckedChange={(value) => set('waitlistAutoPromote', value)}
           />
         </CardContent>
-        <CardFooter separated className="justify-between gap-3">
-          <p className="text-xs text-subtle">{dirty ? 'You have unsaved changes.' : 'Up to date.'}</p>
-          <Button size="sm" leftIcon={<Save />} loading={saving} onClick={save} disabled={!dirty}>
-            Save
-          </Button>
-        </CardFooter>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ListChecks className="size-4 text-primary" aria-hidden="true" />
-            Set on each activity
-          </CardTitle>
-          <CardDescription>
-            These differ from one activity to the next, so each activity has its own. Open an activity and edit the step shown.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <ul className="divide-y divide-line-subtle overflow-hidden rounded-xl border border-line">
-            {ON_EACH_ACTIVITY.map((item) => (
-              <li key={item.title} className="flex flex-col gap-0.5 bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium text-foreground">{item.title}</span>
-                  <span className="block text-xs text-muted">{item.text}</span>
-                </span>
-                <Badge variant="outline" size="sm" className="shrink-0 self-start sm:self-center">
-                  {item.where}
-                </Badge>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button asChild size="sm" variant="secondary" rightIcon={<ArrowRight />}>
-              <Link href="/dashboard/activities">Go to activities</Link>
-            </Button>
-            <Button asChild size="sm" variant="ghost" rightIcon={<ArrowRight />}>
-              <Link href="/dashboard/marketing/automations">Confirmation, reminder and cart emails</Link>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <p className="text-xs text-subtle">
+        Changes guests can make, booking notice, guest details and waivers are set on each activity.{' '}
+        <Link href="/dashboard/activities" className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
+          Go to activities
+          <ArrowRight className="size-3" aria-hidden="true" />
+        </Link>
+      </p>
+
+      {/* ---------- save ---------- */}
+      <div className="sticky bottom-4 z-10 flex items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3 shadow-xs">
+        <p className="text-sm text-muted">{dirty ? 'You have unsaved changes.' : 'All saved.'}</p>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            leftIcon={<RotateCcw />}
+            disabled={JSON.stringify(draft) === JSON.stringify(DEFAULT_BOOKING_DEFAULTS)}
+            onClick={() => update(DEFAULT_BOOKING_DEFAULTS)}
+          >
+            Reset
+          </Button>
+          <Button size="sm" leftIcon={<Save />} onClick={onSave} disabled={!dirty}>
+            Save
+          </Button>
+        </div>
+      </div>
     </div>
+  )
+}
+
+function FixedRow({ label, note }: { label: string; note?: string }) {
+  return (
+    <li className="flex items-center justify-between gap-4 bg-surface px-4 py-3">
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-foreground">{label}</span>
+        {note ? <span className="block text-xs text-subtle">{note}</span> : null}
+      </span>
+      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-subtle">
+        <Lock className="size-3.5" aria-hidden="true" />
+        Always asked
+      </span>
+    </li>
+  )
+}
+
+function ModeRow({ label, value, onChange }: { label: string; value: FieldMode; onChange: (value: FieldMode) => void }) {
+  return (
+    <li className={cn('flex flex-col gap-2 bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between', value === 'off' && 'bg-surface-sunken/40')}>
+      <span className={cn('text-sm font-medium', value === 'off' ? 'text-muted' : 'text-foreground')}>{label}</span>
+      <Segmented label={label} size="sm" value={value} onValueChange={onChange} options={MODES} />
+    </li>
   )
 }
 

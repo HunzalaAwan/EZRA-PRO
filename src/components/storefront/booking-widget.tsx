@@ -35,6 +35,8 @@ import {
 import type { Activity, CurrencyCode, DepartureStatus, Location, PriceTier, VerticalKey } from '@/types'
 import { Switch } from '@/components/ui/switch'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
+import { useBookingDefaults } from '@/hooks/use-booking-defaults'
+import { withBookingDefaults } from '@/lib/booking-defaults'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -363,7 +365,9 @@ export function BookingWidget(rawProps: BookingWidgetProps) {
       }),
     [rawProps.days, ledger.delta],
   )
-  const props = { ...rawProps, days }
+  const { defaults } = useBookingDefaults(rawProps.tenantSlug)
+  const activity = React.useMemo(() => withBookingDefaults(rawProps.activity, defaults), [rawProps.activity, defaults])
+  const props = { ...rawProps, days, activity }
   if (props.activity.kind === 'package') {
     return (
       <PackageWidget

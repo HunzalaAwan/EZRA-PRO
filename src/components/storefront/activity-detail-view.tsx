@@ -39,6 +39,7 @@ import type { Activity, DifficultyLevel, Location, Tenant } from '@/types'
 import { locationAddress } from '@/lib/locations'
 import { kindBadge, kindChipLabel, kindNote, rentalCategoryMeta, routeLabel, categoryLabel, themeLabel, themeOf } from '@/lib/activity-kinds'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
+import { useActivityWithDefaults } from '@/hooks/use-booking-defaults'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
 import { Progress } from '@/components/ui/progress'
@@ -171,7 +172,7 @@ export interface ActivityDetailViewProps {
 
 export function ActivityDetailView({
   tenant,
-  activity,
+  activity: given,
   days,
   locations = [],
   nowIso,
@@ -185,6 +186,8 @@ export function ActivityDetailView({
   recentBookings,
   packageParts,
 }: ActivityDetailViewProps) {
+  // Its own payment and cancellation terms, or the business defaults it follows.
+  const activity = useActivityWithDefaults(given, tenant.slug)
   const sites = React.useMemo(
     () =>
       activity.locations

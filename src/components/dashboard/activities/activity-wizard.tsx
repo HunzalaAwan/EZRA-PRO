@@ -40,6 +40,8 @@ import { DEFAULT_GUEST_FIELDS, guestDetailsOf } from '@/lib/guest-requirements'
 import { DEFAULT_BOOKING, METHOD_LABEL, bookingOf, groupUnit } from '@/lib/booking-method'
 import { EMPTY_PACKAGE, PackagePartsEditor, packageSeats, type PackageOption } from './package-parts-editor'
 import { PaymentTermsEditor } from './payment-terms-editor'
+import { useBookingDefaults } from '@/hooks/use-booking-defaults'
+import type { BookingDefaults } from '@/lib/booking-defaults'
 import { ActivityMessagesEditor } from './activity-messages-editor'
 import { KIND_PRICING, KindPricingExtras } from './kind-pricing-extras'
 import { ChangesPolicyEditor, type DraftCancellation } from './changes-policy-editor'
@@ -297,8 +299,8 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
     accessibility: [],
     bring: [],
     package: { ...EMPTY_PACKAGE },
-    payment: { ...DEFAULT_PAYMENT },
-    cancellation: { preset: 'flexible', freeCancellationHours: 24, lateRefundPercent: 0, keepDeposit: false },
+    payment: { ...DEFAULT_PAYMENT, useDefault: true },
+    cancellation: { preset: 'flexible', freeCancellationHours: 24, lateRefundPercent: 0, keepDeposit: false, useDefault: true },
     changes: { ...DEFAULT_CHANGES },
     guestNote: '',
     privateOption: { enabled: false, price: 0, includedGuests: 6, extraGuest: 0 },
@@ -414,6 +416,24 @@ function rentalHoursFor(draft: ActivityDraft): { hourly: boolean; daily: boolean
 }
 
 /** What one start time, day or date takes, in the kind's own words. Set once, in Basics. */
+/** The payment terms the activity uses: its own, or the business default it follows. */
+function effectiveDraftPayment(draft: Pick<ActivityDraft, 'payment'>, defaults: BookingDefaults): PaymentTerms {
+  return draft.payment?.useDefault ? { ...defaults.payment, useDefault: true } : (draft.payment ?? DEFAULT_PAYMENT)
+}
+
+/** The cancellation policy the activity uses: its own, or the business default it follows. */
+function effectiveDraftCancellation(draft: Pick<ActivityDraft, 'cancellation'>, defaults: BookingDefaults): DraftCancellation {
+  const own = draft.cancellation ?? { preset: 'flexible' as const, freeCancellationHours: 24, lateRefundPercent: 0, keepDeposit: false }
+  return own.useDefault ? { ...defaults.cancellation, preset: 'custom', useDefault: true } : own
+}
+
+/** "In full at checkout", "25% deposit, the rest 2 days before". */
+function paymentLine(pay: PaymentTerms, currency: CurrencyCode): string {
+  if (pay.collect === 'later') return 'On the day, card kept to hold the booking.'
+  if (pay.collect === 'full') return 'In full at checkout.'
+  return `${depositLabel(pay, (minor) => formatCurrency(minor, currency))} deposit, the rest ${pay.balanceDueDays === 0 ? 'on the day' : `${pay.balanceDueDays} ${pluralize(pay.balanceDueDays, 'day')} before`}.`
+}
+
 export function seatsFor(draft: ActivityDraft): ScheduleSeats {
   const kind = draft.kind ?? 'trip'
   const settings = normalizeKindSettings(draft.kindSettings)
@@ -588,12 +608,14 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
       ? { enabled: true, distance: activity.route.distance, unit: activity.route.unit, track: activity.route.track ?? '', elevationM: activity.route.elevationM ?? 0 }
       : emptyRoute(),
     package: activity.package ?? { ...EMPTY_PACKAGE },
-    payment: paymentOf(activity),
+    // No terms of its own: it follows the business default.
+    payment: activity.payment && !activity.payment.useDefault ? paymentOf(activity) : { ...paymentOf(activity), useDefault: true },
     cancellation: {
       preset: presetOf(activity.cancellationPolicy),
       freeCancellationHours: activity.cancellationPolicy.freeCancellationHours,
       lateRefundPercent: activity.cancellationPolicy.lateRefundPercent,
       keepDeposit: Boolean(activity.cancellationPolicy.keepDeposit),
+      useDefault: Boolean(activity.cancellationPolicy.useDefault),
     },
     changes: changesOf(activity),
     guestNote: activity.guestNote ?? '',
@@ -1512,6 +1534,10 @@ export function ActivityWizard({
   )
 
   const [draft, setDraft] = React.useState<ActivityDraft>(initial)
+  const { defaults: bookingDefaults } = useBookingDefaults(tenantSlug)
+  // What guests actually get: the activity's own terms, or the business default it follows.
+  const pay = effectiveDraftPayment(draft, bookingDefaults)
+  const cancel = effectiveDraftCancellation(draft, bookingDefaults)
   const [step, setStep] = React.useState(0)
   const [furthest, setFurthest] = React.useState(0)
   const [direction, setDirection] = React.useState(1)
@@ -1664,14 +1690,14 @@ export function ActivityWizard({
           })),
           privateOption: ['trip', 'activity', 'lesson'].includes(draft.kind ?? 'trip') && draft.privateOption?.enabled ? draft.privateOption : undefined,
           addOns: draft.addOns.map((addOn) => ({ id: addOn.id, label: addOn.label, price: addOn.price, description: addOn.description, per: addOn.per, required: addOn.required, ...(addOn.icon ? { icon: addOn.icon } : {}) })),
-          payment: draft.payment ?? DEFAULT_PAYMENT,
+          payment: draft.payment?.useDefault ? { ...pay, useDefault: true } : (draft.payment ?? DEFAULT_PAYMENT),
           guestNote: (draft.guestNote ?? '').trim(),
           changes: draft.changes ?? DEFAULT_CHANGES,
           cancellationPolicy: (() => {
-            const cancel = isDining(draft)
+            const policy = isDining(draft)
               ? { preset: 'custom' as const, freeCancellationHours: draft.freeCancellationHours, lateRefundPercent: 0, keepDeposit: false }
-              : (draft.cancellation ?? { preset: 'flexible' as const, freeCancellationHours: 24, lateRefundPercent: 0, keepDeposit: false })
-            return { ...cancel, summary: policySummary(cancel, draft.payment) }
+              : cancel
+            return { ...policy, summary: policySummary(policy, pay) }
           })(),
           priceCap: draft.priceCap ?? 0,
           noticeHours: draft.noticeHours ?? 0,
@@ -1742,11 +1768,16 @@ export function ActivityWizard({
   const isLast = step === steps.length - 1
   const policyEditor = (
     <ChangesPolicyEditor
-      cancellation={draft.cancellation ?? { preset: 'flexible', freeCancellationHours: 24, lateRefundPercent: 0, keepDeposit: false }}
-      onCancellation={(cancellation) => patch({ cancellation, freeCancellationHours: cancellation.freeCancellationHours })}
+      cancellation={cancel}
+      onCancellation={(cancellation) => patch({ cancellation: { ...cancellation, useDefault: false }, freeCancellationHours: cancellation.freeCancellationHours })}
+      cancellationDefault={{
+        on: Boolean(draft.cancellation?.useDefault),
+        // Off: start from the default's numbers, then change them.
+        onChange: (on) => patch({ cancellation: { ...cancel, useDefault: on } }),
+      }}
       changes={draft.changes ?? DEFAULT_CHANGES}
       onChanges={(changes) => patch({ changes })}
-      payment={draft.payment ?? DEFAULT_PAYMENT}
+      payment={pay}
       currency={currency}
       wholeGroup={(draft.kind ?? 'trip') === 'charter'}
     />
@@ -1847,7 +1878,7 @@ export function ActivityWizard({
                         slug={activity?.slug ?? (slugify(draft.name) || 'new-activity')}
                         note={draft.guestNote ?? ''}
                         onNote={(guestNote) => patch({ guestNote })}
-                        takesDeposit={(draft.payment ?? DEFAULT_PAYMENT).collect !== 'full'}
+                        takesDeposit={pay.collect !== 'full'}
                       />
                     ) : null}
                     </div>
@@ -2003,13 +2034,33 @@ export function ActivityWizard({
                       </label>
 
                       {dining ? null : (
-                        <PaymentTermsEditor
-                          value={draft.payment ?? DEFAULT_PAYMENT}
-                          onChange={(payment) => patch({ payment })}
-                          currency={currency}
-                          examplePrice={draft.tiers[0]?.price ?? 0}
-                          wholeGroup={(draft.kind ?? 'trip') === 'charter' || (draft.kind ?? 'trip') === 'rental'}
-                        />
+                        <div className="flex flex-col gap-3">
+                          <label className="flex items-center justify-between gap-3 rounded-xl border border-line px-4 py-3">
+                            <span>
+                              <span className="block text-sm font-medium">Use the business default for payment</span>
+                              <span className="block text-xs text-subtle">
+                                {draft.payment?.useDefault ? paymentLine(pay, currency) : 'This activity has its own payment terms.'}{' '}
+                                <a href="/dashboard/settings/booking" className="font-medium text-primary hover:underline">
+                                  Change the default
+                                </a>
+                              </span>
+                            </span>
+                            <Switch
+                              checked={Boolean(draft.payment?.useDefault)}
+                              onCheckedChange={(on) => patch({ payment: { ...pay, useDefault: on } })}
+                              aria-label="Use the business default for payment"
+                            />
+                          </label>
+                          {draft.payment?.useDefault ? null : (
+                            <PaymentTermsEditor
+                              value={draft.payment ?? DEFAULT_PAYMENT}
+                              onChange={(payment) => patch({ payment: { ...payment, useDefault: false } })}
+                              currency={currency}
+                              examplePrice={draft.tiers[0]?.price ?? 0}
+                              wholeGroup={(draft.kind ?? 'trip') === 'charter' || (draft.kind ?? 'trip') === 'rental'}
+                            />
+                          )}
+                        </div>
                       )}
 
 
@@ -2955,6 +3006,9 @@ function ReviewStep({
 }) {
   const crewNames = crew.filter((member) => draft.crewIds.includes(member.id)).map((member) => member.name)
   const crewRow = { label: 'Team', value: crewNames.length > 0 ? crewNames.join(', ') : 'Picked for each time slot', step: 4 }
+  const { defaults: bookingDefaults } = useBookingDefaults(tenantSlug)
+  const reviewPay = effectiveDraftPayment(draft, bookingDefaults)
+  const reviewCancel = effectiveDraftCancellation(draft, bookingDefaults)
   const priced = draft.tiers.filter((tier) => tier.label.trim().length > 0)
   // Free tiers (infants, ride-alongs) are not the "from" price.
   const paid = priced.filter((tier) => tier.price > 0)
@@ -3052,17 +3106,12 @@ function ReviewStep({
         },
         {
           label: 'How guests pay',
-          value: (() => {
-            const pay = draft.payment ?? DEFAULT_PAYMENT
-            if (pay.collect === 'later') return 'On the day, card kept to hold the booking'
-            if (pay.collect === 'full') return 'In full at checkout'
-            return `${depositLabel(pay, (minor) => formatCurrency(minor, currency))} deposit, the rest ${pay.balanceDueDays === 0 ? 'on the day' : `${pay.balanceDueDays} ${pluralize(pay.balanceDueDays, 'day')} before`}`
-          })(),
+          value: `${paymentLine(reviewPay, currency)}${draft.payment?.useDefault ? ' (business default)' : ''}`,
           step: 3,
         },
         {
           label: 'Cancellations',
-          value: `${policySummary(draft.cancellation ?? { freeCancellationHours: 24, lateRefundPercent: 0, keepDeposit: false }, draft.payment)} ${changesSummary(draft.changes ?? DEFAULT_CHANGES, (minor) => formatCurrency(minor, currency))}`,
+          value: `${policySummary(reviewCancel, reviewPay)}${draft.cancellation?.useDefault ? ' (business default)' : ''} ${changesSummary(draft.changes ?? DEFAULT_CHANGES, (minor) => formatCurrency(minor, currency))}`,
           step: 4,
         },
         {

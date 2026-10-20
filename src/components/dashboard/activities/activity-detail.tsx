@@ -5,6 +5,8 @@ import * as React from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useActivityOverride } from '@/hooks/use-activity-overrides'
+import { useBookingDefaults } from '@/hooks/use-booking-defaults'
+import { withBookingDefaults } from '@/lib/booking-defaults'
 import {
   Archive,
   ArrowLeft,
@@ -982,6 +984,9 @@ export interface ActivityDetailProps {
 
 export function ActivityDetail({ detail, tenantSlug, nowIso }: ActivityDetailProps) {
   const activity = useActivityOverride(detail.activity)
+  const { defaults: bookingDefaults } = useBookingDefaults(tenantSlug)
+  // What guests get: its own payment and cancellation terms, or the business defaults it follows.
+  const shown = React.useMemo(() => withBookingDefaults(activity, bookingDefaults), [activity, bookingDefaults])
   const now = React.useMemo(() => new Date(nowIso), [nowIso])
   const hero = primaryMedia(activity)
   const accent = ACTIVITY_ACCENT[activity.colorKey]
@@ -1161,7 +1166,7 @@ export function ActivityDetail({ detail, tenantSlug, nowIso }: ActivityDetailPro
             </TabsList>
 
             <TabsContent value="overview">
-              <OverviewTab detail={detail} />
+              <OverviewTab detail={{ ...detail, activity: shown }} />
             </TabsContent>
             <TabsContent value="pricing">
               <PricingTab detail={detail} />

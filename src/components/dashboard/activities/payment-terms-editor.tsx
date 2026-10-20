@@ -29,6 +29,7 @@ export function PaymentTermsEditor({
   currency,
   examplePrice,
   wholeGroup = false,
+  businessWide = false,
 }: {
   value: PaymentTerms
   onChange: (next: PaymentTerms) => void
@@ -37,6 +38,8 @@ export function PaymentTermsEditor({
   examplePrice: number
   /** Charters and rentals: a booking is one group, so "per guest" reads oddly. */
   wholeGroup?: boolean
+  /** Settings → Booking flow: the default for every activity, not one activity's own. */
+  businessWide?: boolean
 }) {
   const set = (patch: Partial<PaymentTerms>) => onChange({ ...value, ...patch })
   const symbol = formatCurrency(0, currency).replace(/[\d.,\s]/g, '') || '$'
@@ -48,7 +51,7 @@ export function PaymentTermsEditor({
     <section className="flex flex-col gap-4 rounded-xl border border-line p-4">
       <div>
         <h3 className="text-sm font-semibold">How guests pay</h3>
-        <p className="mt-0.5 text-xs text-subtle">For this activity only. Refunds follow the cancellation policy on the Booking step.</p>
+        <p className="mt-0.5 text-xs text-subtle">{businessWide ? 'Refunds follow the cancellation policy below.' : 'For this activity only. Refunds follow the cancellation policy on the Booking step.'}</p>
       </div>
 
       <div role="radiogroup" aria-label="How guests pay" className="grid gap-2 sm:grid-cols-3">
