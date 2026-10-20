@@ -167,8 +167,6 @@ export const CHARTER_VESSELS: { value: Exclude<NonNullable<CharterConfig['vessel
   { value: 'aircraft', label: 'Helicopter or plane', crew: 'Pilot' },
 ]
 
-export const LANGUAGES = ['English', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Japanese', 'Mandarin', 'Korean', 'Hawaiian'] as const
-
 /** Day rentals sell by the day; everything else by the length on each tier. */
 export const isDayRental = (activity: Pick<Activity, 'kind' | 'rental'>) =>
   (activity.kind ?? 'trip') === 'rental' && (activity.rental?.modes ? activity.rental.modes.length === 1 && activity.rental.modes[0] === 'day' : activity.rental?.billing === 'day')
@@ -248,65 +246,71 @@ export function kindBadge(activity: Pick<Activity, 'kind' | 'difficulty' | 'rent
   }
 }
 
-/** Two or three short facts for a listing card, in the kind's own terms. */
+/** Two or three short facts for a listing card, in the kind's own terms. Age only when one is set. */
 export function kindCardFacts(activity: Pick<Activity, 'kind' | 'difficulty' | 'maxCapacity' | 'minAge' | 'rental' | 'charter' | 'lesson' | 'pass' | 'route' | 'package'>): string[] {
-  const age = activity.minAge > 0 ? `Ages ${activity.minAge}+` : 'All ages'
+  const age = activity.minAge > 0 ? [`Ages ${activity.minAge}+`] : []
   switch (activity.kind ?? 'trip') {
     case 'activity':
-      return [`${activity.maxCapacity} per slot`, activity.route ? routeLabel(activity.route) : DIFFICULTY_WORD[activity.difficulty], age]
+      return [`${activity.maxCapacity} per slot`, activity.route ? routeLabel(activity.route) : DIFFICULTY_WORD[activity.difficulty], ...age]
     case 'rental': {
-      const licence = age
       const modes = activity.rental?.modes
       const how = modes && modes.length > 1 ? 'Hour or day' : modes?.[0] === 'day' || activity.rental?.billing === 'day' ? 'By the day' : 'By the hour'
       const kinds = activity.rental?.items?.length ?? 0
-      return [how, kinds > 1 ? `${kinds} items to choose from` : `Fits ${activity.rental?.seatsPerUnit ?? 1}`, licence]
+      return [how, kinds > 1 ? `${kinds} items to choose from` : `Fits ${activity.rental?.seatsPerUnit ?? 1}`, ...age]
     }
     case 'charter':
-      return [`Up to ${activity.charter?.maxGuests ?? activity.maxCapacity} guests`, activity.charter?.crewed === false ? 'Self-drive' : `${crewName(activity.charter)} included`, age]
+      return [`Up to ${activity.charter?.maxGuests ?? activity.maxCapacity} guests`, activity.charter?.crewed === false ? 'Self-drive' : `${crewName(activity.charter)} included`, ...age]
     case 'lesson':
-      return [`${activity.lesson?.ratio ?? 4} per instructor`, (activity.lesson?.sessions ?? 1) > 1 ? `${activity.lesson?.sessions}-day course` : 'Single lesson', age]
+      return [
+        activity.lesson?.ratio ? `${activity.lesson.ratio} per instructor` : `Up to ${activity.maxCapacity} per class`,
+        (activity.lesson?.sessions ?? 1) > 1 ? `${activity.lesson?.sessions}-day course` : 'Single lesson',
+        ...age,
+      ]
     case 'pass':
-      return [activity.pass?.reentry ? 'Re-entry allowed' : 'Single entry', age]
+      return [(activity.pass?.validDays ?? 1) > 1 ? `Valid ${activity.pass?.validDays} days` : 'Valid all day', ...(activity.pass?.reentry ? ['Re-entry allowed'] : []), ...age]
     case 'package':
-      return [`${activity.package?.parts.length ?? 2} activities, one booking`, activity.package?.sameDay === false ? `Over ${activity.package.withinDays} days` : 'All on one day', age]
+      return [`${activity.package?.parts.length ?? 2} activities, one booking`, activity.package?.sameDay === false ? `Over ${activity.package.withinDays} days` : 'All on one day', ...age]
     default:
-      return [`Up to ${activity.maxCapacity}`, activity.route ? routeLabel(activity.route) : DIFFICULTY_WORD[activity.difficulty], age]
+      return [`Up to ${activity.maxCapacity}`, activity.route ? routeLabel(activity.route) : DIFFICULTY_WORD[activity.difficulty], ...age]
   }
 }
 
-/** The "good to know" line on the detail page for kinds that have no difficulty. */
-export function kindNote(activity: Pick<Activity, 'kind' | 'minAge' | 'rental' | 'charter' | 'lesson' | 'pass' | 'ride' | 'difficulty' | 'package'>): { title: string; body: string } | null {
-  const age = activity.minAge > 0 ? `Minimum age ${activity.minAge}.` : 'All ages welcome.'
+/**
+ * The "good to know" line on the detail page for kinds that have no difficulty.
+ * Says only what the activity sets: an age when there is one, never "All ages".
+ * Height and weight limits show in the Requirements section.
+ */
+export function kindNote(activity: Pick<Activity, 'kind' | 'minAge' | 'maxCapacity' | 'rental' | 'charter' | 'lesson' | 'pass' | 'ride' | 'difficulty' | 'package'>): { title: string; body: string } | null {
+  const age = activity.minAge > 0 ? `Minimum age ${activity.minAge}.` : null
+  const join = (parts: (string | null | undefined | false)[]) => parts.filter(Boolean).join(' ')
   switch (activity.kind ?? 'trip') {
-    case 'activity': {
-      const limits = [
-        activity.ride?.minHeightCm ? `Riders at least ${activity.ride.minHeightCm} cm tall.` : null,
-        activity.ride?.maxWeightKg ? `Up to ${activity.ride.maxWeightKg} kg per rider.` : null,
-      ].filter(Boolean)
-      return { title: `${DIFFICULTY_WORD[activity.difficulty]}.`, body: [age, ...limits, 'Arrive 15 minutes before your time slot.'].join(' ') }
-    }
+    case 'activity':
+      return { title: `${DIFFICULTY_WORD[activity.difficulty]}.`, body: join([age, 'Arrive 15 minutes before your time slot.']) }
     case 'rental': {
       const r = activity.rental
-      const parts = [
-        age,
-        (r?.modes?.includes('day') || r?.billing === 'day') && r?.pickupTime && r?.returnTime ? `Pick up after ${r.pickupTime}, return before ${r.returnTime}.` : null,
-      ]
-      return { title: "Before you rent.", body: parts.filter(Boolean).join(' ') }
+      const returnBy = (r?.modes?.includes('day') || r?.billing === 'day') && r?.pickupTime && r?.returnTime ? `Pick up after ${r.pickupTime}, return before ${r.returnTime}.` : 'Bring it back by the end of your rental time.'
+      return { title: 'Before you rent.', body: join([age, returnBy]) }
     }
     case 'charter': {
       return {
         title: `Private ${vesselName(activity.charter).toLowerCase()} charter.`,
-        body: `${activity.charter?.crewed === false ? 'Self-drive: you need the right licence.' : `${crewName(activity.charter)} included.`} Only your group aboard. ${age}`,
+        body: join([activity.charter?.crewed === false ? 'Self-drive: you need the right licence.' : `${crewName(activity.charter)} included.`, 'Only your group aboard.', age]),
       }
     }
     case 'lesson': {
       const level = LESSON_LEVELS.find((entry) => entry.value === activity.lesson?.level)?.label ?? 'All levels'
-      return { title: `${level}.`, body: `${activity.lesson?.ratio ?? 4} students per instructor${activity.lesson?.equipmentIncluded ? ', all equipment included' : ''}. ${age}` }
+      const ratio = activity.lesson?.ratio ? `${activity.lesson.ratio} students per instructor` : `Up to ${activity.maxCapacity} students per class`
+      return { title: `${level}.`, body: join([`${ratio}${activity.lesson?.equipmentIncluded ? ', all equipment included' : ''}.`, age]) }
     }
-    case 'pass':
-      return { title: 'Day pass.', body: `${activity.pass?.reentry ? 'Come and go as you like.' : 'Single entry.'} ${age}` }
+    case 'pass': {
+      const days = activity.pass?.validDays ?? 1
+      return {
+        title: days > 1 ? `${days}-day pass.` : 'Day pass.',
+        body: join([days > 1 ? `Valid ${days} days from the date you pick.` : 'Valid all day on the date you pick.', activity.pass?.reentry ? 'Come and go as you like.' : null, age]),
+      }
+    }
     case 'package':
-      return { title: 'One booking, every part.', body: `Pick a time for each part and we hold your spots on all of them. ${age}` }
+      return { title: 'One booking, every part.', body: join(['Pick a time for each part and we hold your spots on all of them.', age]) }
     default:
       return null
   }
@@ -395,17 +399,6 @@ export function themeOf(activity: Pick<Activity, 'theme' | 'slug' | 'kind' | 're
   if (/snorkel|dive|surf|sup|kayak|jet|paddle|freedive/.test(slug)) return 'water'
   return defaultTheme(activity.category)
 }
-
-/** "Good to know" facts guests filter by. Optional on every activity. */
-export const ACCESSIBILITY_OPTIONS = [
-  'Wheelchair accessible',
-  'Stroller or pram friendly',
-  'Infants can sit on laps',
-  'Service animals welcome',
-  'Near public transport',
-  'Not suitable during pregnancy',
-  'Not suitable with back or neck problems',
-] as const
 
 /** The category guests see: the business's own one if set, otherwise the built-in theme. */
 export const categoryLabel = (activity: Pick<Activity, 'theme' | 'customCategory' | 'slug' | 'kind' | 'rental' | 'category'>) =>

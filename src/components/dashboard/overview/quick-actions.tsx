@@ -71,9 +71,9 @@ const TILES: ActionTile[] = [
     wash: 'bg-[radial-gradient(circle_at_50%_40%,var(--color-coral-500),transparent_70%)]',
   },
   {
-    label: 'Block time',
-    description: 'Close a time slot for maintenance, weather or a private booking.',
-    cta: 'Edit availability',
+    label: 'Close a day',
+    description: 'Close the business for a holiday, training or repairs.',
+    cta: 'Add closed days',
     href: '/dashboard/availability?block=1',
     icon: CalendarOff,
     chip: 'bg-sunset-400/16 text-warning ring-sunset-400/28',

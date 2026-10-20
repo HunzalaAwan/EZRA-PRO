@@ -5,6 +5,8 @@ import * as React from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useActivityOverride } from '@/hooks/use-activity-overrides'
+import { useActivityOverrides } from '@/hooks/use-pricing-override'
+import { applyPricingOverride } from '@/lib/activity-overrides'
 import { useBookingDefaults } from '@/hooks/use-booking-defaults'
 import { withBookingDefaults } from '@/lib/booking-defaults'
 import {
@@ -469,11 +471,13 @@ function OverviewTab({ detail }: { detail: ActivityDetailData }) {
               </Badge>
               <Badge size="sm" variant="neutral">
                 <Users className="size-3" aria-hidden="true" />
-                {activity.maxCapacity > 0 ? `${activity.minParticipants}–${activity.maxCapacity} guests` : 'No spot limit'}
+                {activity.maxCapacity > 0 ? `${activity.minParticipants}–${activity.maxCapacity} guests` : `${activity.minParticipants}+ guests`}
               </Badge>
-              <Badge size="sm" variant="neutral">
-                Ages {activity.minAge}+
-              </Badge>
+              {activity.minAge > 0 ? (
+                <Badge size="sm" variant="neutral">
+                  Ages {activity.minAge}+
+                </Badge>
+              ) : null}
             </div>
           </div>
         </div>
@@ -490,7 +494,9 @@ function OverviewTab({ detail }: { detail: ActivityDetailData }) {
 }
 
 function PricingTab({ detail }: { detail: ActivityDetailData }) {
-  const { activity } = detail
+  // Prices saved in the editor, as the storefront sells them.
+  const override = useActivityOverrides()[detail.activity.id]
+  const activity = React.useMemo(() => applyPricingOverride(detail.activity, override), [detail.activity, override])
   const currency = activity.currency
 
   return (
@@ -498,7 +504,7 @@ function PricingTab({ detail }: { detail: ActivityDetailData }) {
       <div className="grid gap-4 sm:grid-cols-3">
         {[
           { label: 'Pricing model', value: titleCase(activity.pricingModel) },
-          { label: 'Lead price', value: formatCurrency(detail.summary.fromPrice, currency) },
+          { label: 'Lead price', value: formatCurrency(override ? activity.basePrice : detail.summary.fromPrice, currency) },
           {
             label: 'Average booking',
             value: formatCurrency(
@@ -619,7 +625,7 @@ function PricingTab({ detail }: { detail: ActivityDetailData }) {
   )
 }
 
-function ScheduleTab({ detail, nowIso }: { detail: ActivityDetailData; nowIso: string }) {
+function ScheduleTab({ detail, nowIso, tenantSlug }: { detail: ActivityDetailData; nowIso: string; tenantSlug: string }) {
   const activity = useActivityOverride(detail.activity)
   return (
     <DepartureSchedule
@@ -634,6 +640,8 @@ function ScheduleTab({ detail, nowIso }: { detail: ActivityDetailData; nowIso: s
       locations={detail.locations}
       nowIso={nowIso}
       todayKey={nowIso.slice(0, 10)}
+      activity={detail.activity}
+      tenantSlug={tenantSlug}
     />
   )
 }
@@ -1172,7 +1180,7 @@ export function ActivityDetail({ detail, tenantSlug, nowIso }: ActivityDetailPro
               <PricingTab detail={detail} />
             </TabsContent>
             <TabsContent value="schedule">
-              <ScheduleTab detail={detail} nowIso={nowIso} />
+              <ScheduleTab detail={detail} nowIso={nowIso} tenantSlug={tenantSlug} />
             </TabsContent>
             <TabsContent value="performance">
               <PerformanceTab detail={detail} />

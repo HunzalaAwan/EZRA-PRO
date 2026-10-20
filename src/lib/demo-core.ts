@@ -78,6 +78,7 @@ import type {
   PrivateOption,
 } from '@/types'
 import { DEFAULT_PAYMENT, policySummary, presetOf } from '@/lib/booking-policy'
+import { fromPrice } from '@/lib/price-engine'
 
 import {
   addDays,
@@ -3781,7 +3782,11 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
 
 export const ACTIVITIES: Activity[] = SPEC_BY_TENANT.flatMap(([tenantId, specs]) => {
   const tenant = tenantById.get(tenantId)!
-  return specs.map((s) => buildActivity(tenant, s))
+  // One "from" rule everywhere: the lead ticket, or a rental's lowest item rate.
+  return specs.map((s) => {
+    const activity = buildActivity(tenant, s)
+    return { ...activity, basePrice: fromPrice(activity) || activity.basePrice }
+  })
 })
 
 export const activityById = new Map(ACTIVITIES.map((a) => [a.id, a]))

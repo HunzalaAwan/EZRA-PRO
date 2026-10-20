@@ -36,6 +36,8 @@ import {
 import { StarRow } from '@/components/storefront/storefront-hero'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { useStorefrontSettings } from '@/hooks/use-storefront-settings'
+import { useActivityOverrides } from '@/hooks/use-pricing-override'
+import { applyPricingOverride } from '@/lib/activity-overrides'
 import type { DesktopLayout, MobileLayout } from '@/lib/storefront-settings'
 import type { VerticalKey } from '@/types'
 
@@ -106,14 +108,18 @@ const GRID_DESKTOP: Record<DesktopLayout, string> = {
    ========================================================================== */
 
 export function ActivityShowcase({
-  activities,
-  featured,
+  activities: givenActivities,
+  featured: givenFeatured,
   currency,
   basePath,
   tenantSlug,
   vertical,
 }: ActivityShowcaseProps) {
   const { settings } = useStorefrontSettings(tenantSlug, vertical)
+  // Prices saved in the editor show on the cards and in the price sort, as on the activity page.
+  const overrides = useActivityOverrides()
+  const activities = React.useMemo(() => givenActivities.map((activity) => applyPricingOverride(activity, overrides[activity.id])), [givenActivities, overrides])
+  const featured = React.useMemo(() => givenFeatured.map((activity) => applyPricingOverride(activity, overrides[activity.id])), [givenFeatured, overrides])
   const wide = useMediaQuery('(min-width: 640px)', true)
   const mobileLayout = settings.mobileLayout
   const desktopLayout = settings.desktopLayout

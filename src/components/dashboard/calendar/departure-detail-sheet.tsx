@@ -7,10 +7,16 @@
  */
 
 import * as React from 'react'
+import Link from 'next/link'
 import { useBookingLedger } from '@/hooks/use-booking-ledger'
 import { changeBooking, entriesOn } from '@/lib/booking-ledger'
 import { MessageComposer, sendToGuests, type MessageRecipient } from '@/components/dashboard/bookings/message-composer'
 import { useMessageTemplates } from '@/hooks/use-message-templates'
+import { useActivityOverrides } from '@/hooks/use-pricing-override'
+import { useBookingDefaults } from '@/hooks/use-booking-defaults'
+import { applyScheduleOverride, parseActivityOverrides, readActivityOverridesRaw, saveScheduleOverride } from '@/lib/activity-overrides'
+import { cancelChangeId as cancelChangeIdFor, expandSchedules, scheduleContextOf } from '@/lib/activity-schedule'
+import { NewDepartureDialog } from '@/components/dashboard/calendar/new-departure-dialog'
 import { CURRENT_TENANT, tenantById } from '@/lib/demo-core'
 import Image from 'next/image'
 import {
@@ -44,7 +50,7 @@ import {
   fillRate,
 } from '@/lib/utils'
 import { fetchDepartureDetail, type DepartureDetail } from '@/lib/actions/dashboard'
-import type { CurrencyCode, WeatherSnapshot } from '@/types'
+import type { CurrencyCode, ScheduleChange, WeatherSnapshot } from '@/types'
 import {
   Sheet,
   SheetBody,
@@ -163,7 +169,10 @@ export interface DepartureDetailSheetProps {
   departureId: string | null
   onOpenChange: (open: boolean) => void
   currency: CurrencyCode
-  /** Opens the scheduling dialog pre-filled from this departure. */
+  /**
+   * No longer called: Duplicate opens "Add a time slot" from this sheet, with
+   * the activity, location, day and start time filled in. Kept for callers.
+   */
   onDuplicate?: (departureId: string) => void
   /** Bookings made in this browser (online, by staff, from packages) are listed too. */
   tenantSlug?: string
@@ -173,14 +182,17 @@ export function DepartureDetailSheet({
   departureId,
   onOpenChange,
   currency,
-  onDuplicate,
   tenantSlug = '',
 }: DepartureDetailSheetProps) {
   const ledger = useBookingLedger(tenantSlug)
+  const overrides = useActivityOverrides()
+  const { defaults: bookingDefaults } = useBookingDefaults(tenantSlug)
   // Hold the last id so the closing animation still has something to render.
   const [cachedId, setCachedId] = React.useState<string | null>(departureId)
   const [confirmCancel, setConfirmCancel] = React.useState(false)
   const [composeOpen, setComposeOpen] = React.useState(false)
+  /** "Duplicate": the add-a-time-slot form, filled in from this time slot. */
+  const [duplicate, setDuplicate] = React.useState<{ date: Date; time: string; activityId: string; locationId: string | null } | null>(null)
   const [message, setMessage] = React.useState('')
 
   React.useEffect(() => {
@@ -233,6 +245,26 @@ export function DepartureDetailSheet({
 
   const { departure, activity, guests: seededGuests, crew, resources, gross, paid, outstanding, media } = detail
   const tenant = tenantById.get(departure.tenantId) ?? CURRENT_TENANT
+  const slotDay = departure.startsAt.slice(0, 10)
+  const slotTime = departure.startsAt.slice(11, 16)
+  /** The change "Cancel" saves for this time slot; one id per day, start time and location. */
+  const cancelChangeId = cancelChangeIdFor(slotDay, slotTime, departure.locationId)
+  // Cancelled here before. A day closed on the Schedule step doesn't count: booked time slots
+  // still run on a closed day, so they stay open to cancel and refund here.
+  const override = overrides[activity.id]
+  const cancelledBefore = (override?.scheduleChanges ?? []).some((change) => change.id === cancelChangeId && change.action === 'closed')
+  // Added back since ("Add a time slot", the Schedule step): it runs again, so it can be cancelled again.
+  let addedBack = false
+  if (cancelledBefore && activity.kind !== 'package') {
+    try {
+      const ctx = { ...scheduleContextOf(bookingDefaults), ...(activity.locations.length > 1 && departure.locationId ? { locationId: departure.locationId } : {}) }
+      addedBack = expandSchedules(applyScheduleOverride(activity, override), slotDay, slotDay, ctx).some((slot) => slot.time === slotTime)
+    } catch {
+      /* a broken saved edit: it stays cancelled */
+    }
+  }
+  const cancelledHere = cancelledBefore && !addedBack
+  const status = cancelledHere ? 'cancelled' : departure.status
   // Guests still on this time: not cancelled, not moved away (here or by the guest).
   const guests = seededGuests.filter(({ booking }) => {
     const change = ledger.changes[booking.reference]
@@ -275,6 +307,20 @@ export function DepartureDetailSheet({
     if (template) {
       sendToGuests(recipients, { tenantSlug, business: tenant.name, subject: template.subject, body: template.body, extra: { refund_line: 'We have refunded everything you paid; it shows on your card in 5 to 10 days.' } })
     }
+    // Off the schedule too, so the storefront stops selling it (packages have no times of their own).
+    if (activity.kind !== 'package') {
+      const change: ScheduleChange = {
+        id: cancelChangeId,
+        dates: [slotDay],
+        action: 'closed',
+        times: [slotTime],
+        reason: 'Cancelled',
+        ...(departure.locationId && activity.locations.length > 1 ? { locationId: departure.locationId } : {}),
+      }
+      // Last in the list, so it wins over the time being added back after an earlier cancel.
+      const saved = parseActivityOverrides(readActivityOverridesRaw())[activity.id]?.scheduleChanges ?? activity.scheduleChanges ?? []
+      saveScheduleOverride(activity, { scheduleChanges: [...saved.filter((entry) => entry.id !== cancelChangeId), change] })
+    }
   }
   const weather = departure.weather
   const WeatherIcon = weather ? WEATHER_META[weather.condition].icon : Sun
@@ -287,10 +333,13 @@ export function DepartureDetailSheet({
         <SheetContent side="right" size="xl" className="w-full">
           <SheetHeader className="gap-2">
             <div className="flex flex-wrap items-center gap-2">
-              <StatusBadge kind="departure" status={departure.status} size="sm" />
-              <Badge size="sm" variant="outline" className="font-mono">
-                {departure.id.replace('dep_', '#')}
-              </Badge>
+              <StatusBadge kind="departure" status={status} size="sm" />
+              {/* A time slot added on the schedule has a long generated id; there is no short number to show. */}
+              {departure.id.startsWith('gen_') ? null : (
+                <Badge size="sm" variant="outline" className="font-mono">
+                  {departure.id.replace('dep_', '#')}
+                </Badge>
+              )}
             </div>
             <SheetTitle className="text-[1.0625rem]">{activity.name}</SheetTitle>
             <SheetDescription>
@@ -354,7 +403,7 @@ export function DepartureDetailSheet({
                 <Fact
                   icon={Anchor}
                   label="Difficulty"
-                  value={`${activity.difficulty} · min age ${activity.minAge}`}
+                  value={activity.minAge > 0 ? `${activity.difficulty} · min age ${activity.minAge}` : activity.difficulty}
                 />
               </div>
 
@@ -488,7 +537,7 @@ export function DepartureDetailSheet({
                             {resource.name}
                           </p>
                           <p className="truncate text-xs text-subtle">
-                            {resource.kind} · seats {resource.capacity}
+                            {resource.kind} · holds {resource.capacity}
                           </p>
                         </div>
                         {resource.status !== 'available' ? (
@@ -584,18 +633,10 @@ export function DepartureDetailSheet({
                   <Button
                     variant="outline"
                     size="sm"
-                    leftIcon={<Pencil aria-hidden="true" />}
-                    onClick={() => notify('Editor opened', `${activity.name} · ${formatTime(start)}`)}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
                     leftIcon={<Copy aria-hidden="true" />}
                     onClick={() => {
-                      onDuplicate?.(departure.id)
-                      notify('Duplicated', 'Adjust the date and times, then schedule.')
+                      onOpenChange(false)
+                      setDuplicate({ date: new Date(departure.startsAt), time: slotTime, activityId: activity.id, locationId: departure.locationId ?? null })
                     }}
                   >
                     Duplicate
@@ -631,6 +672,7 @@ export function DepartureDetailSheet({
                     size="sm"
                     leftIcon={<Ban aria-hidden="true" />}
                     className="text-danger hover:border-danger hover:text-danger"
+                    disabled={status === 'cancelled'}
                     onClick={() => setConfirmCancel(true)}
                   >
                     Cancel
@@ -657,12 +699,11 @@ export function DepartureDetailSheet({
             >
               Message guests
             </Button>
-            <Button
-              size="sm"
-              leftIcon={<Pencil aria-hidden="true" />}
-              onClick={() => notify('Editor opened', `${activity.name} · ${formatTime(start)}`)}
-            >
-              Edit time slot
+            {/* Times and spots for a day are changed on the activity's Schedule step; a package uses its activities' times. */}
+            <Button size="sm" leftIcon={<Pencil aria-hidden="true" />} asChild>
+              <Link href={activity.kind === 'package' ? `/dashboard/activities/${activity.id}` : `/dashboard/activities/${activity.id}/edit?step=schedule`}>
+                {activity.kind === 'package' ? 'Open activity' : 'Edit schedule'}
+              </Link>
             </Button>
           </SheetFooter>
         </SheetContent>
@@ -674,9 +715,9 @@ export function DepartureDetailSheet({
           <DialogHeader>
             <DialogTitle>Cancel this time slot?</DialogTitle>
             <DialogDescription>
-              {guests.length > 0
-                ? `${recipients.length} ${recipients.length === 1 ? 'booking' : 'bookings'} covering ${departure.booked} guests are cancelled, refunded in full because you called it off, and sent "Booking cancelled".`
-                : 'No guests are booked, so nothing will be refunded.'}
+              {recipients.length > 0
+                ? `It comes off sale. ${recipients.length} ${recipients.length === 1 ? 'booking is' : 'bookings are'} cancelled, refunded in full and sent "Booking cancelled".`
+                : 'It comes off sale. No one is booked, so there is nothing to refund.'}
             </DialogDescription>
           </DialogHeader>
           <DialogBody>
@@ -686,7 +727,7 @@ export function DepartureDetailSheet({
                 {formatDateLong(start)} · {formatTime(start)}
               </p>
               <p className="tabular mt-1.5 text-[0.75rem] text-subtle">
-                Refund exposure {formatCurrency(paid, currency)}
+                To refund {formatCurrency(paid, currency)}
               </p>
             </div>
           </DialogBody>
@@ -701,7 +742,10 @@ export function DepartureDetailSheet({
                 cancelEveryone()
                 setConfirmCancel(false)
                 toast.error('Time slot cancelled', {
-                  description: `${activity.name} · ${formatTime(start)}: ${recipients.length} ${recipients.length === 1 ? 'booking' : 'bookings'} refunded in full and told.`,
+                  description:
+                    recipients.length > 0
+                      ? `${activity.name} · ${formatTime(start)}: ${recipients.length} ${recipients.length === 1 ? 'booking' : 'bookings'} refunded in full and told.`
+                      : `${activity.name} · ${formatTime(start)} is off sale.`,
                 })
               }}
             >
@@ -710,6 +754,20 @@ export function DepartureDetailSheet({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ----------------------------------------------------- duplicate --- */}
+      <NewDepartureDialog
+        open={duplicate !== null}
+        onOpenChange={(next) => {
+          if (!next) setDuplicate(null)
+        }}
+        tenantId={departure.tenantId}
+        currency={currency}
+        initialDate={duplicate?.date ?? null}
+        initialTime={duplicate?.time ?? null}
+        initialActivityId={duplicate?.activityId ?? null}
+        initialLocationId={duplicate?.locationId ?? null}
+      />
 
       {/* ------------------------------------------------------- compose --- */}
       <MessageComposer

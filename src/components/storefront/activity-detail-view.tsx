@@ -38,8 +38,13 @@ import {
 import type { Activity, DifficultyLevel, Location, Tenant } from '@/types'
 import { locationAddress } from '@/lib/locations'
 import { kindBadge, kindChipLabel, kindNote, rentalCategoryMeta, routeLabel, categoryLabel, themeLabel, themeOf } from '@/lib/activity-kinds'
+import { bodyLimitLines } from '@/lib/guest-requirements'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { useActivityWithDefaults } from '@/hooks/use-booking-defaults'
+import { useActivityOverrides, usePricingOverride } from '@/hooks/use-pricing-override'
+import { usePricing } from '@/hooks/use-pricing'
+import { useBookingLedger } from '@/hooks/use-booking-ledger'
+import { applyPricingOverride } from '@/lib/activity-overrides'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
 import { Progress } from '@/components/ui/progress'
@@ -49,7 +54,16 @@ import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from '@/compo
 import { Reveal } from '@/components/motion/reveal'
 import { StaggerGroup, StaggerItem } from '@/components/motion/stagger'
 import { bookingOf } from '@/lib/booking-method'
-import { BookingWidget, type AvailabilityDay } from '@/components/storefront/booking-widget'
+import {
+  BookingWidget,
+  fromUnitLabel,
+  priceStripDays,
+  shownFromPrice,
+  stripRentalOf,
+  useActivitySites,
+  useStorefrontDays,
+  type AvailabilityDay,
+} from '@/components/storefront/booking-widget'
 import type { PackagePartView } from '@/lib/packages'
 import { changesOf, changesSummary, depositLabel, hoursLabel, paymentOf } from '@/lib/booking-policy'
 import { StickyRail } from '@/components/storefront/sticky-rail'
@@ -74,50 +88,10 @@ const DIFFICULTY_COPY: Record<DifficultyLevel, string> = {
   extreme: 'Serious commitment. Prior experience is assessed before you book.',
 }
 
-/** Spoken at the meeting point, by market. */
-const LANGUAGES_BY_LOCALE: Record<string, string[]> = {
-  'en-US': ['English', 'Spanish', 'Japanese'],
-  'en-AU': ['English', 'Mandarin', 'Japanese'],
-  'el-GR': ['Greek', 'English', 'French'],
-  'en-NZ': ['English', 'German', 'Japanese'],
-}
-
-/** A short, honest packing list per vertical — the question every guest asks. */
-const PACKING_LIST: Record<string, string[]> = {
-  watersports: [
-    'Swimwear worn under your clothes',
-    'Reef-safe sunscreen (we sell it at the dock if you forget)',
-    'A towel and a dry change of clothes',
-    'Sunglasses with a retainer strap',
-    'A light windbreaker for the ride home',
-  ],
-  island: [
-    'Swimwear and a rash vest if you burn easily',
-    'Reef-safe sunscreen — the reef thanks you',
-    'A hat that will survive 25 knots',
-    'Motion sickness tablets taken an hour before boarding',
-    'A dry bag for phones and cameras',
-  ],
-  adventure: [
-    'Broken-in walking shoes or boots',
-    'Layers — the valley and the ridge are two different days',
-    'A waterproof shell',
-    'A refillable water bottle',
-    'Sunglasses and high-factor sunscreen',
-  ],
-  restaurants: [
-    'Smart-casual dress — the terrace turns breezy after sunset',
-    'A light layer for the caldera wind',
-    'Your booking reference, on your phone is fine',
-  ],
-  tours: ['Comfortable shoes', 'A light layer', 'A refillable water bottle'],
-  wellness: ['Comfortable clothing you can move in', 'A water bottle', 'Anything that helps you switch off'],
-}
-
+/** "What to bring" and "Good to know" now live inside Requirements. */
 const SECTIONS = [
   { id: 'about', label: 'About' },
   { id: 'included', label: "What's included" },
-  { id: 'bring', label: 'What to bring' },
   { id: 'requirements', label: 'Requirements' },
   { id: 'meeting', label: 'Meeting point' },
   { id: 'policy', label: 'Cancellation' },
@@ -186,15 +160,11 @@ export function ActivityDetailView({
   recentBookings,
   packageParts,
 }: ActivityDetailViewProps) {
-  // Its own payment and cancellation terms, or the business defaults it follows.
-  const activity = useActivityWithDefaults(given, tenant.slug)
-  const sites = React.useMemo(
-    () =>
-      activity.locations
-        .map((site) => ({ ...site, location: locations.find((entry) => entry.id === site.locationId) }))
-        .filter((site): site is typeof site & { location: Location } => Boolean(site.location)),
-    [activity.locations, locations],
-  )
+  // The prices saved in the editor, then its own payment and cancellation terms or the business defaults it follows.
+  const priced = usePricingOverride(given)
+  const activity = useActivityWithDefaults(priced, tenant.slug)
+  // Where it runs from, as the owner saved it.
+  const sites = useActivitySites(activity, locations)
   const reducedMotion = useReducedMotionSafe()
   const [lightbox, setLightbox] = React.useState<number | null>(null)
   const [mobileWidget, setMobileWidget] = React.useState(false)
@@ -207,25 +177,39 @@ export function ActivityDetailView({
   // The main button says how this activity is booked.
   const booking = bookingOf(activity)
   const ctaLabel = booking.method === 'request' || !booking.scheduled ? 'Request to book' : 'Check availability'
-  const languages = activity.languages && activity.languages.length > 0 ? activity.languages : (LANGUAGES_BY_LOCALE[tenant.locale] ?? ['English'])
-  const packing = activity.bring && activity.bring.length > 0 ? activity.bring : (PACKING_LIST[activity.category] ?? PACKING_LIST.tours)
+  // Only what the activity says: no language or packing list is assumed.
+  const languages = activity.languages ?? []
+  const bring = activity.bring ?? []
+  const suitability = activity.accessibility ?? []
+  const limits = bodyLimitLines(activity)
+  const hasRequirements = activity.requirements.length + bring.length + suitability.length + limits.length > 0
+  const sections = React.useMemo(() => SECTIONS.filter((section) => section.id !== 'requirements' || hasRequirements), [hasRequirements])
+
+  // The strip as the widget shows it: the saved schedule, this browser's bookings, every time slot priced by the engine.
+  const liveDays = useStorefrontDays(activity, days, { tenantSlug: tenant.slug, nowIso })
+  const { rules } = usePricing(tenant.slug)
+  const { delta } = useBookingLedger(tenant.slug)
+  const stripRental = React.useMemo(() => stripRentalOf(activity), [activity])
+  const pricedDays = React.useMemo(() => priceStripDays(activity, liveDays, { nowIso, businessRules: rules, rental: stripRental, delta }), [activity, liveDays, nowIso, rules, stripRental, delta])
 
   const nextOpen = React.useMemo(() => {
-    for (const day of days) {
+    for (const day of pricedDays) {
       const slot = day.slots.find((s) => !s.soldOut)
       if (slot) return slot
     }
     return null
-  }, [days])
+  }, [pricedDays])
 
-  const fromPrice = Math.min(
-    ...[activity.basePrice, ...days.map((d) => d.fromPrice).filter((p) => p > 0)],
-  )
+  const fromPrice = shownFromPrice(activity, pricedDays, stripRental)
+  const fromUnit = fromUnitLabel(activity)
+  // Other activities with their saved prices.
+  const overrides = useActivityOverrides()
+  const relatedPriced = React.useMemo(() => related.map((item) => applyPricingOverride(item, overrides[item.id])), [related, overrides])
 
   /* ---------- scrollspy for the section rail ---------- */
 
   React.useEffect(() => {
-    const elements = SECTIONS.map((s) => document.getElementById(s.id)).filter(
+    const elements = sections.map((s) => document.getElementById(s.id)).filter(
       (el): el is HTMLElement => el !== null,
     )
     if (elements.length === 0) return
@@ -241,7 +225,7 @@ export function ActivityDetailView({
     )
     elements.forEach((el) => observer.observe(el))
     return () => observer.disconnect()
-  }, [])
+  }, [sections])
 
   const totalReviews = ratingBuckets.reduce((sum, bucket) => sum + bucket.count, 0)
 
@@ -332,13 +316,13 @@ export function ActivityDetailView({
                   ? `${activity.rental?.items?.length} items to choose from, mix and match`
                   : `Fits ${activity.rental?.seatsPerUnit ?? 1} · ${activity.rental?.units ?? activity.maxCapacity} available`
                 : activity.kind === 'lesson'
-                  ? `${activity.lesson?.ratio ?? 4} students per instructor`
+                  ? activity.lesson?.ratio ? `${activity.lesson.ratio} students per instructor` : `Up to ${activity.maxCapacity} students`
                   : activity.kind === 'charter'
                     ? `Whole group, up to ${activity.charter?.maxGuests ?? activity.maxCapacity}`
                     : `Up to ${activity.maxCapacity} guests`}
             </Fact>
             {activity.route ? <Fact icon={RouteIcon}>{routeLabel(activity.route)}{activity.route.elevationM ? ` · ${activity.route.elevationM} m climb` : ''}</Fact> : null}
-            <Fact icon={Languages}>{languages.join(', ')}</Fact>
+            {languages.length > 0 ? <Fact icon={Languages}>{languages.join(', ')}</Fact> : null}
             <Fact icon={CalendarCheck}>
               Free cancellation · {activity.cancellationPolicy.freeCancellationHours}h
             </Fact>
@@ -402,7 +386,7 @@ export function ActivityDetailView({
               aria-label="Sections"
               className="no-scrollbar sticky top-16 z-20 -mx-4 flex gap-1 overflow-x-auto border-b border-line-subtle bg-[color-mix(in_oklab,var(--background)_92%,transparent)] px-4 py-2.5 backdrop-blur-md sm:top-[4.5rem] sm:-mx-6 sm:px-6 lg:-mx-2 lg:px-2"
             >
-              {SECTIONS.map((section) => (
+              {sections.map((section) => (
                 <a
                   key={section.id}
                   href={`#${section.id}`}
@@ -452,7 +436,7 @@ export function ActivityDetailView({
                   <span className="font-semibold text-foreground">
                     {kindNote(activity)?.title ?? `${DIFFICULTY_LABEL[activity.difficulty]}.`}
                   </span>{' '}
-                  {kindNote(activity)?.body ?? `${DIFFICULTY_COPY[activity.difficulty]} ${activity.minAge > 0 ? `Minimum age ${activity.minAge}.` : 'All ages welcome.'}`}
+                  {kindNote(activity)?.body ?? `${DIFFICULTY_COPY[activity.difficulty]}${activity.minAge > 0 ? ` Minimum age ${activity.minAge}.` : ''}`}
                 </p>
               </div>
             </Section>
@@ -480,46 +464,51 @@ export function ActivityDetailView({
               ) : null}
             </Section>
 
-            {/* ---------- what to bring ---------- */}
-            <Section id="bring" title="What to bring">
-              <ul className="flex flex-wrap gap-2">
-                {packing.map((item) => (
-                  <li
-                    key={item}
-                    className="flex items-center gap-2 rounded-full bg-surface-sunken px-3 py-1.5 text-[0.8125rem] leading-snug text-foreground"
-                  >
-                    <Backpack className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </Section>
-
-            {/* ---------- requirements ---------- */}
-            <Section id="requirements" title="Requirements">
-              {activity.requirements.length === 0 ? <p className="text-sm leading-relaxed text-muted">No special requirements beyond the age and limits shown above.</p> : null}
-              <ul className="space-y-2.5">
-                {activity.requirements.map((item) => (
-                  <li key={item} className="flex items-start gap-2.5">
-                    <CircleAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden="true" />
-                    <span className="text-sm leading-relaxed text-foreground">{item}</span>
-                  </li>
-                ))}
-              </ul>
-              {activity.accessibility && activity.accessibility.length > 0 ? (
-                <ul className="mt-4 flex flex-wrap gap-2">
-                  {activity.accessibility.map((item) => (
-                    <li key={item} className="rounded-full border border-line bg-surface px-3 py-1.5 text-[0.8125rem] text-foreground">
-                      {item}
+            {/* ---------- requirements: one list, with what to bring and suitability ---------- */}
+            {hasRequirements ? (
+              <Section id="requirements" title="Requirements">
+                <ul className="space-y-2.5">
+                  {limits.length > 0 ? (
+                    <li className="flex items-start gap-2.5">
+                      <CircleAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden="true" />
+                      <span className="text-sm leading-relaxed text-foreground">Every guest: {limits.join(', ')}.</span>
+                    </li>
+                  ) : null}
+                  {activity.requirements.map((item) => (
+                    <li key={item} className="flex items-start gap-2.5">
+                      <CircleAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden="true" />
+                      <span className="text-sm leading-relaxed text-foreground">{item}</span>
                     </li>
                   ))}
                 </ul>
-              ) : null}
-              <p className="mt-4 text-sm leading-relaxed text-subtle">
-                Not sure whether this suits your group? Call {tenant.contact.phone} and one of the
-                team will tell you honestly.
-              </p>
-            </Section>
+                {bring.length > 0 ? (
+                  <ul className="mt-4 flex flex-wrap gap-2" aria-label="What to bring">
+                    {bring.map((item) => (
+                      <li
+                        key={item}
+                        className="flex items-center gap-2 rounded-full bg-surface-sunken px-3 py-1.5 text-[0.8125rem] leading-snug text-foreground"
+                      >
+                        <Backpack className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {suitability.length > 0 ? (
+                  <ul className="mt-4 flex flex-wrap gap-2">
+                    {suitability.map((item) => (
+                      <li key={item} className="rounded-full border border-line bg-surface px-3 py-1.5 text-[0.8125rem] text-foreground">
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                <p className="mt-4 text-sm leading-relaxed text-subtle">
+                  Not sure whether this suits your group? Call {tenant.contact.phone} and one of the
+                  team will tell you honestly.
+                </p>
+              </Section>
+            ) : null}
 
             {/* ---------- meeting point ---------- */}
             <Section id="meeting" title={packageParts ? "What's in the package" : sites.length > 1 ? 'Where it runs from' : 'Meeting point'}>
@@ -734,7 +723,7 @@ export function ActivityDetailView({
               Guests who booked this also liked
             </h2>
             <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {related.map((item) => {
+              {relatedPriced.map((item) => {
                 const image = item.media.find((m) => m.isPrimary) ?? item.media[0]
                 return (
                   <Link
@@ -779,7 +768,7 @@ export function ActivityDetailView({
           <div className="min-w-0 flex-1">
             <p className="font-display text-lg font-semibold leading-none tabular text-foreground">
               {formatCurrency(fromPrice, tenant.currency)}
-              <span className="ml-1 text-xs font-medium text-subtle">{activity.kind === 'rental' ? 'per unit' : activity.kind === 'charter' ? 'per group' : 'per person'}</span>
+              <span className="ml-1 text-xs font-medium text-subtle">{fromUnit}</span>
             </p>
             <p className="mt-1 truncate text-xs text-subtle">
               {nextOpen

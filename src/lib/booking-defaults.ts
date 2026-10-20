@@ -1,5 +1,5 @@
 import { DEFAULT_PAYMENT, policySummary } from '@/lib/booking-policy'
-import type { Activity, CancellationPolicy, GuestQuestion, PaymentTerms } from '@/types'
+import type { Activity, BusinessClosure, CancellationPolicy, GuestQuestion, PaymentTerms } from '@/types'
 
 /* ==========================================================================
    Booking defaults — the business-wide rules set in Settings → Booking flow:
@@ -35,6 +35,10 @@ export interface BookingDefaults {
   questions: GuestQuestion[]
   payment: PaymentTerms
   cancellation: DefaultCancellation
+  /** The business's closed days (Availability). Activities that run on closed days ignore them. */
+  closures?: BusinessClosure[]
+  /** Public holidays of a country close the business too, when switched on. */
+  holidays?: { country: string; enabled: boolean }
 }
 
 export const DEFAULT_CHECKOUT_FIELDS: CheckoutFields = { phone: 'required', country: 'required', requests: 'optional' }
@@ -47,6 +51,19 @@ export const DEFAULT_BOOKING_DEFAULTS: BookingDefaults = {
   questions: [],
   payment: DEFAULT_PAYMENT,
   cancellation: { freeCancellationHours: 24, lateRefundPercent: 0, keepDeposit: false },
+  closures: [],
+}
+
+/** Closed days as saved, without broken entries or dates that aren't day keys. */
+function cleanClosures(value: unknown): BusinessClosure[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry, index) => {
+    if (!entry || typeof entry !== 'object') return []
+    const raw = entry as Partial<BusinessClosure>
+    const dates = Array.isArray(raw.dates) ? raw.dates.filter((date): date is string => typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) : []
+    if (dates.length === 0) return []
+    return [{ id: typeof raw.id === 'string' && raw.id ? raw.id : `closure_${index}`, dates: [...new Set(dates)].sort(), reason: typeof raw.reason === 'string' ? raw.reason : '' }]
+  })
 }
 
 /** Stored settings over the defaults, so an older save missing a part still reads whole. */
@@ -60,6 +77,11 @@ export function normalizeDefaults(stored: Partial<BookingDefaults> | null | unde
     questions: Array.isArray(stored.questions) ? stored.questions : [],
     payment: { ...base.payment, ...stored.payment },
     cancellation: { ...base.cancellation, ...stored.cancellation },
+    closures: cleanClosures(stored.closures),
+    holidays:
+      stored.holidays && typeof stored.holidays === 'object' && typeof stored.holidays.country === 'string' && stored.holidays.country
+        ? { country: stored.holidays.country, enabled: Boolean(stored.holidays.enabled) }
+        : undefined,
   }
 }
 

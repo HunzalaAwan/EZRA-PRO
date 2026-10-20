@@ -31,7 +31,7 @@ import {
   pluralize,
 } from '@/lib/utils'
 import type { Activity, GuestQuestion, PickupZone, Tenant, WaiverTemplate } from '@/types'
-import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
+import { useIsHydrated, useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { useActivityWithDefaults, useBookingDefaults } from '@/hooks/use-booking-defaults'
 import type { CheckoutFields } from '@/lib/booking-defaults'
 import { Button } from '@/components/ui/button'
@@ -47,7 +47,8 @@ import {
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { toast } from '@/components/ui/toaster'
-import { buildQuote, type QuoteSelection } from '@/components/storefront/booking-widget'
+import { buildQuote, type AvailabilityDay, type QuoteSelection } from '@/components/storefront/booking-widget'
+import { bookedOn, resolveRental, resolveSelection, type RentalRequest } from '@/components/storefront/checkout-selection'
 import {
   EMPTY_WAIVER,
   GuestDetailsStep,
@@ -61,12 +62,16 @@ import {
 import { CheckoutPickup, EMPTY_PICKUP, PICKUP_OTHER, validatePickup, type PickupChoice } from '@/components/storefront/checkout-pickup'
 import { TicketQr, ticketPayload } from '@/components/ui/ticket-qr'
 import { CheckoutDiscounts } from '@/components/storefront/checkout-discounts'
-import { applyRules, findPromo, giftProblem, promoDiscount, promoProblem } from '@/lib/pricing'
+import { findPromo, giftProblem, promoDiscount, promoProblem } from '@/lib/pricing'
+import { useActivityOverrides, usePricingOverride } from '@/hooks/use-pricing-override'
+import { applyScheduleOverride } from '@/lib/activity-overrides'
 import { guestDetailsOf } from '@/lib/guest-requirements'
 import { CheckoutOptIn, useCheckoutOptIn } from '@/components/storefront/storefront-marketing'
 import type { RentalMode } from '@/lib/activity-kinds'
 import { usePricing } from '@/hooks/use-pricing'
-import { recordBooking } from '@/lib/booking-ledger'
+import { recordBooking, seatDeltas, withLedger } from '@/lib/booking-ledger'
+import { useBookingLedger } from '@/hooks/use-booking-ledger'
+import { useScheduledDays } from '@/hooks/use-scheduled-days'
 import { depositLabel, hoursLabel, paymentOf, splitPayment } from '@/lib/booking-policy'
 import type { PaymentTerms } from '@/types'
 
@@ -80,6 +85,16 @@ export interface CheckoutDeparture {
   endsAt: string
   seatsLeft: number
   priceMultiplier: number
+  /** Spots at the time slot, so filling-up and quiet-time prices match the widget. */
+  capacity?: number
+  /** Spots booked on the server, without carts in progress or the daily limit. */
+  booked?: number
+  /** The time slot's own start, when `startsAt` is moved (a day rental's pick-up): prices count from it. */
+  slotStartsAt?: string
+  /** The time slot's own end, before a rental's hours or return move `endsAt`. */
+  slotEndsAt?: string
+  /** The location the time slot runs from, so its meeting point follows the saved edit. */
+  locationId?: string
   /** Day rentals: when the units come back. The span is startsAt to returnsAt. */
   returnsAt?: string
   /** The location this run leaves from, when the business has more than one. */
@@ -141,10 +156,22 @@ export interface CheckoutFlowProps {
   rentalHours?: number
   /** Length rentals: the length picked. */
   rentalLength?: string
+  /** The link's rental values, checked again here against the saved edit (modes, hours, days, pick-up and return). */
+  rentalRequest?: RentalRequest
   /** Charters: the group size. */
   party?: number
-  /** The private option: one group price, the whole time to themselves. */
+  /** The private option: one group price, the whole time to themselves. Prefer `requestedPrivate`, checked here against the priced activity. */
   privateBooking?: boolean
+  /** The guest asked for the private option (the widget's `p=1`). */
+  requestedPrivate?: boolean
+  /** Nobody is booked on the time slot, as the server sees it; used when the slot isn't in `seededDays`. */
+  slotEmpty?: boolean
+  /** The strip the widget was given, rebuilt here from the saved schedule so spots and seats match the widget. */
+  seededDays?: AvailabilityDay[]
+  /** The time slot the guest picked, as in the link (a generated id stays generated). */
+  slotId?: string
+  /** The link's tickets and extras, checked again here against the rebuilt time slot. */
+  request?: { tiers?: string; addOns?: string }
   basePath: string
   /** Deterministic confirmation code, generated on the server. */
   reference: string
@@ -303,43 +330,143 @@ const COUNTRIES = [
    <CheckoutFlow>
    ========================================================================== */
 
+const NO_DAYS: AvailabilityDay[] = []
+
 export function CheckoutFlow({
   waiver: waiverTemplate,
   nowIso,
   pickupZones = [],
   tenant,
   activity: given,
-  departure,
-  selection,
-  rentalDays = 1,
-  rentalMode,
-  rentalHours,
-  rentalLength,
+  departure: givenDeparture,
+  selection: serverSelection,
+  rentalDays: rentalDaysGiven = 1,
+  rentalMode: rentalModeGiven,
+  rentalHours: rentalHoursGiven,
+  rentalLength: rentalLengthGiven,
+  rentalRequest,
   party,
-  privateBooking = false,
+  privateBooking: privateGiven = false,
+  requestedPrivate,
+  slotEmpty,
+  seededDays,
+  slotId,
+  request,
   basePath,
   reference,
 }: CheckoutFlowProps) {
   const reducedMotion = useReducedMotionSafe()
   // The activity's own payment and cancellation terms, or the business defaults it follows, plus the business's own questions.
-  const activity = useActivityWithDefaults(given, tenant.slug)
+  // Prices saved in the editor count here exactly as in the widget.
+  const pricedActivity = usePricingOverride(given)
+  const activity = useActivityWithDefaults(pricedActivity, tenant.slug)
   const { defaults: bookingDefaults } = useBookingDefaults(tenant.slug)
   const fields = bookingDefaults.checkout
 
-  const pricing = usePricing(tenant.slug)
-  const guestsSelected = selection.tiers.reduce((sum, tier) => sum + tier.qty, 0)
-  const ruleResult = React.useMemo(
-    () => applyRules(pricing.rules, { activitySlug: activity.slug, startsAt: departure.startsAt, nowIso: nowIso ?? departure.startsAt, guests: Math.max(1, guestsSelected) }),
-    [pricing.rules, activity.slug, departure.startsAt, nowIso, guestsSelected],
+  /* ---------- the rental and the meeting point, as the owner saved them ---------- */
+
+  // How a rental is charged (its modes, hours, days, pick-up and return) follows the saved edit, as in the widget.
+  const rentalPlan = React.useMemo(
+    () =>
+      rentalRequest && !givenDeparture.legs && (activity.kind ?? 'trip') === 'rental'
+        ? resolveRental(activity, rentalRequest, {
+            startsAt: givenDeparture.slotStartsAt ?? givenDeparture.startsAt,
+            endsAt: givenDeparture.slotEndsAt ?? givenDeparture.endsAt,
+          })
+        : undefined,
+    [rentalRequest, givenDeparture, activity],
   )
+  const overrides = useActivityOverrides()
+  const savedSites = applyScheduleOverride(given, overrides[given.id]).locations
+  const departure = React.useMemo<CheckoutDeparture>(() => {
+    let next = givenDeparture
+    if (rentalPlan) next = { ...next, startsAt: rentalPlan.startsAt, endsAt: rentalPlan.endsAt, returnsAt: rentalPlan.returnsAt }
+    // A location's own meeting point as saved in the editor (one added there has nothing on the server).
+    const meeting = next.location && next.locationId ? savedSites.find((site) => site.locationId === next.locationId)?.meetingPoint?.trim() : undefined
+    if (meeting && next.location && meeting !== next.location.meetingPoint) next = { ...next, location: { ...next.location, meetingPoint: meeting } }
+    return next
+  }, [givenDeparture, rentalPlan, savedSites])
+  const rentalMode = rentalPlan ? rentalPlan.mode : rentalModeGiven
+  const rentalHours = rentalPlan ? rentalPlan.hours : rentalHoursGiven
+  const rentalDays = rentalPlan ? rentalPlan.days : rentalDaysGiven
+  const rentalLength = rentalPlan ? rentalPlan.lengthId : rentalLengthGiven
+
+  /* ---------- the time slot as the widget showed it ---------- */
+
+  // The server only knows the seeded spots: rebuild the widget's strip from the saved schedule, with this browser's bookings, and read the slot from it.
+  const ledger = useBookingLedger(tenant.slug)
+  // This browser's other bookings: this one, once paid, never counts against itself (so the confirmation keeps its price).
+  const delta = React.useMemo(() => {
+    const own = new Set(ledger.entries.filter((entry) => entry.reference === reference).map((entry) => entry.id))
+    if (own.size === 0) return ledger.delta
+    const changes = Object.fromEntries(Object.entries(ledger.changes).filter(([key]) => !own.has(key)))
+    return seatDeltas({ entries: ledger.entries.filter((entry) => !own.has(entry.id)), changes })
+  }, [ledger, reference])
+  const scheduledDays = useScheduledDays(given, seededDays ?? NO_DAYS, { tenantSlug: tenant.slug, nowIso, delta })
+  const rebuilt = React.useMemo(() => {
+    if (departure.legs || !seededDays) return undefined
+    const slots = scheduledDays.flatMap((day) => day.slots)
+    for (const id of [slotId, departure.id]) {
+      const found = id ? slots.find((slot) => slot.departureId === id) : undefined
+      // A time slot off the schedule stays closed, even when a booking on it is cancelled here.
+      if (found) return { slot: found, live: found.outsideSchedule ? found : withLedger(found, delta) }
+    }
+    return undefined
+  }, [departure.legs, departure.id, seededDays, scheduledDays, slotId, delta])
+  const liveSlot = rebuilt?.live
+  const ownDelta = departure.legs ? 0 : (delta[departure.id] ?? 0)
+  const seatsLeft = liveSlot
+    ? liveSlot.seatsLeft
+    : ownDelta
+      ? Math.max(0, Math.min(departure.capacity ?? Number.POSITIVE_INFINITY, departure.seatsLeft - ownDelta))
+      : departure.seatsLeft
+  const capacity = liveSlot ? liveSlot.capacity : departure.capacity
+  // Filling up and quiet times count real bookings (the server's and this browser's), not carts in progress or the daily limit.
+  const booked = rebuilt
+    ? bookedOn(rebuilt.slot, delta)
+    : departure.capacity !== undefined
+      ? bookedOn({ departureId: departure.id, capacity: departure.capacity, seatsLeft: departure.seatsLeft, booked: departure.booked }, delta)
+      : undefined
+
+  // The link's tickets checked against the seats the guest saw, with the editor's tiers and extras.
+  const itemsLeft = liveSlot?.itemsLeft
+  const selection = React.useMemo(
+    () => (request && liveSlot ? resolveSelection(activity, request.tiers, request.addOns, Math.max(1, seatsLeft), itemsLeft, party) : serverSelection),
+    [request, liveSlot, activity, seatsLeft, itemsLeft, party, serverSelection],
+  )
+
+  // Checked once the browser has read the saved schedule: a time slot it took off (cancelled, closed, its time removed) can't be booked.
+  // Only within the days rebuilt; a time slot further out is left to the server.
+  const hydrated = useIsHydrated()
+  const stripFrom = scheduledDays[0]?.dateKey
+  const stripTo = scheduledDays[scheduledDays.length - 1]?.dateKey
+  const slotDay = (departure.slotStartsAt ?? departure.startsAt).slice(0, 10)
+  const unavailable =
+    hydrated &&
+    !departure.legs &&
+    Boolean(seededDays) &&
+    (rebuilt ? Boolean(rebuilt.slot.outsideSchedule) : Boolean(stripFrom && stripTo && slotDay >= stripFrom && slotDay <= stripTo))
+
+  // Private only when the priced activity offers it and nobody is booked on the time slot, the same check as the widget.
+  const slotIsEmpty = liveSlot ? liveSlot.capacity > 0 && liveSlot.seatsLeft >= liveSlot.capacity : (slotEmpty ?? privateGiven)
+  const privateBooking = (requestedPrivate ?? privateGiven) && Boolean(activity.privateOption?.enabled) && slotIsEmpty
+
+  const pricing = usePricing(tenant.slug)
+  // The same engine and inputs as the widget: the slot's start, the clock, how full it is, its dynamic pricing and the business's rules.
+  // Group rules count people (a charter: its party), worked out by the engine.
   const quote = React.useMemo(
-    () => buildQuote(activity, tenant.slug, selection, departure.priceMultiplier * ruleResult.multiplier, {
+    () => buildQuote(activity, tenant.slug, selection, departure.priceMultiplier, {
       days: rentalDays,
       party,
       private: privateBooking,
       ...(rentalMode ? { rentalMode, hours: rentalHours, lengthId: rentalLength } : {}),
+      startsAt: departure.slotStartsAt ?? departure.startsAt,
+      nowIso,
+      capacity,
+      booked,
+      businessRules: pricing.rules,
     }),
-    [activity, tenant.slug, selection, departure.priceMultiplier, ruleResult.multiplier, rentalDays, party, rentalMode, rentalHours, rentalLength, privateBooking],
+    [activity, tenant.slug, selection, departure.priceMultiplier, departure.slotStartsAt, departure.startsAt, capacity, booked, nowIso, pricing.rules, rentalDays, party, rentalMode, rentalHours, rentalLength, privateBooking],
   )
 
   const [errors, setErrors] = React.useState<Errors>({})
@@ -377,9 +504,18 @@ export function CheckoutFlow({
     const all = [...(activity.guestQuestions ?? []), ...riderQuestions(activity)]
     return details.enabled ? all : all.map((question) => (question.scope === 'guest' ? { ...question, scope: 'booking' as const } : question))
   }, [activity, details.enabled])
-  const [travellers, setTravellers] = React.useState<TravellerState[]>(() =>
-    makeTravellers(details.enabled && (activity.kind ?? 'trip') !== 'rental' ? quote.party : 1),
-  )
+  const travellerCount = Math.max(1, details.enabled && (activity.kind ?? 'trip') !== 'rental' ? quote.party : 1)
+  const [travellers, setTravellers] = React.useState<TravellerState[]>(() => makeTravellers(travellerCount))
+  // The party can change once the saved schedule and prices load: one card per guest, keeping what is filled in.
+  React.useEffect(() => {
+    setTravellers((current) =>
+      current.length === travellerCount
+        ? current
+        : current.length > travellerCount
+          ? current.slice(0, travellerCount)
+          : [...current, ...makeTravellers(travellerCount - current.length)],
+    )
+  }, [travellerCount])
   const [bookingAnswers, setBookingAnswers] = React.useState<Record<string, string>>({})
   const [waiver, setWaiver] = React.useState<WaiverState>(EMPTY_WAIVER)
   const signers = waiverTemplate && signing === 'each' ? signerDefaults(travellers, Math.max(1, quote.party)) : []
@@ -429,10 +565,11 @@ export function CheckoutFlow({
   const tip = !activity.tips
     ? 0
     : tipChoice === 'custom'
-      ? Math.max(0, Math.round((Number.parseFloat(customTip) || 0) * 100) / 100)
+      ? // Typed in dollars (major units); kept in cents like every other amount.
+        Math.max(0, Math.round((Number.parseFloat(customTip) || 0) * 100))
       : tipChoice === 'none'
         ? 0
-        : Math.round(tipBase * Number(tipChoice)) / 100
+        : Math.round((tipBase * Number(tipChoice)) / 100)
   const giftOff = card && !giftProblem(card, todayKey) ? Math.min(card.balance, Math.max(0, withPickup.total + tip - promoOff)) : 0
   const displayQuote = React.useMemo(() => {
     if (promoOff === 0 && giftOff === 0 && tip === 0) return withPickup
@@ -471,7 +608,7 @@ export function CheckoutFlow({
         startsAt: leg.startsAt,
         endsAt: leg.endsAt,
         // A private booking takes the whole time, so nobody else can book onto it.
-        party: privateBooking ? Math.max(quote.party, departure.seatsLeft) : Math.max(1, quote.party),
+        party: privateBooking ? Math.max(quote.party, seatsLeft) : Math.max(1, quote.party),
         source: 'storefront' as const,
         ...(departure.legs ? { packageSlug: activity.slug, packageName: activity.name } : {}),
         name: `${guest.firstName} ${guest.lastName}`.trim(),
@@ -580,6 +717,20 @@ export function CheckoutFlow({
     )
   }
 
+  if (unavailable) {
+    return (
+      <div className="mx-auto w-full max-w-[88rem] px-4 pb-20 pt-24 sm:px-6 sm:pt-28 lg:px-10">
+        <div className="mx-auto mt-6 flex max-w-md flex-col items-center gap-3 rounded-2xl border border-line bg-surface p-8 text-center">
+          <h1 className="font-display text-xl font-semibold tracking-tight text-foreground">This time is no longer available</h1>
+          <p className="text-sm text-muted">Pick another time for {activity.name}.</p>
+          <Button asChild className="mt-2" leftIcon={<ArrowLeft aria-hidden="true" />}>
+            <Link href={`${basePath}/${activity.slug}`}>See other times</Link>
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="mx-auto w-full max-w-[88rem] px-4 pb-20 pt-24 sm:px-6 sm:pt-28 lg:px-10">
       {/* ---------- breadcrumb ---------- */}
@@ -631,7 +782,7 @@ export function CheckoutFlow({
               onGift={setGiftCode}
               promoOff={promoOff}
               giftOff={giftOff}
-              rules={ruleResult.applied}
+              rules={pricing.rules.filter((rule) => quote.appliedChanges.some((change) => change.source === 'business' && change.id === rule.id))}
             />
             {pickupZones.length > 0 ? (
               <div className="border-t border-line-subtle pt-10">
@@ -789,7 +940,7 @@ function TipStep({
   setCustomTip: (value: string) => void
   tip: number
 }) {
-  const money = (amount: number) => formatCurrency(amount, currency, { decimals: amount % 1 !== 0 })
+  const money = (amount: number) => formatCurrency(amount, currency, { decimals: amount % 100 !== 0 })
   const chip = (active: boolean) =>
     cn(
       'flex min-h-14 flex-col items-center justify-center rounded-xl border px-2 py-2 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
@@ -810,7 +961,7 @@ function TipStep({
         {TIP_PERCENTS.map((percent) => (
           <button key={percent} type="button" role="radio" aria-checked={choice === percent} className={chip(choice === percent)} onClick={() => setChoice(percent)}>
             <span className="text-sm font-semibold">{percent}%</span>
-            <span className="text-xs text-muted">{money(Math.round(base * Number(percent)) / 100)}</span>
+            <span className="text-xs text-muted">{money(Math.round((base * Number(percent)) / 100))}</span>
           </button>
         ))}
         <button type="button" role="radio" aria-checked={choice === 'custom'} className={chip(choice === 'custom')} onClick={() => setChoice('custom')}>
@@ -1303,7 +1454,7 @@ function SummaryLines({
           <li key={line.id} className="flex items-baseline justify-between gap-3">
             <span className="min-w-0 truncate text-muted">
               {line.label}
-              {line.total >= 0 && line.id !== 'tip' ? (
+              {line.total >= 0 && line.id !== 'tip' && line.id !== 'minimum' ? (
                 <span className="ml-1.5 text-xs text-faint">
                   {line.quantity} × {formatCurrency(line.unitPrice, tenant.currency)}
                 </span>
@@ -1315,6 +1466,15 @@ function SummaryLines({
           </li>
         ))}
       </ul>
+      {/* The activity's own price changes: "Summer +15% · Book early −10%". Business rules are listed under the discounts; dynamic pricing is left out. */}
+      {quote.appliedChanges.some((change) => change.source === 'activity') ? (
+        <p className="mt-2 text-xs text-subtle">
+          {quote.appliedChanges
+            .filter((change) => change.source === 'activity')
+            .map((change) => change.label)
+            .join(' · ')}
+        </p>
+      ) : null}
 
       <div className="mt-3 space-y-1.5 border-t border-line-subtle pt-3 text-xs text-muted">
         <div className="flex items-baseline justify-between gap-3">

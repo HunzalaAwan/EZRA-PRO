@@ -5,14 +5,17 @@ import { notFound } from 'next/navigation'
 
 import { PageHeader } from '@/components/dashboard/page-header'
 import { Button } from '@/components/ui/button'
-import { getActivityById, getLocationsByTenant, getWaiversByTenant, getPickupZonesByTenant } from '@/lib/demo'
+import { getActivityById, getDeparturesInRange, getLocationsByTenant, getWaiversByTenant, getPickupZonesByTenant } from '@/lib/demo'
 import { getUsersByTenant } from '@/lib/demo'
+import { NOW } from '@/lib/data/constants'
+import { addDays } from '@/lib/utils'
 import { NOW_ISO } from '@/components/dashboard/activities/activity-data'
 import { ActivityWizard } from '@/components/dashboard/activities/activity-wizard'
 import { packageOptionsFor } from '@/components/dashboard/activities/activity-data'
 
 interface EditActivityPageProps {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ step?: string | string[] }>
 }
 
 export async function generateMetadata({ params }: EditActivityPageProps): Promise<Metadata> {
@@ -23,19 +26,32 @@ export async function generateMetadata({ params }: EditActivityPageProps): Promi
 }
 
 /* ==========================================================================
-   /dashboard/activities/[id]/edit — the same six steps as a new activity,
+   /dashboard/activities/[id]/edit — the same seven steps as a new activity,
    filled in from the one that exists, with the live preview beside them.
+   `?step=schedule` opens straight on a step.
    ========================================================================== */
 
-export default async function EditActivityPage({ params }: EditActivityPageProps) {
+export default async function EditActivityPage({ params, searchParams }: EditActivityPageProps) {
   const { tenant } = await requireWorkspaceRoute('/dashboard/activities')
   const { id } = await params
+  const { step } = await searchParams
   const activity = getActivityById(id)
   if (!activity) notFound()
 
   const crew = getUsersByTenant(tenant.id)
     .filter((user) => user.isBookable)
     .map((user) => ({ id: user.id, name: user.name, title: user.title, avatarUrl: user.avatarUrl }))
+
+  // Upcoming time slots that already have bookings: a schedule edit that drops one is flagged, and they stay.
+  const bookedSlots = getDeparturesInRange(tenant.id, NOW, addDays(NOW, 400))
+    .filter((departure) => departure.activityId === activity.id && departure.booked > 0 && departure.status !== 'cancelled' && departure.startsAt >= NOW_ISO)
+    .map((departure) => ({
+      id: departure.id,
+      startsAt: departure.startsAt,
+      booked: departure.booked,
+      status: departure.status,
+      ...(departure.locationId ? { locationId: departure.locationId } : {}),
+    }))
 
   return (
     <div className="flex flex-col">
@@ -70,6 +86,8 @@ export default async function EditActivityPage({ params }: EditActivityPageProps
         tenantSlug={tenant.slug}
         defaultCategory={activity.category}
         nowIso={NOW_ISO}
+        bookedSlots={bookedSlots}
+        initialStep={typeof step === 'string' ? step : undefined}
       />
     </div>
   )

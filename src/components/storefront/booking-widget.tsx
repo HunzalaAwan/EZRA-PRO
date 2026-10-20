@@ -48,7 +48,12 @@ import type { BookingSettings } from '@/types'
 import { useRentalService } from '@/hooks/use-rental-service'
 import { priceUnit } from '@/lib/activity-kinds'
 import { crewName, LESSON_LEVELS, isDayRental, partyLabel, rateFor, rentalCategoryMeta, rentalModes, routeLabel, type RentalMode } from '@/lib/activity-kinds'
-import { applyRules } from '@/lib/pricing'
+import { bodyLimitLines } from '@/lib/guest-requirements'
+import type { PricingRule } from '@/lib/pricing'
+import { chargeByOf, fromPrice, leadPrice, priceBooking, unitPriceDetail, type AppliedChange, type PriceContext, type RentalPricing } from '@/lib/price-engine'
+import { useActivityOverrides, usePricingOverride } from '@/hooks/use-pricing-override'
+import { useLocations } from '@/hooks/use-locations'
+import { applyScheduleOverride } from '@/lib/activity-overrides'
 import { usePricing } from '@/hooks/use-pricing'
 import { IconButton } from '@/components/ui/icon-button'
 import { SimpleTooltip } from '@/components/ui/tooltip'
@@ -57,6 +62,8 @@ import { locationAddress } from '@/lib/locations'
 import { useBookingLedger } from '@/hooks/use-booking-ledger'
 import { addOnPer, addOnUnits, peopleOf, placesOf } from '@/lib/places'
 import { withLedger } from '@/lib/booking-ledger'
+import { useScheduledDays } from '@/hooks/use-scheduled-days'
+import { bookedOn } from '@/components/storefront/checkout-selection'
 import type { PackagePartView } from '@/lib/packages'
 import { PackageWidget } from '@/components/storefront/package-widget'
 
@@ -77,6 +84,8 @@ export interface AvailabilitySlot {
   endsAt: string
   capacity: number
   seatsLeft: number
+  /** Spots booked on the server, without carts in progress or the daily limit. Absent: capacity minus seats left. */
+  booked?: number
   status: DepartureStatus
   /** Dynamic-pricing multiplier for this departure; 1 when none applies. */
   priceMultiplier: number
@@ -85,6 +94,8 @@ export interface AvailabilitySlot {
   /** The location this run leaves from; absent on single-site businesses. */
   locationId?: string
   soldOut: boolean
+  /** Booked, but no longer on the saved schedule: it runs for its guests and takes no new bookings. */
+  outsideSchedule?: boolean
 }
 
 export interface AvailabilityDay {
@@ -133,6 +144,10 @@ export interface QuoteLine {
   quantity: number
   unitPrice: number
   total: number
+  /** Tickets: the price before any change, for the same span. */
+  baseUnitPrice?: number
+  /** Tickets: what moved the price, "Summer +15%". */
+  applied?: string[]
 }
 
 export interface Quote {
@@ -160,6 +175,8 @@ export interface Quote {
   party: number
   /** "2 jet skis", "6 guests": what the booking is counted in. */
   countLabel: string
+  /** Every change that moved a ticket price: the activity's own, group discounts, business rules, dynamic pricing. */
+  appliedChanges: AppliedChange[]
 }
 
 export interface QuoteOptions {
@@ -174,11 +191,25 @@ export interface QuoteOptions {
   lengthId?: string
   /** The private option: one price for the group, the whole time to themselves. */
   private?: boolean
+  /** The time slot's start: dates, seasons and demand changes price from it. */
+  startsAt?: string
+  /** The demo clock: book early and last minute count from it. */
+  nowIso?: string
+  /** Spots at the time slot and how many are already taken, for filling up and quiet times. */
+  capacity?: number
+  booked?: number
+  /** The business's price rules (Pricing → Price rules), applied after the activity's own changes. */
+  businessRules?: PricingRule[]
 }
 
-
-
-/** Deterministic, integer-only money maths — minor units in, minor units out. */
+/**
+ * Deterministic, integer-only money maths — minor units in, minor units out.
+ * Tickets come from the price engine (`@/lib/price-engine`): the activity's
+ * own price changes, group discounts, the time slot's dynamic pricing
+ * (`priceMultiplier`, nothing else) and `options.businessRules`, then the
+ * price cap and the minimum charge. Extras, the booking fee and card
+ * processing are added here.
+ */
 export function buildQuote(
   activity: Activity,
   tenantSlug: string,
@@ -188,76 +219,35 @@ export function buildQuote(
 ): Quote {
   const days = Math.max(1, Math.floor(options.days ?? 1))
   const tax = TAX_BY_TENANT[tenantSlug] ?? PROCESSING_FEE
-  const ticketLines: QuoteLine[] = []
-  let capped = 0
-  let seats = 0
-  let headcount = 0
-  let subtotal = 0
-
-  for (const tier of activity.priceTiers) {
-    const qty = selection.tiers.find((t) => t.tierId === tier.id)?.qty ?? 0
-    if (qty <= 0) continue
-    // A rental with rates prices each item per hour or per day; everything else uses the tier price.
-    const rated = (activity.kind ?? 'trip') === 'rental' && options.rentalMode && (activity.rental?.rates?.length ?? 0) > 0
-    const hours = Math.max(1, Math.floor(options.hours ?? 1))
-    const byLength = rated && options.rentalMode === 'length'
-    const base = rated ? (rateFor(activity, tier.id, options.rentalMode!, options.lengthId) ?? tier.price) : tier.price
-    const span = byLength ? 1 : rated && options.rentalMode === 'hour' ? hours : days
-    const full = Math.round(base * priceMultiplier) * span
-    // A rental item's cap: an hourly or daily price stops at the most one item costs for the whole rental.
-    const itemCap = (activity.kind ?? 'trip') === 'rental' && !byLength ? activity.rental?.items?.find((item) => item.tierId === tier.id)?.cap : undefined
-    const unitPrice = itemCap && itemCap > 0 ? Math.min(full, itemCap) : full
-    if (unitPrice < full) capped += (full - unitPrice) * qty
-    const total = unitPrice * qty
-    ticketLines.push({
-      id: tier.id,
-      label: byLength
-        ? `${tier.label} · ${activity.rental?.lengths?.find((length) => length.id === options.lengthId)?.label ?? 'set length'}`
-        : rated && options.rentalMode === 'hour'
-          ? `${tier.label} · ${hours} ${hours === 1 ? 'hour' : 'hours'}${unitPrice < full ? ' · capped' : ''}`
-          : days > 1
-            ? `${tier.label} · ${days} days${unitPrice < full ? ' · capped' : ''}`
-            : tier.label,
-      kind: 'ticket',
-      quantity: qty,
-      unitPrice,
-      total,
-    })
-    subtotal += total
-    headcount += qty * peopleOf(tier)
-    seats += qty * placesOf(tier)
-  }
-
-  // Private: one price for the group in place of the tickets, plus anyone over what it covers.
-  const priv = activity.privateOption
-  if (options.private && priv?.enabled && headcount > 0) {
-    ticketLines.length = 0
-    const groupPrice = Math.round(priv.price * priceMultiplier)
-    ticketLines.push({ id: 'private', label: `Private · up to ${priv.includedGuests}`, kind: 'ticket', quantity: 1, unitPrice: groupPrice, total: groupPrice })
-    const extra = Math.max(0, headcount - priv.includedGuests)
-    if (extra > 0 && priv.extraGuest > 0) ticketLines.push({ id: 'private-extra', label: 'Extra guests', kind: 'ticket', quantity: extra, unitPrice: priv.extraGuest, total: priv.extraGuest * extra })
-    subtotal = ticketLines.reduce((sum, line) => sum + line.total, 0)
-    capped = 0
-  }
-
-  // Charters: the price covers so many guests; each one over pays a set amount.
-  const charterParty = Math.max(1, options.party ?? headcount)
-  const included = activity.charter?.includedGuests ?? 0
-  const extraPrice = activity.charter?.extraGuestPrice ?? 0
-  if ((activity.kind ?? 'trip') === 'charter' && included > 0 && extraPrice > 0 && charterParty > included && ticketLines.length > 0) {
-    const extra = charterParty - included
-    ticketLines.push({ id: 'charter-extra', label: `Extra guests over ${included}`, kind: 'ticket', quantity: extra, unitPrice: extraPrice, total: extraPrice * extra })
-    subtotal += extraPrice * extra
-  }
-
-  // The booking's cap: tickets or items never come to more than this. Add-ons are on top.
-  const ticketTotal = ticketLines.reduce((sum, line) => sum + line.total, 0)
-  if (activity.priceCap && activity.priceCap > 0 && ticketTotal > activity.priceCap) {
-    const off = ticketTotal - activity.priceCap
-    ticketLines.push({ id: 'cap', label: 'Price cap', kind: 'ticket', quantity: 1, unitPrice: -off, total: -off })
-    subtotal -= off
-    capped += off
-  }
+  const priced = priceBooking({
+    activity,
+    lines: selection.tiers,
+    startsAt: options.startsAt,
+    nowIso: options.nowIso,
+    capacity: options.capacity,
+    booked: options.booked,
+    priceMultiplier,
+    businessRules: options.businessRules,
+    private: options.private,
+    party: options.party,
+    rental: { mode: options.rentalMode, hours: options.hours, days, lengthId: options.lengthId },
+  })
+  const ticketLines: QuoteLine[] = [
+    ...priced.ticketLines.map((line) => ({
+      id: line.id,
+      label: line.label,
+      kind: 'ticket' as const,
+      quantity: line.quantity,
+      unitPrice: line.unitPrice,
+      total: line.total,
+      baseUnitPrice: line.baseUnitPrice,
+      // The time slot's dynamic pricing shows as "Peak time", not on the line.
+      applied: line.applied.filter((change) => change.source !== 'dynamic').map((change) => change.label),
+    })),
+    // The price cap (negative) and the minimum charge (positive).
+    ...priced.adjustments.map((entry) => ({ id: entry.id, label: entry.label, kind: 'ticket' as const, quantity: 1, unitPrice: entry.amount, total: entry.amount })),
+  ]
+  let subtotal = priced.subtotalTickets
 
   const addOnLines: QuoteLine[] = []
   for (const addOn of activity.addOns) {
@@ -287,8 +277,8 @@ export function buildQuote(
     taxTotal,
     taxLabel: tax.label,
     total: subtotal + feeTotal + taxTotal,
-    seats,
-    headcount,
+    seats: priced.seats,
+    headcount: priced.headcount,
     days,
     ...(options.rentalMode === 'hour' ? { hours: Math.max(1, Math.floor(options.hours ?? 1)) } : {}),
     ...(options.rentalMode === 'length'
@@ -297,9 +287,11 @@ export function buildQuote(
           return length ? { hours: length.hours, lengthLabel: length.label } : {}
         })()
       : {}),
-    capped,
-    party: (activity.kind ?? 'trip') === 'charter' ? Math.max(1, options.party ?? headcount) : headcount,
-    countLabel: partyLabel(activity, (activity.kind ?? 'trip') === 'charter' ? Math.max(1, options.party ?? headcount) : headcount),
+    capped: priced.capped,
+    // People on the booking: a charter's party, or the headcount.
+    party: priced.guests,
+    countLabel: partyLabel(activity, priced.guests),
+    appliedChanges: priced.appliedChanges,
   }
 }
 
@@ -320,6 +312,119 @@ export function checkoutHref(
   if (addOns.length > 0) params.set('a', addOns.map((a) => `${a.addOnId}:${a.qty}`).join('|'))
   for (const [key, value] of Object.entries(extra)) if (value !== undefined) params.set(key, String(value))
   return `${checkoutPath}?${params.toString()}`
+}
+
+/* ==========================================================================
+   THE STRIP AS GUESTS SEE IT — shared by the widget and the activity page,
+   so the "From" price, the next start time and the time slots agree.
+   ========================================================================== */
+
+/**
+ * The day strip with the schedule the owner saved (seasons, changes, closed
+ * days) laid over the seeded days, then this browser's bookings, moves and
+ * cancellations. Pass the activity as the server sent it.
+ */
+export function useStorefrontDays(activity: Activity, seededDays: AvailabilityDay[], opts: { tenantSlug: string; nowIso?: string }): AvailabilityDay[] {
+  const ledger = useBookingLedger(opts.tenantSlug)
+  const scheduledDays = useScheduledDays(activity, seededDays, { tenantSlug: opts.tenantSlug, nowIso: opts.nowIso, delta: ledger.delta })
+  return React.useMemo(
+    () =>
+      scheduledDays.map((day) => {
+        if (!day.slots.some((slot) => ledger.delta[slot.departureId])) return day
+        // A time slot off the schedule stays closed, even when a booking on it is cancelled or moved here.
+        const slots = day.slots.map((slot) => (slot.outsideSchedule ? slot : withLedger(slot, ledger.delta)))
+        const open = slots.filter((slot) => !slot.soldOut)
+        return { ...day, slots, seatsLeft: open.reduce((sum, slot) => sum + slot.seatsLeft, 0), soldOut: slots.length > 0 && open.length === 0 }
+      }),
+    [scheduledDays, ledger.delta],
+  )
+}
+
+/** The rental mode and length the strip is priced in; the first the activity offers when none is picked. Undefined without rates. */
+export function stripRentalOf(activity: Activity, rentalMode?: RentalMode, lengthId?: string): RentalPricing | undefined {
+  const modes = rentalModes(activity)
+  if ((activity.kind ?? 'trip') !== 'rental' || modes.length === 0 || (activity.rental?.rates?.length ?? 0) === 0) return undefined
+  const mode = rentalMode ?? modes[0]
+  const lengths = activity.rental?.lengths ?? []
+  const length = lengths.find((entry) => entry.id === lengthId) ?? lengths[0]
+  return { mode, lengthId: mode === 'length' ? length?.id : undefined }
+}
+
+/**
+ * Each time slot priced by the engine (saved prices, price changes, business
+ * rules), with the day totals worked out again. `locationId`: only that
+ * location's time slots. `delta`: this browser's bookings (the ledger), so
+ * filling-up and quiet-time prices count them as checkout does.
+ */
+export function priceStripDays(
+  activity: Activity,
+  days: AvailabilityDay[],
+  ctx: { nowIso?: string; businessRules?: PricingRule[]; rental?: RentalPricing; locationId?: string; delta?: Record<string, number> },
+): AvailabilityDay[] {
+  return days.map((day) => {
+    const slots = (ctx.locationId !== undefined ? day.slots.filter((slot) => !slot.locationId || slot.locationId === ctx.locationId) : day.slots).map((slot) => ({
+      ...slot,
+      leadPrice: leadPrice(activity, {
+        startsAt: slot.startsAt,
+        nowIso: ctx.nowIso,
+        capacity: slot.capacity,
+        booked: bookedOn(slot, ctx.delta),
+        priceMultiplier: slot.priceMultiplier,
+        businessRules: ctx.businessRules,
+        rental: ctx.rental,
+      }),
+    }))
+    const open = slots.filter((slot) => !slot.soldOut)
+    return {
+      ...day,
+      slots,
+      fromPrice: open.length > 0 ? Math.min(...open.map((slot) => slot.leadPrice)) : 0,
+      seatsLeft: open.reduce((total, slot) => total + slot.seatsLeft, 0),
+      soldOut: slots.length > 0 && open.length === 0,
+    }
+  })
+}
+
+/** "From": the plain from price (lowest tier, or a rental's rate in this mode and length), or a cheaper open day in a priced strip. */
+export function shownFromPrice(activity: Activity, pricedDays: AvailabilityDay[], rental?: RentalPricing): number {
+  const plain = rental?.mode === 'length' && rental.lengthId ? leadPrice(activity, { rental: { mode: 'length', lengthId: rental.lengthId } }) : fromPrice(activity, rental?.mode)
+  const open = pricedDays.filter((day) => !day.soldOut && day.slots.length > 0).map((day) => day.fromPrice).filter((price) => price > 0)
+  return Math.min(plain || activity.basePrice, ...open)
+}
+
+/** What the "From" price is for: "per person", "per group", "per kayak an hour". */
+export function fromUnitLabel(activity: Activity, rentalMode?: RentalMode, lengthId?: string): string {
+  const kind = activity.kind ?? 'trip'
+  if (kind === 'rental') {
+    const modes = rentalModes(activity)
+    const rental = stripRentalOf(activity, rentalMode, lengthId)
+    const day = modes.length > 0 ? (rentalMode ?? modes[0]) === 'day' : isDayRental(activity)
+    const length = rental?.mode === 'length' ? activity.rental?.lengths?.find((entry) => entry.id === rental.lengthId) : undefined
+    const suffix = day ? ' a day' : rental?.mode === 'hour' ? ' an hour' : length ? ` · ${length.label.toLowerCase()}` : ''
+    return `per ${rentalCategoryMeta(activity.rental?.category).unit}${suffix}`
+  }
+  if (kind === 'charter' || (chargeByOf(activity) === 'group' && activity.groupPrice)) return 'per group'
+  return kind === 'pass' ? 'per ticket' : 'per person'
+}
+
+const NO_LOCATIONS: Location[] = []
+
+/**
+ * The places an activity runs from as the owner saved them, each with its
+ * business location (Settings → Locations edits included). Only places with
+ * a known location are listed.
+ */
+export function useActivitySites(activity: Activity, locations: Location[] = NO_LOCATIONS) {
+  const overrides = useActivityOverrides()
+  const runsFrom = applyScheduleOverride(activity, overrides[activity.id]).locations
+  const { locations: live } = useLocations(activity.tenantId, locations)
+  return React.useMemo(
+    () =>
+      runsFrom
+        .map((site) => ({ ...site, location: live.find((entry) => entry.id === site.locationId) }))
+        .filter((site): site is typeof site & { location: Location } => Boolean(site.location)),
+    [runsFrom, live],
+  )
 }
 
 /* ==========================================================================
@@ -353,20 +458,13 @@ export interface BookingWidgetProps {
  * request panel when it is booked by phone or has no set schedule.
  */
 export function BookingWidget(rawProps: BookingWidgetProps) {
-  // Bookings, moves and cancellations made in this browser count at once.
-  const ledger = useBookingLedger(rawProps.tenantSlug)
-  const days = React.useMemo(
-    () =>
-      rawProps.days.map((day) => {
-        if (!day.slots.some((slot) => ledger.delta[slot.departureId])) return day
-        const slots = day.slots.map((slot) => withLedger(slot, ledger.delta))
-        const open = slots.filter((slot) => !slot.soldOut)
-        return { ...day, slots, seatsLeft: open.reduce((sum, slot) => sum + slot.seatsLeft, 0), soldOut: slots.length > 0 && open.length === 0 }
-      }),
-    [rawProps.days, ledger.delta],
-  )
+  // The schedule the owner saved (seasons, changes, closed days) over the seeded time slots,
+  // and the bookings, moves and cancellations made in this browser.
+  const days = useStorefrontDays(rawProps.activity, rawProps.days, { tenantSlug: rawProps.tenantSlug, nowIso: rawProps.nowIso })
   const { defaults } = useBookingDefaults(rawProps.tenantSlug)
-  const activity = React.useMemo(() => withBookingDefaults(rawProps.activity, defaults), [rawProps.activity, defaults])
+  // Prices saved in the editor (tier prices, rates, price changes) count here and at checkout alike.
+  const priced = usePricingOverride(rawProps.activity)
+  const activity = React.useMemo(() => withBookingDefaults(priced, defaults), [priced, defaults])
   const props = { ...rawProps, days, activity }
   if (props.activity.kind === 'package') {
     return (
@@ -378,6 +476,7 @@ export function BookingWidget(rawProps: BookingWidgetProps) {
         checkoutPath={props.checkoutPath}
         initialDateKey={props.initialDateKey}
         initialGuests={props.initialGuests}
+        nowIso={props.nowIso}
         variant={props.variant}
         className={props.className}
       />
@@ -408,7 +507,7 @@ function BookingWidgetInner({
   tenantSlug,
   currency,
   days: allDays,
-  locations = [],
+  locations = NO_LOCATIONS,
   checkoutPath,
   initialDateKey,
   initialGuests,
@@ -423,15 +522,14 @@ function BookingWidgetInner({
 
   /* ---------- location ---------- */
 
-  const sites = React.useMemo(
-    () =>
-      activity.locations
-        .map((site) => ({ ...site, location: locations.find((entry) => entry.id === site.locationId) }))
-        .filter((site): site is typeof site & { location: Location } => Boolean(site.location)),
-    [activity.locations, locations],
-  )
+  // The places it runs from as the owner saved them, so the location step matches the time slots.
+  const sites = useActivitySites(activity, locations)
   const multiSite = sites.length > 1
   const [locationId, setLocationId] = React.useState<string>(() => sites[0]?.locationId ?? '')
+  // The saved places arrive after the first render; a place that was taken off is never the one picked.
+  React.useEffect(() => {
+    if (sites.length > 0 && !sites.some((site) => site.locationId === locationId)) setLocationId(sites[0].locationId)
+  }, [sites, locationId])
   /* ---------- kind ---------- */
 
   const kind = activity.kind ?? 'trip'
@@ -453,6 +551,19 @@ function BookingWidgetInner({
   const minDays = Math.max(1, activity.rental?.minDays ?? 1)
   const maxDays = Math.max(minDays, activity.rental?.maxDays || 30)
   const [rentDays, setRentDays] = React.useState(minDays)
+  // How it is charged, as saved in the editor, arrives after the first render: the mode, length and span stay within what is offered.
+  React.useEffect(() => {
+    if (modes.length > 0 && !modes.includes(rentalMode)) setRentalMode(modes[0])
+  }, [modes, rentalMode])
+  React.useEffect(() => {
+    if (lengths.length > 0 && !lengths.some((entry) => entry.id === lengthId)) setLengthId(lengths[0].id)
+  }, [lengths, lengthId])
+  React.useEffect(() => {
+    setRentHours((current) => clamp(current, minHours, maxHours))
+  }, [minHours, maxHours])
+  React.useEffect(() => {
+    setRentDays((current) => clamp(current, minDays, maxDays))
+  }, [minDays, maxDays])
   const showTime = kind !== 'pass' && !dayRental
   const stepList = [multiSite ? 'location' : null, 'date', showTime ? 'time' : null, 'guests', 'extras'].filter(
     (step): step is string => Boolean(step),
@@ -464,37 +575,53 @@ function BookingWidgetInner({
   /** Which request form is open, if any. */
   const [asking, setAsking] = React.useState<RequestContext['reason'] | null>(null)
 
-  /* Only the chosen location's runs, with the day totals recomputed. */
-  const days = React.useMemo(() => {
-    if (!multiSite) return allDays
-    return allDays.map((day) => {
-      const slots = day.slots.filter((slot) => !slot.locationId || slot.locationId === locationId)
-      const open = slots.filter((slot) => !slot.soldOut)
-      return {
-        ...day,
-        slots,
-        fromPrice: open.length > 0 ? Math.min(...open.map((slot) => slot.leadPrice)) : 0,
-        seatsLeft: open.reduce((total, slot) => total + slot.seatsLeft, 0),
-        soldOut: slots.length > 0 && open.length === 0,
-      }
-    })
-  }, [allDays, multiSite, locationId])
+  const { rules } = usePricing(tenantSlug)
+  // This browser's bookings: filling-up and quiet-time prices count them, as checkout does.
+  const { delta } = useBookingLedger(tenantSlug)
+  /* Only the chosen location's runs, each time slot priced by the engine, with the day totals recomputed. */
+  const stripRental = React.useMemo(() => stripRentalOf(activity, rentalMode, lengthId), [activity, rentalMode, lengthId])
+  const days = React.useMemo(
+    () => priceStripDays(activity, allDays, { nowIso, businessRules: rules, rental: stripRental, locationId: multiSite ? locationId : undefined, delta }),
+    [allDays, multiSite, locationId, activity, nowIso, rules, stripRental, delta],
+  )
 
   const bookableDays = React.useMemo(() => days.filter((d) => !d.soldOut && d.slots.length > 0), [days])
-
-  // A new location means a new strip: land on its first bookable day.
-  const previousLocation = React.useRef(locationId)
-  React.useEffect(() => {
-    if (previousLocation.current === locationId) return
-    previousLocation.current = locationId
-    setDateKey(bookableDays[0]?.dateKey ?? days[0]?.dateKey ?? '')
-  }, [locationId, bookableDays, days])
 
   const [dateKey, setDateKey] = React.useState<string>(() => {
     const requested = initialDateKey && days.find((d) => d.dateKey === initialDateKey)
     if (requested && !requested.soldOut && requested.slots.length > 0) return requested.dateKey
     return bookableDays[0]?.dateKey ?? days[0]?.dateKey ?? ''
   })
+  // Until the guest picks a day, the strip follows the saved schedule as it arrives:
+  // the day asked for once it can be booked, or the first day that can.
+  const pickedDay = React.useRef(false)
+  const pickDay = (key: string) => {
+    pickedDay.current = true
+    setDateKey(key)
+  }
+  const previousLocation = React.useRef(locationId)
+  React.useEffect(() => {
+    // A new location means a new strip: land on its first bookable day.
+    if (previousLocation.current !== locationId) {
+      previousLocation.current = locationId
+      setDateKey(bookableDays[0]?.dateKey ?? days[0]?.dateKey ?? '')
+      return
+    }
+    if (pickedDay.current) return
+    const requested = initialDateKey ? bookableDays.find((d) => d.dateKey === initialDateKey) : undefined
+    const current = bookableDays.find((d) => d.dateKey === dateKey)
+    const next = requested?.dateKey ?? current?.dateKey ?? bookableDays[0]?.dateKey
+    if (next && next !== dateKey) setDateKey(next)
+  }, [locationId, bookableDays, days, dateKey, initialDateKey])
+  // The strip can run months ahead: keep the picked day in view.
+  React.useEffect(() => {
+    const strip = stripRef.current
+    const chip = strip?.querySelector<HTMLElement>('[aria-pressed="true"]')
+    if (!strip || !chip) return
+    const box = strip.getBoundingClientRect()
+    const at = chip.getBoundingClientRect()
+    if (at.left < box.left || at.right > box.right) strip.scrollBy({ left: at.left - box.left - 4, behavior: 'auto' })
+  }, [dateKey])
 
   const day = days.find((d) => d.dateKey === dateKey)
   const openSlots = React.useMemo(
@@ -529,11 +656,37 @@ function BookingWidgetInner({
     return seed
   })
 
+  // Prices saved in the editor arrive after the first render: a new price starts at its minimum, and each count stays within its limits.
+  const tiersKey = activity.priceTiers.map((tier) => `${tier.id}:${tier.minQuantity}:${tier.maxQuantity}`).join('|')
+  React.useEffect(() => {
+    const perPerson = kind !== 'charter' && kind !== 'rental'
+    setTierQty((current) => {
+      const known = activity.priceTiers.some((tier) => current[tier.id] !== undefined)
+      const next = { ...current }
+      activity.priceTiers.forEach((tier, index) => {
+        const had = current[tier.id]
+        const wanted = had ?? (index === 0 && !known ? (kind === 'rental' ? 1 : (initialGuests ?? Math.max(tier.minQuantity, 2))) : tier.minQuantity)
+        const least = perPerson || had === undefined ? tier.minQuantity : 0
+        next[tier.id] = clamp(wanted, least, Math.max(least, tier.maxQuantity))
+      })
+      return activity.priceTiers.some((tier) => next[tier.id] !== current[tier.id]) ? next : current
+    })
+    // Runs when the tiers or their limits change, read through tiersKey.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tiersKey])
+
   const [addOnOn, setAddOnOn] = React.useState<Record<string, boolean>>(() => {
     const seed: Record<string, boolean> = {}
     for (const addOn of activity.addOns) seed[addOn.id] = addOn.required
     return seed
   })
+  // An extra the editor made required is always on.
+  const requiredKey = activity.addOns.filter((addOn) => addOn.required).map((addOn) => addOn.id).join('|')
+  React.useEffect(() => {
+    if (!requiredKey) return
+    setAddOnOn((current) => (activity.addOns.every((addOn) => !addOn.required || current[addOn.id]) ? current : { ...current, ...Object.fromEntries(activity.addOns.filter((addOn) => addOn.required).map((addOn) => [addOn.id, true])) }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requiredKey])
 
   const seatsUsed = activity.priceTiers.reduce((total, tier) => total + placesOf(tier) * (tierQty[tier.id] ?? 0), 0)
   const headcount = activity.priceTiers.reduce((total, tier) => total + peopleOf(tier) * (tierQty[tier.id] ?? 0), 0)
@@ -542,6 +695,10 @@ function BookingWidgetInner({
   const privateOpen = Boolean(privateOffer && slot && slot.seatsLeft >= slot.capacity && slot.capacity > 0)
   const [privateOn, setPrivateOn] = React.useState(false)
   const goPrivate = privateOn && privateOpen
+  /* ---------- per group: one price up to so many guests, then each extra guest ---------- */
+  const groupPrice = chargeByOf(activity) === 'group' && kind !== 'charter' ? activity.groupPrice : undefined
+  /** The most guests a per-group booking takes: its own limit, or what the price covers when it can't grow. */
+  const groupMax = groupPrice ? (groupPrice.maxGuests > 0 ? groupPrice.maxGuests : groupPrice.extraGuest > 0 ? Number.POSITIVE_INFINITY : groupPrice.includedGuests) : Number.POSITIVE_INFINITY
   /** Day rentals: a unit is free only if it is free every day of the span. */
   const spanLeft = React.useMemo(() => {
     if (!dayRental || !slot) return slot?.seatsLeft ?? 0
@@ -586,14 +743,16 @@ function BookingWidgetInner({
     return Math.max(0, free - extra)
   }
   // A new time or length: trim what is no longer free, and if nothing is picked, start with the first item that is.
-  const itemsKey = itemMode && slot ? items.map((item) => `${item.tierId}:${itemLeft(item.tierId)}`).join('|') : ''
+  // Only items with a price in the chosen mode can be picked.
+  const priced = (tierId: string) => !rated || rateFor(activity, tierId, rentalMode, byLength ? length?.id : undefined) !== undefined
+  const itemsKey = itemMode && slot ? items.map((item) => `${item.tierId}:${priced(item.tierId) ? itemLeft(item.tierId) : 0}`).join('|') : ''
   React.useEffect(() => {
     if (!itemsKey) return
     setTierQty((current) => {
       const next = { ...current }
-      for (const item of items) next[item.tierId] = Math.min(current[item.tierId] ?? 0, itemLeft(item.tierId))
+      for (const item of items) next[item.tierId] = priced(item.tierId) ? Math.min(current[item.tierId] ?? 0, itemLeft(item.tierId)) : 0
       if (items.every((item) => (next[item.tierId] ?? 0) === 0)) {
-        const first = items.find((item) => itemLeft(item.tierId) > 0)
+        const first = items.find((item) => priced(item.tierId) && itemLeft(item.tierId) > 0)
         if (first) next[first.tierId] = 1
       }
       return items.some((item) => next[item.tierId] !== current[item.tierId]) ? next : current
@@ -615,25 +774,43 @@ function BookingWidgetInner({
     [activity.priceTiers, activity.addOns, tierQty, addOnOn, headcount, kind, party],
   )
 
-  const { rules } = usePricing(tenantSlug)
-  const ruleResult = React.useMemo(
-    () =>
-      slot
-        ? applyRules(rules, { activitySlug: activity.slug, startsAt: slot.startsAt, nowIso: nowIso ?? slot.startsAt, guests: Math.max(1, headcount) })
-        : { multiplier: 1, applied: [] },
-    [rules, slot, activity.slug, nowIso, headcount],
+  /*
+   * What prices this time slot, for the rows and the quote alike: its date and
+   * start, the clock, how full it is, its dynamic pricing, the business's
+   * rules, and the people on the booking (a charter: its party).
+   */
+  const slotBooked = slot ? bookedOn(slot, delta) : undefined
+  const priceCtx: PriceContext = React.useMemo(
+    () => ({
+      startsAt: slot?.startsAt,
+      nowIso,
+      capacity: slot?.capacity,
+      booked: slotBooked,
+      priceMultiplier: slot?.priceMultiplier ?? 1,
+      businessRules: rules,
+      guests: Math.max(1, kind === 'charter' ? party : headcount),
+      rental: rated ? { mode: rentalMode, lengthId: byLength ? length?.id : undefined } : undefined,
+    }),
+    [slot, nowIso, slotBooked, rules, kind, party, headcount, rated, rentalMode, byLength, length],
   )
 
   const quote = React.useMemo(
     () =>
-      buildQuote(activity, tenantSlug, selection, (slot?.priceMultiplier ?? 1) * ruleResult.multiplier, {
+      buildQuote(activity, tenantSlug, selection, slot?.priceMultiplier ?? 1, {
         days: dayRental ? rentDays : 1,
         party,
         private: goPrivate,
         ...(rated ? { rentalMode, hours: rentHours, lengthId: byLength ? length?.id : undefined } : {}),
+        startsAt: slot?.startsAt,
+        nowIso,
+        capacity: slot?.capacity,
+        booked: slotBooked,
+        businessRules: rules,
       }),
-    [activity, tenantSlug, selection, slot, ruleResult.multiplier, dayRental, rentDays, party, rated, rentalMode, rentHours, byLength, length, goPrivate],
+    [activity, tenantSlug, selection, slot, slotBooked, nowIso, rules, dayRental, rentDays, party, rated, rentalMode, rentHours, byLength, length, goPrivate],
   )
+  /** What moved the price, as chips under the total; dynamic pricing shows as "Peak time" instead. */
+  const priceChips = quote.appliedChanges.filter((change) => change.source !== 'dynamic')
 
   // Per-person kinds: every tier's minimum per booking has to be met. Charters and rentals pick one option.
   const perPerson = kind !== 'charter' && kind !== 'rental'
@@ -673,13 +850,26 @@ function BookingWidgetInner({
     stripRef.current?.scrollBy({ left: direction * 264, behavior: reducedMotion ? 'auto' : 'smooth' })
   }
 
-  const fromPrice = Math.min(
-    ...[activity.basePrice, ...bookableDays.map((d) => d.fromPrice).filter((p) => p > 0)],
-  )
+  // "From": the plain from price (lowest tier, or a rental's lowest rate in this mode and length), or a cheaper day in the strip.
+  const fromShown = shownFromPrice(activity, bookableDays, stripRental)
 
   /* ---------- per-kind blocks ---------- */
 
-  const multiplier = slot?.priceMultiplier ?? 1
+  /** A price on this time slot: a tier's ticket, a rental's rate in this mode, or 'private'. */
+  const priceOn = (tierId: string) => unitPriceDetail(activity, tierId, priceCtx)
+  /** The struck-through "Was": the tier's own compare-at price, or its price before a discount. 0: none. */
+  const wasPrice = (tierId: string, detail: { price: number; base: number }) => {
+    const compareAt = rated ? 0 : (activity.priceTiers.find((tier) => tier.id === tierId)?.compareAtPrice ?? 0)
+    const was = Math.max(compareAt, detail.base)
+    return was > detail.price ? was : 0
+  }
+  const wasTag = (amount: number) =>
+    amount > 0 ? (
+      <s className="text-xs font-normal text-faint tabular">
+        <span className="sr-only">Was </span>
+        {formatCurrency(amount, currency)}
+      </s>
+    ) : null
   const chosenTier = activity.priceTiers.find((tier) => (tierQty[tier.id] ?? 0) > 0) ?? activity.priceTiers[0]
   const chosenQty = chosenTier ? (tierQty[chosenTier.id] ?? 0) : 0
   const pickTier = (tierId: string, qty: number) =>
@@ -800,7 +990,7 @@ function BookingWidgetInner({
           {shown.map((item) => {
             const left = itemLeft(item.tierId)
             const qty = tierQty[item.tierId] ?? 0
-            const price = rated ? (rateFor(activity, item.tierId, rentalMode, byLength ? length?.id : undefined) ?? 0) : (activity.priceTiers.find((tier) => tier.id === item.tierId)?.price ?? 0)
+            const itemPrice = priceOn(item.tierId)
             const max = Math.min(left, item.maxPerBooking)
             return (
               <li key={item.tierId} className={cn('rounded-xl border px-3.5 py-3 transition-colors', qty > 0 ? 'border-primary bg-primary-soft/20' : 'border-line', slot && left === 0 && qty === 0 && 'opacity-60')}>
@@ -809,8 +999,9 @@ function BookingWidgetInner({
                     <p className="text-sm font-semibold text-foreground">{item.name}</p>
                     <p className="mt-0.5 text-xs text-subtle">{[item.description, `Fits ${item.holds}`].filter(Boolean).join(' · ')}</p>
                     <p className="mt-1 text-sm font-medium text-foreground tabular">
-                      {formatCurrency(Math.round(price * multiplier), currency)}
+                      {formatCurrency(itemPrice.price, currency)}
                       <span className="text-xs font-normal text-subtle">{per}</span>
+                      {wasPrice(item.tierId, itemPrice) > 0 ? <> {wasTag(wasPrice(item.tierId, itemPrice))}</> : null}
                       {item.cap && (hourRental || dayRental) ? <span className="text-xs font-normal text-subtle"> · never more than {formatCurrency(item.cap, currency)}</span> : null}
                     </p>
                   </div>
@@ -932,9 +1123,8 @@ function BookingWidgetInner({
             .filter((tier) => !rated || rateFor(activity, tier.id, rentalMode) !== undefined)
             .map((tier) => {
               const minutes = lengthOf(tier.id)
-              const price = rated ? (rateFor(activity, tier.id, rentalMode) ?? tier.price) : tier.price
               const note = tier.description || (!rated && !dayRental && minutes ? `${Math.round((minutes / 60) * 10) / 10} hours` : undefined)
-              return optionButton(tier.id, tier.label, `${formatCurrency(Math.round(price * multiplier), currency)}${dayRental ? ' a day' : hourRental ? ' an hour' : ''}`, note || undefined)
+              return optionButton(tier.id, tier.label, `${formatCurrency(priceOn(tier.id).price, currency)}${dayRental ? ' a day' : hourRental ? ' an hour' : ''}`, note || undefined)
             })}
         </div>
         {hourRental ? (
@@ -1010,7 +1200,7 @@ function BookingWidgetInner({
           {activity.priceTiers.map((tier) => {
             const minutes = activity.charter?.durations?.find((entry) => entry.tierId === tier.id)?.minutes
             const note = [minutes ? (minutes >= 1440 ? 'Full day' : `${Math.round((minutes / 60) * 10) / 10} hours`) : null, tier.description].filter(Boolean).join(' · ')
-            return optionButton(tier.id, tier.label, formatCurrency(Math.round(tier.price * multiplier), currency), note || undefined)
+            return optionButton(tier.id, tier.label, formatCurrency(priceOn(tier.id).price, currency), note || undefined)
           })}
         </div>
         <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-3">
@@ -1045,15 +1235,15 @@ function BookingWidgetInner({
   if (kind === 'activity') {
     const limits = [
       activity.minAge > 0 ? `Ages ${activity.minAge}+` : null,
-      activity.ride?.minHeightCm ? `at least ${activity.ride.minHeightCm} cm tall` : null,
-      activity.ride?.maxWeightKg ? `up to ${activity.ride.maxWeightKg} kg` : null,
+      // The Guests step's Height and Weight limits, or a seeded rider limit.
+      ...bodyLimitLines(activity),
     ].filter(Boolean)
     kindNote = (
       <div className="flex items-start gap-3 rounded-xl border border-line bg-surface-sunken/50 px-3.5 py-3">
         <Zap className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
         <div className="min-w-0 text-xs text-muted">
           <p className="text-sm font-medium text-foreground">{formatDurationShort(activity.durationMinutes)} per time slot · arrive 15 minutes early</p>
-          {limits.length > 0 ? <p className="mt-1">Every rider: {limits.join(', ')}.</p> : null}
+          {limits.length > 0 ? <p className="mt-1">Every guest: {limits.join(', ')}.</p> : null}
           {activity.route ? <p className="mt-1">{routeLabel(activity.route)}{activity.route.elevationM ? ` · ${activity.route.elevationM} m climb` : ''}</p> : null}
         </div>
       </div>
@@ -1078,7 +1268,7 @@ function BookingWidgetInner({
         <GraduationCap className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
         <div className="min-w-0 text-xs text-muted">
           <p className="text-sm font-medium text-foreground">
-            {sessions > 1 ? `${sessions}-lesson course` : 'Single lesson'} · {LESSON_LEVELS.find((entry) => entry.value === level)?.label} · {ratio} per instructor
+            {sessions > 1 ? `${sessions}-lesson course` : 'Single lesson'} · {LESSON_LEVELS.find((entry) => entry.value === level)?.label}{ratio > 0 ? ` · ${ratio} per instructor` : ''}
           </p>
           {sessions > 1 && dateKey ? (
             <p className="mt-1">Lessons on {Array.from({ length: sessions }, (_, index) => shortDate(dateKey, index)).join(', ')}, same time each day.</p>
@@ -1096,7 +1286,7 @@ function BookingWidgetInner({
         <Ticket className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
         <p className="text-xs text-muted">
           <span className="block text-sm font-medium text-foreground">{days > 1 ? `Valid ${days} days` : 'Valid all day'}{dateKey ? ` from ${shortDate(dateKey, 0)}` : ''}</span>
-          {activity.pass?.reentry ? 'Come and go as you like.' : 'Single entry.'}
+          {activity.pass?.reentry ? 'Come and go as you like.' : null}
         </p>
       </div>
     )
@@ -1125,8 +1315,8 @@ function BookingWidgetInner({
             From
           </p>
           <p className="mt-0.5 font-display text-2xl font-semibold tabular tracking-tight text-foreground">
-            {formatCurrency(fromPrice, currency)}
-            <span className="ml-1.5 text-xs font-medium text-subtle">{kind === 'rental' ? `per ${rentalMeta.unit}${dayRental ? ' a day' : rated ? ' an hour' : ''}` : kind === 'charter' ? 'per group' : kind === 'pass' ? 'per ticket' : 'per person'}</span>
+            {formatCurrency(fromShown, currency)}
+            <span className="ml-1.5 text-xs font-medium text-subtle">{fromUnitLabel(activity, rentalMode, lengthId)}</span>
           </p>
         </div>
         {slot && slot.priceMultiplier > 1 ? (
@@ -1222,7 +1412,7 @@ function BookingWidgetInner({
                 day={entry}
                 currency={currency}
                 selected={entry.dateKey === dateKey}
-                onSelect={() => setDateKey(entry.dateKey)}
+                onSelect={() => pickDay(entry.dateKey)}
                 emptyLabel={kind === 'trip' ? 'No times' : kind === 'lesson' ? 'No class' : kind === 'activity' ? 'No slots' : 'Closed'}
               />
             ))}
@@ -1292,7 +1482,7 @@ function BookingWidgetInner({
                 <span className="block text-sm font-medium text-foreground">Make it private</span>
                 <span className="block text-xs text-subtle">
                   {privateOpen
-                    ? `Just your group: ${formatCurrency(Math.round(privateOffer.price * (slot?.priceMultiplier ?? 1)), currency)} for up to ${privateOffer.includedGuests}${privateOffer.extraGuest > 0 ? `, then ${formatCurrency(privateOffer.extraGuest, currency)} each` : ''}.`
+                    ? `Just your group: ${formatCurrency(priceOn('private').price, currency)} for up to ${privateOffer.includedGuests}${privateOffer.extraGuest > 0 ? `, then ${formatCurrency(priceOn('private').extraGuest ?? privateOffer.extraGuest, currency)} each` : ''}.`
                     : slot
                       ? 'Others are already booked on this time. Pick an empty time to go private.'
                       : 'Pick a time first.'}
@@ -1302,26 +1492,42 @@ function BookingWidgetInner({
             </label>
           ) : null}
 
+          {groupPrice ? (
+            <p className="mt-3 text-xs text-subtle">
+              <span className="font-medium text-muted tabular">{formatCurrency(priceOn('group').price, currency)}</span> for up to {groupPrice.includedGuests}
+              {groupPrice.extraGuest > 0 ? `, then ${formatCurrency(priceOn('group').extraGuest ?? groupPrice.extraGuest, currency)} each` : ''}
+            </p>
+          ) : null}
+
           <div className="mt-3 divide-y divide-line-subtle rounded-xl border border-line">
             {activity.priceTiers.map((tier) => {
               const qty = tierQty[tier.id] ?? 0
-              const unit = Math.round(tier.price * (slot?.priceMultiplier ?? 1))
+              // The date's price for this ticket, and what it was before a discount.
+              const tierPrice = priceOn(tier.id)
+              const unit = tierPrice.price
+              const was = wasPrice(tier.id, tierPrice)
               const places = placesOf(tier)
-              // Private: the group can be as big as the time, or as the price allows.
+              // Private: the group can be as big as the time, or as the price allows. Per group: up to its most guests.
               const roomLeft = goPrivate
                 ? Math.min(slot?.capacity ?? seatsLeft, privateOffer && privateOffer.extraGuest === 0 ? privateOffer.includedGuests : Number.POSITIVE_INFINITY) - (seatsUsed - qty * places)
-                : seatsLeft - (seatsUsed - qty * places)
+                : Math.min(seatsLeft, groupMax) - (seatsUsed - qty * places)
               const seatRoom = places > 0 ? Math.floor(roomLeft / places) : tier.maxQuantity
               const max = Math.min(tier.maxQuantity, Math.max(0, seatRoom))
 
               return (
                 <div key={tier.id} className="flex items-center gap-3 px-3.5 py-3">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-foreground">{tier.label}</p>
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {tier.label}
+                      {tierAges(tier) ? <span className="font-normal text-subtle"> · {tierAges(tier)}</span> : null}
+                    </p>
                     <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-subtle">
-                      <span className="tabular font-medium text-muted">
-                        {formatCurrency(unit, currency)}
-                      </span>
+                      {groupPrice ? null : (
+                        <span className="tabular font-medium text-muted">
+                          {formatCurrency(unit, currency)}
+                        </span>
+                      )}
+                      {groupPrice ? null : wasTag(was)}
                       {tier.description ? <span className="truncate">· {tier.description}</span> : null}
                       {!tier.countsTowardCapacity ? (
                         <span className="text-faint">· does not use a spot</span>
@@ -1470,7 +1676,7 @@ function BookingWidgetInner({
                 >
                   <span className="min-w-0 truncate text-muted">
                     {line.label}
-                    {line.total >= 0 ? (
+                    {line.total >= 0 && line.id !== 'minimum' ? (
                       <span className="ml-1.5 text-xs text-faint">
                         {line.quantity} × {formatCurrency(line.unitPrice, currency)}
                       </span>
@@ -1523,11 +1729,14 @@ function BookingWidgetInner({
           </div>
         </div>
 
-        {ruleResult.applied.length > 0 ? (
+        {priceChips.length > 0 ? (
           <div className="flex flex-wrap gap-1.5" aria-label="Price adjustments">
-            {ruleResult.applied.map((rule) => (
-              <span key={rule.id} className={cn('rounded-full px-2.5 py-1 text-xs font-medium', rule.percent < 0 ? 'bg-success-soft text-success' : 'bg-surface-sunken text-muted')}>
-                {rule.name} {rule.percent > 0 ? `+${rule.percent}%` : `${rule.percent}%`}
+            {priceChips.map((change) => (
+              <span
+                key={change.id}
+                className={cn('rounded-full px-2.5 py-1 text-xs font-medium', change.effect.type !== 'set' && change.effect.value < 0 ? 'bg-success-soft text-success' : 'bg-surface-sunken text-muted')}
+              >
+                {change.label}
               </span>
             ))}
           </div>
@@ -1788,6 +1997,16 @@ function AnimatedTotal({
       </AnimatePresence>
     </span>
   )
+}
+
+/** "4–12", "Under 3", "65+": a tier's age range, when it has one. */
+function tierAges(tier: Pick<PriceTier, 'ageMin' | 'ageMax'>): string {
+  const min = tier.ageMin && tier.ageMin > 0 ? tier.ageMin : undefined
+  const max = tier.ageMax && tier.ageMax > 0 ? tier.ageMax : undefined
+  if (min !== undefined && max !== undefined) return `${min}–${max}`
+  if (max !== undefined) return `Under ${max + 1}`
+  if (min !== undefined) return `${min}+`
+  return ''
 }
 
 /** "90 min", "2h", "2h 30m". */

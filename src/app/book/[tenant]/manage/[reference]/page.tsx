@@ -63,11 +63,21 @@ export default async function ManageBookingPage({ params }: { params: Promise<{ 
         changes: changesOf(activity),
         // No terms of its own: it follows the business default, applied in the browser.
         payment: activity.payment && !activity.payment.useDefault ? paymentOf(activity) : { ...paymentOf(activity), useDefault: true },
+        // The seeded price; the page works out the saved one for the time slot.
         pricePerGuest: activity.priceTiers[0]?.price ?? 0,
         guestQuestions: activity.guestQuestions ?? [],
         kind: activity.kind ?? 'trip',
       }}
-      departure={{ id: departure.id, startsAt: departure.startsAt, endsAt: departure.endsAt, seatsLeft: Math.max(0, departure.capacity - departure.booked - departure.held) }}
+      departure={{
+        id: departure.id,
+        startsAt: departure.startsAt,
+        endsAt: departure.endsAt,
+        seatsLeft: Math.max(0, departure.capacity - departure.booked - departure.held),
+        capacity: departure.capacity,
+        priceMultiplier: departure.priceMultiplier ?? 1,
+      }}
+      // The schedule the owner saved and their prices are laid over these in the browser.
+      source={activity}
       waiver={getWaiverById(activity.waiverId)}
       days={buildDays(activity, 30)}
       thread={thread}

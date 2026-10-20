@@ -1,4 +1,5 @@
 import type { AvailabilityDay, AvailabilitySlot } from '@/components/storefront/booking-widget'
+import type { Activity } from '@/types'
 
 /* ==========================================================================
    Packages — the parts of a package as the storefront sees them, and the
@@ -21,6 +22,10 @@ export interface PackagePartView {
   times: string[]
   /** The part's own availability, only at the times the package allows. */
   days: AvailabilityDay[]
+  /** The part's activity as seeded, so the browser can lay its saved schedule over `days`. */
+  source?: Activity
+  /** The location the package holds this part to, if any. */
+  locationId?: string
 }
 
 export const timeOf = (iso: string) => iso.slice(11, 16)

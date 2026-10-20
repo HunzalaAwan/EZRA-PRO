@@ -6,11 +6,18 @@ import { CircleAlert, Layers, MapPin, Minus, Plus } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
-import { DateChip, TimeChip, type AvailabilityDay, type AvailabilitySlot } from '@/components/storefront/booking-widget'
+import { DateChip, TimeChip, buildQuote, type AvailabilityDay, type AvailabilitySlot } from '@/components/storefront/booking-widget'
 import { TrustSeal } from '@/components/storefront/trust-bar'
 import { useBookingLedger } from '@/hooks/use-booking-ledger'
+import { useBookingDefaults } from '@/hooks/use-booking-defaults'
+import { useActivityOverrides } from '@/hooks/use-pricing-override'
+import { usePricing } from '@/hooks/use-pricing'
 import { withLedger } from '@/lib/booking-ledger'
-import { apart, clock, firstCombo, openSlots, type PackagePartView } from '@/lib/packages'
+import { applyActivityOverride, type ActivityOverride } from '@/lib/activity-overrides'
+import { closedDaysBetween, isCancelledSlot, normalizeTime, rebuildAvailabilityDays, scheduleContextOf, type RebuildContext } from '@/lib/activity-schedule'
+import { NOW } from '@/lib/data/constants'
+import { addOnUnits, peopleOf } from '@/lib/places'
+import { apart, clock, firstCombo, openSlots, timeOf, type PackagePartView } from '@/lib/packages'
 import { cn, formatCurrency, formatDuration, fromDateKey } from '@/lib/utils'
 import type { Activity, CurrencyCode } from '@/types'
 
@@ -21,6 +28,74 @@ import type { Activity, CurrencyCode } from '@/types'
    other parts (with the package's gap between them). Booking takes seats
    from every part, so the activities sold on their own stay right.
    ========================================================================== */
+
+const pad2 = (n: number) => String(n).padStart(2, '0')
+/** The demo clock as a local ISO, like every startsAt. */
+const LOCAL_NOW = `${NOW.getFullYear()}-${pad2(NOW.getMonth() + 1)}-${pad2(NOW.getDate())}T${pad2(NOW.getHours())}:${pad2(NOW.getMinutes())}:00`
+
+/** A part as the server sends it. With `source`, its saved schedule counts in full; without, closed days and closed times still do. */
+export type PackagePart = PackagePartView & {
+  /** The part's activity as seeded. */
+  source?: Activity
+  /** The location the package holds this part to, if any. */
+  locationId?: string
+}
+
+/** A time slot the schedule no longer has: kept full when it has bookings, otherwise gone. */
+function dropSlot(slot: AvailabilitySlot, delta: Record<string, number> | undefined): AvailabilitySlot[] {
+  const sold = (slot.booked ?? Math.max(0, slot.capacity - slot.seatsLeft)) + (delta?.[slot.departureId] ?? 0)
+  return sold > 0 ? [{ ...slot, seatsLeft: 0, soldOut: true, outsideSchedule: true }] : []
+}
+
+/**
+ * A part's days with the schedule the owner saved for that activity and the
+ * business's closed days, kept to the days and times the package sells.
+ */
+function scheduledPart(part: PackagePart, saved: ActivityOverride | undefined, ctx: RebuildContext): AvailabilityDay[] {
+  if (part.days.length === 0) return part.days
+  const allowed = new Set(part.times)
+  const source = part.source
+  if (source) {
+    const closures = !source.runsOnClosures && ((ctx.closures?.length ?? 0) > 0 || Boolean(ctx.holidays?.enabled))
+    if (!saved && !source.schedules && !source.scheduleChanges && !closures) return part.days
+    try {
+      const keep = new Set(part.days.map((day) => day.dateKey))
+      const primary = source.locations[0]?.locationId
+      return rebuildAvailabilityDays(source, applyActivityOverride(source, saved), part.days, ctx)
+        .filter((day) => keep.has(day.dateKey))
+        .map((day) => ({
+          ...day,
+          slots: day.slots.filter(
+            (slot) => (allowed.size === 0 || allowed.has(timeOf(slot.startsAt))) && (!part.locationId || (slot.locationId ?? primary) === part.locationId),
+          ),
+        }))
+    } catch {
+      return part.days
+    }
+  }
+  // Without the part's activity: its closed days and closed times, and the business's closed days.
+  const closed = closedDaysBetween(part.days[0].dateKey, part.days[part.days.length - 1].dateKey, ctx, saved?.runsOnClosures)
+  const shut = (saved?.scheduleChanges ?? []).filter((change) => change.action === 'closed')
+  if (closed.size === 0 && shut.length === 0) return part.days
+  return part.days.map((day) => {
+    const changes = shut.filter((change) => (change.dates ?? []).includes(day.dateKey))
+    if (!closed.has(day.dateKey) && changes.length === 0) return day
+    const slots = day.slots.flatMap((slot) => {
+      // Called off from the calendar: its guests were refunded, so it leaves the strip.
+      if (isCancelledSlot({ scheduleChanges: shut }, slot.startsAt, slot.locationId)) return []
+      const time = timeOf(slot.startsAt)
+      const off =
+        closed.has(day.dateKey) ||
+        changes.some(
+          (change) =>
+            (!change.locationId || !slot.locationId || change.locationId === slot.locationId) &&
+            (!(change.times?.length) || (change.times ?? []).some((entry) => normalizeTime(entry) === time)),
+        )
+      return off ? dropSlot(slot, ctx.delta) : [slot]
+    })
+    return { ...day, slots }
+  })
+}
 
 const keyPlus = (dateKey: string, days: number) => {
   const date = fromDateKey(dateKey)
@@ -36,16 +111,19 @@ export function PackageWidget({
   checkoutPath,
   initialDateKey,
   initialGuests,
+  nowIso,
   variant = 'rail',
   className,
 }: {
   activity: Activity
   tenantSlug: string
   currency: CurrencyCode
-  parts: PackagePartView[]
+  parts: PackagePart[]
   checkoutPath: string
   initialDateKey?: string
   initialGuests?: number
+  /** The demo clock, local ISO. */
+  nowIso?: string
   variant?: 'rail' | 'sheet'
   className?: string
 }) {
@@ -55,20 +133,23 @@ export function PackageWidget({
   const sameDay = config?.sameDay !== false
   const within = Math.max(1, config?.withinDays ?? 1)
 
-  // Seats booked or given back in this browser count straight away.
+  // Each part's saved schedule and the business's closed days, then the seats booked or given back in this browser.
   const ledger = useBookingLedger(tenantSlug)
-  const parts = React.useMemo(
-    () =>
-      rawParts.map((part) => ({
-        ...part,
-        days: part.days.map((day) => {
-          const slots = day.slots.map((slot) => withLedger(slot, ledger.delta))
-          const open = slots.filter((slot) => !slot.soldOut)
-          return { ...day, slots, seatsLeft: open.reduce((sum, slot) => sum + slot.seatsLeft, 0), soldOut: slots.length > 0 && open.length === 0 }
-        }),
-      })),
-    [rawParts, ledger.delta],
-  )
+  const overrides = useActivityOverrides()
+  const { defaults } = useBookingDefaults(tenantSlug)
+  const now = (nowIso ?? LOCAL_NOW).slice(0, 19)
+  const parts = React.useMemo(() => {
+    const ctx: RebuildContext = { ...scheduleContextOf(defaults), nowIso: now, maxAdvanceDays: defaults.maxAdvanceDays, delta: ledger.delta }
+    return rawParts.map((part) => ({
+      ...part,
+      days: scheduledPart(part, overrides[part.activityId], ctx).map((day) => {
+        // A time slot off the schedule stays closed, whatever this browser did on it.
+        const slots = day.slots.map((slot) => (slot.outsideSchedule ? slot : withLedger(slot, ledger.delta)))
+        const open = slots.filter((slot) => !slot.soldOut)
+        return { ...day, slots, seatsLeft: open.reduce((sum, slot) => sum + slot.seatsLeft, 0), soldOut: slots.length > 0 && open.length === 0 }
+      }),
+    }))
+  }, [rawParts, overrides, defaults, now, ledger.delta])
 
   /* ---------- how many ---------- */
   const [qty, setQty] = React.useState<Record<string, number>>(() =>
@@ -121,8 +202,21 @@ export function PackageWidget({
   const complete = chosen.every(Boolean)
   const clash = complete && chosen.some((a, i) => chosen.some((b, j) => j > i && a && b && !apart(a, b, gap)))
 
-  /* ---------- price ---------- */
-  const total = activity.priceTiers.reduce((sum, tier) => sum + tier.price * (qty[tier.id] ?? 0), 0)
+  /* ---------- price: the same engine and inputs as checkout, from the first part's start ---------- */
+  const { rules } = usePricing(tenantSlug)
+  const headcount = activity.priceTiers.reduce((sum, tier) => sum + peopleOf(tier) * (qty[tier.id] ?? 0), 0)
+  const quote = buildQuote(
+    activity,
+    tenantSlug,
+    {
+      tiers: activity.priceTiers.map((tier) => ({ tierId: tier.id, qty: qty[tier.id] ?? 0 })),
+      addOns: activity.addOns.map((addOn) => ({ addOnId: addOn.id, qty: addOn.required ? addOnUnits(addOn, headcount) : 0 })),
+    },
+    1,
+    { startsAt: chosen[0]?.startsAt, nowIso: now, businessRules: rules },
+  )
+  const total = quote.total
+  const priceChips = quote.appliedChanges.filter((change) => change.source !== 'dynamic')
   const apartPrice = parts.reduce((sum, part) => sum + part.basePrice, 0)
   const saving = Math.max(0, apartPrice - (activity.priceTiers[0]?.price ?? activity.basePrice))
 
@@ -297,8 +391,21 @@ export function PackageWidget({
         </p>
       ) : null}
 
+      {priceChips.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5" aria-label="Price adjustments">
+          {priceChips.map((change) => (
+            <span
+              key={change.id}
+              className={cn('rounded-full px-2.5 py-1 text-xs font-medium', change.effect.type !== 'set' && change.effect.value < 0 ? 'bg-success-soft text-success' : 'bg-surface-sunken text-muted')}
+            >
+              {change.label}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
       <div className="flex items-center justify-between gap-3 border-t border-line-subtle pt-4">
-        <span className="text-sm text-muted">{party} {party === 1 ? 'person' : 'people'}</span>
+        <span className="text-sm text-muted">{party} {party === 1 ? 'person' : 'people'} · all taxes included</span>
         <span className="font-display text-2xl font-semibold tabular tracking-tight text-foreground">{formatCurrency(total, currency, { decimals: true })}</span>
       </div>
       <Button size="lg" fullWidth disabled={!complete || clash || party < 1} onClick={reserve} className="h-12 text-[0.9375rem]">

@@ -1,17 +1,21 @@
 'use client'
 
 import * as React from 'react'
-import { ArrowDown, ArrowUp, GripVertical, Plus, Tag, Trash2, Users } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronDown, MoreHorizontal, Plus, Tag, Trash2, Users } from 'lucide-react'
 
-import type { CurrencyCode, ActivityKind } from '@/types'
+import type { CurrencyCode, ActivityKind, PriceTier } from '@/types'
 import { cn, currencySymbol, formatCurrency } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
 import { Input } from '@/components/ui/input'
-import { Field } from '@/components/ui/field'
-import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
-import { SimpleTooltip } from '@/components/ui/tooltip'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import type { DraftAddOn } from './addon-editor'
 
 /* ==========================================================================
@@ -30,6 +34,9 @@ export interface DraftTier {
   countsTowardCapacity: boolean
   /** Places one ticket takes: 2 for a tandem, 4 for a family ticket. Absent: 1. */
   seats?: number
+  /** Optional age range shown with the name: "Child · 4–12". */
+  ageMin?: number
+  ageMax?: number
 }
 
 /** A tier with no maximum: the seats left decide how many can book. */
@@ -37,8 +44,13 @@ export const NO_LIMIT = 99
 
 let tierCounter = 0
 
-export function blankTier(label = '', price = 0): DraftTier {
+/**
+ * A new, empty price row. Pass the rows already there: the counter starts over
+ * on every page load, and a saved edit can already hold "tier_draft_1".
+ */
+export function blankTier(label = '', price = 0, taken: readonly { id: string }[] = []): DraftTier {
   tierCounter += 1
+  while (taken.some((tier) => tier.id === `tier_draft_${tierCounter}`)) tierCounter += 1
   return {
     id: `tier_draft_${tierCounter}`,
     label,
@@ -52,6 +64,48 @@ export function blankTier(label = '', price = 0): DraftTier {
   }
 }
 
+/** A draft row as the activity stores it. */
+export function tierOfDraft(tier: DraftTier): PriceTier {
+  return {
+    id: tier.id,
+    label: tier.label,
+    price: tier.price,
+    ...(tier.compareAtPrice ? { compareAtPrice: tier.compareAtPrice } : {}),
+    minQuantity: tier.minQuantity,
+    maxQuantity: NO_LIMIT,
+    ...(tier.description.trim() ? { description: tier.description.trim() } : {}),
+    countsTowardCapacity: tier.countsTowardCapacity,
+    ...(tier.countsTowardCapacity && (tier.seats ?? 1) > 1 ? { seats: tier.seats } : {}),
+    ...ageFields(tier),
+  }
+}
+
+/** The age range to save: only the ends that are set. */
+export function ageFields(tier: Pick<DraftTier, 'ageMin' | 'ageMax'>): Pick<PriceTier, 'ageMin' | 'ageMax'> {
+  const min = tier.ageMin && tier.ageMin > 0 ? Math.floor(tier.ageMin) : undefined
+  const max = tier.ageMax && tier.ageMax > 0 ? Math.floor(tier.ageMax) : undefined
+  return { ...(min !== undefined ? { ageMin: min } : {}), ...(max !== undefined ? { ageMax: Math.max(max, min ?? 0) } : {}) }
+}
+
+/** "4–12", "Under 4", "65+": a tier's age range, when it has one. */
+export function tierAgeLabel(tier: Pick<DraftTier, 'ageMin' | 'ageMax'>): string {
+  const { ageMin: min, ageMax: max } = ageFields(tier)
+  if (min !== undefined && max !== undefined) return `${min}–${max}`
+  if (max !== undefined) return `Under ${max + 1}`
+  if (min !== undefined) return `${min}+`
+  return ''
+}
+
+/**
+ * The lead ("from") price row: the first paid price that takes a spot. A
+ * charter's options are picked one of, so its cheapest paid option leads.
+ */
+export function leadTierId(tiers: Pick<DraftTier, 'id' | 'price' | 'countsTowardCapacity'>[], kind?: ActivityKind): string | undefined {
+  const paid = tiers.filter((tier) => tier.price > 0)
+  if (kind === 'charter') return paid.reduce<(typeof paid)[number] | undefined>((min, tier) => (!min || tier.price < min.price ? tier : min), undefined)?.id
+  return (paid.find((tier) => tier.countsTowardCapacity) ?? paid[0])?.id
+}
+
 export interface TierPreset {
   label: string
   price: number
@@ -59,23 +113,32 @@ export interface TierPreset {
   counts?: boolean
   /** Places one ticket takes. */
   seats?: number
+  ageMin?: number
+  ageMax?: number
+  /** Price as a share of the lead price (0.6 = 60%), rounded to a whole unit; `price` when there is no lead yet. */
+  ratio?: number
 }
 
-const TIER_PRESETS: TierPreset[] = [
-  { label: 'Adult', price: 14900, description: 'Ages 18 and over' },
-  { label: 'Child (4–12)', price: 8900, description: 'Must be accompanied by an adult' },
-  { label: 'Senior (65+)', price: 12900, description: '' },
-  { label: 'Infant (under 4)', price: 0, description: 'Sits on a lap, no equipment', counts: false },
-  { label: 'Family (2 adults, 2 children)', price: 44900, description: 'One ticket for four', seats: 4 },
+/** Quick-add prices for anything sold per person. */
+export const TIER_PRESETS: TierPreset[] = [
+  { label: 'Adult', price: 14900, description: '', ageMin: 13 },
+  { label: 'Child', price: 8900, description: '', ageMin: 4, ageMax: 12, ratio: 0.6 },
+  { label: 'Infant', price: 0, description: '', counts: false, ageMax: 3 },
+  { label: 'Senior', price: 12900, description: '', ageMin: 65, ratio: 0.85 },
+  { label: 'Student', price: 12900, description: 'Student ID at check-in', ratio: 0.85 },
+  { label: 'Family', price: 44900, description: '2 adults, 2 children', seats: 4, ratio: 3 },
+  { label: 'Local', price: 12900, description: 'Local ID at check-in', ratio: 0.85 },
 ]
 
 /** Starting points that fit how each kind is sold. */
 export const KIND_TIER_PRESETS: Partial<Record<ActivityKind, TierPreset[]>> = {
+  trip: TIER_PRESETS,
   activity: [
     { label: 'Single rider', price: 11900, description: '' },
-    { label: 'Tandem (two together)', price: 19900, description: 'Two people, one ride', seats: 2 },
-    { label: 'Child rider', price: 8900, description: 'With an adult' },
-    { label: 'Ride-along', price: 3900, description: 'Comes along, does not ride', counts: false },
+    { label: 'Tandem', price: 19900, description: 'Two people, one ride', seats: 2, ratio: 1.7 },
+    { label: 'Child rider', price: 8900, description: '', ageMin: 6, ageMax: 12, ratio: 0.75 },
+    { label: 'Ride-along', price: 3900, description: 'Comes along, does not ride', counts: false, ratio: 0.3 },
+    { label: 'Local', price: 9900, description: 'Local ID at check-in', ratio: 0.85 },
   ],
   charter: [
     { label: 'Half day (4 hours)', price: 89900, description: '' },
@@ -84,17 +147,21 @@ export const KIND_TIER_PRESETS: Partial<Record<ActivityKind, TierPreset[]>> = {
   ],
   lesson: [
     { label: 'Student', price: 12900, description: '' },
-    { label: 'Junior (8–15)', price: 9900, description: 'With a parent on the beach' },
+    { label: 'Junior', price: 9900, description: '', ageMin: 8, ageMax: 15, ratio: 0.75 },
+    { label: 'Local', price: 10900, description: 'Local ID at check-in', ratio: 0.85 },
   ],
   pass: [
     { label: 'Day ticket', price: 4900, description: '' },
-    { label: 'Child ticket', price: 2900, description: 'Ages 3 to 12' },
-    { label: 'Family (2 adults, 2 children)', price: 14900, description: 'One ticket for four', seats: 4 },
-    { label: 'Infant', price: 0, description: 'Under 3, free', counts: false },
+    { label: 'Child', price: 2900, description: '', ageMin: 3, ageMax: 12, ratio: 0.6 },
+    { label: 'Senior', price: 3900, description: '', ageMin: 65, ratio: 0.85 },
+    { label: 'Family', price: 14900, description: '2 adults, 2 children', seats: 4, ratio: 3 },
+    { label: 'Infant', price: 0, description: '', counts: false, ageMax: 2 },
+    { label: 'Local', price: 3900, description: 'Local ID at check-in', ratio: 0.85 },
   ],
   package: [
-    { label: 'Adult', price: 22900, description: 'Ages 13 and over' },
-    { label: 'Child', price: 18900, description: 'With an adult' },
+    { label: 'Adult', price: 22900, description: '', ageMin: 13 },
+    { label: 'Child', price: 18900, description: '', ageMin: 4, ageMax: 12, ratio: 0.8 },
+    { label: 'Senior', price: 19900, description: '', ageMin: 65, ratio: 0.9 },
   ],
 }
 
@@ -160,38 +227,48 @@ export function MoneyInput({
   )
 }
 
-function NumberField({
+/** A whole number, empty when unset. */
+function CountInput({
   value,
   onValueChange,
   ariaLabel,
-  min = 0,
-  max = 999,
+  placeholder,
+  max = 120,
+  className,
+  error,
 }: {
-  value: number
-  onValueChange: (value: number) => void
+  value: number | undefined
+  onValueChange: (value: number | undefined) => void
   ariaLabel: string
-  min?: number
+  placeholder?: string
   max?: number
+  className?: string
+  error?: string
 }) {
   return (
     <Input
       type="number"
-      value={Number.isFinite(value) ? value : 0}
-      min={min}
+      min={0}
       max={max}
       size="sm"
+      value={value && value > 0 ? value : ''}
+      placeholder={placeholder}
       aria-label={ariaLabel}
+      className={className}
+      error={error}
       inputClassName="tabular"
       onChange={(event) => {
         const parsed = Number.parseInt(event.target.value, 10)
-        onValueChange(Number.isFinite(parsed) ? parsed : 0)
+        onValueChange(Number.isFinite(parsed) && parsed > 0 ? Math.min(max, parsed) : undefined)
       }}
     />
   )
 }
 
 /* ==========================================================================
-   TIER EDITOR
+   TIER EDITOR — one slim row per price: name, price, ages. "More" holds the
+   rest (a struck-through Was price, how many guests one ticket counts as,
+   the fewest per booking and a short note).
    ========================================================================== */
 
 export interface PricingTierEditorProps {
@@ -200,12 +277,16 @@ export interface PricingTierEditorProps {
   currency: CurrencyCode
   /** Keyed by `tiers.<index>.<field>`. */
   errors?: Record<string, string>
-  /** One-click starting points; defaults to the tour-operator set. */
+  /** One-click starting points; defaults to the per-person set. */
   presets?: TierPreset[]
   /** Charters price per group: no places per ticket, no "at least". */
   kind?: ActivityKind
   /** Menus and other lists where a place is not counted per ticket. */
   hidePlaces?: boolean
+  /** Per group: the rows only say who is counted, the group price is set elsewhere. */
+  priceless?: boolean
+  /** The word for one row: "price", "option", "guest type". */
+  noun?: string
   className?: string
 }
 
@@ -217,9 +298,12 @@ export function PricingTierEditor({
   presets = TIER_PRESETS,
   kind = 'trip',
   hidePlaces = false,
+  priceless = false,
+  noun = 'price',
   className,
 }: PricingTierEditorProps) {
   const perGroup = kind === 'charter' || hidePlaces
+  const [open, setOpen] = React.useState<Record<string, boolean>>({})
   const update = (index: number, patch: Partial<DraftTier>) => {
     onChange(tiers.map((tier, i) => (i === index ? { ...tier, ...patch } : tier)))
   }
@@ -232,199 +316,200 @@ export function PricingTierEditor({
     onChange(next)
   }
 
-  const usedPresets = new Set(tiers.map((tier) => tier.label.toLowerCase()))
+  const used = new Set(tiers.map((tier) => tier.label.trim().toLowerCase()))
+  const lead = priceless ? undefined : leadTierId(tiers, kind)
+  const leadPrice = tiers.find((tier) => tier.id === lead)?.price ?? 0
+  const showAges = !perGroup
+  // Columns follow the editor's own width (it sits in narrow form columns too): one line from 36rem,
+  // below that the name and actions, then the price and the ages each on their own line.
+  const cols = priceless
+    ? '@xl:grid-cols-[minmax(0,1fr)_9rem_auto]'
+    : showAges
+      ? '@xl:grid-cols-[minmax(0,1fr)_8.5rem_9rem_auto]'
+      : '@xl:grid-cols-[minmax(0,1fr)_8.5rem_auto]'
+
+  const addPreset = (preset: TierPreset) => {
+    const tier = blankTier(preset.label, preset.ratio !== undefined && leadPrice > 0 ? Math.max(100, Math.round((leadPrice * preset.ratio) / 100) * 100) : preset.price, tiers)
+    tier.description = preset.description
+    tier.countsTowardCapacity = preset.counts ?? true
+    if (preset.seats) tier.seats = preset.seats
+    if (preset.ageMin) tier.ageMin = preset.ageMin
+    if (preset.ageMax) tier.ageMax = preset.ageMax
+    onChange([...tiers, tier])
+  }
 
   return (
-    <div className={cn('flex flex-col gap-3', className)}>
-      {tiers.length > 0 && !perGroup ? (
-        <p className="-mt-1 text-xs text-subtle">
-          <span className="font-medium text-muted">Was</span> is shown crossed out, for a sale.{' '}
-          <span className="font-medium text-muted">At least</span> is how many every booking must include.{' '}
-          <span className="font-medium text-muted">Counts as</span> is how many guests one ticket is: 2 for a pair, 4 for a family, none for a free infant.
-        </p>
-      ) : tiers.length > 0 ? (
-        <p className="-mt-1 text-xs text-subtle">
-          <span className="font-medium text-muted">Was</span> is shown crossed out, for a sale.
-        </p>
+    <div className={cn('@container flex flex-col gap-2', className)}>
+      {tiers.length > 0 ? (
+        <div className={cn('hidden gap-2 px-3 text-xs text-subtle @xl:grid', cols)} aria-hidden="true">
+          <span>Name</span>
+          {priceless ? null : <span>Price</span>}
+          {showAges ? <span>Ages (optional)</span> : null}
+          <span className="w-28" />
+        </div>
       ) : null}
-      {tiers.map((tier, index) => (
-        <div
-          key={tier.id}
-          className={cn(
-            'rounded-xl border border-line bg-surface p-3.5 shadow-xs',
-            'transition-[border-color,box-shadow] duration-200 hover:border-line-strong',
-          )}
-        >
-          <div className="flex items-start gap-2.5">
-            <span className="mt-2.5 hidden text-faint sm:block" aria-hidden="true">
-              <GripVertical className="size-4" />
-            </span>
 
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
+      <ul className="flex list-none flex-col gap-2 p-0">
+        {tiers.map((tier, index) => {
+          const name = tier.label || `${noun} ${index + 1}`
+          const more = Boolean(open[tier.id])
+          const hasMore =
+            Boolean(tier.compareAtPrice) || tier.minQuantity > 0 || tier.description.trim().length > 0 || (!perGroup && (!tier.countsTowardCapacity || (tier.seats ?? 1) > 1))
+          const labelError = errors?.[`tiers.${index}.label`]
+          const ageError = errors?.[`tiers.${index}.ageMax`]
+          return (
+            <li key={tier.id} className="rounded-xl border border-line bg-surface p-2.5 transition-colors duration-200 hover:border-line-strong">
+              <div className={cn('grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2', cols)}>
                 <Input
                   value={tier.label}
                   onChange={(event) => update(index, { label: event.target.value })}
-                  placeholder="Price name, e.g. Adult"
-                  aria-label={`Tier ${index + 1} name`}
+                  placeholder={noun === 'menu' ? 'Tasting menu' : kind === 'charter' ? 'Half day' : 'Adult'}
+                  aria-label={`Name of ${noun} ${index + 1}`}
                   size="sm"
-                  className="flex-1"
                   inputClassName="font-medium"
-                  error={errors?.[`tiers.${index}.label`]}
+                  error={labelError}
+                  suffix={tier.id === lead && tiers.length > 1 ? <Badge size="sm" variant="primary">From</Badge> : undefined}
                 />
-                {index === 0 ? (
-                  <Badge size="sm" variant="primary">
-                    Lead price
-                  </Badge>
-                ) : null}
-              </div>
-              {errors?.[`tiers.${index}.label`] ? (
-                <p className="mt-1 text-xs font-medium text-danger">
-                  {errors[`tiers.${index}.label`]}
-                </p>
-              ) : null}
-
-              <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-                <Field label="Price" labelSize="sm">
+                {priceless ? null : (
                   <MoneyInput
                     value={tier.price}
                     onValueChange={(price) => update(index, { price })}
                     currency={currency}
                     size="sm"
-                    ariaLabel={`Price for ${tier.label || `tier ${index + 1}`}`}
+                    ariaLabel={`Price for ${name}`}
+                    className="order-3 @xl:order-none"
                   />
-                </Field>
-                <Field label="Was" labelSize="sm">
-                  <MoneyInput
-                    value={tier.compareAtPrice ?? 0}
-                    onValueChange={(price) =>
-                      update(index, { compareAtPrice: price === 0 ? null : price })
-                    }
-                    currency={currency}
-                    size="sm"
-                    allowEmpty
-                    placeholder="Optional"
-                    ariaLabel={`Compare-at price for ${tier.label || `tier ${index + 1}`}`}
-                  />
-                </Field>
-                {kind === 'charter' ? null : <Field label="At least" labelSize="sm">
-                  <NumberField
-                    value={tier.minQuantity}
-                    onValueChange={(minQuantity) => update(index, { minQuantity: Math.max(0, minQuantity) })}
-                    ariaLabel={`Minimum per booking for ${tier.label || `tier ${index + 1}`}`}
-                  />
-                </Field>}
-              </div>
-
-              <div className="mt-3 flex flex-col gap-2.5 sm:flex-row sm:items-center">
-                <Input
-                  value={tier.description}
-                  onChange={(event) => update(index, { description: event.target.value })}
-                  placeholder="Short note shown under the price (optional)"
-                  aria-label={`Description for ${tier.label || `tier ${index + 1}`}`}
-                  size="sm"
-                  className="flex-1"
-                />
-                {perGroup ? null : (
-                  <label className="flex shrink-0 items-center gap-2 text-xs text-muted">
-                    Counts as
-                    <select
-                      value={tier.countsTowardCapacity ? Math.max(1, tier.seats ?? 1) : 0}
-                      onChange={(event) => {
-                        const places = Number(event.target.value)
-                        update(index, { countsTowardCapacity: places > 0, seats: Math.max(1, places) })
-                      }}
-                      aria-label={`How many guests one ${tier.label || `price ${index + 1}`} ticket counts as`}
-                      className="h-8 rounded-lg border border-line bg-surface px-2 text-xs text-foreground"
-                    >
-                      <option value={0}>no one (free, no spot)</option>
-                      {[1, 2, 3, 4, 5, 6].map((places) => (
-                        <option key={places} value={places}>
-                          {places} {places === 1 ? 'guest' : 'guests'}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
                 )}
+                {showAges ? (
+                  <div className="order-4 col-span-2 flex min-w-0 items-center gap-1.5 @xl:order-none @xl:col-span-1">
+                    {/* The column heading is hidden on narrow widths. */}
+                    <span className="text-xs text-subtle @xl:hidden">Ages</span>
+                    <CountInput value={tier.ageMin} onValueChange={(ageMin) => update(index, { ageMin })} ariaLabel={`Youngest age for ${name}`} placeholder="Any" max={99} className="min-w-0 flex-1" error={ageError} />
+                    <span className="text-xs text-faint" aria-hidden="true">–</span>
+                    <CountInput value={tier.ageMax} onValueChange={(ageMax) => update(index, { ageMax })} ariaLabel={`Oldest age for ${name}`} placeholder="Any" max={99} className="min-w-0 flex-1" error={ageError} />
+                  </div>
+                ) : null}
+                <div className="order-2 flex items-center justify-end gap-0.5 @xl:order-none @xl:w-28">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    aria-expanded={more}
+                    onClick={() => setOpen((current) => ({ ...current, [tier.id]: !more }))}
+                    rightIcon={<ChevronDown className={cn('transition-transform duration-200', more && 'rotate-180')} />}
+                  >
+                    More
+                    {hasMore && !more ? <span className="size-1.5 rounded-full bg-primary" aria-hidden="true" /> : null}
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <IconButton type="button" size="xs" variant="ghost" aria-label={`Actions for ${name}`}>
+                        <MoreHorizontal />
+                      </IconButton>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem disabled={index === 0} onSelect={() => move(index, index - 1)}>
+                        <ArrowUp aria-hidden="true" />
+                        Move up
+                      </DropdownMenuItem>
+                      <DropdownMenuItem disabled={index === tiers.length - 1} onSelect={() => move(index, index + 1)}>
+                        <ArrowDown aria-hidden="true" />
+                        Move down
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem tone="danger" disabled={tiers.length === 1} onSelect={() => onChange(tiers.filter((_, i) => i !== index))}>
+                        <Trash2 aria-hidden="true" />
+                        Remove
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
-            </div>
+              {labelError ? <p className="mt-1 px-0.5 text-xs font-medium text-danger">{labelError}</p> : null}
+              {ageError && showAges ? <p className="mt-1 px-0.5 text-xs font-medium text-danger">{ageError}</p> : null}
 
-            <div className="flex shrink-0 flex-col gap-1">
-              <SimpleTooltip label="Move up">
-                <IconButton
-                  type="button"
-                  aria-label={`Move ${tier.label || `tier ${index + 1}`} up`}
-                  size="xs"
-                  variant="ghost"
-                  disabled={index === 0}
-                  onClick={() => move(index, index - 1)}
-                >
-                  <ArrowUp />
-                </IconButton>
-              </SimpleTooltip>
-              <SimpleTooltip label="Move down">
-                <IconButton
-                  type="button"
-                  aria-label={`Move ${tier.label || `tier ${index + 1}`} down`}
-                  size="xs"
-                  variant="ghost"
-                  disabled={index === tiers.length - 1}
-                  onClick={() => move(index, index + 1)}
-                >
-                  <ArrowDown />
-                </IconButton>
-              </SimpleTooltip>
-              <SimpleTooltip label="Remove price">
-                <IconButton
-                  type="button"
-                  aria-label={`Remove ${tier.label || `tier ${index + 1}`}`}
-                  size="xs"
-                  variant="ghost"
-                  className="text-danger hover:bg-danger-soft"
-                  disabled={tiers.length === 1}
-                  onClick={() => onChange(tiers.filter((_, i) => i !== index))}
-                >
-                  <Trash2 />
-                </IconButton>
-              </SimpleTooltip>
-            </div>
-          </div>
-        </div>
-      ))}
+              {more ? (
+                <div className="mt-2.5 grid gap-2.5 border-t border-line-subtle pt-2.5 @md:grid-cols-2">
+                  {priceless ? null : (
+                    <label className="flex flex-col gap-1 text-xs text-subtle">
+                      Was price
+                      <MoneyInput
+                        value={tier.compareAtPrice ?? 0}
+                        onValueChange={(price) => update(index, { compareAtPrice: price === 0 ? null : price })}
+                        currency={currency}
+                        size="sm"
+                        allowEmpty
+                        placeholder="Shown crossed out"
+                        ariaLabel={`Was price for ${name}`}
+                      />
+                    </label>
+                  )}
+                  {perGroup ? null : (
+                    <label className="flex flex-col gap-1 text-xs text-subtle">
+                      Counts as
+                      <select
+                        value={tier.countsTowardCapacity ? Math.max(1, tier.seats ?? 1) : 0}
+                        onChange={(event) => {
+                          const places = Number(event.target.value)
+                          update(index, { countsTowardCapacity: places > 0, seats: Math.max(1, places) })
+                        }}
+                        aria-label={`How many guests one ${name} counts as`}
+                        className="h-9 rounded-md border border-line bg-surface px-2 text-[0.8125rem] text-foreground"
+                      >
+                        <option value={0}>No one (free, no spot)</option>
+                        {[1, 2, 3, 4, 5, 6].map((places) => (
+                          <option key={places} value={places}>
+                            {places} {places === 1 ? 'guest' : 'guests'}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  {kind === 'charter' ? null : (
+                    <label className="flex flex-col gap-1 text-xs text-subtle">
+                      Fewest per booking
+                      <CountInput value={tier.minQuantity} onValueChange={(minQuantity) => update(index, { minQuantity: minQuantity ?? 0 })} ariaLabel={`Fewest ${name} per booking`} placeholder="None" max={50} />
+                    </label>
+                  )}
+                  <label className="flex flex-col gap-1 text-xs text-subtle">
+                    Note
+                    <Input
+                      value={tier.description}
+                      onChange={(event) => update(index, { description: event.target.value })}
+                      placeholder="Shown under the name"
+                      aria-label={`Note for ${name}`}
+                      size="sm"
+                    />
+                  </label>
+                </div>
+              ) : null}
+            </li>
+          )
+        })}
+      </ul>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          leftIcon={<Plus />}
-          onClick={() => onChange([...tiers, blankTier()])}
-        >
-          Add a price
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Button type="button" variant="secondary" size="xs" leftIcon={<Plus />} onClick={() => onChange([...tiers, blankTier('', 0, tiers)])}>
+          Add {/^[aeiou]/.test(noun) ? 'an' : 'a'} {noun}
         </Button>
-        <span className="text-xs text-faint">or start from</span>
-        {presets.filter((preset) => !usedPresets.has(preset.label.toLowerCase())).map((preset) => (
-          <button
-            key={preset.label}
-            type="button"
-            onClick={() => {
-              const tier = blankTier(preset.label, preset.price)
-              tier.description = preset.description
-              tier.countsTowardCapacity = preset.counts ?? true
-              if (preset.seats) tier.seats = preset.seats
-              onChange([...tiers, tier])
-            }}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-1',
-              'text-xs font-medium text-muted transition-colors duration-200',
-              'hover:border-primary/50 hover:bg-primary-soft/50 hover:text-primary',
-              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
-            )}
-          >
-            <Plus className="size-3" aria-hidden="true" />
-            {preset.label}
-          </button>
-        ))}
+        {presets
+          .filter((preset) => !used.has(preset.label.toLowerCase()))
+          .map((preset) => (
+            <button
+              key={preset.label}
+              type="button"
+              onClick={() => addPreset(preset)}
+              className={cn(
+                'inline-flex h-7 items-center gap-1 rounded-full border border-line bg-surface px-2.5',
+                'text-xs font-medium text-muted transition-colors duration-200',
+                'hover:border-primary/50 hover:bg-primary-soft/50 hover:text-primary',
+                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+              )}
+            >
+              <Plus className="size-3" aria-hidden="true" />
+              {preset.label}
+            </button>
+          ))}
       </div>
     </div>
   )
@@ -432,7 +517,7 @@ export function PricingTierEditor({
 
 /* ==========================================================================
    GUEST PRICE PREVIEW
-   The exact arithmetic the storefront will run, shown while the operator edits.
+   A sample order at the set prices, for menus and packages (no date changes).
    ========================================================================== */
 
 export interface GuestPricePreviewProps {
@@ -456,14 +541,12 @@ export function GuestPricePreview({ tiers, addOns, currency, kind = 'trip', clas
   const requiredAddOns = addOns.filter((addOn) => addOn.required && addOn.label.trim().length > 0)
 
   const ticketTotal = sample.reduce((acc, row) => acc + row.tier.price * row.quantity, 0)
-  const guests = sample.reduce(
-    (acc, row) => acc + (row.tier.countsTowardCapacity ? row.quantity : 0),
-    0,
-  )
+  const guests = sample.reduce((acc, row) => acc + (row.tier.countsTowardCapacity ? row.quantity : 0), 0)
   const addOnTotal = requiredAddOns.reduce((acc, addOn) => acc + addOn.price * (addOn.per === 'booking' ? 1 : Math.max(guests, 1)), 0)
   const total = ticketTotal + addOnTotal
-  const fromPrice = priced.length === 0 ? 0 : Math.min(...priced.map((tier) => tier.price || 0))
-  const compareAt = priced.find((tier) => tier.compareAtPrice)?.compareAtPrice ?? null
+  const leadId = leadTierId(priced, kind)
+  const fromPrice = priced.find((tier) => tier.id === leadId)?.price ?? 0
+  const compareAt = priced.find((tier) => tier.id === leadId)?.compareAtPrice ?? null
 
   return (
     <div className={cn('rounded-xl border border-line bg-surface-sunken/60 p-4', className)}>
@@ -476,32 +559,18 @@ export function GuestPricePreview({ tiers, addOns, currency, kind = 'trip', clas
       </div>
 
       <div className="mt-3 flex items-baseline gap-2">
-        <span className="font-display text-2xl font-semibold">
-          {formatCurrency(fromPrice, currency)}
-        </span>
-        {compareAt && compareAt > fromPrice ? (
-          <span className="text-sm text-faint line-through">
-            {formatCurrency(compareAt, currency)}
-          </span>
-        ) : null}
+        <span className="font-display text-2xl font-semibold">{formatCurrency(fromPrice, currency)}</span>
+        {compareAt && compareAt > fromPrice ? <span className="text-sm text-faint line-through">{formatCurrency(compareAt, currency)}</span> : null}
         <span className="text-xs text-muted">{PREVIEW_UNIT[kind] ?? 'per guest, from'}</span>
       </div>
 
       <ul className="mt-3 flex list-none flex-col gap-1.5 p-0 text-sm">
         {sample.map(({ tier, quantity }) => (
-          <li
-            key={tier.id}
-            className={cn(
-              'flex items-baseline justify-between gap-3',
-              quantity === 0 && 'text-faint',
-            )}
-          >
+          <li key={tier.id} className={cn('flex items-baseline justify-between gap-3', quantity === 0 && 'text-faint')}>
             <span className="min-w-0 truncate">
               <span className="tabular">{quantity} ×</span> {tier.label}
             </span>
-            <span className="shrink-0 tabular">
-              {formatCurrency(tier.price * quantity, currency)}
-            </span>
+            <span className="shrink-0 tabular">{formatCurrency(tier.price * quantity, currency)}</span>
           </li>
         ))}
         {requiredAddOns.map((addOn) => (
@@ -509,9 +578,7 @@ export function GuestPricePreview({ tiers, addOns, currency, kind = 'trip', clas
             <span className="min-w-0 truncate">
               {addOn.label} <span className="text-faint">(required)</span>
             </span>
-            <span className="shrink-0 tabular">
-              {formatCurrency(addOn.price * (addOn.per === 'booking' ? 1 : Math.max(guests, 1)), currency)}
-            </span>
+            <span className="shrink-0 tabular">{formatCurrency(addOn.price * (addOn.per === 'booking' ? 1 : Math.max(guests, 1)), currency)}</span>
           </li>
         ))}
       </ul>
@@ -521,9 +588,7 @@ export function GuestPricePreview({ tiers, addOns, currency, kind = 'trip', clas
           <Users className="size-3.5 text-faint" aria-hidden="true" />
           {guests} {guests === 1 ? 'guest' : 'guests'}
         </span>
-        <span className="font-display text-lg font-semibold tabular">
-          {formatCurrency(total, currency)}
-        </span>
+        <span className="font-display text-lg font-semibold tabular">{formatCurrency(total, currency)}</span>
       </div>
     </div>
   )

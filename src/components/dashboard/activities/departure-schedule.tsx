@@ -21,7 +21,10 @@ import { SimpleTooltip } from '@/components/ui/tooltip'
 import { toast } from '@/components/ui/toaster'
 import { ACTIVITY_FORMAT_META } from '@/lib/activity-format'
 import { cn, formatDateLong, formatDuration, formatNumber, formatRelative, formatTime, pluralize, titleCase } from '@/lib/utils'
-import type { ActivityFormat, DepartureStatus, WeatherSnapshot } from '@/types'
+import type { Activity, ActivityFormat, DepartureStatus, WeatherSnapshot } from '@/types'
+import { useScheduledRows } from '@/hooks/use-scheduled-days'
+import { upsertScheduleChange } from '@/lib/activity-overrides'
+import { slotId, type ScheduledRow } from '@/lib/activity-schedule'
 
 import type { DepartureRowLite } from './activity-data'
 
@@ -58,6 +61,10 @@ export interface DepartureScheduleProps {
   locations?: { id: string; name: string }[]
   nowIso: string
   todayKey: string
+  /** The seeded activity: with it, the list follows the saved schedule, and added times and spot changes are saved. */
+  activity?: Activity
+  /** Where the business's closed days are read from. */
+  tenantSlug?: string
 }
 
 const fillOf = (r: DepartureRowLite) => (r.capacity ? Math.round((r.booked / r.capacity) * 100) : 0)
@@ -73,8 +80,17 @@ const dayLabel = (dateKey: string, todayKey: string) => {
   return diff === 0 ? `Today · ${long}` : diff === 1 ? `Tomorrow · ${long}` : long
 }
 
-export function DepartureSchedule({ rows: initial, crew, format, activityName, maxCapacity, minParticipants, durationMinutes, usualTimes, locations = [], nowIso, todayKey }: DepartureScheduleProps) {
-  const [rows, setRows] = React.useState(initial)
+export function DepartureSchedule({ rows: initial, crew, format, activityName, maxCapacity, minParticipants, durationMinutes, usualTimes, locations = [], nowIso, todayKey, activity, tenantSlug }: DepartureScheduleProps) {
+  // Packages have no times of their own: their rows stay as they are and edits stay on this page.
+  const scheduleActivity = activity && (activity.kind ?? 'trip') !== 'package' ? activity : undefined
+  // The seeded rows laid under the saved schedule; edits made here sit on top, by id.
+  const scheduled = useScheduledRows(scheduleActivity, initial, { tenantSlug: tenantSlug ?? '', todayKey, days: 30, nowIso })
+  const [edits, setEdits] = React.useState<Record<string, ScheduledRow>>({})
+  const [added, setAdded] = React.useState<ScheduledRow[]>([])
+  const rows = React.useMemo(() => {
+    const ids = new Set(scheduled.map((r) => r.id))
+    return [...scheduled, ...added.filter((r) => !ids.has(r.id))].map((r) => edits[r.id] ?? r).sort((a, b) => a.startsAt.localeCompare(b.startsAt))
+  }, [scheduled, added, edits])
   const [range, setRange] = React.useState<RangeKey>('7d')
   const [seats, setSeats] = React.useState<SeatFilter>('all')
   const [site, setSite] = React.useState<string>('all')
@@ -104,7 +120,7 @@ export function DepartureSchedule({ rows: initial, crew, format, activityName, m
     [rows, todayKey, endKey, seats, site, locations],
   )
   const days = React.useMemo(() => {
-    const map = new Map<string, DepartureRowLite[]>()
+    const map = new Map<string, ScheduledRow[]>()
     for (const r of visible) {
       const key = dateKeyOf(r.startsAt)
       map.set(key, [...(map.get(key) ?? []), r])
@@ -119,7 +135,11 @@ export function DepartureSchedule({ rows: initial, crew, format, activityName, m
   const nearly = live.filter((r) => fillOf(r) >= 85).length
 
   /* ---------- actions ---------- */
-  const patch = (id: string, change: (r: DepartureRowLite) => DepartureRowLite) => setRows((current) => current.map((r) => (r.id === id ? change(r) : r)))
+  const patch = (id: string, change: (r: ScheduledRow) => ScheduledRow) =>
+    setEdits((current) => {
+      const base = current[id] ?? rows.find((r) => r.id === id)
+      return base ? { ...current, [id]: change(base) } : current
+    })
 
   const setStatus = (row: DepartureRowLite, status: DepartureStatus) => {
     patch(row.id, (r) => ({ ...r, status }))
@@ -134,13 +154,31 @@ export function DepartureSchedule({ rows: initial, crew, format, activityName, m
     const next = Math.max(row.booked, row.capacity + delta)
     if (next === row.capacity) return
     patch(row.id, (r) => ({ ...r, capacity: next, status: r.status === 'sold_out' && next > r.booked ? 'scheduled' : r.booked >= next && r.status === 'scheduled' ? 'sold_out' : r.status }))
+    // Saved as a spots change for this time slot, so the storefront sells the same number.
+    if (scheduleActivity && scheduleActivity.kind !== 'charter') {
+      const dateKey = dateKeyOf(row.startsAt)
+      const time = row.startsAt.slice(11, 16)
+      upsertScheduleChange(scheduleActivity, { id: `spots_${dateKey}_${time}_${row.locationId ?? ''}`, dates: [dateKey], action: 'spots', times: [time], spots: next, ...(row.locationId ? { locationId: row.locationId } : {}) })
+    }
   }
 
   const toggleCrew = (row: DepartureRowLite, member: CrewOption) =>
     patch(row.id, (r) => ({ ...r, staff: r.staff.some((s) => s.id === member.id) ? r.staff.filter((s) => s.id !== member.id) : [...r.staff, { id: member.id, name: member.name, avatarUrl: member.avatarUrl }] }))
 
   const add = (row: DepartureRowLite) => {
-    setRows((current) => [...current, row].sort((a, b) => a.startsAt.localeCompare(b.startsAt)))
+    // A time already past can't be sold: it stays on this page only, as before.
+    if (scheduleActivity && row.startsAt >= nowIso.slice(0, 19)) {
+      // Saved as an extra time on that day: it comes back from the schedule with its own id.
+      const dateKey = dateKeyOf(row.startsAt)
+      const time = row.startsAt.slice(11, 16)
+      const locationId = row.locationId ?? scheduleActivity.locations[0]?.locationId
+      upsertScheduleChange(scheduleActivity, { id: `add_${dateKey}_${time}_${locationId ?? ''}`, dates: [dateKey], action: 'add', times: [time], spots: row.capacity, ...(locationId ? { locationId } : {}) })
+      const id = slotId(scheduleActivity.id, dateKey, time, locationId)
+      const existing = scheduled.find((r) => r.startsAt === row.startsAt && (r.locationId ?? locationId) === locationId)
+      if (row.staff.length > 0) setEdits((current) => ({ ...current, [existing?.id ?? id]: { ...(existing ?? { ...row, id, locationId, generated: true }), staff: row.staff } }))
+    } else {
+      setAdded((current) => [...current, row])
+    }
     setAdding(false)
     toast.success('Time slot added', { description: `${dayLabel(dateKeyOf(row.startsAt), todayKey).replace(/ · .*$/, '')} at ${formatTime(row.startsAt)} · ${row.capacity} ${pluralize(row.capacity, 'spot')} · on sale now.` })
   }
@@ -249,6 +287,11 @@ export function DepartureSchedule({ rows: initial, crew, format, activityName, m
                                 <MapPin className="size-3" aria-hidden="true" />
                                 {siteName(r.locationId)}
                               </p>
+                            ) : null}
+                            {r.outsideSchedule ? (
+                              <SimpleTooltip label="Removed from the schedule. It has bookings, so it stays as it is.">
+                                <p className="mt-0.5 text-xs text-warning">Outside schedule</p>
+                              </SimpleTooltip>
                             ) : null}
                           </div>
                         </div>

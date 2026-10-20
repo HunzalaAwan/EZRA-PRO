@@ -9,6 +9,7 @@ import {
   ArrowRight,
   Ban,
   CalendarClock,
+  CalendarDays,
   Check,
   CircleAlert,
   Compass,
@@ -17,7 +18,6 @@ import {
   Gauge,
   Images,
   MapPin,
-  Mountain,
   Plus,
   Rocket,
   RotateCcw,
@@ -31,23 +31,28 @@ import {
   Trash2,
   Users,
   UtensilsCrossed,
-  Waves,
 } from 'lucide-react'
 import { z } from 'zod'
 
 import type { Activity, ActivityKind, ActivityTheme, BookingSettings, ChangeRules, CurrencyCode, PackageConfig, PaymentTerms, PrivateOption, DifficultyLevel, GuestDetailsConfig, GuestQuestion, Location, VerticalKey } from '@/types'
-import { DEFAULT_GUEST_FIELDS, guestDetailsOf } from '@/lib/guest-requirements'
+import { DEFAULT_GUEST_FIELDS, bodyLimitLines, guestDetailsOf, rideAsQuestions, riderLimited } from '@/lib/guest-requirements'
 import { DEFAULT_BOOKING, METHOD_LABEL, bookingOf, groupUnit } from '@/lib/booking-method'
 import { EMPTY_PACKAGE, PackagePartsEditor, packageSeats, type PackageOption } from './package-parts-editor'
-import { PaymentTermsEditor } from './payment-terms-editor'
 import { useBookingDefaults } from '@/hooks/use-booking-defaults'
 import type { BookingDefaults } from '@/lib/booking-defaults'
 import { ActivityMessagesEditor } from './activity-messages-editor'
-import { KIND_PRICING, KindPricingExtras } from './kind-pricing-extras'
+import type { ChargeBy, GroupDiscount, GroupPrice, PriceChange } from '@/types'
+import { PricingStep, defaultPricingDraft, draftFromPrice, draftStartTimes, effectiveChargeBy, pricingDraftOf, pricingErrors, pricingFieldsOfDraft, pricingSummary } from './pricing-step'
 import { ChangesPolicyEditor, type DraftCancellation } from './changes-policy-editor'
 import { DEFAULT_CHANGES, DEFAULT_PAYMENT, changesOf, changesSummary, depositLabel, paymentOf, policySummary, presetOf } from '@/lib/booking-policy'
 import { BookingSettingsEditor } from './booking-settings-editor'
-import { saveActivityOverride } from '@/lib/activity-overrides'
+import { ACTIVITY_OVERRIDES_EVENT, applyActivityOverride, parseActivityOverrides, readActivityOverridesRaw, saveActivityOverride } from '@/lib/activity-overrides'
+import type { ActivityLocation, ActivitySchedule, ScheduleChange } from '@/types'
+import { closingGapOf, describeSchedules, expandDays, isGeneratedSlotId, parseSlotId, scheduleContextOf, shiftDayKey, bookingWindowMonths, type ScheduleSource } from '@/lib/activity-schedule'
+import { useBookingLedger } from '@/hooks/use-booking-ledger'
+import { ScheduleStep, type BookedSlot, type ScheduleBase } from './schedule-step'
+import { TODAY_KEY } from '@/lib/data/constants'
+import { defaultScheduleDraft, mergeScheduleChanges, modeForKind, scheduleDraftOf, scheduleSaveOf, scheduleSourceOf, validateScheduleDraft, withMode, type PickMode } from './schedule-draft'
 import {
   cn,
   formatCurrency,
@@ -80,22 +85,19 @@ import {
 import { toast } from '@/components/ui/toaster'
 import { MediaManager, type DraftMedia } from './media-manager'
 import {
-  GuestPricePreview,
-  PricingTierEditor,
-  KIND_TIER_PRESETS,
   NO_LIMIT,
+  ageFields,
   blankTier,
   type DraftTier,
 } from './pricing-tier-editor'
-import { AddonEditor, type DraftAddOn } from './addon-editor'
-import { KindFields, KindPicker, LanguagePicker, RentalRatesEditor, RouteFields, defaultKindSettings, emptyRoute, normalizeKindSettings,
+import type { DraftAddOn } from './addon-editor'
+import { DifficultyField, KindFields, KindPicker, defaultKindSettings, emptyRoute, normalizeKindSettings,
   draftItemOf, type DraftKindSettings, type DraftRoute, type SharedBasics } from './kind-fields'
 import { DurationField, DURATION_UNITS, unitFor, type DurationUnit } from './duration-field'
 import { useCustomCategories } from '@/hooks/use-custom-categories'
 import { GuestQuestionsEditor, type WaiverOption } from './guest-questions-editor'
 import { PickupEditor, type DraftPickup, type PickupZoneOption } from './pickup-editor'
 import {
-  ACCESSIBILITY_OPTIONS,
   ACTIVITY_KIND_META,
   ACTIVITY_THEMES,
   crewName,
@@ -103,12 +105,11 @@ import {
   LESSON_LEVELS,
   defaultTheme,
   rentalCategoryMeta,
+  routeLabel,
   themeLabel,
   themeOf,
 } from '@/lib/activity-kinds'
 import {
-  LocationsEditor,
-  ScheduleEditor,
   defaultSchedule,
   describeSchedule,
   formatClock,
@@ -120,12 +121,9 @@ import {
 import {
   BOOKING_MODE_OPTIONS,
   CHILDREN_OPTIONS,
-  DINING_ADDON_PRESETS,
   DINING_BASICS,
-  DINING_TIER_PRESETS,
   DRESS_OPTIONS,
   DiningBasicsFields,
-  DiningBookingFields,
   DiningDietaryFields,
   DiningServiceEditor,
   FORMAT_OPTIONS,
@@ -173,7 +171,7 @@ export interface ActivityDraft {
   /** How the duration is typed; the value is always stored in minutes. */
   durationUnit: DurationUnit
   minAge: number
-  /** 0 = no seat limit. */
+  /** Spots per time slot (a pass: tickets per day). At least 1 to continue; 0 only while not filled in. */
   maxCapacity: number
   minParticipants: number
   description: string
@@ -187,7 +185,19 @@ export interface ActivityDraft {
   media: DraftMedia[]
   tiers: DraftTier[]
   addOns: DraftAddOn[]
+  /** Dining's services and sittings, and the locations ticked (`schedule.locations`). Tours read the seasons below. */
   schedule: DraftSchedule
+  /* ---- Schedule step (tours and activities) ---- */
+  /** How guests pick a time: set start times, opening hours, or only the dates listed. */
+  scheduleMode: PickMode
+  /** Seasons in priority order; a later one wins where they overlap. */
+  schedules: ActivitySchedule[]
+  /** Closed days, extra or removed times, and spot changes on given days. */
+  scheduleChanges: ScheduleChange[]
+  /** Months guests can book ahead. 0: the business default. */
+  bookingWindowMonths: number
+  /** Runs on the business's closed days and public holidays. */
+  runsOnClosures: boolean
   featured: boolean
   freeCancellationHours: number
   /** Crew assigned to every departure by default. */
@@ -242,15 +252,25 @@ export interface ActivityDraft {
   /** Charters: guests the price covers, and each one over. */
   charterIncluded: number
   charterExtra: number
+  /** How the price is counted; null: the kind's own way. */
+  chargeBy: ChargeBy | null
+  /** Per group: the price, the guests it covers, each extra guest, the most guests. */
+  groupPrice: GroupPrice
+  /** Per person: bigger groups pay less per ticket. */
+  groupDiscounts: GroupDiscount[]
+  /** A booking pays at least this for its tickets, minor units. 0: none. */
+  minimumCharge: number
+  /** The activity's own price changes. */
+  priceChanges: PriceChange[]
 }
 
-const STORAGE_KEY = 'ezra:activity-wizard:v13'
+const STORAGE_KEY = 'ezra:activity-wizard:v14'
 
 /** Dining is the one category whose product is a table, not a departure. */
 export const isDining = (draft: Pick<ActivityDraft, 'category'>) => draft.category === 'restaurants'
 
 /** Generic defaults the operator has not touched can be swapped when the category changes. */
-const TOUR_BASICS = { durationMinutes: 0, maxCapacity: 0, minAge: 8 } as const
+const TOUR_BASICS = { durationMinutes: 0, maxCapacity: 0, minAge: 0 } as const
 
 export function createDefaultDraft(category: VerticalKey, nowIso: string): ActivityDraft {
   const dining = defaultDining()
@@ -279,6 +299,7 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
     schedule: restaurant
       ? { ...schedule, startTimes: serviceStartTimes(dining.services), capacity: DINING_BASICS.maxCapacity }
       : schedule,
+    ...defaultScheduleDraft('trip'),
     featured: false,
     kind: 'trip',
     kindSettings: defaultKindSettings(),
@@ -287,7 +308,8 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
     waiverSigning: 'booker',
     guestDetails: { enabled: false, fields: DEFAULT_GUEST_FIELDS },
     pickup: { enabled: false, zoneIds: [], required: false },
-    languages: ['English'],
+    // Not asked in setup: languages are written in Highlights, so none is claimed.
+    languages: [],
     route: emptyRoute(),
     customRequests: false,
     tips: false,
@@ -306,6 +328,7 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
     privateOption: { enabled: false, price: 0, includedGuests: 6, extraGuest: 0 },
     charterIncluded: 0,
     charterExtra: 0,
+    ...defaultPricingDraft(),
     freeCancellationHours: 24,
     crewIds: [],
     dining,
@@ -334,8 +357,8 @@ function kindOverride(draft: ActivityDraft) {
         ...(item.outOfService > 0 ? { outOfService: Math.min(item.outOfService, item.stock), serviceNote: item.serviceNote } : {}),
       }
     })
-    // With one location the opening hours are the pick-up and return window; several locations use the first.
-    const hours = draft.schedule.locations.length > 1 ? (draft.schedule.locations[0]?.schedule ?? draft.schedule) : draft.schedule
+    // Day rentals' pick-up and return times are set on the Schedule step.
+    const hours = { opensAt: r.pickupTime || '09:00', closesAt: r.returnTime || '17:00' }
     return {
       rental: {
         category: r.category,
@@ -388,17 +411,38 @@ function kindOverride(draft: ActivityDraft) {
   return {}
 }
 
-/** The route an edit saves; null when the operator switched it off or the kind has none. */
-function routeOverride(draft: ActivityDraft) {
-  const kind = draft.kind ?? 'trip'
+/** A line that already states an age: "Ages 8 and over", "Skipper 18+", "Children under 12 with an adult", "All ages welcome". */
+const AGE_MENTION = /\b(ages?|aged)\b|\b\d{1,2}\s*(years?|yrs?)\b|\byears?\s+old\b|\b\d{1,2}\s*\+|\b\d{1,2}\s+(and|or)\s+(over|up|older|above)\b|\b(under|over)\s+\d{1,2}(?!\s*(kg|km|cm|mi|lbs?|m|h|hours?|min|minutes?)\b)\b/i
+
+/** A seeded route as one Highlights line, as the storefront writes it: "6.5 km · Ranch loop through the eucalyptus · 180 m climb". */
+function routeHighlight(route: DraftRoute): string {
+  const label = routeLabel({ distance: route.distance, unit: route.unit, ...(route.track.trim() ? { track: route.track.trim() } : {}) })
+  return route.elevationM > 0 ? `${label} · ${route.elevationM} m climb` : label
+}
+
+/**
+ * Ages are written in Requirements and the track in Highlights now, so a
+ * seeded minimum age becomes "Ages 8 and up" and a seeded route one
+ * Highlights line, unless a line already says it. The draft then carries
+ * no age and no route (saved as 0 and null), so nothing shows twice.
+ */
+function withAgeAndRouteInText(draft: ActivityDraft): ActivityDraft {
   const route = draft.route ?? emptyRoute()
-  if ((kind !== 'trip' && kind !== 'activity') || !route.enabled || route.distance <= 0) return null
-  return {
-    distance: route.distance,
-    unit: route.unit,
-    ...(route.track.trim() ? { track: route.track.trim() } : {}),
-    ...(route.elevationM > 0 ? { elevationM: route.elevationM } : {}),
+  const hasRoute = route.enabled && route.distance > 0
+  if (draft.minAge <= 0 && !hasRoute) return draft
+  const next: ActivityDraft = { ...draft }
+  if (draft.minAge > 0) {
+    if (!draft.requirements.some((line) => AGE_MENTION.test(line))) next.requirements = [`Ages ${draft.minAge} and up`, ...draft.requirements]
+    next.minAge = 0
   }
+  if (hasRoute) {
+    const filled = draft.highlights.filter((line) => line.trim().length > 0)
+    const track = route.track.trim().toLowerCase()
+    const distance = new RegExp(`(^|[^\\d.])${String(Math.round(route.distance * 10) / 10).replace('.', '\\.')}\\s*${route.unit}\\b`, 'i')
+    if (!filled.some((line) => (track && line.toLowerCase().includes(track)) || distance.test(line))) next.highlights = [...filled, routeHighlight(route)]
+    next.route = emptyRoute()
+  }
+  return next
 }
 
 const LEVEL_DIFFICULTY: Record<DraftKindSettings['lesson']['level'], DifficultyLevel> = {
@@ -448,9 +492,95 @@ export function seatsFor(draft: ActivityDraft): ScheduleSeats {
     return { capacity: 1, one: 'charter', many: 'charters', summary: `One group each, up to ${settings.charter.maxGuests} guests` }
   }
   if (kind === 'lesson') return { capacity: n, one: 'spot', many: 'spots', summary: `${n} ${pluralize(n, 'student')} per class`, varies: true }
-  if (kind === 'pass') return { capacity: n, one: 'ticket', many: 'tickets', summary: n > 0 ? `${n} tickets per day` : 'No ticket limit', varies: true }
-  if (kind === 'activity') return { capacity: n, one: 'guest', many: 'guests', summary: `${n} ${pluralize(n, 'spot')} per time slot`, varies: true }
-  return { capacity: n, one: 'guest', many: 'guests', summary: n > 0 ? `${n} ${pluralize(n, 'spot')} per time slot` : 'No limit on guests', varies: true }
+  if (kind === 'pass') return { capacity: n, one: 'ticket', many: 'tickets', summary: `${n} ${pluralize(n, 'ticket')} per day`, varies: true }
+  return { capacity: n, one: 'guest', many: 'guests', summary: `${n} ${pluralize(n, 'spot')} per time slot`, varies: true }
+}
+
+/* ---------- the Schedule step's engine view of a draft ---------- */
+
+/** What the schedule engine needs about the activity itself: where it runs from, its spots, its kind and length. */
+function scheduleBaseOf(draft: ActivityDraft, id = 'draft'): ScheduleBase {
+  return {
+    id,
+    locations: draft.schedule.locations.map((site) => ({ locationId: site.locationId, times: [] })),
+    maxCapacity: seatsFor(draft).capacity,
+    kind: draft.kind ?? 'trip',
+    durationMinutes: draft.durationMinutes,
+  }
+}
+
+/** The draft as the schedule engine reads it. */
+function draftScheduleSource(draft: ActivityDraft, id?: string): ScheduleSource {
+  return scheduleSourceOf(draft, scheduleBaseOf(draft, id))
+}
+
+/**
+ * The next days with time slots, merged across locations: dining reads its
+ * services, everything else its seasons and changes, with the business's
+ * closed days and holidays (from Settings) taken out.
+ */
+function upcomingDays(
+  draft: ActivityDraft,
+  nowIso: string,
+  days: number,
+  defaults?: Pick<BookingDefaults, 'closures' | 'holidays'>,
+): { dateKey: string; times: string[]; seats: number; open?: { from: string; to: string } }[] {
+  if (isDining(draft)) return previewDepartures(draft.schedule, nowIso, days)
+  if ((draft.kind ?? 'trip') === 'package' || isUnscheduled(draft)) return []
+  const todayKey = nowIso.slice(0, 10)
+  const byDay = new Map<string, { dateKey: string; times: string[]; seats: number }>()
+  const ctx = { ...(defaults ? scheduleContextOf(defaults) : {}), bookable: { nowIso, maxAdvanceDays: 3650 } }
+  // A pass's tickets are a daily limit (the season's or Basics' number), shared by the day's time slots at each location.
+  const daily = (draft.kind ?? 'trip') === 'pass'
+  for (const day of expandDays(draftScheduleSource(draft), todayKey, shiftDayKey(todayKey, days - 1), ctx)) {
+    if (day.slots.length === 0) continue
+    const entry = byDay.get(day.dateKey) ?? { dateKey: day.dateKey, times: [], seats: 0 }
+    entry.times = [...new Set([...entry.times, ...day.slots.map((slot) => slot.time)])].sort()
+    entry.seats += daily ? Math.max(...day.slots.map((slot) => slot.capacity)) : day.slots.reduce((sum, slot) => sum + slot.capacity, 0)
+    byDay.set(day.dateKey, entry)
+  }
+  return [...byDay.values()]
+}
+
+/**
+ * The schedule part of an edit. Tours save their seasons, changes, booking
+ * window and closed-day opt-out explicitly (so clearing one sticks), with the
+ * older per-location times kept in step. Dining saves its sittings as before;
+ * a package keeps whatever schedule fields were saved.
+ */
+function scheduleOverride(draft: ActivityDraft, activity: Activity | undefined) {
+  if (isDining(draft)) {
+    return {
+      locations: draft.schedule.locations.map((site) => {
+        const rule = draft.schedule.locations.length > 1 ? site.schedule : draft.schedule
+        const dayCapacity = Object.fromEntries(Object.entries(rule.dayCapacity ?? {}).filter(([, value]) => value > 0))
+        return {
+          locationId: site.locationId,
+          times: rule.startTimes,
+          weekdays: rule.weekdays,
+          ...(Object.keys(dayCapacity).length > 0 ? { dayCapacity, dayLimitUnit: rule.dayLimitUnit ?? 'tickets' } : {}),
+        }
+      }),
+    }
+  }
+  if ((draft.kind ?? 'trip') === 'package') return { locations: savedSites(draft, activity) }
+  return scheduleSaveOf(draft, savedSites(draft, activity), closingGapOf(draft))
+}
+
+/** The activity's locations as saved: each keeps its meeting point and daily limit; times follow the seasons. */
+function savedSites(draft: ActivityDraft, activity: Activity | undefined): ActivityLocation[] {
+  return draft.schedule.locations.map((site) => {
+    const rule = draft.schedule.locations.length > 1 ? site.schedule : draft.schedule
+    const own = activity?.locations.find((entry) => entry.locationId === site.locationId)
+    const dayCapacity = Object.fromEntries(Object.entries(rule.dayCapacity ?? {}).filter(([, value]) => value > 0))
+    return {
+      locationId: site.locationId,
+      times: own?.times ?? [],
+      ...(own?.weekdays ? { weekdays: own.weekdays } : {}),
+      ...(own?.meetingPoint ? { meetingPoint: own.meetingPoint } : {}),
+      ...(Object.keys(dayCapacity).length > 0 ? { dayCapacity, dayLimitUnit: rule.dayLimitUnit ?? 'tickets' } : {}),
+    }
+  })
 }
 
 /**
@@ -546,7 +676,8 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
   const base = createDefaultDraft(activity.category, nowIso)
   const restaurant = activity.category === 'restaurants'
   const homeTimes = activity.locations[0]?.times ?? []
-  return {
+  // A seeded age and route open as Requirements and Highlights lines, where the owner can change them.
+  return withAgeAndRouteInText({
     ...base,
     name: activity.name,
     tagline: activity.tagline,
@@ -574,6 +705,7 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
       description: tier.description ?? '',
       countsTowardCapacity: tier.countsTowardCapacity,
       ...(tier.seats ? { seats: tier.seats } : {}),
+      ...ageFields(tier),
     })),
     addOns: activity.addOns.map((addOn) => ({
       id: addOn.id,
@@ -584,17 +716,20 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
       required: addOn.required,
     })),
     schedule: scheduleFromActivity(activity, base.schedule, homeTimes),
+    // Seasons, changes and the booking window; older activities read as one all-year season per location.
+    ...scheduleDraftOf(activity),
     featured: activity.featured,
     freeCancellationHours: activity.cancellationPolicy.freeCancellationHours,
     kind: activity.kind ?? 'trip',
-    guestQuestions: (activity.guestQuestions ?? []).map((question) => ({ ...question })),
+    // A seeded height or weight limit opens as the Guests step's Height / Weight question.
+    guestQuestions: [...(activity.guestQuestions ?? []).map((question) => ({ ...question })), ...rideAsQuestions(activity)],
     waiverId: activity.waiverId ?? null,
     waiverSigning: activity.waiverSigning ?? 'booker',
     guestDetails: guestDetailsOf(activity),
     pickup: activity.pickup
       ? { enabled: true, zoneIds: [...activity.pickup.zoneIds], required: activity.pickup.required, prices: { ...activity.pickup.prices } }
       : { enabled: false, zoneIds: [], required: false },
-    languages: [...(activity.languages ?? ['English'])],
+    languages: [...(activity.languages ?? [])],
     theme: themeOf(activity),
     customRequests: Boolean(activity.customRequests),
     tips: Boolean(activity.tips),
@@ -622,6 +757,7 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
     privateOption: activity.privateOption ?? { enabled: false, price: 0, includedGuests: Math.min(6, activity.maxCapacity || 6), extraGuest: 0 },
     charterIncluded: activity.charter?.includedGuests ?? 0,
     charterExtra: activity.charter?.extraGuestPrice ?? 0,
+    ...pricingDraftOf(activity),
     kindSettings: (() => {
       const blank = defaultKindSettings()
       const rental = activity.rental
@@ -668,10 +804,11 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
           : { ...blank.charter, maxGuests: activity.maxCapacity },
         lesson: activity.lesson ? { ...blank.lesson, ...activity.lesson, certification: activity.lesson.certification ?? '' } : blank.lesson,
         pass: activity.pass ? { ...blank.pass, ...activity.pass } : blank.pass,
-        activity: { minHeightCm: activity.ride?.minHeightCm ?? 0, maxWeightKg: activity.ride?.maxWeightKg ?? 0 },
+        // Carried by the Height / Weight questions now, so an edit saves an empty `ride`.
+        activity: { minHeightCm: 0, maxWeightKg: 0 },
       }
     })(),
-  }
+  })
 }
 
 /**
@@ -714,51 +851,22 @@ const CATEGORY_OPTIONS: { value: VerticalKey; label: string; hint: string }[] = 
   { value: 'wellness', label: 'Wellness', hint: 'Retreats, spa, yoga' },
 ]
 
-const DIFFICULTY_OPTIONS: {
-  value: DifficultyLevel
-  label: string
-  description: string
-  icon: React.ReactNode
-}[] = [
-  {
-    value: 'easy',
-    label: 'Easy',
-    description: 'Anyone can join. No experience needed.',
-    icon: <Waves />,
-  },
-  {
-    value: 'moderate',
-    label: 'Moderate',
-    description: 'Reasonable fitness, some balance required.',
-    icon: <Gauge />,
-  },
-  {
-    value: 'challenging',
-    label: 'Challenging',
-    description: 'Good fitness and prior experience expected.',
-    icon: <Mountain />,
-  },
-  {
-    value: 'extreme',
-    label: 'Extreme',
-    description: 'Certification or a briefing is mandatory.',
-    icon: <TriangleAlert />,
-  },
-]
-
 /* ==========================================================================
    STEPS + VALIDATION
    ========================================================================== */
 
 const TOUR_STEPS = [
   { id: 'basics', label: 'Basics', hint: 'What you sell and its setup', icon: Compass },
-  { id: 'description', label: 'Description', hint: 'The copy guests read', icon: FileText },
-  { id: 'media', label: 'Media', hint: 'Photos and video', icon: Images },
+  { id: 'description', label: 'Details & photos', hint: 'What guests read and see', icon: FileText },
   { id: 'pricing', label: 'Pricing', hint: 'Prices and extras', icon: Tag },
-  { id: 'schedule', label: 'Booking', hint: 'How and when guests book', icon: CalendarClock },
+  { id: 'schedule', label: 'Schedule', hint: 'When it runs', icon: CalendarDays },
+  { id: 'booking', label: 'Booking', hint: 'How guests book', icon: CalendarClock },
   { id: 'guests', label: 'Guests', hint: 'Arrival and checkout', icon: MapPin },
   { id: 'review', label: 'Review', hint: 'Publish', icon: Rocket },
 ] as const
+
+/** Tour step positions, for jumping back from the Review step. */
+const TOUR_STEP_INDEX = { basics: 0, description: 1, pricing: 2, schedule: 3, booking: 4, guests: 5 } as const
 
 const DINING_STEPS = [
   { id: 'basics', label: 'Basics', hint: 'Name, format, covers', icon: UtensilsCrossed },
@@ -800,7 +908,7 @@ const TOUR_COPY_SCHEMAS = [
         .max(43200, 'Keep it under 30 days')
         .refine((minutes) => minutes === 0 || minutes >= 15, 'Give it at least 15 minutes, or leave it flexible'),
       minAge: z.number().int().min(0).max(99),
-      maxCapacity: z.number().int().min(0).max(500, 'Keep it under 500 spots per time slot, or remove the limit'),
+      maxCapacity: z.number().int().min(0).max(500, 'Keep it under 500 spots per time slot'),
       minParticipants: z.number().int().min(1, 'At least one guest must be required'),
     })
     .refine((draft) => draft.maxCapacity === 0 || draft.minParticipants <= draft.maxCapacity, {
@@ -866,66 +974,14 @@ const TOUR_SCHEMA_LIST = [
       z.object({ label: z.string().trim().min(2, 'Name this extra, or remove it') }),
     ),
   }),
-
-  z
-    .object({
-      schedule: z.object({
-        mode: z.enum(['times', 'hours', 'dates']),
-        weekdays: z.array(z.number()),
-        startTimes: z.array(z.string()),
-        capacity: z.number().int().min(0).max(500),
-        seasonStart: z.string(),
-        seasonEnd: z.string(),
-        opensAt: z.string(),
-        closesAt: z.string(),
-        lastEntryMinutes: z.number().int().min(0),
-        entryInterval: z.number().int().min(0),
-        dates: z.array(z.object({ dateKey: z.string(), time: z.string() })),
-        locations: z.array(z.object({ locationId: z.string(), schedule: z.custom<DraftSchedule>() })),
-      }),
-    })
-    .superRefine(({ schedule }, ctx) => {
-      const issue = (key: string, message: string) => ctx.addIssue({ code: 'custom', path: ['schedule', key], message })
-      if (schedule.locations.length === 0) issue('locations', 'Tick at least one place it starts from')
-      if (schedule.locations.length > 1) {
-        // Each location carries its own rule; the shared one below is not used.
-        for (const site of schedule.locations) {
-          const rule = site.schedule
-          const key = (field: string) => `location.${site.locationId}.${field}`
-          if (schedule.mode === 'dates') {
-            if (rule.dates.length === 0) issue(key('dates'), 'Add at least one date at this location')
-            continue
-          }
-          if (rule.weekdays.length === 0) issue(key('weekdays'), 'Pick at least one day at this location')
-          if (rule.seasonStart && rule.seasonEnd && rule.seasonEnd < rule.seasonStart) issue(key('seasonEnd'), 'The end date must come after the start date')
-          if (schedule.mode === 'times' && rule.startTimes.length === 0) issue(key('startTimes'), 'Add at least one start time at this location')
-          if (schedule.mode === 'hours' && rule.closesAt <= rule.opensAt) issue(key('closesAt'), 'Closing must come after opening')
-        }
-        return
-      }
-      if (schedule.mode === 'dates') {
-        if (schedule.dates.length === 0) issue('dates', 'Add at least one date')
-        return
-      }
-      if (schedule.weekdays.length === 0) issue('weekdays', schedule.mode === 'hours' ? 'Pick at least one open day' : 'Pick at least one day of the week')
-      if (schedule.seasonStart && schedule.seasonEnd && schedule.seasonEnd < schedule.seasonStart) issue('seasonEnd', 'The end date must come after the start date')
-      if (schedule.mode === 'times' && schedule.startTimes.length === 0) issue('startTimes', 'Add at least one start time')
-      if (schedule.mode === 'hours') {
-        if (!/^\d{2}:\d{2}$/.test(schedule.opensAt)) issue('opensAt', 'Pick an opening time')
-        if (!/^\d{2}:\d{2}$/.test(schedule.closesAt)) issue('closesAt', 'Pick a closing time')
-        if (schedule.closesAt <= schedule.opensAt) issue('closesAt', 'Closing must come after opening')
-      }
-    }),
 ]
 
-/** Each tour step's checks, by step id. */
-const STEP_SCHEMAS: Record<string, z.ZodTypeAny | undefined> = {
-  basics: TOUR_SCHEMA_LIST[0],
-  description: TOUR_SCHEMA_LIST[1],
-  media: TOUR_SCHEMA_LIST[2],
-  pricing: TOUR_SCHEMA_LIST[3],
-  schedule: TOUR_SCHEMA_LIST[4],
-  guests: ARRIVAL_SCHEMA,
+/** Each tour step's checks, by step id. Details & photos checks the copy and the photos; Schedule has its own checks. */
+const STEP_SCHEMAS: Record<string, z.ZodTypeAny[] | undefined> = {
+  basics: [TOUR_SCHEMA_LIST[0]],
+  description: [TOUR_SCHEMA_LIST[1], TOUR_SCHEMA_LIST[2]],
+  pricing: [TOUR_SCHEMA_LIST[3]],
+  guests: [ARRIVAL_SCHEMA],
 }
 
 const CLOCK = /^\d{2}:\d{2}$/
@@ -1039,29 +1095,41 @@ type FieldErrors = Record<string, string>
 
 function validateSchemaStep(step: number, draft: ActivityDraft): FieldErrors {
   const id = TOUR_STEPS[step]?.id
-  // No set schedule: only where it runs from is checked.
-  if (!isDining(draft) && id === 'schedule' && (draft.booking?.method ?? 'instant') !== 'instant' && draft.booking?.scheduled === false) return {}
-  // A package runs on its activities' own times: no schedule of its own to check.
-  if (!isDining(draft) && id === 'schedule' && draft.kind === 'package') return {}
-  const schema = isDining(draft) ? DINING_STEP_SCHEMAS[step] : STEP_SCHEMAS[id ?? '']
-  if (!schema) return {}
-  const result = schema.safeParse(draft)
-  if (result.success) return {}
-
+  const dining = DINING_STEP_SCHEMAS[step]
+  const schemas: z.ZodTypeAny[] = isDining(draft) ? (dining ? [dining] : []) : (STEP_SCHEMAS[id ?? ''] ?? [])
   const errors: FieldErrors = {}
-  for (const issue of result.error.issues) {
-    // Schedule fields are nested one level; flatten so editors can look them up
-    // by their own field name ("weekdays"), not the draft path.
-    const path = issue.path.map(String)
-    const key = path[0] === 'schedule' ? path.slice(1).join('.') : path.join('.')
-    if (!errors[key || 'form']) errors[key || 'form'] = issue.message
+  for (const schema of schemas) {
+    const result = schema.safeParse(draft)
+    if (result.success) continue
+    for (const issue of result.error.issues) {
+      // Schedule fields are nested one level; flatten so editors can look them up
+      // by their own field name ("weekdays"), not the draft path.
+      const path = issue.path.map(String)
+      const key = path[0] === 'schedule' ? path.slice(1).join('.') : path.join('.')
+      if (!errors[key || 'form']) errors[key || 'form'] = issue.message
+    }
   }
   return errors
 }
 
+/** Request or call with no set schedule: no days and times to set. */
+const isUnscheduled = (draft: Pick<ActivityDraft, 'booking'>) => (draft.booking?.method ?? 'instant') !== 'instant' && draft.booking?.scheduled === false
+
 function validateStep(step: number, draft: ActivityDraft): FieldErrors {
   const errors = validateSchemaStep(step, draft)
   const id = isDining(draft) ? DINING_STEPS[step]?.id : TOUR_STEPS[step]?.id
+  // The Schedule step: a package runs on its activities' own times, so it has nothing to check.
+  if (id === 'schedule' && !isDining(draft)) {
+    if ((draft.kind ?? 'trip') === 'package') return {}
+    return validateScheduleDraft(draft, {
+      pickedLocationIds: draft.schedule.locations.map((site) => site.locationId),
+      requireLocation: true,
+      unscheduled: isUnscheduled(draft),
+      todayKey: TODAY_KEY,
+    })
+  }
+  // Pricing: a group price that is set, a minimum charge under the cap.
+  if (id === 'pricing' && !isDining(draft)) Object.assign(errors, pricingErrors(draft))
   // A rental prices each item per hour and/or per day; every rate that is on needs a price.
   if (id === 'pricing' && !isDining(draft) && (draft.kind ?? 'trip') === 'rental') {
     const r = normalizeKindSettings(draft.kindSettings).rental
@@ -1072,16 +1140,19 @@ function validateStep(step: number, draft: ActivityDraft): FieldErrors {
       if (draftItemOf(r, tier.id).stock < 1) errors[`item.${tier.id}.stock`] = 'At least 1'
       if (r.modes.includes('length')) for (const length of r.lengths) if ((rate.lengths?.[length.id] ?? 0) <= 0) errors[`rate.${tier.id}.len.${length.id}`] = 'Set a price'
     }
+    // How it is charged sits on Pricing, so its limits are checked here.
+    if (r.modes.includes('day') && r.maxDays > 0 && r.maxDays < r.minDays) errors['rental.maxDays'] = 'Most days cannot be fewer than the fewest'
+    if (r.modes.includes('hour') && r.maxHours > 0 && r.maxHours < r.minHours) errors['rental.maxHours'] = 'Most hours cannot be fewer than the fewest'
   }
   // With a location on the activity, its address is the meeting place; the note is optional.
   if (id === 'guests' && !isDining(draft) && draft.schedule.locations.length > 0) delete errors.meetingPoint
   if (id !== 'basics' || isDining(draft)) return errors
   const kind = draft.kind ?? 'trip'
   const settings = normalizeKindSettings(draft.kindSettings)
-  if (kind === 'rental' && settings.rental.modes.includes('day') && settings.rental.maxDays > 0 && settings.rental.maxDays < settings.rental.minDays) errors['rental.maxDays'] = 'Most days cannot be fewer than the fewest'
-  if (kind === 'rental' && settings.rental.modes.includes('hour') && settings.rental.maxHours > 0 && settings.rental.maxHours < settings.rental.minHours) errors['rental.maxHours'] = 'Most hours cannot be fewer than the fewest'
+  // Every time slot sells at least one spot (there is no "no limit").
   if (kind === 'lesson' && draft.maxCapacity < 1) errors.maxCapacity = 'A class needs at least one spot'
-  if (kind === 'activity' && draft.maxCapacity < 1) errors.maxCapacity = 'Each time slot needs at least one spot'
+  if ((kind === 'activity' || kind === 'trip') && draft.maxCapacity < 1) errors.maxCapacity = 'Each time slot needs at least one spot'
+  if (kind === 'pass' && draft.maxCapacity < 1) errors.maxCapacity = 'Sell at least one ticket a day'
   if (kind === 'activity' && draft.durationMinutes < 5) errors.durationMinutes = 'Say how long it lasts'
   if (kind === 'lesson' && draft.durationMinutes < 15) errors.durationMinutes = 'Give each lesson at least 15 minutes'
   if (kind === 'charter' && settings.charter.maxGuests < 1) errors['charter.maxGuests'] = 'A charter carries at least one guest'
@@ -1092,7 +1163,6 @@ function validateStep(step: number, draft: ActivityDraft): FieldErrors {
   }
   if (kind === 'lesson') {
     if (settings.lesson.sessions < 1) errors['lesson.sessions'] = 'A course has at least one day'
-    if (settings.lesson.ratio < 1) errors['lesson.ratio'] = 'At least one student per instructor'
   }
   return errors
 }
@@ -1334,13 +1404,10 @@ function StorefrontPreview({
   compact?: boolean
 }) {
   const primary = draft.media.find((item) => item.isPrimary) ?? draft.media[0] ?? null
-  const priced = draft.tiers.filter((tier) => tier.label.trim().length > 0)
-  // Free tiers (infants, ride-alongs) are not the "from" price.
-  const paid = priced.filter((tier) => tier.price > 0)
-  const fromPrice = paid.length === 0 ? 0 : Math.min(...paid.map((tier) => tier.price))
-  // No set schedule: nothing to list; the preview says it is arranged instead.
-  const unscheduledPreview = (draft.booking?.method ?? 'instant') !== 'instant' && draft.booking?.scheduled === false
-  const upcoming = unscheduledPreview || draft.kind === 'package' ? [] : previewDepartures(draft.schedule, nowIso, 10).slice(0, 3)
+  const fromPrice = draftFromPrice(draft, currency, isDining(draft))
+  // No set schedule or a package: nothing to list; the preview says it is arranged instead.
+  const { defaults: bookingDefaults } = useBookingDefaults(tenantSlug)
+  const upcoming = upcomingDays(draft, nowIso, 10, bookingDefaults).slice(0, 3)
   const highlights = draft.highlights.filter((item) => item.trim().length > 0).slice(0, 3)
   const dining = isDining(draft)
 
@@ -1405,7 +1472,7 @@ function StorefrontPreview({
           </span>
           <span className="inline-flex items-center gap-1.5">
             <Users className="size-3.5 text-faint" aria-hidden="true" />
-            {dining ? `Parties of ${draft.dining.minPartySize}–${draft.dining.maxPartySize}` : draft.maxCapacity > 0 ? `Up to ${draft.maxCapacity}` : 'No limit on guests'}
+            {dining ? `Parties of ${draft.dining.minPartySize}–${draft.dining.maxPartySize}` : `Up to ${draft.maxCapacity}`}
           </span>
           {dining ? (
             <span className="inline-flex items-center gap-1.5">
@@ -1499,6 +1566,66 @@ export interface ActivityWizardProps {
   packageOptions?: PackageOption[]
   /** For the messages each activity sends. */
   tenantId?: string
+  /** Editing: the activity's upcoming time slots that have bookings, so a schedule edit that drops one says so. */
+  bookedSlots?: BookedSlot[]
+  /** A step to open on ("schedule"), e.g. from Availability's "Edit schedule". */
+  initialStep?: string
+}
+
+function subscribeOverrides(onChange: () => void) {
+  window.addEventListener('storage', onChange)
+  window.addEventListener(ACTIVITY_OVERRIDES_EVENT, onChange)
+  return () => {
+    window.removeEventListener('storage', onChange)
+    window.removeEventListener(ACTIVITY_OVERRIDES_EVENT, onChange)
+  }
+}
+
+/**
+ * The activity with its saved edit laid over it. The server only has the
+ * seeded activity, so the first render (and hydration) uses that; the saved
+ * edit arrives right after, from this browser.
+ */
+function useSavedActivity(activity: Activity | undefined): Activity | undefined {
+  const raw = React.useSyncExternalStore(subscribeOverrides, readActivityOverridesRaw, () => '')
+  return React.useMemo(() => {
+    if (!activity || !raw) return activity
+    const override = parseActivityOverrides(raw)[activity.id]
+    return override ? applyActivityOverride(activity, override) : activity
+  }, [activity, raw])
+}
+
+/** The activity's saved edit as stored right now. Reads the browser's store, so only from effects and handlers. */
+function storedEditOf(activityId: string | undefined) {
+  return activityId ? parseActivityOverrides(readActivityOverridesRaw())[activityId] : undefined
+}
+
+/** What a draft was started from: the saved edit's time stamp ('' for none) and its day-by-day changes. */
+interface DraftBase {
+  stamp: string
+  changes: ScheduleChange[]
+}
+
+/**
+ * The booked time slots the Schedule step keeps and warns about: the
+ * server's (seeded) ones with this browser's bookings and cancellations
+ * counted, plus the generated ones (gen_…) guests booked here, which the
+ * server can't see.
+ */
+function bookedWithLedger(slots: BookedSlot[], delta: Record<string, number>, activityId: string | undefined, nowIso: string): BookedSlot[] {
+  const ids = Object.keys(delta)
+  if (!activityId || ids.length === 0) return slots
+  const known = new Set(slots.map((slot) => slot.id))
+  const out = slots.map((slot) => (delta[slot.id] ? { ...slot, booked: Math.max(0, slot.booked + delta[slot.id]) } : slot))
+  for (const id of ids) {
+    if (delta[id] <= 0 || known.has(id) || !isGeneratedSlotId(id)) continue
+    const parsed = parseSlotId(id)
+    if (!parsed || parsed.activityId !== activityId) continue
+    const startsAt = `${parsed.dateKey}T${parsed.time}:00`
+    if (startsAt < nowIso.slice(0, 19)) continue
+    out.push({ id, startsAt, booked: delta[id], ...(parsed.locationId ? { locationId: parsed.locationId } : {}) })
+  }
+  return out
 }
 
 export function ActivityWizard({
@@ -1516,35 +1643,57 @@ export function ActivityWizard({
   tenantId = '',
   mode = 'create',
   activityId,
-  activity,
+  activity: seededActivity,
   initialDraft,
+  bookedSlots = [],
+  initialStep,
 }: ActivityWizardProps) {
   const router = useRouter()
   const reduceMotion = useReducedMotionSafe()
   const editing = mode === 'edit' && Boolean(activityId)
-  const storageKey = editing ? `ezra:activity-wizard:edit:v3:${activityId}` : STORAGE_KEY
+  const storageKey = editing ? `ezra:activity-wizard:edit:v4:${activityId}` : STORAGE_KEY
   const exitHref = editing ? `/dashboard/activities/${activityId}` : '/dashboard/activities'
+  // Editing opens the activity as last saved, not as seeded: the saved edit is laid over it in the browser.
+  const activity = useSavedActivity(editing ? seededActivity : undefined) ?? seededActivity
+  // The saved edit this render's activity carries ('' when it has none), to tell when another screen saved since.
+  const savedStamp = editing && activity && activity !== seededActivity ? (activity.updatedAt ?? '') : ''
 
   const initial = React.useMemo(
     () => {
-      const start = deriveForKind(withHomeLocation(initialDraft ?? (activity ? draftFromActivity(activity, nowIso) : createDefaultDraft(defaultCategory, nowIso)), locations))
+      const built = initialDraft ?? (activity ? draftFromActivity(activity, nowIso) : createDefaultDraft(defaultCategory, nowIso))
+      // An older save with no spot limit (0) opens with the seeded number: every time slot sells at least one spot.
+      const spotted = !initialDraft && seededActivity && built.maxCapacity < 1 && seededActivity.maxCapacity > 0 ? { ...built, maxCapacity: seededActivity.maxCapacity } : built
+      const start = deriveForKind(withHomeLocation(spotted, locations))
       return !activity && !start.waiverId && waivers[0] ? { ...start, waiverId: waivers[0].id } : start
     },
-    [initialDraft, activity, defaultCategory, nowIso],
+    [initialDraft, activity, seededActivity, defaultCategory, nowIso],
   )
 
   const [draft, setDraft] = React.useState<ActivityDraft>(initial)
+  /** The owner has changed something (or a session draft came back): a saved edit arriving later never replaces it. */
+  const typedRef = React.useRef(false)
+  const adoptedRef = React.useRef(initial)
+  /** What the draft started from. A save made elsewhere since (the calendar, the Schedule tab) is merged in on restore and on save. */
+  const baseRef = React.useRef<DraftBase>({ stamp: savedStamp, changes: initial.scheduleChanges })
   const { defaults: bookingDefaults } = useBookingDefaults(tenantSlug)
   // What guests actually get: the activity's own terms, or the business default it follows.
   const pay = effectiveDraftPayment(draft, bookingDefaults)
   const cancel = effectiveDraftCancellation(draft, bookingDefaults)
-  const [step, setStep] = React.useState(0)
-  const [furthest, setFurthest] = React.useState(0)
+  const openingStep = React.useMemo(() => Math.max(0, stepsFor(isDining(initial)).findIndex((entry) => entry.id === initialStep)), [initial, initialStep])
+  const [step, setStep] = React.useState(openingStep)
+  const [furthest, setFurthest] = React.useState(openingStep)
   const [direction, setDirection] = React.useState(1)
   const [errors, setErrors] = React.useState<FieldErrors>({})
   const [showErrors, setShowErrors] = React.useState(false)
   const [submitting, setSubmitting] = React.useState<'draft' | 'live' | null>(null)
-  const [restored, setRestored] = React.useState(false)
+  /** A session draft came back; `merged` when changes saved elsewhere since were added to it. */
+  const [restored, setRestored] = React.useState<{ merged: boolean } | null>(null)
+
+  /** The saved day-by-day changes right now (the seeded ones when nothing is saved). Effects and handlers only. */
+  const storedChanges = (): DraftBase => {
+    const stored = storedEditOf(activityId)
+    return { stamp: stored?.updatedAt ?? '', changes: Array.isArray(stored?.scheduleChanges) ? stored.scheduleChanges : (seededActivity?.scheduleChanges ?? []) }
+  }
 
   /* ---- sessionStorage: read once after mount so SSR and hydration match ---- */
   React.useEffect(() => {
@@ -1552,12 +1701,25 @@ export function ActivityWizard({
     try {
       const raw = window.sessionStorage.getItem(storageKey)
       if (!raw) return
-      const parsed = JSON.parse(raw) as { draft?: Partial<ActivityDraft>; step?: number }
+      const parsed = JSON.parse(raw) as { draft?: Partial<ActivityDraft>; step?: number; base?: Partial<DraftBase> }
       if (parsed.draft) {
-        setDraft((current) => deriveForKind({ ...current, ...parsed.draft }))
-        setRestored(true)
+        typedRef.current = true
+        let restoredDraft = parsed.draft
+        let merged = false
+        if (editing) {
+          // Saved elsewhere since this draft began (a time slot cancelled on the calendar): keep those changes.
+          const from: DraftBase = { stamp: parsed.base?.stamp ?? '', changes: Array.isArray(parsed.base?.changes) ? parsed.base.changes : (seededActivity?.scheduleChanges ?? []) }
+          const now = storedChanges()
+          if (from.stamp !== now.stamp && Array.isArray(restoredDraft.scheduleChanges)) {
+            restoredDraft = { ...restoredDraft, scheduleChanges: mergeScheduleChanges(from.changes, now.changes, restoredDraft.scheduleChanges) }
+            merged = true
+            baseRef.current = now
+          } else baseRef.current = from
+        }
+        setDraft((current) => deriveForKind({ ...current, ...restoredDraft }))
+        setRestored({ merged })
       }
-      if (typeof parsed.step === 'number') {
+      if (typeof parsed.step === 'number' && !initialStep) {
         const next = Math.min(Math.max(parsed.step, 0), STEPS.length - 1)
         setStep(next)
         setFurthest(next)
@@ -1569,14 +1731,27 @@ export function ActivityWizard({
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return
+    // Only once something was changed: an untouched visit leaves nothing to restore over a later save.
+    if (!typedRef.current) return
     try {
-      window.sessionStorage.setItem(storageKey, JSON.stringify({ draft, step }))
+      window.sessionStorage.setItem(storageKey, JSON.stringify({ draft, step, base: baseRef.current }))
     } catch {
       // Private mode or a full quota — the wizard still works in memory.
     }
   }, [draft, step, storageKey])
 
+  // The saved edit arrives after hydration: adopt it unless the owner has already changed something.
+  React.useEffect(() => {
+    if (adoptedRef.current === initial) return
+    adoptedRef.current = initial
+    if (typedRef.current) return
+    setDraft(initial)
+    baseRef.current = { stamp: savedStamp, changes: initial.scheduleChanges }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initial])
+
   const patch = React.useCallback((changes: Partial<ActivityDraft>) => {
+    typedRef.current = true
     setDraft((current) => deriveForKind({ ...current, ...changes }))
   }, [])
 
@@ -1618,12 +1793,14 @@ export function ActivityWizard({
   }
 
   const reset = () => {
+    typedRef.current = false
     setDraft(editing ? initial : deriveForKind(withHomeLocation(createDefaultDraft(defaultCategory, nowIso), locations)))
+    baseRef.current = { stamp: savedStamp, changes: initial.scheduleChanges }
     setStep(0)
     setFurthest(0)
     setErrors({})
     setShowErrors(false)
-    setRestored(false)
+    setRestored(null)
     try {
       window.sessionStorage.removeItem(storageKey)
     } catch {
@@ -1655,19 +1832,24 @@ export function ActivityWizard({
         /* already gone */
       }
       if (editing && activityId) {
+        // A session draft from before ages and tracks moved into the text still carries them: move them now.
+        const text = withAgeAndRouteInText(draft)
+        // Saved elsewhere while this was open (a time slot cancelled on the calendar): those changes are kept, not written over.
+        const stored = storedChanges()
+        const scheduleChanges = stored.stamp === baseRef.current.stamp ? draft.scheduleChanges : mergeScheduleChanges(baseRef.current.changes, stored.changes, draft.scheduleChanges)
         saveActivityOverride(activityId, {
           name: draft.name,
           tagline: draft.tagline,
           description: draft.description,
-          highlights: draft.highlights,
+          highlights: text.highlights,
           included: draft.included,
           excluded: draft.excluded,
-          requirements: draft.requirements,
+          requirements: text.requirements,
           meetingPoint: draft.meetingPoint,
           difficulty: draft.difficulty,
           durationMinutes: draft.durationMinutes,
           maxCapacity: draft.maxCapacity,
-          minAge: draft.minAge,
+          minAge: text.minAge,
           minParticipants: draft.minParticipants,
           featured: draft.featured,
           languages: draft.languages ?? [],
@@ -1687,8 +1869,9 @@ export function ActivityWizard({
             ...(tier.description.trim() ? { description: tier.description.trim() } : {}),
             countsTowardCapacity: tier.countsTowardCapacity,
             ...(tier.countsTowardCapacity && (tier.seats ?? 1) > 1 ? { seats: tier.seats } : {}),
+            ...ageFields(tier),
           })),
-          privateOption: ['trip', 'activity', 'lesson'].includes(draft.kind ?? 'trip') && draft.privateOption?.enabled ? draft.privateOption : undefined,
+          privateOption: ['trip', 'activity', 'lesson'].includes(draft.kind ?? 'trip') && effectiveChargeBy(draft) === 'person' && draft.privateOption?.enabled ? draft.privateOption : undefined,
           addOns: draft.addOns.map((addOn) => ({ id: addOn.id, label: addOn.label, price: addOn.price, description: addOn.description, per: addOn.per, required: addOn.required, ...(addOn.icon ? { icon: addOn.icon } : {}) })),
           payment: draft.payment?.useDefault ? { ...pay, useDefault: true } : (draft.payment ?? DEFAULT_PAYMENT),
           guestNote: (draft.guestNote ?? '').trim(),
@@ -1700,11 +1883,14 @@ export function ActivityWizard({
             return { ...policy, summary: policySummary(policy, pay) }
           })(),
           priceCap: draft.priceCap ?? 0,
+          // How it charges, the group price, the ladder, the minimum and the activity's own price changes.
+          ...pricingFieldsOfDraft(draft, isDining(draft)),
           noticeHours: draft.noticeHours ?? 0,
           customCategory: draft.customCategory?.trim() || null,
           accessibility: draft.accessibility ?? [],
           bring: (draft.bring ?? []).map((item) => item.trim()).filter(Boolean),
-          route: routeOverride(draft),
+          // The track is a Highlights line now; the old route is cleared.
+          route: null,
           kind: draft.kind ?? 'trip',
           ...kindOverride(draft),
           crewIds: draft.crewIds,
@@ -1726,16 +1912,8 @@ export function ActivityWizard({
                   ),
                 }
               : null,
-          locations: draft.schedule.locations.map((site) => {
-            const rule = draft.schedule.locations.length > 1 ? site.schedule : draft.schedule
-            const dayCapacity = Object.fromEntries(Object.entries(rule.dayCapacity ?? {}).filter(([, value]) => value > 0))
-            return {
-              locationId: site.locationId,
-              times: rule.startTimes,
-              weekdays: rule.weekdays,
-              ...(Object.keys(dayCapacity).length > 0 ? { dayCapacity, dayLimitUnit: rule.dayLimitUnit ?? 'tickets' } : {}),
-            }
-          }),
+          // Where it runs from and when: seasons, day-by-day changes, the booking window.
+          ...scheduleOverride({ ...draft, scheduleChanges }, activity),
         })
         toast.success('Changes saved', { description: `${draft.name} is updated on the storefront.` })
         router.push(exitHref)
@@ -1763,8 +1941,18 @@ export function ActivityWizard({
   const dining = isDining(draft)
   const steps = stepsFor(dining)
   /** Request or call with no set schedule: no days and times to set. */
-  const unscheduled = (draft.booking?.method ?? 'instant') !== 'instant' && draft.booking?.scheduled === false
-  const currentStep = steps[step]
+  const unscheduled = isUnscheduled(draft)
+  const currentStep = steps[step] ?? steps[0]
+  // What the Schedule step reads about the activity itself; recomputed only when those facts change.
+  const scheduleCapacity = seatsFor(draft).capacity
+  const scheduleBase = React.useMemo(
+    () => scheduleBaseOf(draft, activityId ?? 'draft'),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [draft.schedule.locations, scheduleCapacity, draft.kind, draft.durationMinutes, activityId],
+  )
+  // Booked time slots, with this browser's bookings: a generated one guests booked is kept and warned about like a seeded one.
+  const ledger = useBookingLedger(tenantSlug)
+  const liveBookedSlots = React.useMemo(() => bookedWithLedger(bookedSlots, ledger.delta, editing ? activityId : undefined, nowIso), [bookedSlots, ledger.delta, editing, activityId, nowIso])
   const isLast = step === steps.length - 1
   const policyEditor = (
     <ChangesPolicyEditor
@@ -1787,11 +1975,12 @@ export function ActivityWizard({
     <div className="flex flex-col gap-5">
       <StepProgress steps={steps} current={step} furthest={furthest} onJump={(index) => goTo(index, index > step ? 1 : -1)} />
 
-      {restored && step === 0 ? (
+      {/* On whichever step it opens on (a link can open straight on Schedule). */}
+      {restored ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-info/30 bg-info-soft/60 px-4 py-2.5">
           <p className="flex items-center gap-2 text-[0.8125rem] text-foreground">
-            <RotateCcw className="size-4 text-info" aria-hidden="true" />
-            We restored the draft you started earlier in this session.
+            <RotateCcw className="size-4 shrink-0 text-info" aria-hidden="true" />
+            {restored.merged ? 'We restored the draft you started earlier, with the schedule changes saved since.' : 'We restored the draft you started earlier in this session.'}
           </p>
           <Button type="button" variant="ghost" size="xs" onClick={reset}>
             Start over
@@ -1833,7 +2022,26 @@ export function ActivityWizard({
                   {currentStep.id === 'basics' ? (
                     <BasicsStep draft={draft} patch={patch} errors={errors} currency={currency} tenantSlug={tenantSlug} packageOptions={packageOptions.filter((option) => option.id !== activityId)} />
                   ) : null}
-                  {currentStep.id === 'description' ? <DescriptionStep draft={draft} patch={patch} errors={errors} part={dining ? undefined : 'copy'} /> : null}
+                  {currentStep.id === 'description' ? (
+                    dining ? (
+                      <DescriptionStep draft={draft} patch={patch} errors={errors} />
+                    ) : (
+                      // Details & photos: the copy, then the photos, in one step.
+                      <div className="flex flex-col gap-8">
+                        <DescriptionStep draft={draft} patch={patch} errors={errors} part="copy" />
+                        <section className="flex flex-col gap-3 border-t border-line-subtle pt-6">
+                          <h3 className="text-sm font-semibold">Photos</h3>
+                          <MediaManager media={draft.media} onChange={(media) => patch({ media })} errors={errors} />
+                          {errors.media ? (
+                            <p className="flex items-center gap-1.5 text-xs font-medium text-danger">
+                              <CircleAlert className="size-3.5" aria-hidden="true" />
+                              {errors.media}
+                            </p>
+                          ) : null}
+                        </section>
+                      </div>
+                    )
+                  ) : null}
                   {currentStep.id === 'guests' ? (
                     <div className="flex flex-col gap-6">
                     <DescriptionStep
@@ -1863,8 +2071,8 @@ export function ActivityWizard({
                       guestDetails={draft.guestDetails ?? { enabled: false, fields: DEFAULT_GUEST_FIELDS }}
                       onGuestDetailsChange={(guestDetails) => patch({ guestDetails })}
                       forcedReason={
-                        (draft.kind ?? 'trip') === 'activity' && (draft.kindSettings.activity.minHeightCm > 0 || draft.kindSettings.activity.maxWeightKg > 0)
-                          ? 'On because of the height or weight limit in Basics: every rider is asked.'
+                        riderLimited({ kind: draft.kind ?? 'trip', ride: draft.kindSettings?.activity, guestQuestions: draft.guestQuestions })
+                          ? 'On because of a height or weight limit: every guest is asked.'
                           : undefined
                       }
                       waivers={waivers}
@@ -1900,178 +2108,19 @@ export function ActivityWizard({
                     </div>
                   ) : null}
                   {currentStep.id === 'pricing' ? (
-                    <div className="flex flex-col gap-6">
-                      {dining ? (
-                        <>
-                          <DiningBookingFields
-                            dining={draft.dining}
-                            onChange={(next) => patch({ dining: next })}
-                            errors={errors}
-                            currency={currency}
-                          />
-                          <Separator />
-                        </>
-                      ) : null}
-
-                      {!dining && (draft.kind ?? 'trip') === 'rental' ? (
-                      <section>
-                        <h3 className="text-sm font-semibold">Items and prices</h3>
-                        <p className="mt-0.5 mb-3 text-xs text-muted">Everything you lend out: how many you have of each, who it fits and what it costs. The cheapest sets the “from” price.</p>
-                        <RentalRatesEditor
-                          tiers={draft.tiers}
-                          onTiers={(tiers) => patch({ tiers })}
-                          settings={draft.kindSettings}
-                          onSettings={(kindSettings) => patch({ kindSettings })}
-                          currencySymbol={currencySymbol(currency)}
-                          errors={errors}
-                          newTier={(label) => ({ ...blankTier(label, 0), minQuantity: 0 })}
-                        />
-                      </section>
-                      ) : (
-                      <section>
-                        <h3 className="text-sm font-semibold">{dining ? 'Menu prices per guest' : KIND_PRICING[draft.kind ?? 'trip'].title}</h3>
-                        <p className="mt-0.5 mb-3 text-xs text-muted">
-                          {dining
-                            ? draft.dining.bookingMode === 'card_hold'
-                              ? 'Optional for à la carte. Add menus here if guests choose one when they reserve.'
-                              : 'Each guest picks a menu when the table is reserved. The first sets the “from” price.'
-                            : KIND_PRICING[draft.kind ?? 'trip'].text(normalizeKindSettings(draft.kindSettings).lesson.sessions)}
-                        </p>
-                        <PricingTierEditor
-                          tiers={draft.tiers}
-                          onChange={(tiers) => patch({ tiers })}
-                          currency={currency}
-                          errors={errors}
-                          kind={dining ? 'trip' : (draft.kind ?? 'trip')}
-                          hidePlaces={dining}
-                          presets={dining ? DINING_TIER_PRESETS : KIND_TIER_PRESETS[draft.kind ?? 'trip']}
-                        />
-                        {errors.tiers ? (
-                          <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-danger">
-                            <CircleAlert className="size-3.5" aria-hidden="true" />
-                            {errors.tiers}
-                          </p>
-                        ) : null}
-                      </section>
-                      )}
-
-                      {dining ? null : (
-                        <KindPricingExtras
-                          kind={draft.kind ?? 'trip'}
-                          currency={currency}
-                          privateOption={draft.privateOption ?? { enabled: false, price: 0, includedGuests: 6, extraGuest: 0 }}
-                          onPrivateOption={(privateOption) => patch({ privateOption })}
-                          maxGuests={(draft.kind ?? 'trip') === 'charter' ? normalizeKindSettings(draft.kindSettings).charter.maxGuests : draft.maxCapacity}
-                          charterIncluded={draft.charterIncluded ?? 0}
-                          charterExtra={draft.charterExtra ?? 0}
-                          onCharter={(charterIncluded, charterExtra) => patch({ charterIncluded, charterExtra })}
-                          leadPrice={draft.tiers[0]?.price ?? 0}
-                        />
-                      )}
-
-                      <Separator />
-
-                      <section>
-                        <h3 className="text-sm font-semibold">{dining ? 'Pairings and extras' : 'Extras'}</h3>
-                        <p className="mt-0.5 mb-3 text-xs text-muted">
-                          {dining
-                            ? 'Offered once the table is picked: pairings, a bottle on arrival, a cake for the birthday.'
-                            : 'Optional extras offered once the guest has picked a time slot.'}
-                        </p>
-                        <AddonEditor
-                          addOns={draft.addOns}
-                          onChange={(addOns) => patch({ addOns })}
-                          currency={currency}
-                          errors={errors}
-                          presets={dining ? DINING_ADDON_PRESETS : undefined}
-                        />
-                      </section>
-
-                      <Separator />
-
-                      {dining ? null : (
-                        <div className="flex flex-col gap-3 rounded-xl border border-line px-3.5 py-3 sm:flex-row sm:items-end sm:justify-between">
-                          <span>
-                            <span className="block text-sm font-medium">Booking price cap <span className="font-normal text-subtle">Optional</span></span>
-                            <span className="block text-xs text-subtle">
-                              {(draft.kind ?? 'trip') === 'rental'
-                                ? 'The most one booking pays for its items, whatever the mix and length. Caps for single items are set on each item above.'
-                                : (draft.kind ?? 'trip') === 'charter'
-                                  ? 'The most one booking pays, whichever option they pick.'
-                                  : 'The most one booking pays for its tickets. A family of six on a per-person price never pays more than this. Extras are charged on top.'}
-                            </span>
-                          </span>
-                          <Input
-                            className="sm:w-44"
-                            type="number"
-                            min={0}
-                            placeholder="No cap"
-                            aria-label="Booking price cap"
-                            leftIcon={<span className="text-sm font-medium">{currencySymbol(currency)}</span>}
-                            value={draft.priceCap ? draft.priceCap / 100 : ''}
-                            onChange={(event) => patch({ priceCap: Math.max(0, Math.round(Number(event.target.value) * 100) || 0) })}
-                          />
-                        </div>
-                      )}
-
-                      <label className="flex items-start justify-between gap-3 rounded-xl border border-line px-3.5 py-3">
-                        <span>
-                          <span className="block text-sm font-medium">Offer tips at checkout</span>
-                          <span className="block text-xs text-subtle">
-                            Guests can add a tip for your team before paying: 5%, 10%, 15%, 20%, 25% or an amount of their own. Tips are optional and never discounted.
-                          </span>
-                          {draft.tips ? (
-                            <span className="mt-2 flex flex-wrap gap-1.5" aria-hidden="true">
-                              {['No tip', '5%', '10%', '15%', '20%', '25%', 'Custom'].map((chip) => (
-                                <span key={chip} className="rounded-full border border-line px-2.5 py-0.5 text-xs font-medium text-muted">
-                                  {chip}
-                                </span>
-                              ))}
-                            </span>
-                          ) : null}
-                        </span>
-                        <Switch checked={Boolean(draft.tips)} onCheckedChange={(tips) => patch({ tips })} aria-label="Offer tips at checkout" />
-                      </label>
-
-                      {dining ? null : (
-                        <div className="flex flex-col gap-3">
-                          <label className="flex items-center justify-between gap-3 rounded-xl border border-line px-4 py-3">
-                            <span>
-                              <span className="block text-sm font-medium">Use the business default for payment</span>
-                              <span className="block text-xs text-subtle">
-                                {draft.payment?.useDefault ? paymentLine(pay, currency) : 'This activity has its own payment terms.'}{' '}
-                                <a href="/dashboard/settings/booking" className="font-medium text-primary hover:underline">
-                                  Change the default
-                                </a>
-                              </span>
-                            </span>
-                            <Switch
-                              checked={Boolean(draft.payment?.useDefault)}
-                              onCheckedChange={(on) => patch({ payment: { ...pay, useDefault: on } })}
-                              aria-label="Use the business default for payment"
-                            />
-                          </label>
-                          {draft.payment?.useDefault ? null : (
-                            <PaymentTermsEditor
-                              value={draft.payment ?? DEFAULT_PAYMENT}
-                              onChange={(payment) => patch({ payment: { ...payment, useDefault: false } })}
-                              currency={currency}
-                              examplePrice={draft.tiers[0]?.price ?? 0}
-                              wholeGroup={(draft.kind ?? 'trip') === 'charter' || (draft.kind ?? 'trip') === 'rental'}
-                            />
-                          )}
-                        </div>
-                      )}
-
-
-
-                      {(draft.kind ?? 'trip') === 'rental' && !dining ? null : <GuestPricePreview
-                        kind={dining ? 'trip' : (draft.kind ?? 'trip')}
-                        tiers={draft.tiers}
-                        addOns={draft.addOns}
-                        currency={currency}
-                      />}
-                    </div>
+                    <PricingStep
+                      draft={draft}
+                      patch={patch}
+                      errors={errors}
+                      currency={currency}
+                      dining={dining}
+                      tenantSlug={tenantSlug}
+                      activitySlug={activity?.slug ?? slugify(draft.name)}
+                      nowIso={nowIso}
+                      startTimes={draftStartTimes(draft)}
+                      payment={pay}
+                      paymentSummary={paymentLine(pay, currency)}
+                    />
                   ) : null}
                   {currentStep.id === 'schedule' ? (
                     dining ? (
@@ -2084,52 +2133,65 @@ export function ActivityWizard({
                         errors={errors}
                       />
                     ) : (draft.kind ?? 'trip') === 'package' ? (
-                      <div className="flex flex-col gap-6">
-                        <PackageBookingNote config={draft.package} options={packageOptions} onEdit={() => goTo(0, -1)} />
-                        {policyEditor}
-                      </div>
+                      <PackageBookingNote config={draft.package} options={packageOptions} onEdit={() => goTo(0, -1)} />
+                    ) : (
+                      <ScheduleStep
+                        value={draft}
+                        onChange={patch}
+                        onLocations={(ids, changes) =>
+                          patch({
+                            ...changes,
+                            schedule: {
+                              ...draft.schedule,
+                              locations: ids.map((id) => draft.schedule.locations.find((site) => site.locationId === id) ?? { locationId: id, schedule: { ...draft.schedule, locations: [] } }),
+                            },
+                          })
+                        }
+                        base={scheduleBase}
+                        kind={draft.kind ?? 'trip'}
+                        locations={locations}
+                        pickedLocationIds={draft.schedule.locations.map((site) => site.locationId)}
+                        nowIso={nowIso}
+                        tenantSlug={tenantSlug}
+                        // The schedule as last saved, so a booked added time this edit drops is flagged too.
+                        baseline={editing ? activity : undefined}
+                        bookedSlots={liveBookedSlots}
+                        errors={errors}
+                        unscheduled={unscheduled}
+                        onBookingStep={() => goTo(TOUR_STEP_INDEX.booking, 1)}
+                        rentalDay={
+                          rentalHoursFor(draft)?.daily
+                            ? {
+                                pickup: normalizeKindSettings(draft.kindSettings).rental.pickupTime || '09:00',
+                                ret: normalizeKindSettings(draft.kindSettings).rental.returnTime || '17:00',
+                                onChange: (pickupTime, returnTime) => {
+                                  const settings = normalizeKindSettings(draft.kindSettings)
+                                  patch({ kindSettings: { ...settings, rental: { ...settings.rental, pickupTime, returnTime } } })
+                                },
+                              }
+                            : undefined
+                        }
+                        southern={currency === 'AUD' || currency === 'NZD'}
+                      />
+                    )
+                  ) : null}
+                  {currentStep.id === 'booking' && !dining ? (
+                    (draft.kind ?? 'trip') === 'package' ? (
+                      policyEditor
                     ) : (
                       <div className="flex flex-col gap-6">
                         <BookingSettingsEditor
                           value={draft.booking ?? DEFAULT_BOOKING}
                           onChange={(booking) => patch({ booking })}
-                          noticeHours={draft.noticeHours ?? 0}
-                          onNotice={(noticeHours) => patch({ noticeHours })}
                           businessPhone={businessPhone}
                           groupWord={groupUnit(draft.kind, normalizeKindSettings(draft.kindSettings).rental.category, draft.booking?.groupCountBy).many}
                           rentedWord={(draft.kind ?? 'trip') === 'rental' ? rentalCategoryMeta(normalizeKindSettings(draft.kindSettings).rental.category).units : undefined}
                         />
-                        {locations.length > 0 ? (
-                          <LocationsEditor
-                            pickOnly={unscheduled}
-                            rental={rentalHoursFor(draft)}
-                            seats={{ ...seatsFor(draft), onEdit: () => goTo(0, -1) }}
-                            schedule={draft.schedule}
-                            onChange={(schedule) => patch({ schedule })}
-                            locations={locations}
-                            nowIso={nowIso}
-                            errors={errors}
-                          />
-                        ) : null}
-                        {unscheduled ? (
-                          <p className="rounded-xl border border-dashed border-line px-4 py-3 text-sm text-muted">
-                            No set schedule: every booking is arranged with the guest. Their requests arrive in Custom requests; confirm a time there and send the payment link.
-                          </p>
-                        ) : draft.schedule.locations.length > 1 ? null : (
-                          <ScheduleEditor
-                            rental={rentalHoursFor(draft)}
-                            seats={{ ...seatsFor(draft), onEdit: () => goTo(0, -1) }}
-                            schedule={draft.schedule}
-                            onChange={(schedule) => patch({ schedule })}
-                            nowIso={nowIso}
-                            errors={errors}
-                          />
-                        )}
                         {policyEditor}
                       </div>
                     )
                   ) : null}
-                  {currentStep.id === 'schedule' && crew.length > 0 ? (
+                  {(dining ? currentStep.id === 'schedule' : currentStep.id === 'booking') && crew.length > 0 ? (
                     <CrewPicker
                       crew={crew}
                       selected={draft.crewIds}
@@ -2220,10 +2282,10 @@ export function ActivityWizard({
 
 const STEP_COPY: Record<string, string> = {
   basics: 'What you sell, who it suits, and how many can book each time slot.',
-  description: 'The copy guests read before they book. Specific beats clever.',
-  media: 'Photography does most of the selling. Landscape frames, no logos, no text overlays.',
+  description: 'What guests read and see before they book.',
   pricing: 'What it costs, and the extras you offer once a time slot is picked.',
-  schedule: 'How guests book, when it happens, and the rules for changes and cancellations.',
+  schedule: 'When it runs, all year, and how far ahead guests can book.',
+  booking: 'How guests book, changes and cancellations, and who leads it.',
   guests: 'Where guests go, and what checkout asks of them.',
   review: 'One last read-through, then publish.',
 }
@@ -2261,12 +2323,18 @@ function currencySymbol(currency: CurrencyCode | undefined) {
   }
 }
 
-/** One line each, the facts a guest reads on the listing card, in the kind's own terms. */
+/**
+ * One line each, the facts a guest reads on the listing card, in the kind's
+ * own terms. Only what the editor still sets: languages, students per
+ * instructor, equipment and re-entry are written in the text now. Spots not
+ * filled in yet are left out.
+ */
 function kindFacts(draft: ActivityDraft): string[] {
   const kind = draft.kind ?? 'trip'
   const s = normalizeKindSettings(draft.kindSettings)
-  const age = draft.minAge > 0 ? `Ages ${draft.minAge}+` : 'All ages'
-  const langs = (draft.languages ?? []).length > 0 ? (draft.languages ?? []).join(', ') : null
+  // Ages are written in Requirements now; only a seeded minimum age shows.
+  const age = draft.minAge > 0 ? [`Ages ${draft.minAge}+`] : []
+  const spots = draft.maxCapacity > 0
   if (kind === 'rental') {
     const r = s.rental
     return [
@@ -2281,14 +2349,12 @@ function kindFacts(draft: ActivityDraft): string[] {
   }
   if (kind === 'charter') {
     const c = s.charter
+    // How guests book and the notice are on their own Review rows (Booking and Schedule steps).
     return [
       `${vesselName(c)} · ${c.crewed ? `${crewName(c)} included` : 'Self-drive'}`,
       draft.durationMinutes > 0 ? formatDuration(draft.durationMinutes) : 'Length to agree',
       `${draft.minParticipants}–${c.maxGuests} guests`,
-      METHOD_LABEL[(draft.booking ?? DEFAULT_BOOKING).method],
-      ...((draft.noticeHours ?? 0) > 0 ? [`${draft.noticeHours}h notice`] : []),
-      age,
-      ...(langs ? [langs] : []),
+      ...age,
     ]
   }
   if (kind === 'lesson') {
@@ -2296,10 +2362,8 @@ function kindFacts(draft: ActivityDraft): string[] {
     return [
       LESSON_LEVELS.find((entry) => entry.value === l.level)?.label ?? 'All levels',
       `${l.sessions > 1 ? `${l.sessions} days of ` : ''}${formatDuration(draft.durationMinutes)}`,
-      `${draft.maxCapacity} per class · ${l.ratio} per instructor`,
-      age,
-      ...(l.equipmentIncluded ? ['Equipment included'] : []),
-      ...(langs ? [langs] : []),
+      ...(spots ? [`${draft.maxCapacity} per class`] : []),
+      ...age,
     ]
   }
   const route = draft.route ?? emptyRoute()
@@ -2307,29 +2371,27 @@ function kindFacts(draft: ActivityDraft): string[] {
   if (kind === 'activity') {
     return [
       `${formatDuration(draft.durationMinutes)} each`,
-      `${draft.maxCapacity} per time slot`,
+      ...(spots ? [`${draft.maxCapacity} per time slot`] : []),
       draft.difficulty.charAt(0).toUpperCase() + draft.difficulty.slice(1),
-      age,
-      ...(s.activity.minHeightCm > 0 ? [`${s.activity.minHeightCm} cm+`] : []),
-      ...(s.activity.maxWeightKg > 0 ? [`Up to ${s.activity.maxWeightKg} kg`] : []),
+      ...age,
+      // Height and weight limits come from the Guests step's questions now.
+      ...bodyLimitLines({ kind, ride: s.activity, guestQuestions: draft.guestQuestions }).map((line) => line.charAt(0).toUpperCase() + line.slice(1)),
       ...routeFact,
     ]
   }
   if (kind === 'pass') {
     return [
       s.pass.validDays > 1 ? `Valid ${s.pass.validDays} days` : 'Valid all day',
-      draft.maxCapacity > 0 ? `${draft.maxCapacity} tickets a day` : 'No ticket limit',
-      s.pass.reentry ? 'Re-entry allowed' : 'Single entry',
-      age,
+      ...(spots ? [`${draft.maxCapacity} ${pluralize(draft.maxCapacity, 'ticket')} per day`] : []),
+      ...age,
     ]
   }
   return [
     draft.difficulty.charAt(0).toUpperCase() + draft.difficulty.slice(1),
     draft.durationMinutes > 0 ? formatDuration(draft.durationMinutes) : 'Flexible length',
-    draft.maxCapacity > 0 ? `${draft.minParticipants}–${draft.maxCapacity} guests` : 'No limit on guests',
-    age,
+    ...(spots ? [`${draft.minParticipants}–${draft.maxCapacity} guests`] : []),
+    ...age,
     ...routeFact,
-    ...(langs ? [langs] : []),
   ]
 }
 
@@ -2480,6 +2542,8 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
     patch({
       kind: next,
       schedule: { ...draft.schedule, mode },
+      // The Schedule step starts on the kind's usual way to pick a time (it can be changed there).
+      ...(next === draft.kind || draft.scheduleMode === 'dates' || draft.scheduleMode === modeForKind(next) ? {} : withMode(draft, modeForKind(next), 30, closingGapOf({ kind: next, durationMinutes: draft.durationMinutes }))),
       ...(draft.meetingPoint.trim() ? {} : { arrivalMode: arrival }),
       ...(starter ? { tiers: [{ ...draft.tiers[0], label: STARTER_TIER[next] }] } : {}),
       ...(next === 'lesson' && draft.maxCapacity < 1 ? { maxCapacity: 8, durationMinutes: draft.durationMinutes || 120 } : {}),
@@ -2496,12 +2560,9 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
   const shared: SharedBasics = {
     maxCapacity: draft.maxCapacity,
     minParticipants: draft.minParticipants,
-    minAge: draft.minAge,
     durationMinutes: draft.durationMinutes,
     durationUnit: draft.durationUnit,
-    languages: draft.languages ?? [],
     difficulty: draft.difficulty,
-    route: draft.route ?? emptyRoute(),
   }
   return (
     <div className="flex flex-col gap-5">
@@ -2584,33 +2645,11 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
   )
 }
 
-/** A scheduled trip: seats on a departure, a length, a fitness level. */
+/** A scheduled trip: spots per time slot, a length, a difficulty. Ages, languages and a track go in Requirements and Highlights. */
 function TourBasicsFields({ draft, patch, errors }: StepProps) {
   return (
     <div className="flex flex-col gap-5 rounded-xl border border-line bg-surface-sunken/40 p-4">
       <p className="text-[0.8125rem] font-medium">Group activity settings</p>
-      <fieldset>
-        <legend className="text-[0.8125rem] font-medium">Difficulty</legend>
-        <p className="mt-0.5 mb-2.5 text-xs text-muted">
-          Sets expectations and filters out the bookings you do not want.
-        </p>
-        <RadioGroup
-          value={draft.difficulty}
-          onValueChange={(value) => patch({ difficulty: value as DifficultyLevel })}
-          className="grid gap-2.5 sm:grid-cols-2"
-        >
-          {DIFFICULTY_OPTIONS.map((option) => (
-            <RadioGroupCard
-              key={option.value}
-              value={option.value}
-              label={option.label}
-              description={option.description}
-              icon={option.icon}
-            />
-          ))}
-        </RadioGroup>
-      </fieldset>
-
       <DurationField
         error={errors.durationMinutes}
         description="Leave it flexible if guests set their own pace."
@@ -2620,11 +2659,7 @@ function TourBasicsFields({ draft, patch, errors }: StepProps) {
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <Field
-          label="Spots per time slot"
-          error={errors.maxCapacity}
-          description="The most guests booked on one time slot, together. Empty: no limit."
-        >
+        <Field label="Spots per time slot" required error={errors.maxCapacity}>
           <Input
             type="number"
             min={1}
@@ -2634,11 +2669,7 @@ function TourBasicsFields({ draft, patch, errors }: StepProps) {
             onChange={(event) => patch({ maxCapacity: Number.parseInt(event.target.value, 10) || 0 })}
           />
         </Field>
-        <Field
-          label="Fewest guests to go ahead"
-          error={errors.minParticipants}
-          description="If fewer book, you can call that time slot off."
-        >
+        <Field label="Fewest guests to go ahead" error={errors.minParticipants}>
           <Input
             type="number"
             min={1}
@@ -2649,27 +2680,7 @@ function TourBasicsFields({ draft, patch, errors }: StepProps) {
             }
           />
         </Field>
-        <Field label="Minimum age" error={errors.minAge} description="0 means all ages welcome.">
-          <Input
-            type="number"
-            min={0}
-            max={99}
-            value={draft.minAge}
-            suffix="years"
-            onChange={(event) => patch({ minAge: Number.parseInt(event.target.value, 10) || 0 })}
-          />
-        </Field>
-      </div>
-
-      <div>
-        <p className="text-[0.8125rem] font-medium">Guided in</p>
-        <p className="mt-0.5 mb-2 text-xs text-muted">Shown on the storefront, so guests know they will follow along.</p>
-        <LanguagePicker value={draft.languages ?? []} onChange={(languages) => patch({ languages })} />
-      </div>
-
-      <div>
-        <p className="mb-2 text-[0.8125rem] font-medium">Distance or track</p>
-        <RouteFields value={draft.route ?? emptyRoute()} onChange={(route) => patch({ route })} />
+        <DifficultyField value={draft.difficulty} onChange={(difficulty) => patch({ difficulty })} />
       </div>
     </div>
   )
@@ -2763,6 +2774,12 @@ const DESCRIPTION_COPY = {
   },
 } as const
 
+/** Requirements with an older activity's "What to bring" and "Good to know" entries after them, once each. */
+function mergedRequirements(draft: Pick<ActivityDraft, 'requirements' | 'bring' | 'accessibility'>): string[] {
+  const extra = [...(draft.bring ?? []), ...(draft.accessibility ?? [])].filter((item) => item.trim() && !draft.requirements.includes(item))
+  return [...draft.requirements, ...extra.filter((item, index) => extra.indexOf(item) === index)]
+}
+
 function DescriptionStep({
   draft,
   patch,
@@ -2797,7 +2814,7 @@ function DescriptionStep({
 
       <ListEditor
         legend="Highlights"
-        description="Optional. Three to five short bullets work best, shown right under the price."
+        description={dining ? 'Optional. Three to five short bullets work best.' : 'Optional. Three to five short bullets: the route, languages, what stands out.'}
         items={draft.highlights}
         onChange={(highlights) => patch({ highlights })}
         placeholder={copy.highlightPlaceholder}
@@ -2824,51 +2841,16 @@ function DescriptionStep({
 
       {dining ? <DiningDietaryFields dining={draft.dining} onChange={(next) => patch({ dining: next })} /> : null}
 
+      {/* One list: ages, limits, what to bring and accessibility. A seeded activity's
+          bring and accessibility entries show here and fold in on the first change. */}
       <ListEditor
         legend={copy.requirements}
         tone="warning"
-        description={dining ? copy.requirementsHelp : 'Optional. Anything not already covered by the age, licence and rider limits you set in Basics.'}
-        items={draft.requirements}
-        onChange={(requirements) => patch({ requirements })}
-        placeholder={copy.requirementsPlaceholder}
+        description={dining ? copy.requirementsHelp : 'Optional. Ages, fitness, what to bring, accessibility.'}
+        items={dining ? draft.requirements : mergedRequirements(draft)}
+        onChange={(requirements) => patch(dining ? { requirements } : { requirements, bring: [], accessibility: [] })}
+        placeholder={dining ? copy.requirementsPlaceholder : 'Ages 8 and up'}
       />
-
-      {dining ? null : (
-        <>
-          <ListEditor
-            legend="What to bring"
-            description="Optional. Leave it empty and guests see a sensible list for the category."
-            items={draft.bring ?? []}
-            onChange={(bring) => patch({ bring })}
-            placeholder="Reef-safe sunscreen"
-          />
-          <fieldset>
-            <legend className="text-[0.8125rem] font-medium">Good to know</legend>
-            <p className="mt-0.5 mb-2.5 text-xs text-muted">Optional. Tick what applies; guests filter by these on booking sites.</p>
-            <div className="flex flex-wrap gap-1.5">
-              {ACCESSIBILITY_OPTIONS.map((option) => {
-                const on = (draft.accessibility ?? []).includes(option)
-                return (
-                  <button
-                    key={option}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() =>
-                      patch({ accessibility: on ? (draft.accessibility ?? []).filter((entry) => entry !== option) : [...(draft.accessibility ?? []), option] })
-                    }
-                    className={cn(
-                      'rounded-full border px-3 py-1 text-xs font-medium transition-colors duration-200',
-                      on ? 'border-primary/50 bg-primary-soft text-primary' : 'border-line bg-surface text-muted hover:text-foreground',
-                    )}
-                  >
-                    {option}
-                  </button>
-                )
-              })}
-            </div>
-          </fieldset>
-        </>
-      )}
 
       </>
       )}
@@ -2923,7 +2905,7 @@ function DescriptionStep({
               label={draft.arrivalMode === 'meet' ? 'Where exactly to meet' : 'Arrival notes'}
               optional
               error={errors.meetingPoint}
-              description={`The address comes from ${locationNames.join(', ')}, set on the Booking step. Add the exact place: a slip, a sign, a desk or where to park.`}
+              description={`The address comes from ${locationNames.join(', ')}, set on the Schedule step. Add the exact place: a slip, a sign, a desk or where to park.`}
             >
               <Textarea
                 rows={2}
@@ -3010,15 +2992,27 @@ function ReviewStep({
   const reviewPay = effectiveDraftPayment(draft, bookingDefaults)
   const reviewCancel = effectiveDraftCancellation(draft, bookingDefaults)
   const priced = draft.tiers.filter((tier) => tier.label.trim().length > 0)
-  // Free tiers (infants, ride-alongs) are not the "from" price.
-  const paid = priced.filter((tier) => tier.price > 0)
-  const fromPrice = paid.length === 0 ? 0 : Math.min(...paid.map((tier) => tier.price))
-  const generated = previewDepartures(draft.schedule, nowIso, 14)
+  const fromPrice = draftFromPrice(draft, currency, isDining(draft))
+  const generated = upcomingDays(draft, nowIso, 14, bookingDefaults)
   const departures = generated.reduce((acc, day) => acc + (day.open ? 1 : day.times.length), 0)
+  // Tours: the seasons in one line, per location when it runs from more than one.
+  const scheduleSource = isDining(draft) ? null : draftScheduleSource(draft)
+  const todayKey = nowIso.slice(0, 10)
+  // The activity's own booking window is in months; the business default is set in days, so it reads in days.
+  const ownMonths = scheduleSource && draft.bookingWindowMonths > 0 ? bookingWindowMonths(scheduleSource, bookingDefaults.maxAdvanceDays) : 0
+  const windowWords = ownMonths > 0 ? `${ownMonths} ${pluralize(ownMonths, 'month')}` : `${bookingDefaults.maxAdvanceDays} ${pluralize(bookingDefaults.maxAdvanceDays, 'day')}`
   const locationNames = draft.schedule.locations
     .map((site) => {
       const found = locations.find((entry) => entry.id === site.locationId)
-      return found ? (draft.schedule.locations.length > 1 ? `${found.name}: ${describeSchedule(site.schedule, seatsFor(draft))}` : found.name) : null
+      if (!found) return null
+      if (draft.schedule.locations.length < 2) return found.name
+      // Each location's own times; the booking window is said once, on the Schedule row.
+      return scheduleSource
+        ? `${found.name}: ${describeSchedules(scheduleSource, { maxAdvanceDays: bookingDefaults.maxAdvanceDays, todayKey, locationId: site.locationId })
+            .split(' · ')
+            .filter((part) => !part.startsWith('books up to'))
+            .join(' · ')}`
+        : `${found.name}: ${describeSchedule(site.schedule, seatsFor(draft))}`
     })
     .filter((name): name is string => Boolean(name))
   const seats = generated.reduce((acc, day) => acc + day.seats, 0)
@@ -3062,7 +3056,7 @@ function ReviewStep({
         {
           label: 'Guest details',
           value: [
-            draft.guestDetails?.enabled ? 'Details from each guest' : 'Booker only',
+            draft.guestDetails?.enabled || riderLimited({ kind: draft.kind ?? 'trip', ride: draft.kindSettings?.activity, guestQuestions: draft.guestQuestions }) ? 'Details from each guest' : 'Booker only',
             `${(draft.guestQuestions ?? []).length} ${pluralize((draft.guestQuestions ?? []).length, 'question')}`,
             draft.waiverId
               ? `${waivers.find((waiver) => waiver.id === draft.waiverId)?.title ?? 'Waiver'}, signed by ${draft.waiverSigning === 'each' ? 'each guest' : 'the booker'}`
@@ -3071,22 +3065,22 @@ function ReviewStep({
           step: 5,
         },
         { label: 'Category', value: draft.customCategory || themeLabel(draft.theme ?? defaultTheme(draft.category)), step: 0 },
-        ...((draft.accessibility ?? []).length > 0 ? [{ label: 'Good to know', value: (draft.accessibility ?? []).join(', '), step: 1 }] : []),
-        { label: 'Setup', value: kindFacts(draft).join(' · '), step: 0 },
+        // A rental's charging, items, stock, deposits and late fee are all set on Pricing.
+        { label: 'Setup', value: kindFacts(draft).join(' · '), step: (draft.kind ?? 'trip') === 'rental' ? TOUR_STEP_INDEX.pricing : TOUR_STEP_INDEX.basics },
         { label: 'Highlights', value: `${draft.highlights.filter(Boolean).length} bullets`, step: 1 },
         {
           label: draft.arrivalMode === 'meet' ? 'Meeting point' : draft.arrivalMode === 'venue' ? 'Venue' : 'Arrival',
           value: draft.meetingPoint || 'No fixed place',
           step: 5,
         },
-        { label: 'Media', value: `${draft.media.length} ${pluralize(draft.media.length, 'image')}`, step: 2 },
+        { label: 'Photos', value: `${draft.media.length} ${pluralize(draft.media.length, 'image')}`, step: TOUR_STEP_INDEX.description },
         {
           label: 'Pricing',
-          value: `${priced.length} ${pluralize(priced.length, 'price')} from ${formatCurrency(fromPrice, currency)} · ${draft.addOns.length} ${pluralize(draft.addOns.length, 'extra')}`,
-          step: 3,
+          value: pricingSummary(draft, currency),
+          step: TOUR_STEP_INDEX.pricing,
         },
         ...(locations.length > 0
-          ? [{ label: 'Starts from', value: locationNames.length > 0 ? locationNames.join(', ') : 'No location picked', step: 4 }]
+          ? [{ label: 'Runs from', value: locationNames.length > 0 ? locationNames.join(', ') : 'No location picked', step: TOUR_STEP_INDEX.schedule }]
           : []),
         {
           label: 'How guests book',
@@ -3097,7 +3091,6 @@ function ReviewStep({
                 ? `over ${b.groupLimit} ${groupUnit(draft.kind, normalizeKindSettings(draft.kindSettings).rental.category, b.groupCountBy).many} ask first`
                 : null,
               b.method === 'instant' && b.otherDates ? 'other dates on request' : null,
-              (draft.noticeHours ?? 0) > 0 ? `${draft.noticeHours}h notice` : null,
               b.method === 'instant' && b.customQuote ? 'custom quotes' : null,
             ].filter(Boolean)
             return [METHOD_LABEL[b.method], ...extras].join(' · ')
@@ -3107,7 +3100,7 @@ function ReviewStep({
         {
           label: 'How guests pay',
           value: `${paymentLine(reviewPay, currency)}${draft.payment?.useDefault ? ' (business default)' : ''}`,
-          step: 3,
+          step: TOUR_STEP_INDEX.pricing,
         },
         {
           label: 'Cancellations',
@@ -3116,8 +3109,14 @@ function ReviewStep({
         },
         {
           label: 'Schedule',
-          value: (draft.booking?.method ?? 'instant') !== 'instant' && draft.booking?.scheduled === false ? 'No set schedule, arranged with each guest' : describeSchedule(draft.schedule, seatsFor(draft)),
-          step: 4,
+          value: isUnscheduled(draft)
+            ? 'No set schedule, arranged with each guest'
+            : (draft.kind ?? 'trip') === 'package'
+              ? "On each activity's own times"
+              : scheduleSource
+                ? `${describeSchedules(scheduleSource, { maxAdvanceDays: bookingDefaults.maxAdvanceDays, todayKey })}${(draft.noticeHours ?? 0) > 0 ? ` · closes ${draft.noticeHours}h before` : ''}`
+                : describeSchedule(draft.schedule, seatsFor(draft)),
+          step: TOUR_STEP_INDEX.schedule,
         },
         crewRow,
       ]
@@ -3130,13 +3129,13 @@ function ReviewStep({
       ]
     : [
         {
-          label: draft.schedule.mode === 'hours' ? 'Open days · next 14 days' : draft.schedule.mode === 'dates' ? 'Dates listed' : 'Time slots · next 14 days',
+          label: 'Time slots · next 14 days',
           value: departures.toString(),
           icon: CalendarClock,
         },
         {
           label: `${seatsFor(draft).many.charAt(0).toUpperCase()}${seatsFor(draft).many.slice(1)} it can take · next 14 days`,
-          value: seatsFor(draft).capacity > 0 ? previewDepartures({ ...draft.schedule, capacity: seatsFor(draft).capacity }, nowIso, 14).reduce((acc, day) => acc + day.seats, 0).toString() : 'No limit',
+          value: seats.toString(),
           icon: Users,
         },
         { label: 'Lead price', value: formatCurrency(fromPrice, currency), icon: Tag },
@@ -3254,8 +3253,10 @@ function ReviewStep({
           <span className="font-medium text-foreground">
             {tenantSlug}.ezrapro.com/{slugify(draft.name) || 'new-activity'}
           </span>
-          . {dining ? 'Sittings are added from your services' : 'Time slots are added from your schedule'} for the next 180 days and appear on the
-          calendar straight away.
+          .{' '}
+          {dining
+            ? 'Sittings are added from your services for the next 180 days and appear on the calendar straight away.'
+            : `Time slots follow your schedule, bookable up to ${windowWords} ahead.`}
         </p>
       </div>
 
@@ -3270,7 +3271,7 @@ function ReviewStep({
 }
 
 /* ==========================================================================
-   A package on the Booking step: nothing to schedule. Its times are the
+   A package on the Schedule step: nothing to schedule. Its times are the
    parts' own, picked on Basics; this says so and shows them.
    ========================================================================== */
 

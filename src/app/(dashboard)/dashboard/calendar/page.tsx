@@ -29,6 +29,7 @@ export default async function CalendarPage() {
         description="Every time slot, spot and team assignment on one calendar. Switch views with M, W, D or A, and press T to jump back to today."
       />
       <CalendarShell
+        tenantId={tenant.id}
         tenantSlug={tenant.slug}
         initialWindow={INITIAL_WINDOW}
         initialEvents={getCalendarEvents(tenant.id, INITIAL_WINDOW.from, INITIAL_WINDOW.to)}

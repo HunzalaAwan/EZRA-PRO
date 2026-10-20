@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import Link from 'next/link'
 import { Ban, Check, Gift, Pencil, Plus, RotateCcw, Tag, TrendingUp, X } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
@@ -24,9 +25,16 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
 import { usePricing } from '@/hooks/use-pricing'
+import { useBookingDefaults } from '@/hooks/use-booking-defaults'
+import { useBookingLedger } from '@/hooks/use-booking-ledger'
+import { useActivityOverrides } from '@/hooks/use-pricing-override'
+import { applyPricingOverride, applyScheduleOverride } from '@/lib/activity-overrides'
+import { rateFor, rentalModes } from '@/lib/activity-kinds'
+import { clockTime, expandSchedules, scheduleContextOf, shiftDayKey, slotId } from '@/lib/activity-schedule'
+import { getActivityBySlug, tenantBySlug } from '@/lib/demo-core'
+import { effectLabel, priceBooking } from '@/lib/price-engine'
 import {
   RULE_KIND_LABEL,
-  applyRules,
   newGiftCode,
   ruleSummary,
   type GiftCard,
@@ -35,7 +43,7 @@ import {
   type RuleKind,
 } from '@/lib/pricing'
 import { cn, formatCurrency, formatDateLong, pluralize } from '@/lib/utils'
-import type { CurrencyCode } from '@/types'
+import type { Activity, CurrencyCode } from '@/types'
 
 /* ==========================================================================
    PRICING
@@ -52,16 +60,32 @@ export interface PricingActivity {
 
 type TabKey = 'rules' | 'promos' | 'gifts'
 
+/** A seeded time slot's spots and how many are taken, for filling-up and quiet-time changes. */
+export interface SlotFill {
+  departureId: string
+  capacity: number
+  booked: number
+}
+
 export function PricingClient({
   tenantSlug,
   currency,
   activities,
   nowIso,
+  peaks = {},
+  fills,
 }: {
   tenantSlug: string
   currency: CurrencyCode
   activities: PricingActivity[]
   nowIso: string
+  /** Peak or off-peak pricing on seeded time slots, by "slug|YYYY-MM-DDTHH:MM". */
+  peaks?: Record<string, number>
+  /**
+   * Seeded time slots' spots and bookings, by "slug|YYYY-MM-DDTHH:MM". With it, the price
+   * check applies filling-up and quiet-time changes (a time slot not in it is a new one, none booked).
+   */
+  fills?: Record<string, SlotFill>
 }) {
   const pricing = usePricing(tenantSlug)
   const [tab, setTab] = React.useState<TabKey>('rules')
@@ -88,7 +112,7 @@ export function PricingClient({
         ) : null}
       </div>
 
-      {tab === 'rules' ? <RulesTab pricing={pricing} activities={activities} currency={currency} nowIso={nowIso} /> : null}
+      {tab === 'rules' ? <RulesTab pricing={pricing} tenantSlug={tenantSlug} activities={activities} currency={currency} nowIso={nowIso} peaks={peaks} fills={fills} /> : null}
       {tab === 'promos' ? <PromosTab pricing={pricing} activities={activities} currency={currency} todayKey={todayKey} /> : null}
       {tab === 'gifts' ? <GiftsTab pricing={pricing} currency={currency} todayKey={todayKey} liability={liability} /> : null}
     </div>
@@ -103,18 +127,8 @@ type Pricing = ReturnType<typeof usePricing>
 
 const BLANK_RULE: PricingRule = { id: '', name: '', kind: 'early_bird', percent: -10, activitySlugs: [], daysAhead: 30, active: true }
 
-function RulesTab({ pricing, activities, currency, nowIso }: { pricing: Pricing; activities: PricingActivity[]; currency: CurrencyCode; nowIso: string }) {
+function RulesTab({ pricing, tenantSlug, activities, currency, nowIso, peaks, fills }: { pricing: Pricing; tenantSlug: string; activities: PricingActivity[]; currency: CurrencyCode; nowIso: string; peaks: Record<string, number>; fills?: Record<string, SlotFill> }) {
   const [editing, setEditing] = React.useState<PricingRule | null>(null)
-  const [previewSlug, setPreviewSlug] = React.useState(activities[0]?.slug ?? '')
-  const [previewDays, setPreviewDays] = React.useState('35')
-  const [previewGuests, setPreviewGuests] = React.useState(2)
-
-  const activity = activities.find((entry) => entry.slug === previewSlug)
-  const start = new Date(new Date(nowIso).getTime() + Number(previewDays) * 86_400_000)
-  start.setHours(10, 0, 0, 0)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const startIso = `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}T10:00:00`
-  const preview = applyRules(pricing.rules, { activitySlug: previewSlug, startsAt: startIso, nowIso, guests: previewGuests })
 
   const save = (rule: PricingRule) => {
     if (!rule.name.trim()) return
@@ -131,6 +145,10 @@ function RulesTab({ pricing, activities, currency, nowIso }: { pricing: Pricing;
           <div>
             <CardTitle>Price rules</CardTitle>
             <CardDescription>Applied one after another to the ticket price. They never take a price below half.</CardDescription>
+            <p className="mt-1 text-xs text-subtle">
+              Each activity can also have its own price changes, set on its Pricing step in{' '}
+              <Link href="/dashboard/activities" className="font-medium text-primary hover:underline">Activities</Link>.
+            </p>
           </div>
           <Button size="sm" leftIcon={<Plus />} onClick={() => setEditing({ ...BLANK_RULE })}>Add rule</Button>
         </CardHeader>
@@ -161,49 +179,164 @@ function RulesTab({ pricing, activities, currency, nowIso }: { pricing: Pricing;
         </CardContent>
       </Card>
 
-      <Card className="h-fit">
-        <CardHeader className="flex flex-col items-start gap-1">
-          <CardTitle>Price check</CardTitle>
-          <CardDescription>What a guest pays, with the rules as they are now.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <Select value={previewSlug} onValueChange={setPreviewSlug}>
-            <SelectTrigger aria-label="Activity"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {activities.map((entry) => (
-                <SelectItem key={entry.slug} value={entry.slug}>{entry.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <div className="grid grid-cols-2 gap-2">
-            <Select value={previewDays} onValueChange={setPreviewDays}>
-              <SelectTrigger aria-label="When"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {[['0', 'Later today'], ['1', 'Tomorrow'], ['7', 'In a week'], ['35', 'In five weeks'], ['100', 'In December']].map(([value, label]) => (
-                  <SelectItem key={value} value={value}>{label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Input type="number" min={1} value={previewGuests} onChange={(e) => setPreviewGuests(Math.max(1, Number(e.target.value) || 1))} aria-label="Guests" />
-          </div>
-          <div className="rounded-xl bg-surface-sunken px-4 py-3 text-sm">
-            <div className="flex justify-between text-muted"><span>Base price</span><span className="tabular-nums">{formatCurrency(activity?.basePrice ?? 0, currency)}</span></div>
-            {preview.applied.map((rule) => (
-              <div key={rule.id} className="flex justify-between text-muted">
-                <span>{rule.name}</span>
-                <span className={cn('tabular-nums', rule.percent < 0 ? 'text-success' : 'text-warning')}>{rule.percent > 0 ? '+' : ''}{rule.percent}%</span>
-              </div>
-            ))}
-            <div className="mt-2 flex justify-between border-t border-line pt-2 font-semibold">
-              <span>Per guest on {formatDateLong(start)}</span>
-              <span className="tabular-nums">{formatCurrency(Math.round((activity?.basePrice ?? 0) * preview.multiplier), currency)}</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <PriceCheck tenantSlug={tenantSlug} activities={activities} currency={currency} nowIso={nowIso} rules={pricing.rules} peaks={peaks} fills={fills} />
 
       <RuleDialog rule={editing} activities={activities} onClose={() => setEditing(null)} onSave={save} onDelete={(id) => { pricing.setRules(pricing.rules.filter((entry) => entry.id !== id)); setEditing(null); toast('Rule removed') }} />
     </div>
+  )
+}
+
+/* --------------------------------------------------------------------------
+   Price check — the price engine on one activity, as the storefront prices
+   it: its saved prices and own price changes, then the price rules above.
+   -------------------------------------------------------------------------- */
+
+/**
+ * The tickets checked: the lead ticket (a rental's first rated item) for the count, a charter for its party.
+ * A rental is priced for its shortest rental, as the storefront starts it.
+ */
+function checkPrice(activity: Activity, count: number, ctx: { startsAt: string; nowIso: string; rules: PricingRule[]; multiplier?: number; capacity?: number; booked?: number }) {
+  const kind = activity.kind ?? 'trip'
+  const mode = (activity.rental?.rates?.length ?? 0) > 0 ? rentalModes(activity)[0] : undefined
+  const lengthId = mode === 'length' ? activity.rental?.lengths?.[0]?.id : undefined
+  const paid = activity.priceTiers.filter((tier) => tier.price > 0)
+  const lead = mode
+    ? (activity.priceTiers.find((tier) => (rateFor(activity, tier.id, mode, lengthId) ?? 0) > 0) ?? activity.priceTiers[0])
+    : (paid.find((tier) => tier.countsTowardCapacity) ?? paid[0] ?? activity.priceTiers[0])
+  if (!lead) return null
+  const result = priceBooking({
+    activity,
+    lines: [{ tierId: lead.id, qty: kind === 'charter' ? 1 : count }],
+    startsAt: ctx.startsAt,
+    nowIso: ctx.nowIso,
+    businessRules: ctx.rules,
+    priceMultiplier: ctx.multiplier,
+    capacity: ctx.capacity,
+    booked: ctx.booked,
+    party: kind === 'charter' ? count : undefined,
+    rental: mode ? { mode, hours: Math.max(1, Math.floor(activity.rental?.minHours ?? 1)), days: Math.max(1, Math.floor(activity.rental?.minDays ?? 1)), lengthId } : undefined,
+  })
+  return { result, before: result.ticketLines.reduce((sum, line) => sum + line.baseUnitPrice * line.quantity, 0) }
+}
+
+function PriceCheck({ tenantSlug, activities, currency, nowIso, rules, peaks, fills }: { tenantSlug: string; activities: PricingActivity[]; currency: CurrencyCode; nowIso: string; rules: PricingRule[]; peaks: Record<string, number>; fills?: Record<string, SlotFill> }) {
+  const overrides = useActivityOverrides()
+  const { defaults } = useBookingDefaults(tenantSlug)
+  const ledger = useBookingLedger(tenantSlug)
+  const tenant = tenantBySlug.get(tenantSlug)
+  const todayKey = nowIso.slice(0, 10)
+  const [slug, setSlug] = React.useState(activities[0]?.slug ?? '')
+  const [dateKey, setDateKey] = React.useState(() => shiftDayKey(todayKey, 35))
+  const [picked, setPicked] = React.useState('')
+  const [count, setCount] = React.useState(2)
+
+  const seeded = tenant ? getActivityBySlug(tenant.id, slug) : undefined
+  const override = seeded ? overrides[seeded.id] : undefined
+  const validDay = /^\d{4}-\d{2}-\d{2}$/.test(dateKey)
+
+  // That day's time slots from the saved schedule and the business's closed days.
+  const slots = React.useMemo(() => {
+    if (!seeded || !validDay) return []
+    try {
+      const scheduled = applyScheduleOverride(seeded, override)
+      return expandSchedules(scheduled, dateKey, dateKey, scheduleContextOf(defaults))
+    } catch {
+      return []
+    }
+  }, [seeded, override, dateKey, validDay, defaults])
+  const times = React.useMemo(() => [...new Set(slots.map((slot) => slot.time))].sort(), [slots])
+  const time = times.includes(picked) ? picked : (times[0] ?? '')
+
+  // How full the time slot is, for filling-up and quiet-time changes: the seeded spots and bookings,
+  // or a new time slot's own spots; then the bookings and changes made since.
+  const fill = React.useMemo(() => {
+    if (!fills || !seeded || !time) return undefined
+    const slot = slots.find((entry) => entry.time === time)
+    const seededFill = fills[`${slug}|${dateKey}T${time}`]
+    const capacity = seededFill?.capacity ?? slot?.capacity ?? 0
+    if (capacity <= 0) return undefined
+    const departureId = seededFill?.departureId ?? slotId(seeded.id, dateKey, time, slot?.locationId)
+    return { capacity, booked: Math.max(0, (seededFill?.booked ?? 0) + (ledger.delta[departureId] ?? 0)) }
+  }, [fills, seeded, slots, slug, dateKey, time, ledger.delta])
+
+  const check = React.useMemo(() => {
+    if (!seeded || !validDay) return null
+    try {
+      // A seeded time slot's peak or off-peak pricing, as the storefront applies it.
+      const multiplier = time ? peaks[`${slug}|${dateKey}T${time}`] : undefined
+      return checkPrice(applyPricingOverride(seeded, override), count, { startsAt: `${dateKey}T${time || '12:00'}:00`, nowIso, rules, multiplier, capacity: fill?.capacity, booked: fill?.booked })
+    } catch {
+      return null
+    }
+  }, [seeded, override, validDay, dateKey, time, count, nowIso, rules, peaks, slug, fill])
+
+  const unit = seeded?.kind === 'rental' ? 'items' : 'guests'
+  const money = (value: number) => formatCurrency(value, currency)
+
+  return (
+    <Card className="h-fit">
+      <CardHeader className="flex flex-col items-start gap-1">
+        <CardTitle>Price check</CardTitle>
+        <CardDescription>What a guest pays for tickets on that day and time.</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <Select value={slug} onValueChange={setSlug}>
+          <SelectTrigger aria-label="Activity"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {activities.map((entry) => (
+              <SelectItem key={entry.slug} value={entry.slug}>{entry.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="grid grid-cols-2 gap-2">
+          <Input type="date" min={todayKey} value={dateKey} onChange={(e) => setDateKey(e.target.value)} aria-label="Date" />
+          <Select value={time} onValueChange={setPicked} disabled={times.length === 0}>
+            <SelectTrigger aria-label="Start time"><SelectValue placeholder={seeded?.kind === 'package' ? 'Any time' : 'No time slots'} /></SelectTrigger>
+            <SelectContent>
+              {times.map((entry) => (
+                <SelectItem key={entry} value={entry}>{clockTime(entry)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <Input type="number" min={1} max={99} value={count} suffix={pluralize(count, unit === 'items' ? 'item' : 'guest')} onChange={(e) => setCount(Math.min(99, Math.max(1, Math.floor(Number(e.target.value)) || 1)))} aria-label={unit === 'items' ? 'Items' : 'Guests'} />
+        {check ? (
+          <div className="rounded-xl bg-surface-sunken px-4 py-3 text-sm">
+            {check.result.ticketLines.map((line) => (
+              <div key={line.id} className="flex justify-between gap-3 text-muted">
+                <span className="truncate">{line.label}{line.quantity > 1 ? ` × ${line.quantity}` : ''}</span>
+                <span className="tabular-nums">{money(line.baseUnitPrice * line.quantity)}</span>
+              </div>
+            ))}
+            {check.result.appliedChanges.map((change) => {
+              const down = change.effect.type !== 'set' && change.effect.value < 0
+              const up = change.effect.type !== 'set' && change.effect.value > 0
+              return (
+                <div key={change.id} className="flex justify-between gap-3 text-muted">
+                  <span className="truncate">{change.name}</span>
+                  <span className={cn('tabular-nums', down && 'text-success', up && 'text-warning')}>{effectLabel(change.effect, currency)}</span>
+                </div>
+              )
+            })}
+            {check.result.adjustments.map((entry) => (
+              <div key={entry.id} className="flex justify-between gap-3 text-muted">
+                <span>{entry.label}</span>
+                <span className="tabular-nums">{entry.amount > 0 ? '+' : '−'}{money(Math.abs(entry.amount))}</span>
+              </div>
+            ))}
+            <div className="mt-2 flex justify-between gap-3 border-t border-line pt-2 font-semibold">
+              <span>Total</span>
+              <span className="tabular-nums">
+                {check.before > check.result.subtotalTickets ? <s className="mr-1.5 font-normal text-subtle">{money(check.before)}</s> : null}
+                {money(check.result.subtotalTickets)}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <p className="rounded-xl bg-surface-sunken px-4 py-3 text-sm text-subtle">Pick an activity and a date</p>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

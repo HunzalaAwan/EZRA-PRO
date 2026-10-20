@@ -4,24 +4,28 @@ import { bookingOf } from '@/lib/booking-method'
 
 import { NOW, getActivityById, getDepartureById, getStorefront, getStorefrontAvailability, getLocationById, getWaiverById, getPickupZonesByTenant } from '@/lib/demo'
 import { locationAddress } from '@/lib/locations'
-import { buildDays } from '@/lib/storefront-availability'
+import { buildDays, rentalItemsLeftFor } from '@/lib/storefront-availability'
+import { isGeneratedSlotId, slotFromDeparture } from '@/lib/activity-schedule'
 import { bookingReference, clamp, seatsRemaining } from '@/lib/utils'
-import type { Activity } from '@/types'
-import { rentalModes, type RentalMode } from '@/lib/activity-kinds'
+import type { Activity, Departure } from '@/types'
 
-/** A local ISO plus some minutes, still local. */
-function plusMinutes(iso: string, minutes: number) {
-  const date = new Date(iso)
-  date.setMinutes(date.getMinutes() + minutes)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:00`
+/**
+ * A time slot from a saved schedule isn't in the seeded strip: it is as the id
+ * says, nothing booked, and for rentals with items only what overlapping
+ * rentals leave free.
+ */
+function generatedSlot(activity: Activity, row: Departure) {
+  const slot = slotFromDeparture(activity, row)
+  const left = rentalItemsLeftFor(activity, row.startsAt)
+  if (!left) return slot
+  const seatsLeft = Math.min(slot.seatsLeft, Object.values(left).reduce((sum, value) => sum + value, 0))
+  return { ...slot, itemsLeft: left, seatsLeft, soldOut: slot.soldOut || seatsLeft <= 0 }
 }
 import {
   CheckoutFlow,
   type CheckoutDeparture,
 } from '@/components/storefront/checkout-flow'
-import type { QuoteSelection } from '@/components/storefront/booking-widget'
-import { placesOf, addOnUnits, peopleOf } from '@/lib/places'
+import { resolveRental, resolveSelection, type RentalRequest } from '@/components/storefront/checkout-selection'
 
 interface TenantParams {
   tenant: string
@@ -38,74 +42,6 @@ export async function generateMetadata({
     title: { absolute: `Checkout · ${storefront?.tenant.name ?? 'Booking'}` },
     robots: { index: false, follow: false },
   }
-}
-
-/* ==========================================================================
-   URL → SELECTION
-
-   The widget encodes its state as `t=tierId:qty|tierId:qty` and
-   `a=addOnId:qty|…`. Everything is re-validated here against the activity, so
-   a hand-edited URL can never produce a quote the operator would not honour.
-   ========================================================================== */
-
-function parsePairs(raw: string | string[] | undefined): Map<string, number> {
-  const out = new Map<string, number>()
-  if (typeof raw !== 'string') return out
-  for (const chunk of raw.split('|')) {
-    const [id, value] = chunk.split(':')
-    const qty = Number(value)
-    if (!id || !Number.isFinite(qty) || qty <= 0) continue
-    out.set(id, Math.floor(qty))
-  }
-  return out
-}
-
-function resolveSelection(
-  activity: Activity,
-  rawTiers: string | string[] | undefined,
-  rawAddOns: string | string[] | undefined,
-  seatsLeft: number,
-  /** Rentals with items: what is left of each. */
-  itemsLeft?: Record<string, number>,
-  /** Charters: the group size, which per-guest extras are charged on. */
-  party?: number,
-): QuoteSelection {
-  const requestedTiers = parsePairs(rawTiers)
-  const requestedAddOns = parsePairs(rawAddOns)
-
-  let seatsUsed = 0
-  const perPerson = (activity.kind ?? 'trip') !== 'charter' && (activity.kind ?? 'trip') !== 'rental'
-  const tiers = activity.priceTiers.map((tier) => {
-    // The minimum per booking is required; a link without it gets it added.
-    const wanted = Math.max(requestedTiers.get(tier.id) ?? 0, perPerson ? tier.minQuantity : 0)
-    const places = placesOf(tier)
-    const room = places > 0 ? Math.floor(Math.max(0, seatsLeft - seatsUsed) / places) : tier.maxQuantity
-    // Each rental item is capped by its own count, not just the total.
-    const itemRoom = itemsLeft ? (itemsLeft[tier.id] ?? 0) : Number.POSITIVE_INFINITY
-    const qty = clamp(wanted, 0, Math.min(tier.maxQuantity, room, itemRoom))
-    seatsUsed += qty * places
-    return { tierId: tier.id, qty }
-  })
-
-  // A bare /checkout link still has to render a complete, sensible order.
-  if (tiers.every((tier) => tier.qty === 0)) {
-    const lead = (itemsLeft ? activity.priceTiers.find((tier) => (itemsLeft[tier.id] ?? 0) > 0) : undefined) ?? activity.priceTiers[0]
-    const fallback = clamp(
-      Math.max(lead.minQuantity, Math.min((activity.kind ?? 'trip') === 'rental' ? 1 : 2, activity.maxCapacity)),
-      1,
-      Math.max(1, Math.min(lead.maxQuantity, seatsLeft)),
-    )
-    tiers[0] = { tierId: lead.id, qty: fallback }
-  }
-
-  const headcount = party ?? tiers.reduce((total, tier) => total + tier.qty * peopleOf(activity.priceTiers.find((entry) => entry.id === tier.tierId) ?? {}), 0)
-  // An extra the guest picked: one for each guest, or one for the booking.
-  const addOns = activity.addOns.map((addOn) => ({
-    addOnId: addOn.id,
-    qty: (requestedAddOns.get(addOn.id) ?? 0) > 0 || addOn.required ? addOnUnits(addOn, headcount) : 0,
-  }))
-
-  return { tiers, addOns }
 }
 
 /* ==========================================================================
@@ -152,7 +88,8 @@ export default async function CheckoutPage({
       const row = getDepartureById(ids[index])
       const inner = getActivityById(part.activityId)
       if (!row || !inner || row.activityId !== inner.id || row.tenantId !== tenant.id || row.status === 'cancelled') return null
-      const slot = buildDays(inner, 45).flatMap((day) => day.slots).find((entry) => entry.departureId === row.id)
+      // A time slot from a saved schedule isn't in the seeded strip: it is as the id says, nothing booked.
+      const slot = buildDays(inner, 45).flatMap((day) => day.slots).find((entry) => entry.departureId === row.id) ?? (isGeneratedSlotId(row.id) ? generatedSlot(inner, row) : undefined)
       return {
         row,
         seatsLeft: Math.min(seatsRemaining(row.capacity, row.booked, row.held), slot?.seatsLeft ?? 0),
@@ -184,40 +121,29 @@ export default async function CheckoutPage({
   const departureRow = packageLegs ? packageLegs[0].row : valid ? requested : fallback
   if (!departureRow) notFound()
 
-  /* Day rentals run for n days from the pick-up; charters carry their group size. */
-  const modes = rentalModes(activity)
-  const rentalMode = modes.length > 0 ? (modes.includes(query.m as RentalMode) ? (query.m as RentalMode) : modes[0]) : undefined
-  const dayRental = (activity.kind ?? 'trip') === 'rental' && (rentalMode ? rentalMode === 'day' : activity.rental?.billing === 'day')
-  const minHours = Math.max(1, activity.rental?.minHours ?? 1)
-  const lengths = activity.rental?.lengths ?? []
-  const rentalLength = rentalMode === 'length' ? (lengths.find((entry) => entry.id === query.l) ?? lengths[0]) : undefined
-  const rentalHours =
-    rentalMode === 'hour'
-      ? clamp(Math.floor(Number(query.h) || minHours), minHours, Math.max(minHours, activity.rental?.maxHours || 12))
-      : rentalLength
-        ? rentalLength.hours
-        : undefined
-  const minDays = Math.max(1, activity.rental?.minDays ?? 1)
-  const maxDays = Math.max(minDays, activity.rental?.maxDays || 30)
-  const rentalDays = dayRental ? clamp(Math.floor(Number(query.n) || minDays), minDays, maxDays) : 1
+  /* Day rentals run for n days from the pick-up; charters carry their group size. CheckoutFlow checks the rental again against the saved edit. */
+  const rentalRequest: RentalRequest = {
+    mode: typeof query.m === 'string' ? query.m : undefined,
+    hours: typeof query.h === 'string' ? query.h : undefined,
+    days: typeof query.n === 'string' ? query.n : undefined,
+    length: typeof query.l === 'string' ? query.l : undefined,
+  }
+  const rental = resolveRental(activity, rentalRequest, departureRow)
+  const rentalMode = rental.mode
+  const rentalHours = rental.hours
+  const rentalDays = rental.days
   const party =
     (activity.kind ?? 'trip') === 'charter'
       ? clamp(Math.floor(Number(query.g) || 2), Math.max(1, activity.minParticipants), activity.charter?.maxGuests ?? activity.maxCapacity)
       : undefined
-  const returnsAt = dayRental
-    ? (() => {
-        const back = new Date(`${departureRow.startsAt.slice(0, 10)}T12:00:00`)
-        back.setDate(back.getDate() + rentalDays)
-        const key = `${back.getFullYear()}-${String(back.getMonth() + 1).padStart(2, '0')}-${String(back.getDate()).padStart(2, '0')}`
-        return `${key}T${activity.rental?.returnTime ?? '17:00'}:00`
-      })()
-    : undefined
-  const pickupAt = dayRental ? `${departureRow.startsAt.slice(0, 10)}T${activity.rental?.pickupTime ?? '09:00'}:00` : undefined
 
   const site = departureRow.locationId ? getLocationById(departureRow.locationId) : undefined
   const siteMeeting = activity.locations.find((entry) => entry.locationId === departureRow.locationId)?.meetingPoint
 
-  const slotRow = packageLegs ? undefined : buildDays(activity, 45).flatMap((day) => day.slots).find((slot) => slot.departureId === departureRow.id)
+  const slotRow = packageLegs
+    ? undefined
+    : (buildDays(activity, 45).flatMap((day) => day.slots).find((slot) => slot.departureId === departureRow.id) ??
+      (isGeneratedSlotId(departureRow.id) ? generatedSlot(activity, departureRow) : undefined))
   const departure: CheckoutDeparture = packageLegs
     ? {
         id: packageLegs.map((entry) => entry.leg.departureId).join('+'),
@@ -230,20 +156,29 @@ export default async function CheckoutPage({
       }
     : {
     id: departureRow.id,
-    startsAt: pickupAt ?? departureRow.startsAt,
-    endsAt: returnsAt ?? (rentalHours ? plusMinutes(departureRow.startsAt, rentalHours * 60) : departureRow.endsAt),
-    returnsAt,
+    startsAt: rental.startsAt,
+    endsAt: rental.endsAt,
+    returnsAt: rental.returnsAt,
     seatsLeft: Math.min(
       seatsRemaining(departureRow.capacity, departureRow.booked, departureRow.held),
       slotRow?.seatsLeft ?? Number.POSITIVE_INFINITY,
     ),
     priceMultiplier: departureRow.priceMultiplier ?? 1,
+    // Prices count from the time slot itself (a day rental's pick-up moves startsAt) and how full it is.
+    capacity: departureRow.capacity,
+    booked: departureRow.booked,
+    slotStartsAt: departureRow.startsAt,
+    slotEndsAt: departureRow.endsAt,
+    locationId: departureRow.locationId,
     location: site
       ? { name: site.name, addressLine: locationAddress(site), meetingPoint: siteMeeting ?? activity.meetingPoint }
       : undefined,
   }
 
   /* ---------- selection ---------- */
+
+  // The strip the activity page gave the widget: CheckoutFlow rebuilds it from the saved schedule, so spots, seats and prices match what the guest saw.
+  const stripDays = packageLegs ? undefined : buildDays(activity)
 
   const selection = resolveSelection(
     activity,
@@ -278,9 +213,14 @@ export default async function CheckoutPage({
       rentalDays={rentalDays}
       rentalMode={rentalMode}
       rentalHours={rentalHours}
-      rentalLength={rentalLength?.id}
+      rentalLength={rental.lengthId}
+      rentalRequest={packageLegs ? undefined : rentalRequest}
       party={party}
-      privateBooking={query.p === '1' && Boolean(activity.privateOption?.enabled) && Boolean(slotRow && slotRow.seatsLeft >= slotRow.capacity)}
+      requestedPrivate={query.p === '1'}
+      slotEmpty={Boolean(slotRow && slotRow.capacity > 0 && slotRow.seatsLeft >= slotRow.capacity)}
+      seededDays={stripDays}
+      slotId={packageLegs ? undefined : valid ? requestedId : departureRow.id}
+      request={{ tiers: typeof query.t === 'string' ? query.t : undefined, addOns: typeof query.a === 'string' ? query.a : undefined }}
       basePath={`/book/${tenant.slug}`}
       reference={reference}
       nowIso={`${NOW.getFullYear()}-${String(NOW.getMonth() + 1).padStart(2, '0')}-${String(NOW.getDate()).padStart(2, '0')}T${String(NOW.getHours()).padStart(2, '0')}:${String(NOW.getMinutes()).padStart(2, '0')}:00`}

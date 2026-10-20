@@ -121,10 +121,10 @@ export function TodaysDepartures({ events, staff, nowIso, className }: TodaysDep
             variant="no-data"
             icon={Sun}
             title="No time slots scheduled"
-            description="Today is clear. Add a time slot or open the calendar to publish availability for the week."
+            description="Today is clear. Add a time slot from the calendar."
             action={
               <Button asChild size="sm" leftIcon={<CalendarPlus />}>
-                <Link href="/dashboard/availability">Add a time slot</Link>
+                <Link href="/dashboard/calendar">Open calendar</Link>
               </Button>
             }
           />

@@ -35,6 +35,7 @@ import {
   getUsersByTenant,
   getLocationById,
 } from '@/lib/demo'
+import { fromPrice } from '@/lib/price-engine'
 import { addDays, average, clamp, fillRate, percentChange, startOfDay, toDateKey } from '@/lib/utils'
 
 /* ==========================================================================
@@ -262,11 +263,13 @@ function windowStats(activityId: string, from: Date, to: Date): WindowStats {
   }
 }
 
-/** Cheapest sellable tier — comp/infant tiers with a 0 minimum are ignored. */
+/**
+ * The "from" price, by the same rule as the storefront and the wizard's Review
+ * (`fromPrice`: the lead ticket, a charter's cheapest option, a rental's
+ * lowest rate, or the group price). Everything free: the seeded base price.
+ */
 function priceFloor(activity: Activity) {
-  const sellable = activity.priceTiers.filter((tier) => tier.price > 0)
-  if (sellable.length === 0) return activity.basePrice
-  return sellable.reduce((min, tier) => Math.min(min, tier.price), sellable[0].price)
+  return fromPrice(activity) || activity.basePrice
 }
 
 function compareAtFloor(activity: Activity) {

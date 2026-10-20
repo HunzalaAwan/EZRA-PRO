@@ -1,36 +1,46 @@
 import type { Metadata } from 'next'
 import { requireWorkspaceRoute } from '@/lib/workspace'
 
-import {
-  NOW,
-  getActivitiesByTenant,
-  getCalendarEventsByDay,
-  getDeparturesInRange,
-} from '@/lib/demo'
-import { addDays } from '@/lib/utils'
+import { NOW, TODAY_KEY, getActivitiesByTenant, getDeparturesInRange } from '@/lib/demo'
+import { NOW_ISO } from '@/components/dashboard/activities/activity-data'
 import { AvailabilityPageClient } from '@/components/dashboard/availability/availability-page-client'
-import { deriveObservedHours, deriveScheduleTemplates } from '@/components/dashboard/availability/derive'
+import { addDays } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'Availability',
-  description: 'The recurring rhythm behind your calendar, and what the next fortnight looks like.',
+  description: 'Closed days for the whole business, and each activity’s schedule.',
 }
 
-export default async function AvailabilityPage() {
+interface AvailabilityPageProps {
+  /** `?block=1` (Overview → Close a day) opens the closed-days form. */
+  searchParams: Promise<{ block?: string }>
+}
+
+export default async function AvailabilityPage({ searchParams }: AvailabilityPageProps) {
   const { tenant } = await requireWorkspaceRoute('/dashboard/availability')
-  const windowDepartures = getDeparturesInRange(tenant.id, addDays(NOW, -56), addDays(NOW, 56))
-  const observedDepartures = getDeparturesInRange(tenant.id, addDays(NOW, -90), addDays(NOW, -1))
-  const activityById = new Map(getActivitiesByTenant(tenant.id).map((a) => [a.id, a]))
+  const { block } = await searchParams
+  const activities = getActivitiesByTenant(tenant.id)
+    .filter((activity) => activity.status === 'live')
+    .sort((a, b) => a.name.localeCompare(b.name))
+
+  // Booked time slots per day for the next year, so closing a day can say which still run.
+  const bookedByDay: Record<string, number> = {}
+  for (const departure of getDeparturesInRange(tenant.id, NOW, addDays(NOW, 366))) {
+    if (departure.booked <= 0 || departure.status === 'cancelled' || departure.startsAt < NOW_ISO) continue
+    const dateKey = departure.startsAt.slice(0, 10)
+    bookedByDay[dateKey] = (bookedByDay[dateKey] ?? 0) + 1
+  }
 
   return (
     <AvailabilityPageClient
       tenant={tenant}
-      now={NOW}
-      templates={deriveScheduleTemplates(windowDepartures, activityById)}
-      previewByDay={getCalendarEventsByDay(tenant.id, NOW, addDays(NOW, 13))}
-      observedHours={deriveObservedHours(observedDepartures)}
+      activities={activities}
+      todayKey={TODAY_KEY}
+      nowIso={NOW_ISO}
+      bookedByDay={bookedByDay}
+      openAdd={block === '1'}
     />
   )
 }

@@ -31,8 +31,10 @@ export interface DraftAddOn {
 
 let addOnCounter = 0
 
-export function blankAddOn(label = '', price = 0): DraftAddOn {
+/** A new extra. Pass the extras already there: the counter starts over on every page load, and a saved edit can already hold "add_draft_1". */
+export function blankAddOn(label = '', price = 0, taken: readonly { id: string }[] = []): DraftAddOn {
   addOnCounter += 1
+  while (taken.some((addOn) => addOn.id === `add_draft_${addOnCounter}`)) addOnCounter += 1
   return {
     id: `add_draft_${addOnCounter}`,
     label,
@@ -238,7 +240,7 @@ export function AddonEditor({ addOns, onChange, currency, errors, presets = ADDO
           variant="secondary"
           size="sm"
           leftIcon={<Plus />}
-          onClick={() => onChange([...addOns, blankAddOn()])}
+          onClick={() => onChange([...addOns, blankAddOn('', 0, addOns)])}
         >
           Add an extra
         </Button>
@@ -249,7 +251,7 @@ export function AddonEditor({ addOns, onChange, currency, errors, presets = ADDO
               key={preset.label}
               type="button"
               onClick={() => {
-                const addOn = blankAddOn(preset.label, preset.price)
+                const addOn = blankAddOn(preset.label, preset.price, addOns)
                 addOn.description = preset.description
                 addOn.per = preset.per ?? 'guest'
                 onChange([...addOns, addOn])

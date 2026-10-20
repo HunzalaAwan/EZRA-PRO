@@ -38,7 +38,16 @@ import { ACTIVITY_KIND_META } from '@/lib/activity-kinds'
 import { applyRules, findPromo, giftProblem, promoDiscount, promoProblem } from '@/lib/pricing'
 import { cn, formatCurrency, formatTime, pluralize } from '@/lib/utils'
 import { EMPTY_GUEST, WALK_IN_SOURCES, summarize, type WalkInGuest, type WalkInRecord } from '@/lib/walk-ins'
-import type { ActivityKind, CurrencyCode } from '@/types'
+import type { Activity, ActivityKind, CurrencyCode } from '@/types'
+import { applyActivityOverride, applyPricingOverride, type ActivityOverride } from '@/lib/activity-overrides'
+import { priceBooking, unitPrice, type PriceContext } from '@/lib/price-engine'
+import { useActivityOverrides } from '@/hooks/use-pricing-override'
+import { useBookingDefaults } from '@/hooks/use-booking-defaults'
+import { useBookingLedger } from '@/hooks/use-booking-ledger'
+import { withLedger } from '@/lib/booking-ledger'
+import { rebuildAvailabilityDays, scheduleContextOf, type RebuildContext } from '@/lib/activity-schedule'
+import type { AvailabilityDay } from '@/components/storefront/booking-widget'
+import { bookedOn } from '@/components/storefront/checkout-selection'
 
 import { WalkInLog } from './walk-in-log'
 import { WalkInRevenue } from './walk-in-revenue'
@@ -57,7 +66,60 @@ export interface WalkInActivity {
   image: string
   tiers: { id: string; label: string; price: number; min: number; max: number; seat: boolean }[]
   addOns: { id: string; label: string; price: number; per: 'guest' | 'booking' }[]
-  slots: { id: string; startsAt: string; seatsLeft: number; itemsLeft?: Record<string, number> }[]
+  /** `booked`: real bookings (the server's and this browser's), for filling-up and quiet-time prices. */
+  slots: { id: string; startsAt: string; seatsLeft: number; itemsLeft?: Record<string, number>; capacity?: number; booked?: number; priceMultiplier?: number }[]
+  /** The full activity, so the desk prices with the same engine as the storefront and checkout. */
+  source?: Activity
+  /** Today and tomorrow as seeded, so the desk can lay the saved schedule over them. */
+  days?: AvailabilityDay[]
+}
+
+/** What the desk can sell from a day strip: open time slots from this hour on. */
+function deskSlots(days: AvailabilityDay[], nowIso: string, delta: Record<string, number> = {}): WalkInActivity['slots'] {
+  return days.flatMap((day) =>
+    day.slots
+      .filter((slot) => slot.startsAt >= nowIso.slice(0, 13) && !slot.soldOut)
+      .map((slot) => ({ id: slot.departureId, startsAt: slot.startsAt, seatsLeft: slot.seatsLeft, capacity: slot.capacity, booked: bookedOn(slot, delta), priceMultiplier: slot.priceMultiplier, ...(slot.itemsLeft ? { itemsLeft: slot.itemsLeft } : {}) })),
+  )
+}
+
+/** The seeded days with the saved schedule laid over them, like the storefront's strip. Nothing saved: as they are. */
+function scheduledDesk(source: Activity, days: AvailabilityDay[], saved: ActivityOverride | undefined, ctx: RebuildContext): AvailabilityDay[] {
+  const closures = !source.runsOnClosures && ((ctx.closures?.length ?? 0) > 0 || Boolean(ctx.holidays?.enabled))
+  if (!saved && !source.schedules && !source.scheduleChanges && !closures) return days
+  try {
+    const keep = new Set(days.map((day) => day.dateKey))
+    // Only the days the desk sells: the rebuilt strip can run further ahead.
+    return rebuildAvailabilityDays(source, applyActivityOverride(source, saved), days, ctx).filter((day) => keep.has(day.dateKey))
+  } catch {
+    // A broken saved edit never stops the desk: the seeded times still sell.
+    return days
+  }
+}
+
+/**
+ * Today's and tomorrow's time slots as the schedule the owner saved has them
+ * (cancelled and closed times gone, added ones in), with the bookings made
+ * in this browser counted. Activities with nothing left to sell drop out.
+ */
+function useDeskActivities(activities: WalkInActivity[], tenantSlug: string, nowIso: string): WalkInActivity[] {
+  const overrides = useActivityOverrides()
+  const { defaults } = useBookingDefaults(tenantSlug)
+  const ledger = useBookingLedger(tenantSlug)
+  return React.useMemo(() => {
+    const ctx: RebuildContext = { ...scheduleContextOf(defaults), nowIso, maxAdvanceDays: defaults.maxAdvanceDays, delta: ledger.delta }
+    return activities
+      .map((entry) => {
+        if (!entry.source || !entry.days) return entry
+        const days = scheduledDesk(entry.source, entry.days, overrides[entry.source.id], ctx).map((day) => ({
+          ...day,
+          // A time slot off the schedule stays closed, whatever this browser did on it.
+          slots: day.slots.map((slot) => (slot.outsideSchedule ? slot : withLedger(slot, ledger.delta))),
+        }))
+        return { ...entry, slots: deskSlots(days, nowIso, ledger.delta) }
+      })
+      .filter((entry) => entry.slots.length > 0)
+  }, [activities, overrides, defaults, ledger.delta, nowIso])
 }
 
 interface DeskProps {
@@ -75,7 +137,8 @@ interface DeskProps {
 
 type DeskTab = 'sale' | 'log' | 'revenue'
 
-export function WalkInDesk({ tenantSlug, tenantName, currency, activities, nowIso, seed, allRevenue, staff }: DeskProps) {
+export function WalkInDesk({ tenantSlug, tenantName, currency, activities: seeded, nowIso, seed, allRevenue, staff }: DeskProps) {
+  const activities = useDeskActivities(seeded, tenantSlug, nowIso)
   const walkIns = useWalkIns(tenantSlug, seed)
   const [tab, setTab] = React.useState<DeskTab>('sale')
   const todayKey = nowIso.slice(0, 10)
@@ -206,6 +269,10 @@ function WalkInTill({
     setQty(activity ? seedQty(activity) : {})
     setExtras({})
   }, [slug]) // eslint-disable-line react-hooks/exhaustive-deps
+  // The saved schedule can leave the picked activity with nothing to sell: move to the first that has something.
+  React.useEffect(() => {
+    if (!activity && activities[0]) setSlug(activities[0].slug)
+  }, [activity, activities])
 
   const set = (patch: Partial<WalkInGuest>) => setGuest((current) => ({ ...current, ...patch }))
 
@@ -229,10 +296,29 @@ function WalkInTill({
   const guests = activity ? activity.tiers.reduce((sum, tier) => sum + (qty[tier.id] ?? 0), 0) : 0
   const seatsUsed = activity ? activity.tiers.reduce((sum, tier) => sum + (tier.seat ? (qty[tier.id] ?? 0) : 0), 0) : 0
   const rules = activity && slot ? applyRules(pricing.rules, { activitySlug: activity.slug, startsAt: slot.startsAt, nowIso, guests: Math.max(1, guests) }) : { multiplier: 1, applied: [] }
+  // The price engine on the activity with its saved price edits: the same prices as the storefront and checkout.
+  const overrides = useActivityOverrides()
+  const engineActivity = React.useMemo(() => (activity?.source ? applyPricingOverride(activity.source, overrides[activity.source.id]) : undefined), [activity, overrides])
+  const priceCtx: PriceContext | undefined = slot
+    ? { startsAt: slot.startsAt, nowIso, capacity: slot.capacity, booked: slot.booked ?? (slot.capacity !== undefined ? Math.max(0, slot.capacity - slot.seatsLeft) : undefined), priceMultiplier: slot.priceMultiplier, businessRules: pricing.rules }
+    : undefined
+  const priced = activity && engineActivity && priceCtx ? priceBooking({ ...priceCtx, activity: engineActivity, lines: activity.tiers.map((tier) => ({ tierId: tier.id, qty: qty[tier.id] ?? 0 })) }) : undefined
+  /** A ticket's price at this time: the engine's, or the plain price with the business rules. */
+  const tierUnit = (tier: WalkInActivity['tiers'][number]) =>
+    engineActivity && priceCtx ? unitPrice(engineActivity, tier.id, { ...priceCtx, guests: priced?.guests }) : Math.round(tier.price * rules.multiplier)
+  /** What moved the prices, in a few words each. */
+  const appliedLabels = priced
+    ? priced.appliedChanges.filter((change) => change.source !== 'dynamic').map((change) => ({ id: change.id, label: change.label }))
+    : rules.applied.map((rule) => ({ id: rule.id, label: `${rule.name} ${rule.percent > 0 ? '+' : ''}${rule.percent}%` }))
 
   const lines = activity
     ? [
-        ...activity.tiers.filter((tier) => (qty[tier.id] ?? 0) > 0).map((tier) => ({ label: `${qty[tier.id]} × ${tier.label}`, total: Math.round(tier.price * rules.multiplier) * (qty[tier.id] ?? 0) })),
+        ...(priced
+          ? [
+              ...priced.ticketLines.map((line) => ({ label: `${line.quantity} × ${line.label}`, total: line.total })),
+              ...priced.adjustments.map((entry) => ({ label: entry.label, total: entry.amount })),
+            ]
+          : activity.tiers.filter((tier) => (qty[tier.id] ?? 0) > 0).map((tier) => ({ label: `${qty[tier.id]} × ${tier.label}`, total: Math.round(tier.price * rules.multiplier) * (qty[tier.id] ?? 0) }))),
         ...activity.addOns
           .filter((addOn) => extras[addOn.id])
           .map((addOn) => {
@@ -395,7 +481,7 @@ function WalkInTill({
                       <span>
                         <span className="block text-sm font-medium">{tier.label}</span>
                         <span className="block text-xs text-subtle tabular-nums">
-                          {formatCurrency(Math.round(tier.price * rules.multiplier), currency)}
+                          {formatCurrency(tierUnit(tier), currency)}
                           {slot?.itemsLeft ? ` · ${slot.itemsLeft[tier.id] ?? 0} left` : ''}
                         </span>
                       </span>
@@ -541,8 +627,8 @@ function WalkInTill({
             {lines.map((line) => (
               <li key={line.label} className="flex justify-between gap-2"><span className="truncate text-muted">{line.label}</span><span className="tabular-nums">{formatCurrency(line.total, currency)}</span></li>
             ))}
-            {rules.applied.map((rule) => (
-              <li key={rule.id} className="text-xs text-subtle">{rule.name} {rule.percent > 0 ? '+' : ''}{rule.percent}% in the prices</li>
+            {appliedLabels.map((entry) => (
+              <li key={entry.id} className="text-xs text-subtle">{entry.label} in the prices</li>
             ))}
             {promoOff > 0 ? (
               <li className="flex justify-between text-success"><span className="inline-flex items-center gap-1">{promo?.code}<button type="button" aria-label="Remove code" onClick={() => setPromoCode(null)}><X className="size-3.5" /></button></span><span className="tabular-nums">−{formatCurrency(promoOff, currency)}</span></li>

@@ -30,22 +30,29 @@ export default async function WalkInPage() {
   const { tenant } = await requireWorkspaceRoute('/dashboard/walk-in')
 
   /* ---------- what can be sold now ---------- */
+  // Today and tomorrow. The desk lays the saved schedule (cancelled, closed and added times) over the days
+  // and leaves out what has nothing left to sell, so an activity with only added times still shows.
   const activities: WalkInActivity[] = getActivitiesByTenant(tenant.id)
     .filter((activity) => activity.status === 'live' && activity.category !== 'restaurants')
-    .map((activity) => ({
-      slug: activity.slug,
-      name: activity.name,
-      kind: activity.kind ?? 'trip',
-      image: activity.media.find((media) => media.isPrimary)?.url ?? activity.media[0]?.url ?? '',
-      tiers: activity.priceTiers.map((tier) => ({ id: tier.id, label: tier.label, price: tier.price, min: tier.minQuantity, max: tier.maxQuantity, seat: tier.countsTowardCapacity })),
-      addOns: activity.addOns.map((addOn) => ({ id: addOn.id, label: addOn.label, price: addOn.price, per: addOn.per ?? 'guest' })),
-      slots: buildDays(activity, 2).flatMap((day) =>
-        day.slots
-          .filter((slot) => slot.startsAt >= NOW_ISO.slice(0, 13) && !slot.soldOut)
-          .map((slot) => ({ id: slot.departureId, startsAt: slot.startsAt, seatsLeft: slot.seatsLeft, ...(slot.itemsLeft ? { itemsLeft: slot.itemsLeft } : {}) })),
-      ),
-    }))
-    .filter((activity) => activity.slots.length > 0)
+    .map((activity) => {
+      const days = buildDays(activity, 2)
+      return {
+        slug: activity.slug,
+        name: activity.name,
+        kind: activity.kind ?? 'trip',
+        image: activity.media.find((media) => media.isPrimary)?.url ?? activity.media[0]?.url ?? '',
+        tiers: activity.priceTiers.map((tier) => ({ id: tier.id, label: tier.label, price: tier.price, min: tier.minQuantity, max: tier.maxQuantity, seat: tier.countsTowardCapacity })),
+        addOns: activity.addOns.map((addOn) => ({ id: addOn.id, label: addOn.label, price: addOn.price, per: addOn.per ?? 'guest' })),
+        slots: days.flatMap((day) =>
+          day.slots
+            .filter((slot) => slot.startsAt >= NOW_ISO.slice(0, 13) && !slot.soldOut)
+            .map((slot) => ({ id: slot.departureId, startsAt: slot.startsAt, seatsLeft: slot.seatsLeft, capacity: slot.capacity, priceMultiplier: slot.priceMultiplier, ...(slot.itemsLeft ? { itemsLeft: slot.itemsLeft } : {}) })),
+        ),
+        days,
+        // The desk prices with the same engine as the storefront and checkout.
+        source: activity,
+      }
+    })
 
   /* ---------- the last 30 days of walk-ins, and all revenue for the share ---------- */
   const days = dayKeys(NOW_ISO.slice(0, 10), HISTORY_DAYS)

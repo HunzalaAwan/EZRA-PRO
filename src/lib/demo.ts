@@ -19,6 +19,7 @@
 
 
 import { rentalItemsOf, rentalSpan } from '@/lib/rental-items'
+import { departureFromSlotId, isGeneratedSlotId, parseSlotId } from '@/lib/activity-schedule'
 import type {
   Activity,
   ActivityFeedItem,
@@ -1211,8 +1212,33 @@ export function getCustomerById(id: string): Customer | undefined {
   return customerById.get(id)
 }
 
+const generatedById = new Map<string, Departure>()
+
+/**
+ * A time slot by id. A `gen_…` id comes from a schedule saved in the
+ * browser: it reads as the seeded time slot at the same activity, day,
+ * start time and location when there is one, or as a time slot built on
+ * the fly with the activity's spots and nothing booked yet.
+ */
 export function getDepartureById(id: string): Departure | undefined {
-  return departureById.get(id)
+  const seeded = departureById.get(id)
+  if (seeded || !isGeneratedSlotId(id)) return seeded
+  const cached = generatedById.get(id)
+  if (cached) return cached
+  const parsed = parseSlotId(id)
+  const activity = parsed ? activityById.get(parsed.activityId) : undefined
+  if (!parsed || !activity || activity.kind === 'package') return undefined
+  const startsAt = `${parsed.dateKey}T${parsed.time}:00`
+  const locationId = parsed.locationId ?? activity.locations[0]?.locationId
+  const same = (departuresByDayKey.get(`${activity.tenantId}::${parsed.dateKey}`) ?? []).find(
+    (d) => d.activityId === activity.id && d.startsAt === startsAt && (d.locationId ?? locationId) === locationId && d.status !== 'cancelled',
+  )
+  if (same) return same
+  const built = departureFromSlotId(activity, id)
+  if (!built) return undefined
+  const departure: Departure = new Date(built.startsAt).getTime() < NOW_MS ? { ...built, status: 'completed' } : built
+  generatedById.set(id, departure)
+  return departure
 }
 
 export function getBookingById(id: string): Booking | undefined {

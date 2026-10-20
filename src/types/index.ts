@@ -835,7 +835,7 @@ export interface Activity {
   theme?: ActivityTheme
   /** A category the business made itself; shown instead of the theme when set. */
   customCategory?: string
-  /** Accessibility and suitability facts, from ACCESSIBILITY_OPTIONS. */
+  /** Accessibility and suitability facts on older activities; new ones list them in Requirements. */
   accessibility?: string[]
   /** What guests should bring; a sensible list is shown when empty. */
   bring?: string[]

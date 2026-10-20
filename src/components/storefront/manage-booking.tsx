@@ -25,6 +25,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
 import { TicketQr, ticketPayload } from '@/components/ui/ticket-qr'
 import type { AvailabilityDay } from '@/components/storefront/booking-widget'
+import { bookedOn } from '@/components/storefront/checkout-selection'
 import {
   EMPTY_WAIVER,
   GuestDetailsStep,
@@ -40,9 +41,13 @@ import type { InboxThread } from '@/lib/inbox'
 import { answerProblem } from '@/lib/guest-requirements'
 import { cn, formatCurrency, formatDateLong, formatRelative, formatTime, pluralize } from '@/lib/utils'
 import { useBookingLedger } from '@/hooks/use-booking-ledger'
+import { useScheduledDays } from '@/hooks/use-scheduled-days'
+import { usePricingOverride } from '@/hooks/use-pricing-override'
+import { usePricing } from '@/hooks/use-pricing'
+import { unitPrice } from '@/lib/price-engine'
 import { changeBooking, withLedger } from '@/lib/booking-ledger'
 import { changesSummary, hoursLabel, refundFor, splitPayment } from '@/lib/booking-policy'
-import type { ActivityKind, BookingStatus, CancellationPolicy, ChangeRules, CurrencyCode, GuestQuestion, PaymentTerms, WaiverTemplate } from '@/types'
+import type { Activity, ActivityKind, BookingStatus, CancellationPolicy, ChangeRules, CurrencyCode, GuestQuestion, PaymentTerms, WaiverTemplate } from '@/types'
 
 /* ==========================================================================
    MANAGE BOOKING — the guest's own page, from the link in every message.
@@ -125,7 +130,9 @@ export function ManageBooking(
           guestQuestions: GuestQuestion[]
           kind: ActivityKind
         }
-        departure: { id: string; startsAt: string; endsAt: string; seatsLeft: number }
+        departure: { id: string; startsAt: string; endsAt: string; seatsLeft: number; capacity?: number; priceMultiplier?: number }
+        /** The activity as seeded, so the saved schedule and prices count here as on the storefront. */
+        source: Activity
         waiver?: WaiverTemplate
         days: AvailabilityDay[]
         thread?: InboxThread
@@ -149,7 +156,7 @@ export function ManageBooking(
 
 type InnerProps = Exclude<Parameters<typeof ManageBooking>[0], { notFoundReference: string }>
 
-function ManageBookingInner({ tenant, booking, guest, activity: given, departure, waiver, days: rawDays, thread, nowIso }: InnerProps) {
+function ManageBookingInner({ tenant, booking, guest, activity: given, departure, source, waiver, days: rawDays, thread, nowIso }: InnerProps) {
   // Its own cancellation and payment terms, or the business defaults it follows.
   const { defaults: bookingDefaults } = useBookingDefaults(tenant.slug)
   const activity = React.useMemo(() => ({ ...given, ...resolveTerms({ policy: given.policy, payment: given.payment }, bookingDefaults) }), [given, bookingDefaults])
@@ -164,9 +171,29 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
   const ledger = useBookingLedger(tenant.slug)
   const change = ledger.changes[booking.reference]
   const start = { fromDepartureId: departure.id, fromStartsAt: departure.startsAt, fromParty: booking.partySize }
-  const days = React.useMemo(() => rawDays.map((day) => ({ ...day, slots: day.slots.map((slot) => withLedger(slot, ledger.delta)) })), [rawDays, ledger.delta])
+  // The schedule the owner saved (cancelled and closed times, added ones) over the seeded days, then this browser's changes.
+  const scheduledDays = useScheduledDays(source, rawDays, { tenantSlug: tenant.slug, nowIso, delta: ledger.delta })
+  const days = React.useMemo(
+    () => scheduledDays.map((day) => ({ ...day, slots: day.slots.map((slot) => (slot.outsideSchedule ? slot : withLedger(slot, ledger.delta))) })),
+    [scheduledDays, ledger.delta],
+  )
   const currentDepartureId = change?.movedTo?.departureId ?? departure.id
   const startsAt = change?.movedTo?.startsAt ?? departure.startsAt
+  // Added guests pay the first ticket's price on the time slot the booking is on: saved prices, price changes and the business's rules.
+  const priced = usePricingOverride(source)
+  const { rules: priceRules } = usePricing(tenant.slug)
+  const onSlot = days.flatMap((day) => day.slots).find((slot) => slot.departureId === currentDepartureId)
+  const leadTier = priced.priceTiers[0]
+  const pricePerGuest = leadTier
+    ? unitPrice(priced, leadTier.id, {
+        startsAt,
+        nowIso,
+        capacity: onSlot?.capacity ?? departure.capacity,
+        booked: onSlot ? bookedOn(onSlot, ledger.delta) : undefined,
+        priceMultiplier: onSlot?.priceMultiplier ?? departure.priceMultiplier ?? 1,
+        businessRules: priceRules,
+      })
+    : given.pricePerGuest
   const hoursToGo = (new Date(startsAt).getTime() - now.getTime()) / 3_600_000
   const past = hoursToGo < 0
   const cancelled = Boolean(change?.cancelled) || booking.status === 'cancelled' || booking.status === 'refunded'
@@ -176,7 +203,7 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
   const freeWindow = activity.policy.freeCancellationHours > 0 && hoursToGo >= activity.policy.freeCancellationHours
   const partySize = change?.party ?? booking.partySize
   const added = Math.max(0, partySize - booking.partySize)
-  const extra = added * activity.pricePerGuest
+  const extra = added * pricePerGuest
   const seatsLeftNow = Math.max(0, departure.seatsLeft - (ledger.delta[currentDepartureId] ?? 0))
   const deposit = activity.payment.collect === 'deposit' ? splitPayment(activity.payment, booking.total, booking.partySize).now : 0
   const balance = state.balancePaid ? 0 : Math.max(0, booking.total + extra - booking.amountPaid)
@@ -469,17 +496,17 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
                 <IconButton aria-label="Fewer guests" size="sm" variant="outline" disabled={adding <= 1} onClick={() => setAdding((n) => n - 1)}><Minus aria-hidden="true" /></IconButton>
                 <span className="w-6 text-center text-base font-semibold tabular-nums">{adding}</span>
                 <IconButton aria-label="More guests" size="sm" variant="outline" disabled={adding >= seatsLeftNow} onClick={() => setAdding((n) => n + 1)}><Plus aria-hidden="true" /></IconButton>
-                <span className="text-sm text-muted">more at {formatCurrency(activity.pricePerGuest, currency)} each · {seatsLeftNow} {pluralize(seatsLeftNow, 'spot')} left</span>
+                <span className="text-sm text-muted">more at {formatCurrency(pricePerGuest, currency)} each · {seatsLeftNow} {pluralize(seatsLeftNow, 'spot')} left</span>
               </div>
               <Button
                 onClick={() => {
                   changeBooking(tenant.slug, booking.reference, start, { party: partySize + adding }, { by: 'guest', what: `Added ${adding} ${pluralize(adding, 'guest')}` })
                   update({ balancePaid: true })
                   setOpen(null)
-                  toast.success(`${adding} ${pluralize(adding, 'guest')} added`, { description: `Paid ${formatCurrency(adding * activity.pricePerGuest, currency)}. Add their details above.` })
+                  toast.success(`${adding} ${pluralize(adding, 'guest')} added`, { description: `Paid ${formatCurrency(adding * pricePerGuest, currency)}. Add their details above.` })
                 }}
               >
-                Add and pay {formatCurrency(adding * activity.pricePerGuest, currency)}
+                Add and pay {formatCurrency(adding * pricePerGuest, currency)}
               </Button>
             </div>
           ) : null}

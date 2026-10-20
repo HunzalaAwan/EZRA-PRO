@@ -201,14 +201,100 @@ export const GUEST_FIELDS: Record<GuestFieldKey, { label: string; hint: string }
 
 export const DEFAULT_GUEST_FIELDS: GuestDetailsConfig['fields'] = [{ key: 'name', required: true }]
 
-/** An activity with a height or weight limit has to ask every rider. */
-export function riderLimited(activity: Pick<Activity, 'kind' | 'ride'>): boolean {
-  return (activity.kind ?? 'trip') === 'activity' && Boolean(activity.ride?.minHeightCm || activity.ride?.maxWeightKg)
+type BodyMeasure = 'height' | 'weight'
+
+/** Whether a question measures height or weight: its library preset, or its unit. */
+function bodyMeasureOf(question: GuestQuestion): BodyMeasure | null {
+  if (question.kind !== 'number') return null
+  if (question.preset === 'height' || /^(cm|in|inches)$/i.test(question.unit ?? '')) return 'height'
+  if (question.preset === 'weight' || /^(kg|lb|lbs)$/i.test(question.unit ?? '')) return 'weight'
+  return null
+}
+
+/** A height or weight question each guest answers, with a min or a max: a limit checkout enforces. */
+export function isBodyLimit(question: GuestQuestion): boolean {
+  if (question.scope !== 'guest' || !bodyMeasureOf(question)) return false
+  return (question.min ?? 0) > 0 || (question.max ?? 0) > 0
+}
+
+/**
+ * An activity with a height or weight limit has to ask every guest: the
+ * Guests step's Height or Weight question with a min or max, or the older
+ * rider limits seeded activities still carry in `ride`.
+ */
+export function riderLimited(activity: Pick<Activity, 'kind' | 'ride' | 'guestQuestions'>): boolean {
+  const ride = (activity.kind ?? 'trip') === 'activity' && Boolean(activity.ride?.minHeightCm || activity.ride?.maxWeightKg)
+  return ride || (activity.guestQuestions ?? []).some(isBodyLimit)
+}
+
+/**
+ * A bound the business set on the question. The library's untouched range
+ * (90–220 cm, 20–130 kg with its stock message) only catches typing slips, so
+ * it is not shown as a limit: a sizing question on a seeded activity adds no line.
+ */
+function ownBound(question: GuestQuestion, side: 'min' | 'max'): number | undefined {
+  const value = question[side]
+  if (value === undefined || value <= 0) return undefined
+  const preset = question.preset ? (QUESTION_PRESETS as Record<string, Omit<GuestQuestion, 'id' | 'preset'> | undefined>)[question.preset] : undefined
+  const stock = preset !== undefined && preset[side] === value && (question.limitMessage ?? '') === (preset.limitMessage ?? '')
+  return stock ? undefined : value
+}
+
+/**
+ * The height and weight limits in words, for the storefront: "at least 120 cm
+ * tall", "up to 110 kg". A Height or Weight question wins over the seeded
+ * rider limit of the same measure, the way checkout asks them.
+ */
+export function bodyLimitLines(activity: Pick<Activity, 'kind' | 'ride' | 'guestQuestions'>): string[] {
+  const questions = (activity.guestQuestions ?? []).filter(isBodyLimit)
+  const range = (min: number | undefined, max: number | undefined, unit: string, tall: boolean) => {
+    const low = min && min > 0 ? min : undefined
+    const high = max && max > 0 ? max : undefined
+    const tail = `${unit ? ` ${unit}` : ''}${tall ? ' tall' : ''}`
+    if (low !== undefined && high !== undefined) return `${low}–${high}${tail}`
+    if (low !== undefined) return `at least ${low}${tail}`
+    if (high !== undefined) return `up to ${high}${tail}`
+    return null
+  }
+  const lines: string[] = []
+  for (const measure of ['height', 'weight'] as const) {
+    const asked = questions.filter((entry) => bodyMeasureOf(entry) === measure)
+    if (asked.length > 0) {
+      const line = asked.map((entry) => range(ownBound(entry, 'min'), ownBound(entry, 'max'), entry.unit ?? '', measure === 'height')).find(Boolean)
+      if (line) lines.push(line)
+      continue
+    }
+    // Checkout skips the seeded rider limit when the library question is on the activity.
+    if ((activity.kind ?? 'trip') !== 'activity' || (activity.guestQuestions ?? []).some((entry) => (entry.preset ?? entry.id) === measure)) continue
+    const line = measure === 'height' ? range(activity.ride?.minHeightCm, undefined, 'cm', true) : range(undefined, activity.ride?.maxWeightKg, 'kg', false)
+    if (line) lines.push(line)
+  }
+  return lines
+}
+
+/**
+ * A seeded rider limit (`ride`) as the Guests step's Height and Weight
+ * questions, so the editor shows it where limits are set now. Skips a
+ * measure the activity already asks with its library question.
+ */
+export function rideAsQuestions(activity: Pick<Activity, 'kind' | 'ride' | 'guestQuestions'>): GuestQuestion[] {
+  if ((activity.kind ?? 'trip') !== 'activity' || !activity.ride) return []
+  const known = new Set((activity.guestQuestions ?? []).map((question) => question.preset ?? question.id))
+  const out: GuestQuestion[] = []
+  const { minHeightCm, maxWeightKg } = activity.ride
+  // Same ids checkout used for these, so answers on earlier bookings still line up.
+  if (minHeightCm && !known.has('height')) {
+    out.push({ ...presetQuestion('height', { min: minHeightCm, max: undefined, limitMessage: `Riders must be at least ${minHeightCm} cm tall.` }), id: 'q_rider_height' })
+  }
+  if (maxWeightKg && !known.has('weight')) {
+    out.push({ ...presetQuestion('weight', { min: undefined, max: maxWeightKg, limitMessage: `The limit is ${maxWeightKg} kg per rider.` }), id: 'q_rider_weight' })
+  }
+  return out
 }
 
 /**
  * The activity's guest details. Older activities without a setting ask each
- * guest when they have per-guest questions; a rider limit always does.
+ * guest when they have per-guest questions; a height or weight limit always does.
  */
 export function guestDetailsOf(activity: Pick<Activity, 'guestDetails' | 'guestQuestions' | 'kind' | 'ride'>): GuestDetailsConfig {
   const forced = riderLimited(activity)

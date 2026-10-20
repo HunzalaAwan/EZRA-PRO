@@ -69,10 +69,13 @@ export function BookingFlowSettingsClient({ tenant }: BookingFlowSettingsClientP
     setDraft(next)
   }
   const set = <K extends keyof BookingDefaults>(key: K, value: BookingDefaults[K]) => update({ ...draft, [key]: value })
-  const dirty = JSON.stringify(draft) !== JSON.stringify(defaults)
+  // Closed days and holidays are edited on Availability, so they never count as a change here.
+  const comparable = (value: BookingDefaults) => JSON.stringify({ ...value, closures: undefined, holidays: undefined })
+  const dirty = comparable(draft) !== comparable(defaults)
 
   const onSave = () => {
-    const clean = { ...draft, questions: draft.questions.filter((question) => question.label.trim()) }
+    // Closed days and holidays are set on Availability: always save the latest ones.
+    const clean = { ...draft, questions: draft.questions.filter((question) => question.label.trim()), closures: defaults.closures, holidays: defaults.holidays }
     if (save(clean)) {
       touched.current = false
       setDraft(clean)
@@ -236,10 +239,9 @@ export function BookingFlowSettingsClient({ tenant }: BookingFlowSettingsClientP
             <CalendarClock className="size-4 text-primary" aria-hidden="true" />
             Calendar and sold-out times
           </CardTitle>
-          <CardDescription>The same for every activity you sell.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-5 pt-0">
-          <Field label="Calendar opens" description="How far ahead guests can book." className="sm:max-w-sm">
+          <Field label="Booking window" description="How far ahead guests can book, unless an activity sets its own." className="sm:max-w-sm">
             {({ id }) => (
               <Select value={String(draft.maxAdvanceDays)} onValueChange={(value) => set('maxAdvanceDays', Number(value))}>
                 <SelectTrigger id={id}>
@@ -255,6 +257,13 @@ export function BookingFlowSettingsClient({ tenant }: BookingFlowSettingsClientP
               </Select>
             )}
           </Field>
+          <p className="-mt-2 text-xs text-subtle">
+            Closed days and public holidays are on{' '}
+            <Link href="/dashboard/availability" className="font-medium text-primary hover:underline">
+              Availability
+            </Link>
+            .
+          </p>
           <ToggleRow
             title="Waitlist on sold-out times"
             body="Guests join a list instead of leaving. You keep the demand."
@@ -289,8 +298,8 @@ export function BookingFlowSettingsClient({ tenant }: BookingFlowSettingsClientP
             size="sm"
             variant="ghost"
             leftIcon={<RotateCcw />}
-            disabled={JSON.stringify(draft) === JSON.stringify(DEFAULT_BOOKING_DEFAULTS)}
-            onClick={() => update(DEFAULT_BOOKING_DEFAULTS)}
+            disabled={comparable(draft) === comparable(DEFAULT_BOOKING_DEFAULTS)}
+            onClick={() => update({ ...DEFAULT_BOOKING_DEFAULTS, closures: defaults.closures, holidays: defaults.holidays })}
           >
             Reset
           </Button>

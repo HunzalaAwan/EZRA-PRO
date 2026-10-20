@@ -7,14 +7,14 @@ import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
-import { BeforeInput } from './changes-policy-editor'
 import type { BookingSettings } from '@/types'
 
 /* ==========================================================================
    HOW GUESTS BOOK — the first thing on the Booking step. Book online, send
    a request that the business confirms, or call. Request and call can run
    without a set schedule. Instant booking can still send some cases to a
-   request: big groups, other dates, short notice and custom quotes.
+   request: big groups, other dates and custom quotes. The booking notice
+   (how long before the start online booking closes) is on the Schedule step.
    ========================================================================== */
 
 const METHODS: { value: BookingSettings['method']; title: string; text: string; icon: typeof CalendarClock }[] = [
@@ -40,16 +40,12 @@ function Row({ title, text, checked, onChange, children }: { title: string; text
 export function BookingSettingsEditor({
   value,
   onChange,
-  noticeHours,
-  onNotice,
   businessPhone,
   groupWord = 'people',
   rentedWord,
 }: {
   value: BookingSettings
   onChange: (next: BookingSettings) => void
-  noticeHours: number
-  onNotice: (hours: number) => void
   businessPhone: string
   /** What the limit is counted in: "people", "bikes". */
   groupWord?: string
@@ -168,39 +164,11 @@ export function BookingSettingsEditor({
             onChange={(otherDates) => set({ otherDates })}
           />
           <Row
-            title="Booking notice"
-            text="Online booking closes this long before the start. Guests can still ask for something sooner."
-            checked={noticeHours > 0}
-            onChange={(on) => onNotice(on ? 24 : 0)}
-          >
-            <Field label="Close online booking">
-              {({ id }) => (
-                <div className="flex items-center gap-2.5">
-                  <BeforeInput id={id} hours={noticeHours} onHours={(hours) => onNotice(Math.max(1, hours))} className="w-full sm:w-64" />
-                  <span className="shrink-0 text-sm text-muted">before the start</span>
-                </div>
-              )}
-            </Field>
-          </Row>
-          <Row
             title="Custom quotes"
             text="Guests can ask for something different: a private version, a special occasion, extra time."
             checked={value.customQuote}
             onChange={(customQuote) => set({ customQuote })}
           />
-        </div>
-      ) : value.scheduled ? (
-        <div className="flex flex-col divide-y divide-line-subtle border-t border-line-subtle pt-4">
-          <Row
-            title="Booking notice"
-            text="Times sooner than this are not offered."
-            checked={noticeHours > 0}
-            onChange={(on) => onNotice(on ? 24 : 0)}
-          >
-            <Field label="Hide times sooner than">
-              {({ id }) => <BeforeInput id={id} hours={noticeHours} onHours={(hours) => onNotice(Math.max(1, hours))} className="w-full sm:w-64" />}
-            </Field>
-          </Row>
         </div>
       ) : null}
       {!instant ? (

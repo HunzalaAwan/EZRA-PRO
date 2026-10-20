@@ -14,14 +14,11 @@ import {
   ACTIVITY_KINDS,
   ACTIVITY_KIND_META,
   CHARTER_VESSELS,
-  LANGUAGES,
   LESSON_LEVELS,
   RENTAL_CATEGORIES,
-  RENTAL_LENGTHS,
-  crewName,
   rentalCategoryMeta,
 } from '@/lib/activity-kinds'
-import { cn, formatDuration } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import type { ActivityKind, CharterConfig, DifficultyLevel, LessonConfig, RentalCategory, RentalConfig } from '@/types'
 
 import { DurationField, type DurationUnit } from './duration-field'
@@ -122,8 +119,9 @@ export function defaultKindSettings(): DraftKindSettings {
       kmPerDay: 0,
     },
     charter: { maxGuests: 6, requestToBook: false, noticeHours: 24, vessel: 'boat', vesselLabel: '', crewLabel: '', crewed: true, minutes: {} },
-    lesson: { level: 'beginner', sessions: 1, ratio: 4, certification: '', equipmentIncluded: true },
-    pass: { validDays: 1, reentry: true },
+    // Not asked in setup any more: a new lesson or pass claims none of these on the storefront.
+    lesson: { level: 'beginner', sessions: 1, ratio: 0, certification: '', equipmentIncluded: false },
+    pass: { validDays: 1, reentry: false },
     activity: { minHeightCm: 0, maxWeightKg: 0 },
   }
 }
@@ -156,7 +154,7 @@ export function normalizeKindSettings(settings: Partial<DraftKindSettings> | und
   }
 }
 
-/** The distance or track, typed in the wizard. Off means the listing shows none. */
+/** A seeded distance or track, carried through an edit. Not edited any more: the track goes in Highlights. */
 export interface DraftRoute {
   enabled: boolean
   distance: number
@@ -167,16 +165,16 @@ export interface DraftRoute {
 
 export const emptyRoute = (): DraftRoute => ({ enabled: false, distance: 0, unit: 'km', track: '', elevationM: 0 })
 
-/** The numbers every activity carries, edited from inside a kind's card. */
+/**
+ * The numbers every activity carries, edited from inside a kind's card.
+ * Ages, languages and a track are written in Requirements and Highlights.
+ */
 export interface SharedBasics {
   maxCapacity: number
   minParticipants: number
-  minAge: number
   durationMinutes: number
   durationUnit: DurationUnit
-  languages: string[]
   difficulty: DifficultyLevel
-  route: DraftRoute
 }
 
 export function KindPicker({ value, onChange }: { value: ActivityKind; onChange: (kind: ActivityKind) => void }) {
@@ -227,178 +225,182 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
   )
 }
 
-function Toggle({ label, hint, checked, onChange }: { label: string; hint: string; checked: boolean; onChange: (value: boolean) => void }) {
+/** One small on/off with its label beside it. */
+function InlineSwitch({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
   return (
-    <label className="flex items-center justify-between gap-3 rounded-xl border border-line bg-surface px-3.5 py-3">
-      <span>
-        <span className="block text-sm font-medium">{label}</span>
-        <span className="block text-xs text-subtle">{hint}</span>
-      </span>
-      <Switch checked={checked} onCheckedChange={onChange} aria-label={label} />
+    <label className="flex h-10 cursor-pointer items-center gap-2.5 text-sm font-medium text-foreground">
+      <Switch size="sm" checked={checked} onCheckedChange={onChange} aria-label={label} />
+      {label}
     </label>
   )
 }
 
-function Segmented<T extends string>({
-  value,
-  options,
-  onChange,
-  label,
-}: {
-  value: T
-  options: { value: T; label: string; hint: string }[]
-  onChange: (value: T) => void
-  label: string
-}) {
-  return (
-    <div role="radiogroup" aria-label={label} className="grid gap-2 sm:grid-cols-2">
-      {options.map((option) => {
-        const on = option.value === value
-        return (
-          <button
-            key={option.value}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            onClick={() => onChange(option.value)}
-            className={cn(
-              'rounded-xl border px-3.5 py-3 text-left transition-colors duration-200',
-              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
-              on ? 'border-primary bg-primary-soft/30' : 'border-line bg-surface hover:border-line-strong',
-            )}
-          >
-            <span className="block text-sm font-medium text-foreground">{option.label}</span>
-            <span className="block text-xs text-subtle">{option.hint}</span>
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-/** Languages the guide or instructor speaks, as toggle chips. */
-export function LanguagePicker({ value, onChange }: { value: string[]; onChange: (value: string[]) => void }) {
-  return (
-    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Languages">
-      {LANGUAGES.map((language) => {
-        const on = value.includes(language)
-        return (
-          <button
-            key={language}
-            type="button"
-            aria-pressed={on}
-            onClick={() => onChange(on ? value.filter((entry) => entry !== language) : [...value, language])}
-            className={cn(
-              'rounded-full border px-3 py-1 text-xs font-medium transition-colors duration-200',
-              on ? 'border-primary/50 bg-primary-soft text-primary' : 'border-line bg-surface text-muted hover:text-foreground',
-            )}
-          >
-            {language}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
-
-function TierLengths({
-  tiers,
-  minutes,
-  options,
-  fallback,
-  onChange,
-  labelFor,
-}: {
-  tiers: DraftTier[]
-  minutes: Record<string, number>
-  options: number[]
-  fallback: number
-  onChange: (next: Record<string, number>) => void
-  labelFor: (minutes: number) => string
-}) {
-  return (
-    <ul className="flex list-none flex-col gap-2 p-0">
-      {tiers.map((tier) => (
-        <li key={tier.id} className="flex items-center gap-3 rounded-lg border border-line-subtle bg-surface px-3 py-2">
-          <span className="min-w-0 flex-1 truncate text-sm">{tier.label || 'Untitled'}</span>
-          <Select value={String(minutes[tier.id] ?? fallback)} onValueChange={(value) => onChange({ ...minutes, [tier.id]: Number(value) })}>
-            <SelectTrigger className="w-48" size="sm" aria-label={`Length of ${tier.label}`}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {options.map((option) => (
-                <SelectItem key={option} value={String(option)}>
-                  {labelFor(option)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </li>
-      ))}
-    </ul>
-  )
-}
-
-const ageField = (shared: SharedBasics, onShared: (patch: Partial<SharedBasics>) => void, errors: Record<string, string>, label = 'Minimum age') => (
-  <Field label={label} error={errors.minAge} description="0 means all ages welcome.">
-    {(control) => (
-      <Input {...control} type="number" min={0} max={99} suffix="years" value={shared.minAge} onChange={(e) => onShared({ minAge: num(e.target.value) })} />
-    )}
-  </Field>
-)
-
-const INTENSITY: { value: DifficultyLevel; label: string }[] = [
-  { value: 'easy', label: 'Easy · anyone can do it' },
-  { value: 'moderate', label: 'Moderate · some fitness or balance' },
-  { value: 'challenging', label: 'Challenging · fit and confident' },
-  { value: 'extreme', label: 'Extreme · experience or a briefing needed' },
+export const DIFFICULTY_CHOICES: { value: DifficultyLevel; label: string; hint: string }[] = [
+  { value: 'easy', label: 'Easy', hint: 'Anyone can do it' },
+  { value: 'moderate', label: 'Moderate', hint: 'Some fitness or balance' },
+  { value: 'challenging', label: 'Challenging', hint: 'Fit and confident' },
+  { value: 'extreme', label: 'Extreme', hint: 'Experience or a briefing needed' },
 ]
 
-/** Optional distance or track, for hikes, rides, runs and routes. */
-export function RouteFields({ value, onChange }: { value: DraftRoute; onChange: (value: DraftRoute) => void }) {
-  const set = (patch: Partial<DraftRoute>) => onChange({ ...value, ...patch })
+/** Difficulty as one compact select, shared by group activities and activities. */
+export function DifficultyField({ value, onChange }: { value: DifficultyLevel; onChange: (value: DifficultyLevel) => void }) {
   return (
-    <div className="flex flex-col gap-3">
-      <Toggle
-        label="Has a distance or track"
-        hint="For a hiking trail, a ride route or a circuit. Shown on the storefront."
-        checked={value.enabled}
-        onChange={(enabled) => set({ enabled })}
-      />
-      {value.enabled ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.6fr)]">
-          <Field label="Distance">
-            <div className="flex gap-2">
-              <Input
-                type="number"
-                min={0}
-                step={0.5}
-                value={value.distance || ''}
-                placeholder="6.5"
-                aria-label="Distance"
-                className="flex-1"
-                onChange={(e) => set({ distance: Math.max(0, Number(e.target.value) || 0) })}
-              />
-              <Select value={value.unit} onValueChange={(unit) => set({ unit: unit as DraftRoute['unit'] })}>
-                <SelectTrigger className="w-20 shrink-0" aria-label="Distance unit">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="km">km</SelectItem>
-                  <SelectItem value="mi">mi</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </Field>
-          <Field label="Elevation gain" optional>
-            {(control) => <Input {...control} type="number" min={0} step={10} suffix="m" value={value.elevationM || ''} placeholder="0" onChange={(e) => set({ elevationM: num(e.target.value) })} />}
-          </Field>
-          <Field label="Track or route name" optional>
-            {(control) => <Input {...control} placeholder="Ranch loop, Red trail, Coast to Black Rock" value={value.track} onChange={(e) => set({ track: e.target.value.slice(0, 60) })} />}
-          </Field>
+    <Field label="Difficulty">
+      <Select value={value} onValueChange={(next) => onChange(next as DifficultyLevel)}>
+        <SelectTrigger aria-label="Difficulty">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {DIFFICULTY_CHOICES.map((option) => (
+            <SelectItem key={option.value} value={option.value} description={option.hint}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </Field>
+  )
+}
+
+/* ==========================================================================
+   HOW A RENTAL IS CHARGED — by the hour, by length, by the day, with the
+   limits for each and the late return fee. Lives with the prices on the
+   Pricing step; the item rates themselves are in RentalRatesEditor.
+   ========================================================================== */
+
+export function RentalChargingFields({
+  settings: raw,
+  onSettings,
+  currencySymbol,
+  errors,
+}: {
+  settings: DraftKindSettings
+  onSettings: (settings: DraftKindSettings) => void
+  currencySymbol: string
+  errors: Record<string, string>
+}) {
+  const settings = normalizeKindSettings(raw)
+  const rental = settings.rental
+  const set = (patch: Partial<DraftKindSettings['rental']>) => onSettings({ ...settings, rental: { ...rental, ...patch } })
+  const hourly = rental.modes.includes('hour')
+  const daily = rental.modes.includes('day')
+  const byLength = rental.modes.includes('length')
+  const toggleMode = (mode: 'hour' | 'day' | 'length') => {
+    const on = rental.modes.includes(mode)
+    // One way of charging has to stay on.
+    if (on && rental.modes.length === 1) return
+    const modes = on ? rental.modes.filter((entry) => entry !== mode) : (['hour', 'day', 'length'] as const).filter((entry) => entry === mode || rental.modes.includes(entry))
+    set({
+      modes: [...modes],
+      billing: modes.length === 1 && modes[0] === 'day' ? 'day' : 'length',
+      // Two common lengths to start from; each can be renamed or removed.
+      ...(mode === 'length' && !on && rental.lengths.length === 0
+        ? { lengths: [{ id: 'len_4', label: 'Up to 4 hours', hours: 4 }, { id: 'len_8', label: 'Up to 8 hours', hours: 8 }] }
+        : {}),
+    })
+  }
+  const setLength = (id: string, patch: Partial<{ label: string; hours: number }>) =>
+    set({ lengths: rental.lengths.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)) })
+
+  return (
+    <section className="flex flex-col gap-3">
+      <div>
+        <h3 className="text-sm font-semibold">How it is charged</h3>
+        <p className="mt-0.5 text-xs text-muted">Pick one or more. Guests choose when they book.</p>
+      </div>
+      <div role="group" aria-label="How it is charged" className="grid gap-2 sm:grid-cols-3">
+        {([
+          ['hour', 'By the hour', 'A price per hour'],
+          ['length', 'By length', 'One price for a set length'],
+          ['day', 'By the day', 'A price per day'],
+        ] as const).map(([mode, label, hint]) => {
+          const on = rental.modes.includes(mode)
+          return (
+            <button
+              key={mode}
+              type="button"
+              aria-pressed={on}
+              onClick={() => toggleMode(mode)}
+              className={cn(
+                'flex items-start gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors duration-200',
+                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+                on ? 'border-primary bg-primary-soft/30' : 'border-line bg-surface hover:border-line-strong',
+              )}
+            >
+              <span className={cn('mt-0.5 grid size-4 shrink-0 place-items-center rounded border', on ? 'border-primary bg-primary text-on-primary' : 'border-line-strong')} aria-hidden="true">
+                {on ? <svg viewBox="0 0 12 12" className="size-3"><path d="M2.5 6.2 5 8.5l4.5-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg> : null}
+              </span>
+              <span>
+                <span className="block text-sm font-medium text-foreground">{label}</span>
+                <span className="block text-xs text-subtle">{hint}</span>
+              </span>
+            </button>
+          )
+        })}
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {hourly ? (
+          <>
+            <Field label="Fewest hours" optional error={errors['rental.minHours']}>
+              {(control) => <Input {...control} type="number" min={1} max={12} suffix="hours" placeholder="1" value={rental.minHours > 1 ? rental.minHours : ''} onChange={(e) => set({ minHours: num(e.target.value, 1) })} />}
+            </Field>
+            <Field label="Most hours" optional error={errors['rental.maxHours']}>
+              {(control) => <Input {...control} type="number" min={1} max={24} suffix="hours" placeholder="No limit" value={rental.maxHours || ''} onChange={(e) => set({ maxHours: num(e.target.value) })} />}
+            </Field>
+          </>
+        ) : null}
+        {daily ? (
+          <>
+            <Field label="Fewest days" optional error={errors['rental.minDays']}>
+              {(control) => <Input {...control} type="number" min={1} suffix="days" placeholder="1" value={rental.minDays > 1 ? rental.minDays : ''} onChange={(e) => set({ minDays: num(e.target.value, 1) })} />}
+            </Field>
+            <Field label="Most days" optional error={errors['rental.maxDays']}>
+              {(control) => <Input {...control} type="number" min={1} max={60} suffix="days" placeholder="No limit" value={rental.maxDays || ''} onChange={(e) => set({ maxDays: num(e.target.value) })} />}
+            </Field>
+          </>
+        ) : null}
+      </div>
+      {byLength ? (
+        <div className="flex flex-col gap-2 rounded-xl border border-line p-3">
+          <p className="text-[0.8125rem] font-medium">Lengths you sell</p>
+          <p className="-mt-1.5 text-xs text-subtle">One price each, used in full or not.</p>
+          <ul className="flex list-none flex-col gap-2 p-0">
+            {rental.lengths.map((length) => (
+              <li key={length.id} className="grid grid-cols-[minmax(0,1fr)_8rem_2rem] items-center gap-2">
+                <Input size="sm" aria-label="Length name" value={length.label} placeholder="Up to 4 hours" onChange={(e) => setLength(length.id, { label: e.target.value })} />
+                <Input size="sm" aria-label="Hours it can be out" type="number" min={1} max={24} suffix="hours" value={length.hours || ''} onChange={(e) => setLength(length.id, { hours: num(e.target.value, 1) })} />
+                <button
+                  type="button"
+                  aria-label={`Remove ${length.label || 'length'}`}
+                  disabled={rental.lengths.length === 1}
+                  onClick={() => set({ lengths: rental.lengths.filter((entry) => entry.id !== length.id) })}
+                  className="grid size-8 place-items-center rounded-lg text-faint hover:bg-surface-sunken hover:text-danger disabled:opacity-30"
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+          <Button
+            type="button"
+            variant="secondary"
+            size="xs"
+            className="self-start"
+            onClick={() => {
+              const hours = Math.min(24, (rental.lengths.at(-1)?.hours ?? 0) + 2)
+              set({ lengths: [...rental.lengths, { id: `len_${Date.now().toString(36)}`, label: `Up to ${hours} hours`, hours }] })
+            }}
+          >
+            + Add a length
+          </Button>
         </div>
       ) : null}
-    </div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Field label={`Late return fee (${currencySymbol})`} optional description="Per hour late.">
+          {(control) => <Input {...control} type="number" min={0} placeholder="None" value={rental.lateFee ? Math.round(rental.lateFee / 100) : ''} onChange={(e) => set({ lateFee: num(e.target.value) * 100 })} />}
+        </Field>
+      </div>
+    </section>
   )
 }
 
@@ -408,8 +410,6 @@ export function KindFields({
   kind,
   settings: raw,
   onChange,
-  tiers,
-  currencySymbol,
   errors,
   shared,
   onShared,
@@ -420,8 +420,10 @@ export function KindFields({
   kind: ActivityKind
   settings: DraftKindSettings
   onChange: (settings: DraftKindSettings) => void
-  tiers: DraftTier[]
-  currencySymbol: string
+  /** Not read here any more; kept so callers need not change. */
+  tiers?: DraftTier[]
+  /** Not read here any more: the late return fee moved to RentalChargingFields. */
+  currencySymbol?: string
   errors: Record<string, string>
   shared: SharedBasics
   onShared: (patch: Partial<SharedBasics>) => void
@@ -444,55 +446,23 @@ export function KindFields({
 
   /* ---------- activity: a time slot, no departure ---------- */
   if (kind === 'activity') {
-    const ride = settings.activity
     return shell(
       <>
-        <Section title="Each time slot" hint="Guests pick a time slot and turn up. Which time slots are offered is set on the Booking step.">
-          <DurationField
-            label="Each time slot lasts"
-            error={errors.durationMinutes}
-            minutes={shared.durationMinutes}
-            unit={shared.durationUnit === 'days' ? 'minutes' : shared.durationUnit}
-            onChange={(durationMinutes, durationUnit) => onShared({ durationMinutes, durationUnit })}
-            presets={[15, 30, 45, 60, 90, 120]}
-            allowFlexible={false}
-          />
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Field label="Spots per time slot" required error={errors.maxCapacity} description="The most guests booked on one time slot, together.">
-              {(control) => <Input {...control} type="number" min={1} value={shared.maxCapacity || ''} placeholder="8" onChange={(e) => onShared({ maxCapacity: num(e.target.value) })} />}
-            </Field>
-            <Field label="Intensity">
-              <Select value={shared.difficulty} onValueChange={(value) => onShared({ difficulty: value as DifficultyLevel })}>
-                <SelectTrigger aria-label="Intensity">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {INTENSITY.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            {ageField(shared, onShared, errors)}
-          </div>
-        </Section>
-
-        <Section title="Height and weight limits" hint="Optional. Each guest is asked at checkout, and the booking stops if a limit is not met.">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Minimum height" description="0 for no limit.">
-              {(control) => <Input {...control} type="number" min={0} suffix="cm" value={ride.minHeightCm} onChange={(e) => set('activity', { minHeightCm: num(e.target.value) })} />}
-            </Field>
-            <Field label="Maximum weight" description="0 for no limit.">
-              {(control) => <Input {...control} type="number" min={0} suffix="kg" value={ride.maxWeightKg} onChange={(e) => set('activity', { maxWeightKg: num(e.target.value) })} />}
-            </Field>
-          </div>
-        </Section>
-
-        <Section title="Distance or track">
-          <RouteFields value={shared.route} onChange={(route) => onShared({ route })} />
-        </Section>
+        <DurationField
+          label="Each time slot lasts"
+          error={errors.durationMinutes}
+          minutes={shared.durationMinutes}
+          unit={shared.durationUnit === 'days' ? 'minutes' : shared.durationUnit}
+          onChange={(durationMinutes, durationUnit) => onShared({ durationMinutes, durationUnit })}
+          presets={[15, 30, 45, 60, 90, 120]}
+          allowFlexible={false}
+        />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Spots per time slot" required error={errors.maxCapacity}>
+            {(control) => <Input {...control} type="number" min={1} value={shared.maxCapacity || ''} placeholder="8" onChange={(e) => onShared({ maxCapacity: num(e.target.value) })} />}
+          </Field>
+          <DifficultyField value={shared.difficulty} onChange={(difficulty) => onShared({ difficulty })} />
+        </div>
       </>,
     )
   }
@@ -500,26 +470,6 @@ export function KindFields({
   /* ---------- rental ---------- */
   if (kind === 'rental') {
     const rental = settings.rental
-    const hourly = rental.modes.includes('hour')
-    const daily = rental.modes.includes('day')
-    const byDay = daily && !hourly
-    const byLength = rental.modes.includes('length')
-    const toggleMode = (mode: 'hour' | 'day' | 'length') => {
-      const on = rental.modes.includes(mode)
-      // One way of charging has to stay on.
-      if (on && rental.modes.length === 1) return
-      const modes = on ? rental.modes.filter((entry) => entry !== mode) : (['hour', 'day', 'length'] as const).filter((entry) => entry === mode || rental.modes.includes(entry))
-      set('rental', {
-        modes: [...modes],
-        billing: modes.length === 1 && modes[0] === 'day' ? 'day' : 'length',
-        // Two common lengths to start from; each can be renamed or removed.
-        ...(mode === 'length' && !on && rental.lengths.length === 0
-          ? { lengths: [{ id: 'len_4', label: 'Up to 4 hours', hours: 4 }, { id: 'len_8', label: 'Up to 8 hours', hours: 8 }] }
-          : {}),
-      })
-    }
-    const setLength = (id: string, patch: Partial<{ label: string; hours: number }>) =>
-      set('rental', { lengths: rental.lengths.map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)) })
     const pickCategory = (category: RentalCategory) => {
       const next = rentalCategoryMeta(category)
       set('rental', {
@@ -531,7 +481,7 @@ export function KindFields({
     }
     return shell(
       <>
-        <Section title="What do you rent?" hint="Sets the requirements guests see and what we ask at checkout.">
+        <Section title="What do you rent?">
           <div role="radiogroup" aria-label="What do you rent" className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
             {RENTAL_CATEGORIES.map((entry) => {
               const Icon = CATEGORY_ICONS[entry.value]
@@ -560,106 +510,10 @@ export function KindFields({
           </div>
         </Section>
 
-        <Section title="How it is charged" hint="Pick one or more. Guests choose when they book. The prices for each are set per item in the Pricing step.">
-          <div role="group" aria-label="How it is charged" className="grid gap-2 sm:grid-cols-3">
-            {([
-              ['hour', 'By the hour', 'A price per hour. Guests pick a start time and how many hours.'],
-              ['length', 'By length', 'One price for a set length, however much of it is used: up to 4 hours, a full day.'],
-              ['day', 'By the day', 'A price per day. Picked up after opening, back before closing, one day or more.'],
-            ] as const).map(([mode, label, hint]) => {
-              const on = rental.modes.includes(mode)
-              return (
-                <button
-                  key={mode}
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() => toggleMode(mode)}
-                  className={cn(
-                    'flex items-start gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors duration-200',
-                    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
-                    on ? 'border-primary bg-primary-soft/30' : 'border-line bg-surface hover:border-line-strong',
-                  )}
-                >
-                  <span className={cn('mt-0.5 grid size-4 shrink-0 place-items-center rounded border', on ? 'border-primary bg-primary text-on-primary' : 'border-line-strong')} aria-hidden="true">
-                    {on ? <svg viewBox="0 0 12 12" className="size-3"><path d="M2.5 6.2 5 8.5l4.5-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg> : null}
-                  </span>
-                  <span>
-                    <span className="block text-sm font-medium text-foreground">{label}</span>
-                    <span className="block text-xs text-subtle">{hint}</span>
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {hourly ? (
-              <>
-                <Field label="Fewest hours" optional error={errors['rental.minHours']}>
-                  {(control) => <Input {...control} type="number" min={1} max={12} suffix="hours" placeholder="1" value={rental.minHours > 1 ? rental.minHours : ''} onChange={(e) => set('rental', { minHours: num(e.target.value, 1) })} />}
-                </Field>
-                <Field label="Most hours" optional error={errors['rental.maxHours']}>
-                  {(control) => <Input {...control} type="number" min={1} max={24} suffix="hours" placeholder="No limit" value={rental.maxHours || ''} onChange={(e) => set('rental', { maxHours: num(e.target.value) })} />}
-                </Field>
-              </>
-            ) : null}
-            {daily ? (
-              <>
-                <Field label="Fewest days" optional error={errors['rental.minDays']}>
-                  {(control) => <Input {...control} type="number" min={1} suffix="days" placeholder="1" value={rental.minDays > 1 ? rental.minDays : ''} onChange={(e) => set('rental', { minDays: num(e.target.value, 1) })} />}
-                </Field>
-                <Field label="Most days" optional error={errors['rental.maxDays']}>
-                  {(control) => <Input {...control} type="number" min={1} max={60} suffix="days" placeholder="No limit" value={rental.maxDays || ''} onChange={(e) => set('rental', { maxDays: num(e.target.value) })} />}
-                </Field>
-              </>
-            ) : null}
-          </div>
-          {byLength ? (
-            <div className="flex flex-col gap-2 rounded-xl border border-line p-3">
-              <p className="text-[0.8125rem] font-medium">Lengths you sell</p>
-              <p className="-mt-1.5 text-xs text-subtle">Each is one price, whether guests use all of it or not. Name them the way guests think: “Up to 4 hours”, “Half day”, “Full day”.</p>
-              <ul className="flex list-none flex-col gap-2 p-0">
-                {rental.lengths.map((length) => (
-                  <li key={length.id} className="grid grid-cols-[minmax(0,1fr)_8rem_2rem] items-center gap-2">
-                    <Input size="sm" aria-label="Length name" value={length.label} placeholder="Up to 4 hours" onChange={(e) => setLength(length.id, { label: e.target.value })} />
-                    <Input size="sm" aria-label="Hours it can be out" type="number" min={1} max={24} suffix="hours" value={length.hours || ''} onChange={(e) => setLength(length.id, { hours: num(e.target.value, 1) })} />
-                    <button
-                      type="button"
-                      aria-label={`Remove ${length.label || 'length'}`}
-                      disabled={rental.lengths.length === 1}
-                      onClick={() => set('rental', { lengths: rental.lengths.filter((entry) => entry.id !== length.id) })}
-                      className="grid size-8 place-items-center rounded-lg text-faint hover:bg-surface-sunken hover:text-danger disabled:opacity-30"
-                    >
-                      ×
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              <Button
-                type="button"
-                variant="secondary"
-                size="xs"
-                className="self-start"
-                onClick={() => {
-                  const hours = Math.min(24, (rental.lengths.at(-1)?.hours ?? 0) + 2)
-                  set('rental', { lengths: [...rental.lengths, { id: `len_${Date.now().toString(36)}`, label: `Up to ${hours} hours`, hours }] })
-                }}
-              >
-                + Add a length
-              </Button>
-            </div>
-          ) : null}
-          <p className="text-xs text-subtle">
-            {daily ? 'Pick-up and return times are your opening hours, set once in the Schedule step.' : 'Start times follow your opening hours in the Schedule step.'}
-          </p>
-        </Section>
-
-        <Section title="Between rentals" hint="Your items, how many you have and their prices are set on the Pricing step.">
+        <Section title="Between rentals" hint="Items, how they are charged and prices are on the Pricing step.">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Gap between rentals" optional description="Time to clean, check or refuel before it goes out again.">
+            <Field label="Gap between rentals" optional description="To clean, check or refuel.">
               {(control) => <Input {...control} type="number" min={0} step={5} suffix="min" placeholder="None" value={rental.bufferMinutes || ''} onChange={(e) => set('rental', { bufferMinutes: num(e.target.value) })} />}
-            </Field>
-            <Field label={`Late return fee (${currencySymbol})`} optional description="Per hour. Shown to guests before they book.">
-              {(control) => <Input {...control} type="number" min={0} placeholder="None" value={rental.lateFee ? Math.round(rental.lateFee / 100) : ''} onChange={(e) => set('rental', { lateFee: num(e.target.value) * 100 })} />}
             </Field>
           </div>
         </Section>
@@ -670,7 +524,6 @@ export function KindFields({
   /* ---------- charter ---------- */
   if (kind === 'charter') {
     const charter = settings.charter
-    const crew = crewName(charter)
     const vesselValue = charter.vessel === 'other' ? `own:${charter.vesselLabel}` : charter.vessel
     const vesselTaken = (name: string) =>
       [...CHARTER_VESSELS.map((entry) => entry.label), ...ownVessels.categories.map((entry) => entry.label)].some((entry) => entry.toLowerCase() === name.trim().toLowerCase())
@@ -725,12 +578,7 @@ export function KindFields({
               </Select>
             </Field>
             <div className="sm:self-end">
-              <Toggle
-                label={`${crew} included`}
-                hint="Turn off for a bare-boat or self-drive hire."
-                checked={charter.crewed}
-                onChange={(crewed) => set('charter', { crewed })}
-              />
+              <InlineSwitch label="Comes with a captain or driver" checked={charter.crewed} onChange={(crewed) => set('charter', { crewed })} />
             </div>
           </div>
           {addingVessel ? (
@@ -755,15 +603,14 @@ export function KindFields({
           ) : null}
         </Section>
 
-        <Section title="The group" hint="One group per charter. The price is for the whole group.">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <Field label="Most guests" required error={errors['charter.maxGuests']} description="What the boat, vehicle or guide can take.">
+        <Section title="The group" hint="One group per charter.">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Most guests" required error={errors['charter.maxGuests']}>
               {(control) => <Input {...control} type="number" min={1} value={charter.maxGuests} onChange={(e) => set('charter', { maxGuests: num(e.target.value) })} />}
             </Field>
-            <Field label="Fewest guests" error={errors.minParticipants} description="If fewer book, you can call it off.">
+            <Field label="Fewest guests" error={errors.minParticipants}>
               {(control) => <Input {...control} type="number" min={1} value={shared.minParticipants} onChange={(e) => onShared({ minParticipants: num(e.target.value, 1) })} />}
             </Field>
-            {ageField(shared, onShared, errors)}
           </div>
         </Section>
 
@@ -771,20 +618,12 @@ export function KindFields({
           <DurationField
             label="Charter length"
             error={errors.durationMinutes}
-            description="The usual length. Say in the description if guests can book longer."
             minutes={shared.durationMinutes}
             unit={shared.durationUnit === 'minutes' ? 'hours' : shared.durationUnit}
             onChange={(durationMinutes, durationUnit) => onShared({ durationMinutes, durationUnit })}
             presets={[120, 180, 240, 360, 480, 1440]}
             allowFlexible={false}
           />
-        </Section>
-
-        <Section title="Languages" hint="How guests book (online or by request) and the notice you need are set on the Booking step.">
-          <div>
-            <p className="mb-2 text-xs font-medium text-muted">Languages spoken</p>
-            <LanguagePicker value={shared.languages} onChange={(languages) => onShared({ languages })} />
-          </div>
         </Section>
       </>,
     )
@@ -797,7 +636,7 @@ export function KindFields({
       <>
         <Section title="The course">
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Level" description="Replaces difficulty for lessons.">
+            <Field label="Level">
               <Select value={lesson.level} onValueChange={(value) => set('lesson', { level: value as LessonConfig['level'] })}>
                 <SelectTrigger aria-label="Level">
                   <SelectValue />
@@ -811,7 +650,7 @@ export function KindFields({
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Days in the course" required error={errors['lesson.sessions']} description="1 for a single lesson. Courses run on consecutive days.">
+            <Field label="Days in the course" required error={errors['lesson.sessions']} description="1 for a single lesson.">
               {(control) => <Input {...control} type="number" min={1} max={14} value={lesson.sessions} onChange={(e) => set('lesson', { sessions: num(e.target.value) })} />}
             </Field>
           </div>
@@ -826,33 +665,14 @@ export function KindFields({
           />
         </Section>
 
-        <Section title="Class size" hint="How many can book one class. Every class time on the Booking step uses this number.">
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Section title="Class size">
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Students per class" required error={errors.maxCapacity}>
               {(control) => <Input {...control} type="number" min={1} value={shared.maxCapacity || ''} placeholder="8" onChange={(e) => onShared({ maxCapacity: num(e.target.value) })} />}
             </Field>
-            <Field label="Students per instructor" required error={errors['lesson.ratio']}>
-              {(control) => <Input {...control} type="number" min={1} value={lesson.ratio} onChange={(e) => set('lesson', { ratio: num(e.target.value) })} />}
-            </Field>
-            <Field label="Fewest to go ahead" error={errors.minParticipants} description="If fewer book, you can cancel that class.">
+            <Field label="Fewest to go ahead" error={errors.minParticipants}>
               {(control) => <Input {...control} type="number" min={1} value={shared.minParticipants} onChange={(e) => onShared({ minParticipants: num(e.target.value, 1) })} />}
             </Field>
-            {ageField(shared, onShared, errors)}
-          </div>
-        </Section>
-
-        <Section title="What students get">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Certificate earned" optional>
-              {(control) => <Input {...control} placeholder="PADI Open Water, AIDA 2…" value={lesson.certification} onChange={(e) => set('lesson', { certification: e.target.value })} />}
-            </Field>
-            <div className="sm:self-end">
-              <Toggle label="Equipment included" hint="Board, wetsuit or gear is part of the price." checked={lesson.equipmentIncluded} onChange={(equipmentIncluded) => set('lesson', { equipmentIncluded })} />
-            </div>
-          </div>
-          <div>
-            <p className="mb-2 text-xs font-medium text-muted">Taught in</p>
-            <LanguagePicker value={shared.languages} onChange={(languages) => onShared({ languages })} />
           </div>
         </Section>
       </>,
@@ -863,7 +683,7 @@ export function KindFields({
   const pass = settings.pass
   return shell(
     <div className="grid gap-4 sm:grid-cols-2">
-      <Field label="Valid for" description="Days from the date the guest picks.">
+      <Field label="Valid for" description="From the date the guest picks.">
         <Select value={String(pass.validDays)} onValueChange={(value) => set('pass', { validDays: Number(value) })}>
           <SelectTrigger aria-label="Valid for">
             <SelectValue />
@@ -877,13 +697,9 @@ export function KindFields({
           </SelectContent>
         </Select>
       </Field>
-      <Field label="Tickets per day" error={errors.maxCapacity} description="Leave it empty for no limit.">
-        {(control) => <Input {...control} type="number" min={1} value={shared.maxCapacity || ''} placeholder="No limit" suffix="tickets" onChange={(e) => onShared({ maxCapacity: num(e.target.value) })} />}
+      <Field label="Tickets per day" required error={errors.maxCapacity} description="Shared by the day's time slots.">
+        {(control) => <Input {...control} type="number" min={1} value={shared.maxCapacity || ''} placeholder="60" suffix="tickets" onChange={(e) => onShared({ maxCapacity: num(e.target.value) })} />}
       </Field>
-      {ageField(shared, onShared, errors)}
-      <div className="sm:self-end">
-        <Toggle label="Re-entry allowed" hint="Guests can leave and come back the same day." checked={pass.reentry} onChange={(reentry) => set('pass', { reentry })} />
-      </div>
     </div>,
   )
 }
@@ -997,7 +813,7 @@ export function RentalRatesEditor({
                     ))
                   : null}
                 {hourly || daily ? (
-                  <Field label="Price cap" labelSize="sm" optional>
+                  <Field label="Most per item" labelSize="sm" optional>
                     {(control) => <Input {...control} type="number" min={0} placeholder="None" leftIcon={<span className="text-sm font-medium">{currencySymbol}</span>} value={item.cap ? item.cap / 100 : ''} onChange={(e) => setItem(tier.id, { cap: money(e.target.value) })} />}
                   </Field>
                 ) : null}
@@ -1012,10 +828,8 @@ export function RentalRatesEditor({
       <Button type="button" variant="secondary" size="sm" className="self-start" onClick={() => onTiers([...tiers, newTier('')])}>
         + Add another item
       </Button>
-      <p className="text-xs text-subtle">
-        {stock} {stock === 1 ? 'item' : 'items'} in all, for up to {people} {people === 1 ? 'person' : 'people'} at once.{' '}
-        {hourly || daily ? 'A price cap is the most one item costs for a whole rental: $100 an hour with a $550 cap never charges more than $550. ' : ''} Guests choose any mix on one booking page, and each item is counted on its own:
-        when one runs out, the others can still be booked. Deposits are held at pick-up and returned when everything comes back.
+      <p className="text-xs text-subtle tabular">
+        {stock} {stock === 1 ? 'item' : 'items'} · up to {people} {people === 1 ? 'person' : 'people'} at once
       </p>
     </div>
   )

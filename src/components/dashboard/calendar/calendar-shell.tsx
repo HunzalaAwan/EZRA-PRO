@@ -57,6 +57,7 @@ import { DayView } from '@/components/dashboard/calendar/day-view'
 import { AgendaView } from '@/components/dashboard/calendar/agenda-view'
 import { DepartureDetailSheet } from '@/components/dashboard/calendar/departure-detail-sheet'
 import { NewDepartureDialog } from '@/components/dashboard/calendar/new-departure-dialog'
+import { useScheduledEvents } from '@/components/dashboard/calendar/scheduled-events'
 
 type ViewKey = 'month' | 'week' | 'day' | 'agenda'
 
@@ -175,13 +176,25 @@ export function CalendarShell({
 
   // Seats taken or given back by bookings, packages, moves and cancellations made in this browser.
   const ledger = useBookingLedger(tenantSlug)
-  const events = React.useMemo(() => {
-    // Same inclusive day-bound semantics as getDeparturesInRange.
-    const inRange = cache.events
-      .filter((event) => {
+  // Same inclusive day-bound semantics as getDeparturesInRange.
+  const inRangeEvents = React.useMemo(
+    () =>
+      cache.events.filter((event) => {
         const key = event.departure.startsAt.slice(0, 10)
         return key >= rangeFromKey && key <= rangeToKey
-      })
+      }),
+    [cache.events, rangeFromKey, rangeToKey],
+  )
+  // Time slots added or closed on the schedule in this browser; only over days already loaded.
+  const scheduledEvents = useScheduledEvents(inRangeEvents, {
+    tenantId,
+    tenantSlug,
+    fromKey: rangeFromKey > cache.fromKey ? rangeFromKey : cache.fromKey,
+    toKey: rangeToKey < cache.toKey ? rangeToKey : cache.toKey,
+    delta: ledger.delta,
+  })
+  const events = React.useMemo(() => {
+    const inRange = scheduledEvents
       .map((event) => {
         const change = ledger.delta[event.departure.id]
         if (!change) return event
@@ -195,7 +208,7 @@ export function CalendarShell({
         }
       })
     return filterEvents(inRange, filters)
-  }, [cache.events, rangeFromKey, rangeToKey, filters, ledger.delta])
+  }, [scheduledEvents, filters, ledger.delta])
 
   const eventsByDay = React.useMemo(() => {
     const out: Record<string, CalendarEvent[]> = {}
