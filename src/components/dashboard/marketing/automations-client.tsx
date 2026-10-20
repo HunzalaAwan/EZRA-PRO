@@ -15,9 +15,8 @@ import { Switch } from '@/components/ui/switch'
 import { SimpleTooltip } from '@/components/ui/tooltip'
 import { toast } from '@/components/ui/toaster'
 import { AutomationEditor, isStaffSent } from '@/components/dashboard/marketing/automation-editor'
-import { FlowBuilder } from '@/components/dashboard/marketing/flow-builder'
+import { AutomationBuilder } from '@/components/dashboard/marketing/automation-builder'
 import { FlowIcon } from '@/components/dashboard/marketing/flow-builder/icons'
-import { SimpleEditor } from '@/components/dashboard/marketing/simple-editor'
 import { useChannels } from '@/hooks/use-channels'
 import { brandColors, useEmailContext } from '@/hooks/use-email-context'
 import { useFlows } from '@/hooks/use-flows'
@@ -33,7 +32,7 @@ import { flowFromTemplate } from '@/lib/flows/defaults'
 import { describeTrigger, type DescribeLookups } from '@/lib/flows/describe'
 import type { FlowExtras } from '@/lib/flows/engine'
 import { syncFlowPromos } from '@/lib/flows/promos'
-import { blankSimpleFlow, toSimple } from '@/lib/flows/simple'
+import { blankSimpleFlow } from '@/lib/flows/simple'
 import { AUTOMATION_TEMPLATES, templateById, type AutomationTemplate } from '@/lib/flows/templates'
 import { forSimulation, simulationKey } from '@/lib/flows/tree'
 import type { Flow, FlowRun } from '@/lib/flows/types'
@@ -44,14 +43,14 @@ import type { Tenant } from '@/types'
 /* ==========================================================================
    AUTOMATIONS
    Two views. "Automations": the ones that run on their own, each with a
-   switch, plus ready-made ones to add in a click. Each opens in a short
-   one-screen form; anything more is under "More options". "Booking
+   switch, plus ready-made ones to add in a click. Each opens in the
+   builder: a trigger, then one card per step. "Booking
    messages": the confirmation, reminders and the rest every booking gets.
    ========================================================================== */
 
 type RunMap = Record<string, Omit<FlowRun, 'journeys'>>
 type View = 'flows' | 'booking'
-type Editing = { flow: Flow; isNew: boolean; mode: 'simple' | 'advanced' }
+type Editing = { flow: Flow; isNew: boolean }
 
 const STATUS_ORDER: Record<Flow['status'], number> = { live: 0, paused: 1, draft: 2 }
 const n = (value: number) => value.toLocaleString('en-US')
@@ -156,8 +155,7 @@ export function AutomationsClient({
     return list.some((entry) => entry.id === flow.id) ? list.map((entry) => (entry.id === flow.id ? flow : entry)) : [flow, ...list]
   }
 
-  /** Simple when it fits the short form; the full builder otherwise. */
-  const open = (flow: Flow, isNew = false) => setEditing({ flow, isNew, mode: toSimple(flow) ? 'simple' : 'advanced' })
+  const open = (flow: Flow, isNew = false) => setEditing({ flow, isNew })
 
   const addTemplate = (template: AutomationTemplate) => {
     setPicking(false)
@@ -172,8 +170,8 @@ export function AutomationsClient({
       linked.current = true
       const template = initialRecipe ? templateById(initialRecipe) : undefined
       const flow = initialFlow ? latest.current.flows.find((entry) => entry.id === initialFlow) : undefined
-      if (template) setEditing({ flow: template.build(nowIso), isNew: true, mode: 'simple' })
-      else if (flow) setEditing({ flow, isNew: false, mode: toSimple(flow) ? 'simple' : 'advanced' })
+      if (template) setEditing({ flow: template.build(nowIso), isNew: true })
+      else if (flow) setEditing({ flow, isNew: false })
       else if (initialRecipe) setPicking(true)
       try {
         window.history.replaceState(window.history.state, '', window.location.pathname)
@@ -248,8 +246,6 @@ export function AutomationsClient({
     { value: 'flows', label: 'Automations', icon: Workflow, count: flows.length },
     { value: 'booking', label: 'Booking messages', icon: Inbox, count: bookingMessages.length },
   ]
-
-  const simple = editing && editing.mode === 'simple' ? toSimple(editing.flow) : null
 
   return (
     <div className="flex flex-col gap-6">
@@ -351,46 +347,17 @@ export function AutomationsClient({
       </Dialog>
 
       {/* ---------- editors ---------- */}
-      {editing && editing.mode === 'simple' && simple ? (
-        <SimpleEditor
+      {editing ? (
+        <AutomationBuilder
           key={editing.flow.id}
           flow={editing.flow}
-          simple={simple}
           isNew={editing.isNew}
-          activities={data.activities}
-          ctx={ctx}
-          brand={brand}
-          savedTemplates={marketing.emailTemplates}
-          onSaveTemplate={(name, design) => {
-            marketing.saveEmailTemplate({ id: `tpl_${Date.now().toString(36)}`, name, design, updatedAt: nowIso })
-            toast.success(`${name} saved to Email templates`)
-          }}
-          checkContext={checkCtx}
           onSave={saveFlow}
           onClose={() => setEditing(null)}
           onDelete={
             !editing.isNew && !editing.flow.builtIn
               ? () => {
                   setDeleting(editing.flow)
-                  setEditing(null)
-                }
-              : undefined
-          }
-          onAdvanced={(flow) => setEditing({ flow, isNew: editing.isNew, mode: 'advanced' })}
-        />
-      ) : null}
-
-      {editing && (editing.mode === 'advanced' || !simple) ? (
-        <FlowBuilder
-          key={`${editing.flow.id}-advanced`}
-          flow={editing.flow}
-          isNew={editing.isNew}
-          onClose={() => setEditing(null)}
-          onSave={saveFlow}
-          onDelete={
-            !editing.isNew && !editing.flow.builtIn
-              ? () => {
-                  removeFlow(editing.flow)
                   setEditing(null)
                 }
               : undefined
