@@ -54,7 +54,7 @@ interface ActionTile {
 const TILES: ActionTile[] = [
   {
     label: 'New booking',
-    description: 'Take a reservation over the phone or at the desk.',
+    description: 'Take a booking over the phone or at the desk.',
     cta: 'Open the form',
     href: '/dashboard/bookings?new=1',
     icon: Plus,
@@ -63,7 +63,7 @@ const TILES: ActionTile[] = [
   },
   {
     label: 'Add activity',
-    description: 'Publish a new trip with tiers, add-ons and photos.',
+    description: 'Publish a new activity with prices, add-ons and photos.',
     cta: 'Start a draft',
     href: '/dashboard/activities?new=1',
     icon: Waves,
@@ -72,7 +72,7 @@ const TILES: ActionTile[] = [
   },
   {
     label: 'Block time',
-    description: 'Close a slot for maintenance, weather or a private charter.',
+    description: 'Close a time slot for maintenance, weather or a private booking.',
     cta: 'Edit availability',
     href: '/dashboard/availability?block=1',
     icon: CalendarOff,
@@ -81,7 +81,7 @@ const TILES: ActionTile[] = [
   },
   {
     label: 'Invite teammate',
-    description: 'Add a captain, guide or reservations lead to the crew.',
+    description: 'Add a guide, instructor or desk lead to your team.',
     cta: 'Send an invite',
     href: '/dashboard/team?invite=1',
     icon: UserPlus,

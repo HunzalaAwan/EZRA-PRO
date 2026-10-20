@@ -288,7 +288,7 @@ export function DiningBasicsFields({
       </fieldset>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Cuisine" required error={errors['dining.cuisine']} description="Shown on the listing and used by storefront filters.">
+        <Field label="Cuisine" required error={errors['dining.cuisine']} description="Shown on the storefront and used by its filters.">
           <Input placeholder="Modern Greek" value={dining.cuisine} onChange={(event) => set({ cuisine: event.target.value })} />
           <div className="mt-2 flex flex-wrap gap-1.5">
             {CUISINE_SUGGESTIONS.map((cuisine) => (

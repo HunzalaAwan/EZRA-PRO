@@ -384,14 +384,14 @@ const TAG_POOL = [
 ]
 
 const NOTE_POOL = [
-  'Prefers the first departure of the day — gets seasick in afternoon chop.',
+  'Prefers the first time slot of the day — gets seasick in afternoon chop.',
   'Travels with an underwater camera rig; needs deck space for it.',
   'Books for the whole extended family every year, usually in July.',
-  'Asked to be seated away from the engine on the last trip.',
+  'Asked to be seated away from the engine last time.',
   'Nut allergy on file — confirm catering before every booking.',
   'Repeat guest via the resort concierge desk; invoice goes to the hotel.',
   'Wants an email the week before, not a text message.',
-  'Non-swimmer — always assign a flotation vest and brief the crew.',
+  'Non-swimmer — always assign a flotation vest and brief the team.',
   'Celebrating an anniversary this year; flagged for a complimentary upgrade.',
   'Cancelled once for weather and was gracious about it.',
   'Corporate account — purchase order number required on the invoice.',

@@ -84,7 +84,7 @@ export function DepartureSchedule({ rows: initial, crew, format, activityName, m
   const [adding, setAdding] = React.useState(false)
   const open = format === 'open'
   const meta = ACTIVITY_FORMAT_META[format]
-  const noun = open ? 'arrival slot' : 'departure'
+  const noun = 'time slot'
   const now = React.useMemo(() => new Date(nowIso), [nowIso])
 
   const endKey = addDaysKey(todayKey, range === '7d' ? 7 : range === '14d' ? 14 : 30)
@@ -123,10 +123,10 @@ export function DepartureSchedule({ rows: initial, crew, format, activityName, m
 
   const setStatus = (row: DepartureRowLite, status: DepartureStatus) => {
     patch(row.id, (r) => ({ ...r, status }))
-    const when = `${formatTime(row.startsAt)} ${titleCase(noun)}`
+    const when = `${formatTime(row.startsAt)} ${noun}`
     toast(
-      status === 'cancelled' ? `${when} cancelled` : status === 'weather_hold' ? `${when} on weather hold` : status === 'confirmed' ? `${when} confirmed to run` : status === 'completed' ? `${when} marked away` : `${when} back on sale`,
-      { description: status === 'cancelled' ? `${row.booked} ${pluralize(row.booked, 'guest')} emailed with a refund or a new date.` : status === 'weather_hold' ? 'Guests get a message now and a decision two hours before.' : status === 'confirmed' ? 'Crew and guests get the confirmation.' : undefined },
+      status === 'cancelled' ? `${when} cancelled` : status === 'weather_hold' ? `${when} on weather hold` : status === 'confirmed' ? `${when} confirmed to go ahead` : status === 'completed' ? `${when} marked as done` : `${when} back on sale`,
+      { description: status === 'cancelled' ? `${row.booked} ${pluralize(row.booked, 'guest')} emailed with a refund or a new date.` : status === 'weather_hold' ? 'Guests get a message now and a decision two hours before.' : status === 'confirmed' ? 'Your team and guests get the confirmation.' : undefined },
     )
   }
 
@@ -142,7 +142,7 @@ export function DepartureSchedule({ rows: initial, crew, format, activityName, m
   const add = (row: DepartureRowLite) => {
     setRows((current) => [...current, row].sort((a, b) => a.startsAt.localeCompare(b.startsAt)))
     setAdding(false)
-    toast.success(`${titleCase(noun)} added`, { description: `${dayLabel(dateKeyOf(row.startsAt), todayKey).replace(/ · .*$/, '')} at ${formatTime(row.startsAt)} · ${row.capacity} ${pluralize(row.capacity, 'seat')} · on sale now.` })
+    toast.success('Time slot added', { description: `${dayLabel(dateKeyOf(row.startsAt), todayKey).replace(/ · .*$/, '')} at ${formatTime(row.startsAt)} · ${row.capacity} ${pluralize(row.capacity, 'spot')} · on sale now.` })
   }
 
   const selected = selectedId ? rows.find((r) => r.id === selectedId) ?? null : null
@@ -152,12 +152,12 @@ export function DepartureSchedule({ rows: initial, crew, format, activityName, m
       {/* ---------- head ---------- */}
       <div className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-foreground">{open ? 'Arrival slots' : format === 'dates' ? 'Fixed dates' : 'Departures'}</p>
+          <p className="text-sm font-semibold text-foreground">{format === 'dates' ? 'Fixed dates' : 'Time slots'}</p>
           <p className="mt-0.5 text-xs text-muted">{meta.hint}</p>
           <p className="mt-2 text-xs text-subtle tabular-nums">
-            {formatNumber(live.length)} {pluralize(live.length, noun)} in the next {range.replace('d', ' days')} · {formatNumber(booked)} of {formatNumber(capacity)} seats sold
+            {formatNumber(live.length)} {pluralize(live.length, noun)} in the next {range.replace('d', ' days')} · {formatNumber(booked)} of {formatNumber(capacity)} spots sold
             {nearly ? ` · ${nearly} nearly full` : ''}
-            {noCrew ? ` · ${noCrew} without crew` : ''}
+            {noCrew ? ` · ${noCrew} without a team member` : ''}
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -165,7 +165,7 @@ export function DepartureSchedule({ rows: initial, crew, format, activityName, m
             <Link href="/dashboard/calendar">Calendar</Link>
           </Button>
           <Button size="sm" leftIcon={<CalendarPlus />} onClick={() => setAdding(true)}>
-            {open ? 'Add a slot' : 'Add a departure'}
+            Add a time slot
           </Button>
         </div>
       </div>
@@ -194,7 +194,7 @@ export function DepartureSchedule({ rows: initial, crew, format, activityName, m
         ) : null}
         <Segmented
           size="sm"
-          label="Seats"
+          label="Spots"
           options={[
             { value: 'all', label: 'All' },
             { value: 'open', label: 'Open' },
@@ -209,7 +209,7 @@ export function DepartureSchedule({ rows: initial, crew, format, activityName, m
 
       {/* ---------- days ---------- */}
       {days.length === 0 ? (
-        <EmptyState surface="dashed" size="sm" icon={CalendarClock} title={`Nothing ${seats === 'all' ? 'scheduled' : 'matches'}`} description={seats === 'all' ? `No ${pluralize(2, noun)} in this window. Add one, or widen the range.` : 'Try another seat filter.'} />
+        <EmptyState surface="dashed" size="sm" icon={CalendarClock} title={`Nothing ${seats === 'all' ? 'scheduled' : 'matches'}`} description={seats === 'all' ? `No ${pluralize(2, noun)} in this window. Add one, or widen the range.` : 'Try another spots filter.'} />
       ) : (
         days.map(([dateKey, list]) => {
           const dayBooked = list.reduce((s, r) => s + (r.status === 'cancelled' ? 0 : r.booked), 0)
@@ -219,7 +219,7 @@ export function DepartureSchedule({ rows: initial, crew, format, activityName, m
               <div className="flex items-baseline justify-between gap-3 px-1 pb-2">
                 <h3 className="text-[0.8125rem] font-medium text-foreground">{dayLabel(dateKey, todayKey)}</h3>
                 <span className="text-xs text-subtle tabular-nums">
-                  {list.length} {pluralize(list.length, noun)} · {dayBooked} of {dayCapacity} seats
+                  {list.length} {pluralize(list.length, noun)} · {dayBooked} of {dayCapacity} spots
                 </span>
               </div>
               <ul className="flex list-none flex-col gap-2 p-0">
@@ -243,7 +243,7 @@ export function DepartureSchedule({ rows: initial, crew, format, activityName, m
                               {formatTime(r.startsAt)}
                               <span className="text-faint"> – {formatTime(r.endsAt)}</span>
                             </p>
-                            <p className={cn('text-xs', upcoming && dateKey === todayKey && new Date(r.startsAt).getTime() - now.getTime() < 2 * 3_600_000 && !dead ? 'text-warning' : 'text-subtle')}>{dead && r.status === 'completed' ? 'Away' : formatRelative(r.startsAt, now)}</p>
+                            <p className={cn('text-xs', upcoming && dateKey === todayKey && new Date(r.startsAt).getTime() - now.getTime() < 2 * 3_600_000 && !dead ? 'text-warning' : 'text-subtle')}>{dead && r.status === 'completed' ? 'Done' : formatRelative(r.startsAt, now)}</p>
                             {multiSite ? (
                               <p className="mt-0.5 inline-flex items-center gap-1 text-xs text-muted">
                                 <MapPin className="size-3" aria-hidden="true" />
@@ -258,11 +258,11 @@ export function DepartureSchedule({ rows: initial, crew, format, activityName, m
                         <div className="flex shrink-0 items-center justify-between gap-3 sm:justify-end">
                           {r.weather ? <WeatherPill weather={r.weather} /> : null}
                           {open ? null : r.staff.length > 0 ? (
-                            <AvatarGroup size="xs" max={3} label="Assigned crew" avatars={r.staff.map((m) => ({ id: m.id, name: m.name, src: m.avatarUrl }))} />
+                            <AvatarGroup size="xs" max={3} label="Assigned team" avatars={r.staff.map((m) => ({ id: m.id, name: m.name, src: m.avatarUrl }))} />
                           ) : !dead ? (
                             <span className="inline-flex items-center gap-1 text-xs text-warning">
                               <AlertTriangle className="size-3" aria-hidden="true" />
-                              No crew
+                              No team
                             </span>
                           ) : null}
                           <StatusBadge kind="departure" status={r.status} size="sm" />
@@ -290,7 +290,7 @@ export function DepartureSchedule({ rows: initial, crew, format, activityName, m
 
 function WeatherPill({ weather }: { weather: WeatherSnapshot }) {
   return (
-    <SimpleTooltip label={`${titleCase(weather.condition)} · ${weather.tempC}°C · ${weather.windKts} kts · ${weather.goConfidence}% likely to run`}>
+    <SimpleTooltip label={`${titleCase(weather.condition)} · ${weather.tempC}°C · ${weather.windKts} kts · ${weather.goConfidence}% likely to go ahead`}>
       <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium tabular-nums', weather.goConfidence >= 75 ? 'bg-success-soft text-success' : weather.goConfidence >= 50 ? 'bg-warning-soft text-warning' : 'bg-danger-soft text-danger')}>{weather.goConfidence}%</span>
     </SimpleTooltip>
   )
@@ -320,7 +320,7 @@ function RunSheet({ row: r, crew, open, noun, minParticipants, now, todayKey, on
               <div className="rounded-xl border border-line p-4">
                 <div className="flex items-end justify-between gap-3">
                   <div>
-                    <p className="text-xs text-muted">Seats</p>
+                    <p className="text-xs text-muted">Spots</p>
                     <p className="mt-0.5 font-display text-2xl leading-none font-semibold text-foreground tabular-nums">
                       {r.booked}
                       <span className="text-base text-subtle"> / {r.capacity}</span>
@@ -332,11 +332,11 @@ function RunSheet({ row: r, crew, open, noun, minParticipants, now, todayKey, on
                   </div>
                   {live ? (
                     <span className="inline-flex items-center rounded-full border border-line">
-                      <button type="button" aria-label="Remove a seat" className="grid size-8 place-items-center text-muted disabled:opacity-40" disabled={r.capacity <= r.booked} onClick={() => onSeats(r, -1)}>
+                      <button type="button" aria-label="Remove a spot" className="grid size-8 place-items-center text-muted disabled:opacity-40" disabled={r.capacity <= r.booked} onClick={() => onSeats(r, -1)}>
                         <Minus className="size-3.5" />
                       </button>
                       <span className="min-w-[2rem] text-center text-sm tabular-nums">{r.capacity}</span>
-                      <button type="button" aria-label="Add a seat" className="grid size-8 place-items-center text-muted" onClick={() => onSeats(r, 1)}>
+                      <button type="button" aria-label="Add a spot" className="grid size-8 place-items-center text-muted" onClick={() => onSeats(r, 1)}>
                         <Plus className="size-3.5" />
                       </button>
                     </span>
@@ -349,7 +349,7 @@ function RunSheet({ row: r, crew, open, noun, minParticipants, now, todayKey, on
 
               {!open ? (
                 <div>
-                  <p className="text-xs font-medium text-muted">Crew</p>
+                  <p className="text-xs font-medium text-muted">Team</p>
                   <ul className="mt-2 flex flex-col gap-1.5">
                     {crew.map((m) => {
                       const on = r.staff.some((s) => s.id === m.id)
@@ -367,18 +367,18 @@ function RunSheet({ row: r, crew, open, noun, minParticipants, now, todayKey, on
                         </li>
                       )
                     })}
-                    {crew.length === 0 ? <li className="text-xs text-subtle">No bookable crew yet. Add them under Team.</li> : null}
+                    {crew.length === 0 ? <li className="text-xs text-subtle">No team members yet. Add them under Team.</li> : null}
                   </ul>
                 </div>
               ) : (
-                <p className="text-xs text-subtle">Open entry: guests arrive any time in this slot, so there is no group to crew. Adjust the seats to widen or narrow it.</p>
+                <p className="text-xs text-subtle">Open entry: guests arrive any time in this time slot, so there is no group to assign a team to. Adjust the spots to widen or narrow it.</p>
               )}
 
               {r.weather ? (
                 <div>
                   <p className="text-xs text-muted">Weather</p>
                   <p className={cn('mt-0.5 text-[0.8125rem]', r.weather.goConfidence < 60 ? 'text-warning' : 'text-foreground')}>
-                    {titleCase(r.weather.condition)} · {r.weather.tempC}° · {r.weather.windKts} kts wind{r.weather.swellM ? ` · ${r.weather.swellM} m swell` : ''} · {r.weather.goConfidence}% likely to run
+                    {titleCase(r.weather.condition)} · {r.weather.tempC}° · {r.weather.windKts} kts wind{r.weather.swellM ? ` · ${r.weather.swellM} m swell` : ''} · {r.weather.goConfidence}% likely to go ahead
                   </p>
                 </div>
               ) : null}
@@ -386,7 +386,7 @@ function RunSheet({ row: r, crew, open, noun, minParticipants, now, todayKey, on
             <SheetFooter className="flex-wrap gap-2">
               {live && upcoming && r.status !== 'confirmed' && !open ? (
                 <Button size="sm" onClick={() => onStatus(r, 'confirmed')}>
-                  Confirm it runs
+                  Confirm it goes ahead
                 </Button>
               ) : null}
               {live && upcoming && r.status !== 'weather_hold' ? (
@@ -401,7 +401,7 @@ function RunSheet({ row: r, crew, open, noun, minParticipants, now, todayKey, on
               ) : null}
               {live && !upcoming && !open ? (
                 <Button size="sm" variant="outline" onClick={() => onStatus(r, 'completed')}>
-                  Mark away
+                  Mark as done
                 </Button>
               ) : null}
               {live ? (
@@ -414,7 +414,7 @@ function RunSheet({ row: r, crew, open, noun, minParticipants, now, todayKey, on
                 </Button>
               ) : null}
               <Button asChild size="sm" variant="ghost" className="ml-auto" rightIcon={<ArrowUpRight />}>
-                <Link href={dateKeyOf(r.startsAt) === todayKey ? '/dashboard/manifest' : '/dashboard/calendar'}>{dateKeyOf(r.startsAt) === todayKey ? 'Manifest' : 'Calendar'}</Link>
+                <Link href={dateKeyOf(r.startsAt) === todayKey ? '/dashboard/manifest' : '/dashboard/calendar'}>{dateKeyOf(r.startsAt) === todayKey ? 'Guest list' : 'Calendar'}</Link>
               </Button>
             </SheetFooter>
           </>
@@ -453,8 +453,8 @@ function AddRunDialog({ open, onOpenChange, noun, isOpenEntry, activityName, max
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="md">
         <DialogHeader divider>
-          <DialogTitle>{isOpenEntry ? 'Add an arrival slot' : 'Add a departure'}</DialogTitle>
-          <DialogDescription>{isOpenEntry ? `An extra window for ${activityName}. Guests can pick it on the storefront straight away.` : `An extra run of ${activityName}. It goes on sale on the storefront the moment you add it.`}</DialogDescription>
+          <DialogTitle>Add a time slot</DialogTitle>
+          <DialogDescription>{isOpenEntry ? `An extra time slot for ${activityName}. Guests can pick it on the storefront straight away.` : `An extra time slot for ${activityName}. It goes on sale on the storefront the moment you add it.`}</DialogDescription>
         </DialogHeader>
         <DialogBody className="flex flex-col gap-4 py-4">
           <div className="grid grid-cols-2 gap-4">
@@ -477,9 +477,9 @@ function AddRunDialog({ open, onOpenChange, noun, isOpenEntry, activityName, max
               </Select>
             </Field>
           ) : null}
-          <Field label="Seats" required description={`${activityName} normally takes ${maxCapacity}.`}>{(control) => <Input {...control} type="number" inputMode="numeric" min={1} max={500} value={capacity} onChange={(e) => setCapacity(Math.max(0, Number(e.target.value || 0)))} leftIcon={<Users />} />}</Field>
+          <Field label="Spots" required description={`${activityName} normally takes ${maxCapacity}.`}>{(control) => <Input {...control} type="number" inputMode="numeric" min={1} max={500} value={capacity} onChange={(e) => setCapacity(Math.max(0, Number(e.target.value || 0)))} leftIcon={<Users />} />}</Field>
           {!isOpenEntry && crew.length ? (
-            <Field label="Crew" optional>
+            <Field label="Team" optional>
               <div className="flex flex-wrap gap-1.5">
                 {crew.map((m) => {
                   const on = crewIds.includes(m.id)
@@ -493,7 +493,7 @@ function AddRunDialog({ open, onOpenChange, noun, isOpenEntry, activityName, max
               </div>
             </Field>
           ) : null}
-          <Field label="Note for the crew" optional>{(control) => <Textarea {...control} rows={2} placeholder="Charter for the Okada family, pick up at the north pier…" />}</Field>
+          <Field label="Note for your team" optional>{(control) => <Textarea {...control} rows={2} placeholder="Charter for the Okada family, pick up at the north pier…" />}</Field>
         </DialogBody>
         <DialogFooter divider>
           <Button variant="ghost" size="sm" leftIcon={<X />} onClick={() => onOpenChange(false)}>

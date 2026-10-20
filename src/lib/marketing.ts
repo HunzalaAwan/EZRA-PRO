@@ -91,8 +91,8 @@ export const EMPTY_FILTER: AudienceFilter = { segments: [], activitySlugs: [], c
 export function defaultAudiences(homeCountry: string): Audience[] {
   return [
     { id: 'aud_all', name: 'Everyone subscribed', description: 'Every guest who said yes to email or texts.', filter: EMPTY_FILTER, builtIn: true },
-    { id: 'aud_new', name: 'First-timers', description: 'Booked once. The best time to win a second trip.', filter: { ...EMPTY_FILTER, segments: ['new'] }, builtIn: true },
-    { id: 'aud_repeat', name: 'Repeat guests', description: 'Two trips or more.', filter: { ...EMPTY_FILTER, minBookings: 2 }, builtIn: true },
+    { id: 'aud_new', name: 'First-timers', description: 'Booked once. The best time to win a second booking.', filter: { ...EMPTY_FILTER, segments: ['new'] }, builtIn: true },
+    { id: 'aud_repeat', name: 'Repeat guests', description: 'Two bookings or more.', filter: { ...EMPTY_FILTER, minBookings: 2 }, builtIn: true },
     { id: 'aud_vip', name: 'VIPs', description: 'Your biggest spenders.', filter: { ...EMPTY_FILTER, segments: ['vip'] }, builtIn: true },
     {
       id: 'aud_lapsed',
@@ -176,7 +176,7 @@ export function describeFilter(filter: AudienceFilter, activityName: (slug: stri
   const parts: string[] = []
   if (filter.segments.length > 0) parts.push(filter.segments.map((segment) => SEGMENT_LABEL[segment]).join(' or '))
   if (filter.activitySlugs.length > 0) parts.push(`booked ${filter.activitySlugs.map(activityName).join(' or ')}`)
-  if (filter.lastTrip) parts.push(filter.lastTrip.op === 'within' ? `last trip in the past ${filter.lastTrip.days} days` : `no trip in ${filter.lastTrip.days} days`)
+  if (filter.lastTrip) parts.push(filter.lastTrip.op === 'within' ? `last booking in the past ${filter.lastTrip.days} days` : `no booking in ${filter.lastTrip.days} days`)
   if (filter.minBookings) parts.push(`${filter.minBookings}+ bookings`)
   if (filter.minSpend) parts.push(`spent ${currency ? formatCurrency(filter.minSpend * 100, currency) : filter.minSpend}+`)
   if (filter.countries.length > 0) parts.push(`from ${filter.countries.join(', ')}`)
@@ -419,8 +419,8 @@ export function defaultForms(slug: string): SignupForms {
   return {
     popup: {
       enabled: true,
-      headline: 'Get 10% off your first trip',
-      text: 'Join the list for first dibs on new trips, last-minute seats and the odd locals-only deal. No spam, unsubscribe any time.',
+      headline: 'Get 10% off your first booking',
+      text: 'Join the list for first dibs on new activities, last-minute spots and the odd locals-only deal. No spam, unsubscribe any time.',
       button: 'Send my code',
       trigger: 'delay',
       delaySeconds: 12,
@@ -429,13 +429,13 @@ export function defaultForms(slug: string): SignupForms {
       collectPhone: false,
       offer: { enabled: true, percent: 10, validDays: 30, code: `${prefix}10` },
     },
-    footer: { enabled: true, headline: 'Trip news and last-minute seats', text: 'One email a month, at most.' },
+    footer: { enabled: true, headline: 'News and last-minute spots', text: 'One email a month, at most.' },
     checkout: {
       enabled: true,
-      label: 'Send me new trips and offers. Unsubscribe any time.',
+      label: 'Send me new activities and offers. Unsubscribe any time.',
       preChecked: false,
       sms: true,
-      smsLabel: 'Text me last-minute seats. Msg & data rates may apply. Reply STOP to opt out.',
+      smsLabel: 'Text me last-minute spots. Msg & data rates may apply. Reply STOP to opt out.',
     },
   }
 }

@@ -2,7 +2,7 @@
 
 /**
  * The guest profile. Identity and controls up top, six facts underneath, then a
- * two-column split: the full trip history on the left, reputation / money /
+ * two-column split: the full booking history on the left, reputation / money /
  * internal context on the right.
  */
 
@@ -342,7 +342,7 @@ export function CustomerDetail({
       lastName: customer.lastName,
       email: customer.email,
       phone: customer.phone,
-      activityName: pick?.activityName ?? 'your trip',
+      activityName: pick?.activityName ?? 'your booking',
       startsAt: pick?.departureAt ?? NOW.toISOString().slice(0, 19),
       meetingPoint: '',
       party: pick?.partySize ?? 1,
@@ -562,7 +562,7 @@ export function CustomerDetail({
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <FactTile
           icon={Ticket}
-          label="Trips"
+          label="Bookings"
           value={formatNumber(stats.totalBookings)}
           hint={
             stats.cancellations > 0
@@ -579,7 +579,7 @@ export function CustomerDetail({
         />
         <FactTile
           icon={CreditCard}
-          label="Average order"
+          label="Average booking"
           value={formatCurrency(stats.avgOrderValue, currency)}
           hint={methods.length > 0 ? `${methods.length} payment method${methods.length === 1 ? '' : 's'}` : 'No cards on file'}
         />
@@ -602,14 +602,14 @@ export function CustomerDetail({
           hint={
             stats.ratingCount > 0
               ? `${stats.ratingCount} review${stats.ratingCount === 1 ? '' : 's'} left`
-              : 'Never rated a trip'
+              : 'Never left a rating'
           }
         />
       </div>
 
       {/* ================= BODY ================= */}
       <div className="grid gap-5 lg:grid-cols-3">
-        {/* ---- trip history ---- */}
+        {/* ---- booking history ---- */}
         <RefundDialog
           open={refundTarget !== null}
           onOpenChange={(open) => {
@@ -631,7 +631,7 @@ export function CustomerDetail({
             <Button
               variant="ghost"
               size="xs"
-              onClick={() => toast.success('Trip history exported')}
+              onClick={() => toast.success('Booking history exported')}
             >
               Export
             </Button>
@@ -741,7 +741,7 @@ export function CustomerDetail({
                             <DropdownMenuItem asChild>
                               <Link href={`/dashboard/bookings/${booking.id}`}>
                                 <ArrowUpRight />
-                                Open reservation
+                                Open booking
                               </Link>
                             </DropdownMenuItem>
                             <DropdownMenuItem onSelect={() => toast.success(`Confirmation resent for ${booking.reference}`)}>
@@ -789,7 +789,7 @@ export function CustomerDetail({
                   icon={Star}
                   hideMedallion
                   title="No reviews yet"
-                  description="Send a follow-up after their next trip to ask for one."
+                  description="Send a follow-up after their next booking to ask for one."
                   action={
                     <Button
                       variant="outline"
@@ -846,7 +846,7 @@ export function CustomerDetail({
                   hideMedallion
                   icon={CreditCard}
                   title="No stored methods"
-                  description="Every trip so far was settled at the dock."
+                  description="Every booking so far was paid in person."
                 />
               ) : (
                 <ul className="space-y-2">
@@ -896,7 +896,7 @@ export function CustomerDetail({
               <Textarea
                 value={noteDraft}
                 onChange={(event) => setNoteDraft(event.currentTarget.value)}
-                placeholder={`Add context about ${customer.firstName} — preferences, mobility, who to seat them with…`}
+                placeholder={`Add context about ${customer.firstName} — preferences, mobility, who to pair them with…`}
                 rows={3}
                 aria-label="New internal note"
               />

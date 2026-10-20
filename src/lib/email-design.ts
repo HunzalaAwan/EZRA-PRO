@@ -134,7 +134,7 @@ export function newBlock(type: EmailBlockType, ctx: Pick<EmailContext, 'activiti
         right: { src: second?.image ?? '', title: second?.name ?? 'Right', text: second?.tagline ?? '', link: second ? `activity:${second.slug}` : '{book_link}' },
       }
     case 'coupon':
-      return { id, type, title: '{offer_percent} off your next trip', note: 'Enter the code at checkout.' }
+      return { id, type, title: '{offer_percent} off your next booking', note: 'Enter the code at checkout.' }
     case 'divider':
       return { id, type }
     case 'spacer':
@@ -204,15 +204,15 @@ export const EMAIL_TEMPLATES: EmailTemplateDef[] = [
   {
     id: 'newsletter',
     name: 'Newsletter',
-    hint: 'A story and two trips side by side',
+    hint: 'A story and two activities side by side',
     build: (ctx, accent) => {
       const [a, c] = ctx.activities
       return {
         theme: baseTheme(accent),
         blocks: [
-          b({ type: 'header', align: 'left', tagline: 'News from the water' }),
+          b({ type: 'header', align: 'left', tagline: 'News and new dates' }),
           b({ type: 'heading', text: 'What is new this month', size: 'lg', align: 'left' }),
-          b({ type: 'text', text: 'Hi {first_name},\n\nHere is what the crew has been seeing out there, the best days to go, and a couple of trips worth a look.', align: 'left', muted: false }),
+          b({ type: 'text', text: 'Hi {first_name},\n\nHere is what the team has been seeing out there, the best days to go, and a couple of activities worth a look.', align: 'left', muted: false }),
           b({
             type: 'columns',
             left: { src: a?.image ?? '', title: a?.name ?? '', text: a?.tagline ?? '', link: a ? `activity:${a.slug}` : '{book_link}' },
@@ -235,7 +235,7 @@ export const EMAIL_TEMPLATES: EmailTemplateDef[] = [
       blocks: [
         b({ type: 'header', align: 'center', tagline: '' }),
         b({ type: 'heading', text: '{offer_percent} off, just for you', size: 'xl', align: 'center' }),
-        b({ type: 'text', text: 'Hi {first_name}, book any trip in the next two weeks and save. Bring a friend.', align: 'center', muted: true }),
+        b({ type: 'text', text: 'Hi {first_name}, book any activity in the next two weeks and save. Bring a friend.', align: 'center', muted: true }),
         b({ type: 'coupon', title: 'Your code', note: 'Enter it at checkout. Good for 14 days.' }),
         b({ type: 'button', label: 'Use my code', link: '{book_link}', align: 'center', style: 'solid', full: true }),
         b({ type: 'spacer', size: 'sm' }),
@@ -246,7 +246,7 @@ export const EMAIL_TEMPLATES: EmailTemplateDef[] = [
   },
   {
     id: 'launch',
-    name: 'New trip',
+    name: 'New activity',
     hint: 'Announce something new',
     build: (ctx, accent) => {
       const a = ctx.activities[0]
@@ -256,7 +256,7 @@ export const EMAIL_TEMPLATES: EmailTemplateDef[] = [
           b({ type: 'header', align: 'left', tagline: 'Just announced' }),
           b({ type: 'image', src: a?.image ?? '', alt: a?.name ?? '', link: a ? `activity:${a.slug}` : '{book_link}', width: 'full', rounded: true }),
           b({ type: 'heading', text: a ? `New: ${a.name}` : 'Something new', size: 'lg', align: 'left' }),
-          b({ type: 'text', text: 'Hi {first_name}, we have been working on this one for a while and you are among the first to hear. Early bookers get the best seats.', align: 'left', muted: false }),
+          b({ type: 'text', text: 'Hi {first_name}, we have been working on this one for a while and you are among the first to hear. Early bookers get the best spots.', align: 'left', muted: false }),
           ...(a ? [b({ type: 'activity', slug: a.slug, showPrice: true, buttonLabel: 'Be first to book' })] : []),
           b({ type: 'footer', text: 'You get this because you booked with {business} or joined our list.' }),
         ],
@@ -266,13 +266,13 @@ export const EMAIL_TEMPLATES: EmailTemplateDef[] = [
   {
     id: 'thanks',
     name: 'Thank you',
-    hint: 'After the trip: thanks and a review',
+    hint: 'After the activity: thanks and a review',
     build: (ctx, accent) => ({
       theme: { ...baseTheme(accent), background: '#EFF5EF', font: 'serif' },
       blocks: [
         b({ type: 'header', align: 'center', tagline: '' }),
         b({ type: 'heading', text: 'Thank you for coming out with us', size: 'lg', align: 'center' }),
-        b({ type: 'text', text: 'Hi {first_name}, it was a pleasure having you aboard {activity}. If you have a minute, a review helps a small crew more than anything.', align: 'center', muted: true }),
+        b({ type: 'text', text: 'Hi {first_name}, it was a pleasure having you on {activity}. If you have a minute, a review helps a small team more than anything.', align: 'center', muted: true }),
         b({ type: 'button', label: 'Leave a review', link: '{manage_link}', align: 'center', style: 'solid', full: false }),
         b({ type: 'divider' }),
         b({ type: 'heading', text: 'Next time', size: 'md', align: 'center' }),

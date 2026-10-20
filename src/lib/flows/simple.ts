@@ -41,18 +41,18 @@ export interface SimpleAutomation {
 /** The moments the simple editor lists, in plain words, in the order owners look for them. */
 export const SIMPLE_TRIGGERS: { type: TriggerType; label: string; offsetWords?: string }[] = [
   { type: 'booking_made', label: 'Someone books' },
-  { type: 'before_start', label: 'Before the trip or visit', offsetWords: 'before it starts' },
-  { type: 'after_end', label: 'After the trip or visit', offsetWords: 'after it ends' },
+  { type: 'before_start', label: 'Before the booking', offsetWords: 'before it starts' },
+  { type: 'after_end', label: 'After the booking', offsetWords: 'after it ends' },
   { type: 'booking_cancelled', label: 'A booking is cancelled' },
   { type: 'no_show', label: 'A guest doesn’t turn up' },
   { type: 'joined_list', label: 'Someone joins your list' },
   { type: 'checkout_abandoned', label: 'Someone leaves without booking', offsetWords: 'after they leave' },
   { type: 'review_left', label: 'A guest leaves a good review' },
-  { type: 'lapsed', label: 'A guest hasn’t been back', offsetWords: 'since their last trip' },
+  { type: 'lapsed', label: 'A guest hasn’t been back', offsetWords: 'since their last booking' },
   { type: 'became_vip', label: 'A guest becomes a regular' },
-  { type: 'trip_anniversary', label: 'A year after their trip' },
+  { type: 'trip_anniversary', label: 'A year after their booking' },
   { type: 'gift_card_expiring', label: 'A gift card is running out', offsetWords: 'before it runs out' },
-  { type: 'low_fill', label: 'A trip or visit has empty seats', offsetWords: 'before it starts' },
+  { type: 'low_fill', label: 'A time slot has empty spots', offsetWords: 'before it starts' },
 ]
 
 export const ONLY_IF_LABEL: Record<SimpleOnlyIf, string> = {

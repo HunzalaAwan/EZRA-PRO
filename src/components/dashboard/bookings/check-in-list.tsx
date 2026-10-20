@@ -269,7 +269,7 @@ export function CheckInList({
   if (parties.length === 0) {
     return (
       <p className="rounded-xl border border-dashed border-line px-4 py-6 text-center text-sm text-subtle">
-        No guests booked on this departure yet.
+        No guests booked on this time slot yet.
       </p>
     )
   }
@@ -281,7 +281,7 @@ export function CheckInList({
         <CheckInRing checkedIn={guestsIn} total={guestsExpected} size={48} />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-foreground tabular-nums">
-            {guestsIn} of {guestsExpected} guests aboard
+            {guestsIn} of {guestsExpected} guests checked in
           </p>
           <p className="text-xs text-subtle tabular-nums">
             {parties.length} {parties.length === 1 ? 'party' : 'parties'}
@@ -296,7 +296,7 @@ export function CheckInList({
               debounceMs={0}
               size="sm"
               tone="sunken"
-              label="Find a guest on this departure"
+              label="Find a guest on this time slot"
               placeholder="Find a guest…"
               shortcut={false}
             />
@@ -310,7 +310,7 @@ export function CheckInList({
           disabled={allIn}
           className="print:hidden"
         >
-          {allIn ? 'All aboard' : 'Check in all'}
+          {allIn ? 'All checked in' : 'Check in all'}
         </Button>
       </div>
 
@@ -446,7 +446,7 @@ export function CheckInList({
       {visible.length === 0 ? (
         <p className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-line px-4 py-6 text-sm text-subtle">
           <Search aria-hidden="true" className="size-4" />
-          No guest on this departure matches “{query.trim()}”.
+          No guest on this time slot matches “{query.trim()}”.
         </p>
       ) : null}
       <Dialog open={pending !== null} onOpenChange={(value) => !value && setPending(null)}>

@@ -391,7 +391,7 @@ export function CalendarShell({
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-line-subtle px-3.5 py-2">
           <dl className="tabular flex flex-wrap items-center gap-x-4 gap-y-1 text-[0.75rem]">
             <div className="flex items-baseline gap-1.5">
-              <dt className="text-subtle">Departures</dt>
+              <dt className="text-subtle">Time slots</dt>
               <dd className="font-semibold text-foreground">{formatNumber(stats.running)}</dd>
             </div>
             <Separator orientation="vertical" className="hidden h-3.5 sm:block" />

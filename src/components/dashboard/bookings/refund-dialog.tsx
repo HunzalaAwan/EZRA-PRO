@@ -49,7 +49,7 @@ export type RefundReason =
 export const REFUND_REASONS: { value: RefundReason; label: string }[] = [
   { value: 'guest_request', label: 'Guest asked to cancel' },
   { value: 'weather', label: 'Weather or sea state' },
-  { value: 'operator_cancelled', label: 'We cancelled the departure' },
+  { value: 'operator_cancelled', label: 'We cancelled the time slot' },
   { value: 'overbooked', label: 'Overbooked' },
   { value: 'duplicate', label: 'Duplicate charge' },
   { value: 'goodwill', label: 'Goodwill after a complaint' },
@@ -165,7 +165,7 @@ export function RefundDialog({ open, onOpenChange, targets, currency, onConfirm 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="md">
         <DialogHeader>
-          <DialogTitle>{single ? `Refund ${single.guestName}` : `Refund ${targets.length} reservations`}</DialogTitle>
+          <DialogTitle>{single ? `Refund ${single.guestName}` : `Refund ${targets.length} bookings`}</DialogTitle>
           <DialogDescription>
             {single
               ? `${single.reference} · ${single.activityName} · ${formatDateShort(single.departureAt)}`
@@ -176,7 +176,7 @@ export function RefundDialog({ open, onOpenChange, targets, currency, onConfirm 
         <DialogBody className="space-y-5">
           {refundable <= 0 ? (
             <p className="rounded-xl border border-line bg-surface-sunken px-3.5 py-3 text-sm text-muted">
-              Nothing is left to return on {single ? 'this reservation' : 'these reservations'}: every dollar
+              Nothing is left to return on {single ? 'this booking' : 'these bookings'}: every dollar
               collected has already been refunded.
             </p>
           ) : null}
@@ -193,7 +193,7 @@ export function RefundDialog({ open, onOpenChange, targets, currency, onConfirm 
                 <RadioGroupCard
                   value="partial"
                   label="Partial refund"
-                  description="Return part of it; the rest stays with you and the seats stay booked."
+                  description="Return part of it; the rest stays with you and the spots stay booked."
                 />
               </RadioGroup>
 
@@ -294,7 +294,7 @@ export function RefundDialog({ open, onOpenChange, targets, currency, onConfirm 
           <div className="space-y-3">
             <label
               className={cn('flex items-start gap-3', !releaseAllowed && 'opacity-50')}
-              title={releaseAllowed ? undefined : 'Partial refunds keep the reservation in place.'}
+              title={releaseAllowed ? undefined : 'Partial refunds keep the booking in place.'}
             >
               <Switch
                 size="sm"
@@ -304,11 +304,11 @@ export function RefundDialog({ open, onOpenChange, targets, currency, onConfirm 
                 className="mt-0.5"
               />
               <span className="text-sm">
-                <span className="block font-medium text-foreground">Cancel the reservation too</span>
+                <span className="block font-medium text-foreground">Cancel the booking too</span>
                 <span className="block text-xs text-muted">
                   {seats > 0
-                    ? `Releases ${seats} ${seats === 1 ? 'seat' : 'seats'} back to the departure.`
-                    : 'Nothing to release: the reservation is already closed.'}
+                    ? `Releases ${seats} ${seats === 1 ? 'spot' : 'spots'} back to the time slot.`
+                    : 'Nothing to release: the booking is already closed.'}
                 </span>
               </span>
             </label>

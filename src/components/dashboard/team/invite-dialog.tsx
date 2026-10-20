@@ -128,7 +128,7 @@ export function InviteDialog({
               Invite people to {CURRENT_TENANT.name}
             </DialogTitle>
             <DialogDescription>
-              Invitations expire after seven days. Seats are only billed once someone accepts.
+              Invitations expire after seven days. You only pay for someone once they accept.
             </DialogDescription>
           </DialogHeader>
 
@@ -153,7 +153,7 @@ export function InviteDialog({
                   separators={[',', ' ', ';']}
                   transform={(raw) => raw.trim().toLowerCase()}
                   validate={validateTag}
-                  placeholder="crew@bluehorizonmaui.com"
+                  placeholder="team@bluehorizonmaui.com"
                 />
               )}
             </Field>
@@ -207,7 +207,7 @@ export function InviteDialog({
                   setMessage(e.target.value)
                   setErrors((prev) => ({ ...prev, message: undefined }))
                 }}
-                placeholder="Welcome aboard — you'll be running the dawn patrol manifests with Tui."
+                placeholder="Welcome to the team — you'll be running the morning guest lists with Tui."
               />
             </Field>
 
@@ -215,7 +215,7 @@ export function InviteDialog({
               <AlertDescription>
                 {ROLE_META[role].label}s{' '}
                 {role === 'guide'
-                  ? 'only see departures they are assigned to, and cannot view revenue.'
+                  ? 'only see time slots they are assigned to, and cannot view revenue.'
                   : role === 'viewer'
                     ? 'can read reports but cannot change a single record.'
                     : 'can be scoped further per activity once they accept.'}

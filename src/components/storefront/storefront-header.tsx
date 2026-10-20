@@ -108,7 +108,7 @@ export function StorefrontHeader({ tenant, kind = 'experiences' }: StorefrontHea
             { label: 'Contact', href: `${base}#contact` },
           ]
         : [
-            { label: 'Experiences', href: `${base}#experiences` },
+            { label: 'Activities', href: `${base}#experiences` },
             { label: 'About', href: `${base}#about` },
             { label: 'Contact', href: `${base}#contact` },
           ]
@@ -117,7 +117,7 @@ export function StorefrontHeader({ tenant, kind = 'experiences' }: StorefrontHea
       ? { label: 'Order online', href: `${base}#menu`, browse: 'See the menu', browseHref: `${base}#menu` }
       : kind === 'hotel'
         ? { label: 'Book a stay', href: `${base}#rooms`, browse: 'See the rooms', browseHref: `${base}#rooms` }
-        : { label: brand.ctaLabel ?? 'Book now', href: `${base}#experiences`, browse: 'Browse experiences', browseHref: `${base}#experiences` }
+        : { label: brand.ctaLabel ?? 'Book now', href: `${base}#experiences`, browse: 'Browse activities', browseHref: `${base}#experiences` }
 
   const activeLanguage = LANGUAGES.find((l) => l.code === language) ?? LANGUAGES[0]
 

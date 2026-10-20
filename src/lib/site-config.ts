@@ -169,7 +169,7 @@ export const DASHBOARD_NAV: DashboardNavSection[] = [
       { label: 'Calendar', href: '/dashboard/calendar', icon: 'CalendarDays', countKey: 'todayDepartures' },
       { label: 'Bookings', href: '/dashboard/bookings', icon: 'Ticket', countKey: 'pendingBookings' },
       { label: 'Inbox', href: '/dashboard/inbox', icon: 'MessageCircle', countKey: 'openConversations' },
-      { label: 'Manifest', href: '/dashboard/manifest', icon: 'ClipboardList' },
+      { label: 'Guest list', href: '/dashboard/manifest', icon: 'ClipboardList' },
     ],
   },
   {
@@ -196,9 +196,9 @@ export const DASHBOARD_NAV: DashboardNavSection[] = [
     heading: 'Grow',
     items: [
       { label: 'Analytics', href: '/dashboard/analytics', icon: 'ChartSpline' },
-      { label: 'Customers', href: '/dashboard/customers', icon: 'Users' },
+      { label: 'Guests', href: '/dashboard/customers', icon: 'Users' },
       { label: 'Marketing', href: '/dashboard/marketing', icon: 'Megaphone' },
-      { label: 'Abandoned carts', href: '/dashboard/abandoned', icon: 'ShoppingCart', countKey: 'abandonedCarts' },
+      { label: 'Unfinished bookings', href: '/dashboard/abandoned', icon: 'ShoppingCart', countKey: 'abandonedCarts' },
       { label: 'Payments', href: '/dashboard/payments', icon: 'CreditCard' },
       { label: 'Reviews', href: '/dashboard/reviews', icon: 'Star' },
     ],

@@ -42,8 +42,8 @@ interface Capability {
 const CAPABILITIES: Capability[] = [
   {
     key: 'calendar',
-    label: 'Calendar & manifests',
-    hint: 'See departures, print run sheets, check guests in',
+    label: 'Calendar & guest lists',
+    hint: 'See time slots, print guest lists, check guests in',
     grants: {
       owner: 'full',
       admin: 'full',
@@ -56,7 +56,7 @@ const CAPABILITIES: Capability[] = [
   {
     key: 'bookings',
     label: 'Take & edit bookings',
-    hint: 'Create, move, resize and cancel reservations',
+    hint: 'Create, move, resize and cancel bookings',
     grants: {
       owner: 'full',
       admin: 'full',
@@ -82,7 +82,7 @@ const CAPABILITIES: Capability[] = [
   {
     key: 'schedule',
     label: 'Schedule & capacity',
-    hint: 'Open departures, set capacity, assign crew and vessels',
+    hint: 'Open time slots, set capacity, assign team members and resources',
     grants: {
       owner: 'full',
       admin: 'full',
@@ -179,7 +179,7 @@ const GRANT_META: Record<
   { icon: typeof Check; className: string; label: string }
 > = {
   full: { icon: Check, className: 'text-success', label: 'Full access' },
-  limited: { icon: Check, className: 'text-warning', label: 'Own departures only' },
+  limited: { icon: Check, className: 'text-warning', label: 'Own time slots only' },
   view: { icon: Eye, className: 'text-info', label: 'Read only' },
   none: { icon: Minus, className: 'text-faint', label: 'No access' },
 }
@@ -307,13 +307,13 @@ export function TeamPageClient({
           icon={<Users className="size-4" />}
           value={members.length}
           label="Workspace members"
-          hint={`${members.length} of 15 seats on the Growth plan`}
+          hint={`${members.length} of 15 team members on the Growth plan`}
         />
         <SummaryTile
           icon={<ShieldCheck className="size-4" />}
           value={bookableCount}
-          label="Assignable to departures"
-          hint="Captains, guides and instructors"
+          label="Assignable to time slots"
+          hint="Guides and instructors"
         />
         <SummaryTile
           icon={<UserPlus className="size-4" />}

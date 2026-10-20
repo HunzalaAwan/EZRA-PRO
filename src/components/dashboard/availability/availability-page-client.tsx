@@ -124,12 +124,12 @@ export function AvailabilityPageClient({
       if (next.has(template.activity.id)) {
         next.delete(template.activity.id)
         toast.success(`${template.activity.name} resumed`, {
-          description: 'Future departures will generate again from tomorrow.',
+          description: 'Future time slots will generate again from tomorrow.',
         })
       } else {
         next.add(template.activity.id)
         toast(`${template.activity.name} paused`, {
-          description: 'No new departures will be generated. Existing ones still run.',
+          description: 'No new time slots will be generated. Existing ones still go ahead.',
         })
       }
       return next
@@ -146,7 +146,7 @@ export function AvailabilityPageClient({
       <PageHeader
         className="mb-0"
         title="Availability"
-        description="Operating hours, blackout dates and the schedule templates that generate every departure on your calendar."
+        description="Operating hours, blackout dates and the schedule templates that generate every time slot on your calendar."
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" asChild>
@@ -157,7 +157,7 @@ export function AvailabilityPageClient({
               leftIcon={<Save />}
               onClick={() =>
                 toast.success('Availability published', {
-                  description: 'Departures for the next 12 months have been regenerated.',
+                  description: 'Time slots for the next 12 months have been regenerated.',
                 })
               }
             >
@@ -172,12 +172,12 @@ export function AvailabilityPageClient({
         <SummaryTile
           icon={<CalendarClock className="size-4" />}
           value={formatNumber(PREVIEW_TOTALS.departures)}
-          label="Departures, next 14 days"
+          label="Time slots, next 14 days"
         />
         <SummaryTile
           icon={<Users className="size-4" />}
           value={formatNumber(PREVIEW_TOTALS.seats)}
-          label="Seats opened"
+          label="Spots opened"
         />
         <SummaryTile
           icon={<Layers className="size-4" />}
@@ -203,7 +203,7 @@ export function AvailabilityPageClient({
               Schedule templates
             </CardTitle>
             <CardDescription>
-              One template per activity. Each generates departures inside the operating hours
+              One template per activity. Each generates time slots inside the operating hours
               above, skipping blackout dates.
             </CardDescription>
           </div>
@@ -254,7 +254,7 @@ export function AvailabilityPageClient({
                       </span>
                       <span className="inline-flex items-center gap-1">
                         <Ship className="size-3.5" aria-hidden="true" />
-                        {template.capacity} {pluralize(template.capacity, 'seat')} per departure
+                        {template.capacity} {pluralize(template.capacity, 'spot')} per time slot
                       </span>
                       <span className="tabular">
                         {formatNumber(template.departures)} generated in the 16-week window
@@ -307,7 +307,7 @@ export function AvailabilityPageClient({
           <div className="min-w-0">
             <CardTitle className="flex items-center gap-2">
               <CalendarDays className="size-4 text-primary" aria-hidden="true" />
-              Generated departures — next fortnight
+              Generated time slots — next fortnight
             </CardTitle>
             <CardDescription>
               Exactly what these rules produce, day by day. Blackout dates would appear here as
@@ -316,7 +316,7 @@ export function AvailabilityPageClient({
           </div>
           <CardToolbar>
             <Badge variant="primary" size="sm">
-              {formatNumber(PREVIEW_TOTALS.departures)} departures
+              {formatNumber(PREVIEW_TOTALS.departures)} time slots
             </Badge>
           </CardToolbar>
         </CardHeader>
@@ -366,7 +366,7 @@ export function AvailabilityPageClient({
 
                     {events.length === 0 ? (
                       <p className="rounded-lg border border-dashed border-line-strong px-2 py-3 text-center text-xs text-faint">
-                        No departures
+                        No time slots
                       </p>
                     ) : (
                       <>
@@ -377,8 +377,8 @@ export function AvailabilityPageClient({
                           showLabel={false}
                         />
                         <p className="text-xs text-muted tabular">
-                          {events.length} {pluralize(events.length, 'departure')} ·{' '}
-                          {formatNumber(booked)}/{formatNumber(capacity)} seats
+                          {events.length} {pluralize(events.length, 'time slot')} ·{' '}
+                          {formatNumber(booked)}/{formatNumber(capacity)} spots
                         </p>
 
                         <ul className="flex flex-col gap-1">

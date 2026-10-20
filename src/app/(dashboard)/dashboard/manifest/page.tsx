@@ -8,9 +8,9 @@ import { ManifestView } from '@/components/dashboard/bookings/manifest-view'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: 'Daily manifest · EZRA Pro',
+  title: 'Guest list',
   description:
-    'The dock run sheet — every departure, crew, vessel and guest for the day, with one-tap check-in.',
+    'Every time slot, team member, resource and guest for the day, with one-tap check-in.',
 }
 
 export default async function ManifestPage() {
@@ -20,8 +20,8 @@ export default async function ManifestPage() {
       <div className="print:hidden">
         <PageHeader
           className="mb-0"
-          title="Daily manifest"
-          description="Pick a departure on the left, check guests in on the right."
+          title="Guest list"
+          description="Pick a time slot on the left, check guests in on the right."
         />
       </div>
 

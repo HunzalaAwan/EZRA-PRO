@@ -116,7 +116,7 @@ export function MarketingOverviewClient({ tenant: tenantRecord, nowIso, data }: 
 
   const tools = [
     { label: 'Growth automations', text: `${growth.filter((flow) => flow.status === 'live').length} of ${growth.length} on`, href: '/dashboard/marketing/automations', icon: Zap, checked: growth.some((flow) => flow.status === 'live'), toggle: null },
-    { label: 'Storefront pop-up', text: marketing.forms.popup.offer.enabled ? `${marketing.forms.popup.offer.percent}% first-trip code` : 'List only, no code', href: '/dashboard/marketing/forms', icon: MousePointerClick, checked: marketing.forms.popup.enabled, toggle: null },
+    { label: 'Storefront pop-up', text: marketing.forms.popup.offer.enabled ? `${marketing.forms.popup.offer.percent}% first-booking code` : 'List only, no code', href: '/dashboard/marketing/forms', icon: MousePointerClick, checked: marketing.forms.popup.enabled, toggle: null },
     { label: 'Checkout opt-in', text: marketing.forms.checkout.sms ? 'Email and texts' : 'Email', href: '/dashboard/marketing/forms', icon: Mail, checked: marketing.forms.checkout.enabled, toggle: (value: boolean) => marketing.setForms({ ...marketing.forms, checkout: { ...marketing.forms.checkout, enabled: value } }) },
   ]
 
@@ -124,9 +124,9 @@ export function MarketingOverviewClient({ tenant: tenantRecord, nowIso, data }: 
   const nextTrip = store.byId('flow_next_trip')
   const ideas = [
     winBack && !on(winBack.id) && lapsed > 0 ? { text: `${lapsed} guests have not been back in four months. Turn on “${winBack.name}”.`, action: 'Turn on', run: () => setOn(winBack, true) } : null,
-    nextTrip && !on(nextTrip.id) && firstTimers > 0 ? { text: `${firstTimers} first-timers could get a next-trip code two weeks after their trip.`, action: 'Turn on', run: () => setOn(nextTrip, true) } : null,
+    nextTrip && !on(nextTrip.id) && firstTimers > 0 ? { text: `${firstTimers} first-timers could get a next-booking code two weeks after their activity.`, action: 'Turn on', run: () => setOn(nextTrip, true) } : null,
     !marketing.forms.popup.enabled ? { text: 'The storefront pop-up is off. It is usually the fastest way to grow the list.', action: 'Open', href: '/dashboard/marketing/forms' } : null,
-    !added('last-minute-seats') ? { text: 'Quiet trips or visits get nothing. “Last-minute seats” offers the spare seats to past guests.', action: 'Add', href: '/dashboard/marketing/automations?recipe=last-minute-seats' } : null,
+    !added('last-minute-seats') ? { text: 'Quiet time slots get nothing. “Last-minute spots” offers the spare spots to past guests.', action: 'Add', href: '/dashboard/marketing/automations?recipe=last-minute-seats' } : null,
     !added('waiver-reminder') ? { text: 'Unsigned waivers slow down check-in. “Waiver reminder” chases them before the day.', action: 'Add', href: '/dashboard/marketing/automations?recipe=waiver-reminder' } : null,
     recentCampaigns.length === 0 ? { text: 'No campaign in the last 30 days. A short newsletter keeps you in mind.', action: 'Write one', href: '/dashboard/marketing/campaigns' } : null,
   ].filter(Boolean).slice(0, 4) as { text: string; action: string; run?: () => void; href?: string }[]

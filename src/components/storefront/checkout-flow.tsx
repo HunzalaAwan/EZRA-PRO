@@ -426,7 +426,7 @@ export function CheckoutFlow({
   const displayQuote = React.useMemo(() => {
     if (promoOff === 0 && giftOff === 0 && tip === 0) return withPickup
     const lines = [...withPickup.addOnLines]
-    if (tip > 0) lines.push({ id: 'tip', label: tipChoice === 'custom' ? 'Tip for the crew' : `Tip for the crew · ${tipChoice}%`, kind: 'addon' as const, quantity: 1, unitPrice: tip, total: tip })
+    if (tip > 0) lines.push({ id: 'tip', label: tipChoice === 'custom' ? 'Tip for the team' : `Tip for the team · ${tipChoice}%`, kind: 'addon' as const, quantity: 1, unitPrice: tip, total: tip })
     if (promoOff > 0 && promo) lines.push({ id: 'promo', label: `Code ${promo.code}`, kind: 'addon' as const, quantity: 1, unitPrice: -promoOff, total: -promoOff })
     if (giftOff > 0 && card) lines.push({ id: 'gift', label: `Gift card …${card.code.slice(-4)}`, kind: 'addon' as const, quantity: 1, unitPrice: -giftOff, total: -giftOff })
     return { ...withPickup, addOnLines: lines, subtotal: withPickup.subtotal + tip, total: Math.max(0, withPickup.total + tip - promoOff - giftOff) }
@@ -587,7 +587,7 @@ export function CheckoutFlow({
             Secure checkout
           </h1>
           <p className="mt-2 text-sm text-muted">
-            Your details and payment on one page. Seats are held for the next 15 minutes.
+            Your details and payment on one page. Your spots are held for the next 15 minutes.
           </p>
 
           {/* ---------- mobile summary ---------- */}
@@ -788,9 +788,9 @@ function TipStep({
     <section aria-labelledby="step-tip" className="space-y-4">
       <div>
         <h2 id="step-tip" className="font-display text-xl font-semibold tracking-tight">
-          Add a tip for the crew
+          Add a tip for the team
         </h2>
-        <p className="mt-1.5 text-sm text-muted">Optional. Every cent goes to the guides and crew on your day.</p>
+        <p className="mt-1.5 text-sm text-muted">Optional. Every cent goes to the team who look after you on the day.</p>
       </div>
       <div role="radiogroup" aria-label="Tip" className="grid grid-cols-3 gap-2 sm:grid-cols-7">
         <button type="button" role="radio" aria-checked={choice === 'none'} className={chip(choice === 'none')} onClick={() => setChoice('none')}>
@@ -1727,7 +1727,7 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
         <dl className="grid grid-cols-1 gap-4 py-5 sm:grid-cols-2">
           <div>
             <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">
-              Experience
+              Activity
             </dt>
             <dd className="mt-1 text-sm font-medium text-foreground">{activity.name}</dd>
           </div>
@@ -1854,7 +1854,7 @@ function riderQuestions(activity: Activity): GuestQuestion[] {
       unit: 'kg',
       max: activity.ride.maxWeightKg,
       limitMessage: `The limit is ${activity.ride.maxWeightKg} kg per rider.`,
-      help: 'Only the crew sees this. It keeps the harness and the horse safe.',
+      help: 'Only our team sees this. It keeps the harness and the horse safe.',
     })
   }
   return out
@@ -1896,7 +1896,7 @@ function PayWhenStep({
     <section className="space-y-4">
       <div>
         <h2 className="font-display text-xl font-semibold tracking-tight text-foreground">When you pay</h2>
-        <p className="mt-1 text-sm text-muted">Your place is held either way.</p>
+        <p className="mt-1 text-sm text-muted">Your spot is held either way.</p>
       </div>
       <div role="radiogroup" aria-label="When you pay" className="grid gap-2 sm:grid-cols-2">
         {options.map((option) => (

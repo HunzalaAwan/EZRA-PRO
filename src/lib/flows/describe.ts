@@ -131,10 +131,10 @@ function triggerText(trigger: FlowTrigger, activity: string): string {
       return `A booking is cancelled${of}`
     case 'before_start':
       if (activity) return none ? `${activity} starts` : `${span} before ${activity} starts`
-      return none ? 'A trip or visit starts' : `${span} before the start`
+      return none ? 'A booking starts' : `${span} before the start`
     case 'after_end':
       if (activity) return none ? `${activity} ends` : `${span} after ${activity} ends`
-      return none ? 'A trip or visit ends' : `${span} after it ends`
+      return none ? 'A booking ends' : `${span} after it ends`
     case 'checked_in':
       return `A guest checks in${of}`
     case 'no_show':
@@ -154,7 +154,7 @@ function triggerText(trigger: FlowTrigger, activity: string): string {
     case 'became_vip':
       return 'A guest makes their third booking'
     case 'trip_anniversary':
-      return none ? `It’s a year since a trip${of}` : `${span} before a trip’s one-year anniversary${of}`
+      return none ? `It’s a year since a booking${of}` : `${span} before a booking’s one-year anniversary${of}`
     case 'review_left': {
       const stars = ratingPhrase(trigger.ratings)
       return `A guest leaves a ${stars ? `${stars} ` : ''}review${of}`
@@ -167,11 +167,11 @@ function triggerText(trigger: FlowTrigger, activity: string): string {
       return 'A guest sends a request'
     case 'low_fill': {
       const fill = Math.round(trigger.fillBelow ?? 50)
-      const what = activity || 'a trip or visit'
+      const what = activity || 'a time slot'
       return capitalize(none ? `${what} is under ${fill}% full as it starts` : `${what} is under ${fill}% full ${span} before it starts`)
     }
     case 'weather_alert':
-      return `The weather puts ${activity || 'a trip or visit'} at risk`
+      return `The weather puts ${activity || 'a time slot'} at risk`
     case 'manual':
       return 'Your team adds a guest'
   }
@@ -300,7 +300,7 @@ function phraseOf(c: Condition, lookups: DescribeLookups): Phrase {
     }
     case 'guest.daysSinceLastTrip': {
       const days = `${amountText(c, plain)} ${countFor(c) === 1 ? 'day' : 'days'} ago`
-      return { statement: `their last trip was ${days}`, question: `Was their last trip ${days}?` }
+      return { statement: `their last booking was ${days}`, question: `Was their last booking ${days}?` }
     }
     case 'guest.bookedActivity': {
       const list = activities()
@@ -318,8 +318,8 @@ function phraseOf(c: Condition, lookups: DescribeLookups): Phrase {
         : { statement: 'they agreed to marketing texts', question: 'Did they agree to marketing texts?' }
     case 'guest.hasUpcomingTrip':
       return negative
-        ? { statement: 'they have no trip coming up', question: 'Do they have no trip coming up?' }
-        : { statement: 'they have a trip coming up', question: 'Do they have a trip coming up?' }
+        ? { statement: 'they have no booking coming up', question: 'Do they have no booking coming up?' }
+        : { statement: 'they have a booking coming up', question: 'Do they have a booking coming up?' }
     case 'guest.local':
       return negative
         ? { statement: 'they don’t live locally', question: 'Are they from out of town?' }

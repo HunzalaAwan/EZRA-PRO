@@ -60,7 +60,7 @@ export function deriveUpcomingResourceRuns(
       list.push({
         departureId: departure.id,
         startsAt: departure.startsAt,
-        activityName: names.get(departure.activityId) ?? 'Departure',
+        activityName: names.get(departure.activityId) ?? 'Time slot',
         booked: departure.booked,
         capacity: departure.capacity,
       })

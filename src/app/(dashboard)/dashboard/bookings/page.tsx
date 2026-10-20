@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'Bookings',
-  description: 'Every reservation — search, filter and manage in one place.',
+  description: 'Find, filter and manage every booking.',
 }
 
 /**

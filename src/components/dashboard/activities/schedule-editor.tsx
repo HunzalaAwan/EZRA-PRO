@@ -100,7 +100,7 @@ export const WEEKDAY_LABEL: Record<number, string> = {
 }
 
 export const SCHEDULE_MODES: { value: ScheduleMode; label: string; description: string; icon: typeof Clock }[] = [
-  { value: 'times', label: 'Set start times', description: 'Guests book a set time, like 9:00 or 1:30. Tours, classes, rides, trips.', icon: Clock },
+  { value: 'times', label: 'Set start times', description: 'Guests book a set start time, like 9:00 or 1:30. Group activities, classes, rides.', icon: Clock },
   { value: 'hours', label: 'Open hours', description: 'Guests come any time you are open, or at arrival times you set. Parks, rentals, visits.', icon: DoorOpen },
   { value: 'dates', label: 'Specific dates', description: 'Only on the dates you list. Events, workshops, one-off days.', icon: CalendarDays },
 ]
@@ -257,7 +257,7 @@ export function describeSchedule(schedule: DraftSchedule, nouns?: Pick<ScheduleS
   if (schedule.mode === 'dates') {
     return `${plural(schedule.dates.length, 'date')} · ${seats} each`
   }
-  return `${plural(schedule.startTimes.length, 'time')} on ${plural(schedule.weekdays.length, 'day')} · ${seats} each`
+  return `${plural(schedule.startTimes.length, 'start time')} on ${plural(schedule.weekdays.length, 'day')} · ${seats} each`
 }
 
 /* ==========================================================================
@@ -328,7 +328,7 @@ export function ScheduleEditor({ schedule: given, onChange, nowIso, errors, show
   const totalSeats = preview.reduce((acc, day) => acc + day.seats, 0)
 
   const countLabel =
-    schedule.mode === 'hours' ? 'open days' : schedule.mode === 'dates' ? 'dates' : 'start times'
+    schedule.mode === 'hours' ? 'open days' : schedule.mode === 'dates' ? 'dates' : 'time slots'
 
   return (
     <div className={cn('flex flex-col gap-6', className)}>
@@ -361,7 +361,7 @@ export function ScheduleEditor({ schedule: given, onChange, nowIso, errors, show
                 <Users className="size-3.5 text-faint" aria-hidden="true" />
                 {seats.summary}
               </span>
-              <span className="mt-0.5 block text-xs text-subtle">Set once in Basics, used at every time and location.</span>
+              <span className="mt-0.5 block text-xs text-subtle">Set once in Basics, used at every time slot and location.</span>
             </span>
             {seats.onEdit ? (
               <Button type="button" variant="ghost" size="xs" onClick={seats.onEdit}>
@@ -373,7 +373,7 @@ export function ScheduleEditor({ schedule: given, onChange, nowIso, errors, show
         <div>
           <div className="flex items-baseline justify-between gap-3">
             <p className="text-[0.8125rem] font-medium">
-              {schedule.mode === 'hours' ? 'Guests per day' : schedule.mode === 'dates' ? 'Guests per date' : 'Guests per start time'}
+              {schedule.mode === 'hours' ? 'Spots per day' : schedule.mode === 'dates' ? 'Spots per date' : 'Spots per time slot'}
             </p>
             <span className="font-display text-sm font-semibold tabular">
               {unlimited ? 'No limit' : schedule.capacity}
@@ -643,7 +643,7 @@ function StartTimes({
             onChange={(event) => setTimeDraft(event.target.value)}
           />
           <Button type="button" variant="secondary" size="sm" leftIcon={<Plus />} onClick={addTime}>
-            Add time
+            Add start time
           </Button>
         </span>
       </div>
@@ -765,7 +765,7 @@ function DateList({
   return (
     <div>
       <p className="text-[0.8125rem] font-medium">Dates</p>
-      <p className="mt-0.5 text-xs text-muted">Add each date and its start time. Add the same date twice for two sessions.</p>
+      <p className="mt-0.5 text-xs text-muted">Add each date and its start time. Add the same date twice for two time slots.</p>
 
       <div className="mt-2.5 flex flex-wrap items-end gap-2">
         <Input type="date" size="sm" className="w-40" value={dateDraft} aria-label="Date" onChange={(event) => setDateDraft(event.target.value)} />

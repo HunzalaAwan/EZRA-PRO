@@ -70,14 +70,14 @@ export function PickupEditor({
       {inline ? null : (
         <CardHeader className="flex flex-col items-start gap-1">
           <CardTitle>Hotel pickup</CardTitle>
-          <CardDescription>Guests pick their hotel at checkout and get a pickup time; the driver gets a run sheet.</CardDescription>
+          <CardDescription>Guests pick their hotel at checkout and get a pickup time; the driver gets a pickup list.</CardDescription>
         </CardHeader>
       )}
       <Body className="flex flex-col gap-4">
         {variant === 'only' ? (
           <div>
             <p className="text-[0.8125rem] font-medium">Pickup zones</p>
-            <p className="mt-0.5 text-xs text-muted">Guests pick their hotel at checkout and get a pickup time; the driver gets a run sheet. Set a price for each zone, or keep it free.</p>
+            <p className="mt-0.5 text-xs text-muted">Guests pick their hotel at checkout and get a pickup time; the driver gets a pickup list. Set a price for each zone, or keep it free.</p>
           </div>
         ) : (
         <label className="flex items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-3">

@@ -342,7 +342,7 @@ function DepartureCard({
     <button
       type="button"
       onClick={() => onSelect(departure.id)}
-      aria-label={`${formatTime(departure.startsAt)} ${activity.name}, ${departure.booked} of ${departure.capacity} seats booked${
+      aria-label={`${formatTime(departure.startsAt)} ${activity.name}, ${departure.booked} of ${departure.capacity} spots booked${
         cancelled ? ', cancelled' : soldOut ? ', sold out' : weather ? ', weather hold' : ''
       }`}
       className={cn(
@@ -594,7 +594,7 @@ export function WeekView({
                             ),
                           )
                         }
-                        aria-label={`New ${band.label.toLowerCase()} departure on ${formatDateLong(day)}`}
+                        aria-label={`New ${band.label.toLowerCase()} time slot on ${formatDateLong(day)}`}
                         className={cn(
                           'flex min-h-6 items-center justify-center rounded-md border border-dashed border-line-subtle',
                           'opacity-0 transition-opacity duration-150',
@@ -613,7 +613,7 @@ export function WeekView({
 
           {activeBands.length === 0 ? (
             <p className="px-4 py-16 text-center text-sm text-subtle">
-              No departures scheduled this week.
+              No time slots scheduled this week.
             </p>
           ) : null}
         </div>

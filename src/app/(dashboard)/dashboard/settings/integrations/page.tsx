@@ -260,7 +260,7 @@ export default function IntegrationsSettingsPage() {
           <CardTitle>Build your own</CardTitle>
           <CardDescription>
             The REST API and webhooks cover every object you see in this dashboard — activities,
-            departures, bookings, guests and payouts.
+            time slots, bookings, guests and payouts.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2 pt-0">

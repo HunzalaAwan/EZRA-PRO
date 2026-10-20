@@ -260,7 +260,7 @@ function MediaGallery({ detail }: { detail: ActivityDetailData }) {
         size="sm"
         icon={Images}
         title="No media yet"
-        description="Add photography before this activity goes live — listings with five or more images convert roughly a third better."
+        description="Add photography before this activity goes live — activities with five or more images convert roughly a third better."
       />
     )
   }
@@ -361,7 +361,7 @@ function OverviewTab({ detail }: { detail: ActivityDetailData }) {
 
   return (
     <div className="flex flex-col gap-5">
-      <SectionCard title="About this experience">
+      <SectionCard title="About this activity">
         <p className="text-sm leading-relaxed text-muted">{activity.description}</p>
 
         {activity.highlights.length > 0 ? (
@@ -467,7 +467,7 @@ function OverviewTab({ detail }: { detail: ActivityDetailData }) {
               </Badge>
               <Badge size="sm" variant="neutral">
                 <Users className="size-3" aria-hidden="true" />
-                {activity.maxCapacity > 0 ? `${activity.minParticipants}–${activity.maxCapacity} guests` : 'No seat limit'}
+                {activity.maxCapacity > 0 ? `${activity.minParticipants}–${activity.maxCapacity} guests` : 'No spot limit'}
               </Badge>
               <Badge size="sm" variant="neutral">
                 Ages {activity.minAge}+
@@ -554,7 +554,7 @@ function PricingTab({ detail }: { detail: ActivityDetailData }) {
                       </Badge>
                     ) : (
                       <Badge size="sm" variant="outline">
-                        Free seat
+                        Takes no spot
                       </Badge>
                     )}
                   </TableCell>
@@ -575,14 +575,14 @@ function PricingTab({ detail }: { detail: ActivityDetailData }) {
 
       <SectionCard
         title="Add-ons"
-        description="Optional extras offered after the guest picks a time."
+        description="Optional extras offered after the guest picks a time slot."
       >
         {activity.addOns.length === 0 ? (
           <EmptyState
             surface="dashed"
             size="sm"
             title="No add-ons yet"
-            description="Operators who attach one relevant add-on lift average order value by roughly 12%."
+            description="Operators who attach one relevant add-on lift average booking value by roughly 12%."
           />
         ) : (
           <ul className="grid list-none gap-3 p-0 sm:grid-cols-2">
@@ -661,7 +661,7 @@ function PerformanceTab({ detail }: { detail: ActivityDetailData }) {
         currency={detail.activity.currency}
         height={280}
         title={`${detail.activity.name} performance`}
-        description={`Attributed to the departure date · last ${range === '30d' ? '30' : '90'} days`}
+        description={`Counted on the date of the time slot · last ${range === '30d' ? '30' : '90'} days`}
         toolbar={
           <div className="flex flex-wrap items-center gap-2">
             <Segmented
@@ -695,7 +695,7 @@ function PerformanceTab({ detail }: { detail: ActivityDetailData }) {
           currency={detail.activity.currency}
           height={248}
           title="When this activity actually fills"
-          description="Seats sold against seats offered, trailing 90 days."
+          description="Spots sold against spots offered, trailing 90 days."
         />
 
         <SectionCard
@@ -782,7 +782,7 @@ function ReviewsTab({ detail, now }: { detail: ActivityDetailData; now: Date }) 
             surface="dashed"
             icon={Star}
             title="No written reviews yet"
-            description="Ratings arrive after a departure completes. Written feedback follows the automated post-trip email."
+            description="Ratings arrive after a time slot is done. Written feedback follows the automated after-activity email."
           />
         ) : (
           <ul className="flex list-none flex-col gap-3 p-0">
@@ -869,7 +869,7 @@ function DetailRail({ detail, tenantSlug }: { detail: ActivityDetailData; tenant
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">Lifetime performance</CardTitle>
-          <CardDescription>Every departure this activity has ever run.</CardDescription>
+          <CardDescription>Every time slot this activity has ever had.</CardDescription>
         </CardHeader>
         <CardContent className="pt-0">
           <div className="divide-y divide-line-subtle">
@@ -878,10 +878,10 @@ function DetailRail({ detail, tenantSlug }: { detail: ActivityDetailData; tenant
               label="Revenue"
               value={formatCurrency(lifetime.revenue, activity.currency, { compact: true })}
             />
-            <RailStat label="Guests carried" value={formatNumber(lifetime.guests)} />
+            <RailStat label="Guests" value={formatNumber(lifetime.guests)} />
             <RailStat label="Avg party size" value={lifetime.avgPartySize.toFixed(1)} />
             <RailStat
-              label="Seat occupancy"
+              label="Spots filled"
               value={`${lifetime.occupancy.toFixed(1)}%`}
               tone={lifetime.occupancy >= 75 ? 'good' : undefined}
             />
@@ -896,7 +896,7 @@ function DetailRail({ detail, tenantSlug }: { detail: ActivityDetailData; tenant
               tone={lifetime.cancellationRate > 10 ? 'warn' : undefined}
             />
             <RailStat label="Repeat guests" value={`${lifetime.repeatRate.toFixed(1)}%`} />
-            <RailStat label="Departures run" value={formatNumber(lifetime.departures)} />
+            <RailStat label="Time slots so far" value={formatNumber(lifetime.departures)} />
           </div>
         </CardContent>
       </Card>
@@ -904,7 +904,7 @@ function DetailRail({ detail, tenantSlug }: { detail: ActivityDetailData; tenant
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">Assigned resources</CardTitle>
-          <CardDescription>Consumed by every departure of this activity.</CardDescription>
+          <CardDescription>Used by every time slot of this activity.</CardDescription>
         </CardHeader>
         <CardContent className="pt-0">
           {detail.resources.length === 0 ? (
@@ -922,8 +922,8 @@ function DetailRail({ detail, tenantSlug }: { detail: ActivityDetailData; tenant
       {detail.team.length > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Crew on this activity</CardTitle>
-            <CardDescription>Ranked by departures assigned.</CardDescription>
+            <CardTitle className="text-sm">Team on this activity</CardTitle>
+            <CardDescription>Ranked by time slots assigned.</CardDescription>
           </CardHeader>
           <CardContent className="pt-0">
             <ul className="flex list-none flex-col gap-3 p-0">

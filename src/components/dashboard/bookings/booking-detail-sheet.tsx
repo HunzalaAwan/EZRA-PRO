@@ -78,11 +78,11 @@ export function BookingDetailSheet({
               {reference ? (
                 <span className="font-mono tracking-tight">{reference}</span>
               ) : (
-                'Reservation'
+                'Booking'
               )}
             </SheetTitle>
             <SheetDescription className="text-xs">
-              Full reservation record, guest profile and payment history
+              Full booking record, guest profile and payment history
             </SheetDescription>
           </div>
 
@@ -94,7 +94,7 @@ export function BookingDetailSheet({
                 </Badge>
               ) : null}
               <IconButton
-                aria-label="Previous reservation"
+                aria-label="Previous booking"
                 size="sm"
                 variant="secondary"
                 onClick={onPrevious}
@@ -103,7 +103,7 @@ export function BookingDetailSheet({
                 <ChevronLeft />
               </IconButton>
               <IconButton
-                aria-label="Next reservation"
+                aria-label="Next booking"
                 size="sm"
                 variant="secondary"
                 onClick={onNext}

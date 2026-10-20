@@ -25,7 +25,7 @@ import type { Tenant } from '@/types'
 export function TemplatesClient({ tenant: tenantRecord, nowIso, data }: { tenant: Tenant; nowIso: string; data: MarketingBasics }) {
   const tenant = useMarketingTenant(tenantRecord)
   const marketing = useMarketing(tenant, nowIso)
-  const ctx = useEmailContext(tenantRecord, data.activities, { first_name: 'Maia', offer_code: 'WELCOME10', offer_percent: '10%', activity: data.activities[0]?.name ?? 'your trip' })
+  const ctx = useEmailContext(tenantRecord, data.activities, { first_name: 'Maia', offer_code: 'WELCOME10', offer_percent: '10%', activity: data.activities[0]?.name ?? 'your activity' })
   const brand = React.useMemo(() => brandColors(tenantRecord), [tenantRecord])
   const accent = brand[0] ?? '#601CEF'
   const readyMade = React.useMemo(() => EMAIL_TEMPLATES.map((template) => ({ ...template, design: template.build(ctx, accent) })), [ctx, accent])
@@ -94,7 +94,7 @@ export function TemplatesClient({ tenant: tenantRecord, nowIso, data }: { tenant
       <Card>
         <CardHeader className="flex flex-col items-start gap-1">
           <CardTitle>Ready-made designs</CardTitle>
-          <CardDescription>Built with your colours and trip photos. Open one to change anything; it is saved to your templates.</CardDescription>
+          <CardDescription>Built with your colours and activity photos. Open one to change anything; it is saved to your templates.</CardDescription>
         </CardHeader>
         <CardContent>
           <ul className="grid list-none gap-4 p-0 sm:grid-cols-2 lg:grid-cols-3">

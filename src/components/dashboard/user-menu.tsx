@@ -49,7 +49,7 @@ const SHORTCUTS: { group: string; items: { keys: string[]; label: string }[] }[]
       { keys: ['G', 'O'], label: 'Overview' },
       { keys: ['G', 'C'], label: 'Calendar' },
       { keys: ['G', 'B'], label: 'Bookings' },
-      { keys: ['G', 'M'], label: 'Manifest' },
+      { keys: ['G', 'M'], label: 'Guest list' },
     ],
   },
   {

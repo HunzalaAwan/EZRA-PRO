@@ -11,8 +11,8 @@ import { formatCurrency } from '@/lib/utils'
 export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
-  title: 'Abandoned carts',
-  description: 'Guests who picked a date and seats but did not pay, and the reminders that bring them back.',
+  title: 'Unfinished bookings',
+  description: 'Guests who picked a date and spots but did not pay, and the reminders that bring them back.',
 }
 
 /* ==========================================================================
@@ -29,8 +29,8 @@ export default async function AbandonedPage() {
   return (
     <>
       <PageHeader
-        title="Abandoned carts"
-        description={`${open.length} ${open.length === 1 ? 'guest' : 'guests'} picked a date and seats but did not pay, worth ${formatCurrency(openValue, tenant.currency, { compact: true })}. Most come back after one reminder.`}
+        title="Unfinished bookings"
+        description={`${open.length} ${open.length === 1 ? 'guest' : 'guests'} picked a date and spots but did not pay, worth ${formatCurrency(openValue, tenant.currency, { compact: true })}. Most come back after one reminder.`}
       />
       <AbandonedClient rows={rows} currency={tenant.currency} nowIso={NOW_ISO} recoveryDelayMinutes={45} recoveryDiscountPercent={10} />
     </>

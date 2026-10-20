@@ -427,10 +427,10 @@ export function seatsFor(draft: ActivityDraft): ScheduleSeats {
   if (kind === 'charter') {
     return { capacity: 1, one: 'charter', many: 'charters', summary: `One group each, up to ${settings.charter.maxGuests} guests` }
   }
-  if (kind === 'lesson') return { capacity: n, one: 'place', many: 'places', summary: `${n} ${pluralize(n, 'student')} per class`, varies: true }
+  if (kind === 'lesson') return { capacity: n, one: 'spot', many: 'spots', summary: `${n} ${pluralize(n, 'student')} per class`, varies: true }
   if (kind === 'pass') return { capacity: n, one: 'ticket', many: 'tickets', summary: n > 0 ? `${n} tickets per day` : 'No ticket limit', varies: true }
-  if (kind === 'activity') return { capacity: n, one: 'guest', many: 'guests', summary: `${n} ${pluralize(n, 'guest')} per time`, varies: true }
-  return { capacity: n, one: 'guest', many: 'guests', summary: n > 0 ? `${n} ${pluralize(n, 'guest')} per start time` : 'No limit on guests', varies: true }
+  if (kind === 'activity') return { capacity: n, one: 'guest', many: 'guests', summary: `${n} ${pluralize(n, 'spot')} per time slot`, varies: true }
+  return { capacity: n, one: 'guest', many: 'guests', summary: n > 0 ? `${n} ${pluralize(n, 'spot')} per time slot` : 'No limit on guests', varies: true }
 }
 
 /**
@@ -685,8 +685,8 @@ export function withCategory(draft: ActivityDraft, category: VerticalKey): Activ
 
 const CATEGORY_OPTIONS: { value: VerticalKey; label: string; hint: string }[] = [
   { value: 'watersports', label: 'Watersports', hint: 'Snorkel, dive, surf, paddle' },
-  { value: 'tours', label: 'Tours', hint: 'Sightseeing, culture, food' },
-  { value: 'island', label: 'Island & boat', hint: 'Day trips, charters, transfers' },
+  { value: 'tours', label: 'Sightseeing', hint: 'City walks, culture, food' },
+  { value: 'island', label: 'Island & boat', hint: 'Boat days, charters, transfers' },
   { value: 'adventure', label: 'Adventure', hint: 'Hike, bike, climb, ride' },
   { value: 'restaurants', label: 'Dining', hint: 'Tastings, chef tables, seatings' },
   { value: 'wellness', label: 'Wellness', hint: 'Retreats, spa, yoga' },
@@ -778,7 +778,7 @@ const TOUR_COPY_SCHEMAS = [
         .max(43200, 'Keep it under 30 days')
         .refine((minutes) => minutes === 0 || minutes >= 15, 'Give it at least 15 minutes, or leave it flexible'),
       minAge: z.number().int().min(0).max(99),
-      maxCapacity: z.number().int().min(0).max(500, 'Keep it under 500 guests per time, or remove the limit'),
+      maxCapacity: z.number().int().min(0).max(500, 'Keep it under 500 spots per time slot, or remove the limit'),
       minParticipants: z.number().int().min(1, 'At least one guest must be required'),
     })
     .refine((draft) => draft.maxCapacity === 0 || draft.minParticipants <= draft.maxCapacity, {
@@ -790,7 +790,7 @@ const TOUR_COPY_SCHEMAS = [
     description: z
       .string()
       .trim()
-      .min(80, 'Describe the experience in at least 80 characters — this is the storefront copy'),
+      .min(80, 'Describe the activity in at least 80 characters — this is the storefront copy'),
     highlights: z.array(z.string()),
     included: z.array(z.string()),
   }),
@@ -912,7 +912,7 @@ const CLOCK = /^\d{2}:\d{2}$/
 const DINING_STEP_SCHEMAS = [
   z
     .object({
-      name: z.string().trim().min(3, 'Give this experience a name guests will recognise'),
+      name: z.string().trim().min(3, 'Give it a name guests will recognise'),
       tagline: z
         .string()
         .trim()
@@ -1058,10 +1058,10 @@ function validateStep(step: number, draft: ActivityDraft): FieldErrors {
   const settings = normalizeKindSettings(draft.kindSettings)
   if (kind === 'rental' && settings.rental.modes.includes('day') && settings.rental.maxDays > 0 && settings.rental.maxDays < settings.rental.minDays) errors['rental.maxDays'] = 'Most days cannot be fewer than the fewest'
   if (kind === 'rental' && settings.rental.modes.includes('hour') && settings.rental.maxHours > 0 && settings.rental.maxHours < settings.rental.minHours) errors['rental.maxHours'] = 'Most hours cannot be fewer than the fewest'
-  if (kind === 'lesson' && draft.maxCapacity < 1) errors.maxCapacity = 'A class needs at least one place'
-  if (kind === 'activity' && draft.maxCapacity < 1) errors.maxCapacity = 'Each time needs at least one guest'
+  if (kind === 'lesson' && draft.maxCapacity < 1) errors.maxCapacity = 'A class needs at least one spot'
+  if (kind === 'activity' && draft.maxCapacity < 1) errors.maxCapacity = 'Each time slot needs at least one spot'
   if (kind === 'activity' && draft.durationMinutes < 5) errors.durationMinutes = 'Say how long it lasts'
-  if (kind === 'lesson' && draft.durationMinutes < 15) errors.durationMinutes = 'Give each session at least 15 minutes'
+  if (kind === 'lesson' && draft.durationMinutes < 15) errors.durationMinutes = 'Give each lesson at least 15 minutes'
   if (kind === 'charter' && settings.charter.maxGuests < 1) errors['charter.maxGuests'] = 'A charter carries at least one guest'
   if (kind === 'package') {
     delete errors.maxCapacity
@@ -1069,7 +1069,7 @@ function validateStep(step: number, draft: ActivityDraft): FieldErrors {
     if ((draft.package?.parts ?? []).filter((part) => part.activityId).length < 2) errors.package = 'Add at least two activities'
   }
   if (kind === 'lesson') {
-    if (settings.lesson.sessions < 1) errors['lesson.sessions'] = 'A course has at least one session'
+    if (settings.lesson.sessions < 1) errors['lesson.sessions'] = 'A course has at least one day'
     if (settings.lesson.ratio < 1) errors['lesson.ratio'] = 'At least one student per instructor'
   }
   return errors
@@ -1945,7 +1945,7 @@ export function ActivityWizard({
                         <p className="mt-0.5 mb-3 text-xs text-muted">
                           {dining
                             ? 'Offered once the table is picked: pairings, a bottle on arrival, a cake for the birthday.'
-                            : 'Optional extras offered once the guest has picked a time.'}
+                            : 'Optional extras offered once the guest has picked a time slot.'}
                         </p>
                         <AddonEditor
                           addOns={draft.addOns}
@@ -2157,7 +2157,7 @@ export function ActivityWizard({
               nowIso={nowIso}
             />
             <p className="text-xs leading-relaxed text-faint">
-              This is how the listing renders on {tenantName}&rsquo;s storefront and inside the
+              This is how the activity shows on {tenantName}&rsquo;s storefront and inside the
               booking widget. It updates as you type.
             </p>
           </div>
@@ -2168,10 +2168,10 @@ export function ActivityWizard({
 }
 
 const STEP_COPY: Record<string, string> = {
-  basics: 'What you sell, who it suits, and how many can book each time.',
+  basics: 'What you sell, who it suits, and how many can book each time slot.',
   description: 'The copy guests read before they book. Specific beats clever.',
   media: 'Photography does most of the selling. Landscape frames, no logos, no text overlays.',
-  pricing: 'What it costs, and the extras you offer once a time is picked.',
+  pricing: 'What it costs, and the extras you offer once a time slot is picked.',
   schedule: 'How guests book, when it happens, and the rules for changes and cancellations.',
   guests: 'Where guests go, and what checkout asks of them.',
   review: 'One last read-through, then publish.',
@@ -2231,7 +2231,7 @@ function kindFacts(draft: ActivityDraft): string[] {
   if (kind === 'charter') {
     const c = s.charter
     return [
-      `${vesselName(c)} · ${c.crewed ? `${crewName(c)} included` : 'Self-skippered'}`,
+      `${vesselName(c)} · ${c.crewed ? `${crewName(c)} included` : 'Self-drive'}`,
       draft.durationMinutes > 0 ? formatDuration(draft.durationMinutes) : 'Length to agree',
       `${draft.minParticipants}–${c.maxGuests} guests`,
       METHOD_LABEL[(draft.booking ?? DEFAULT_BOOKING).method],
@@ -2244,7 +2244,7 @@ function kindFacts(draft: ActivityDraft): string[] {
     const l = s.lesson
     return [
       LESSON_LEVELS.find((entry) => entry.value === l.level)?.label ?? 'All levels',
-      `${l.sessions > 1 ? `${l.sessions} sessions of ` : ''}${formatDuration(draft.durationMinutes)}`,
+      `${l.sessions > 1 ? `${l.sessions} days of ` : ''}${formatDuration(draft.durationMinutes)}`,
       `${draft.maxCapacity} per class · ${l.ratio} per instructor`,
       age,
       ...(l.equipmentIncluded ? ['Equipment included'] : []),
@@ -2256,7 +2256,7 @@ function kindFacts(draft: ActivityDraft): string[] {
   if (kind === 'activity') {
     return [
       `${formatDuration(draft.durationMinutes)} each`,
-      `${draft.maxCapacity} per time`,
+      `${draft.maxCapacity} per time slot`,
       draft.difficulty.charAt(0).toUpperCase() + draft.difficulty.slice(1),
       age,
       ...(s.activity.minHeightCm > 0 ? [`${s.activity.minHeightCm} cm+`] : []),
@@ -2456,7 +2456,7 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
     <div className="flex flex-col gap-5">
       {dining ? null : <KindPicker value={kind} onChange={pickKind} />}
       <Field
-        label={dining ? 'Experience name' : 'Activity name'}
+        label="Activity name"
         required
         error={errors.name}
         description={
@@ -2537,7 +2537,7 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
 function TourBasicsFields({ draft, patch, errors }: StepProps) {
   return (
     <div className="flex flex-col gap-5 rounded-xl border border-line bg-surface-sunken/40 p-4">
-      <p className="text-[0.8125rem] font-medium">Scheduled trip settings</p>
+      <p className="text-[0.8125rem] font-medium">Group activity settings</p>
       <fieldset>
         <legend className="text-[0.8125rem] font-medium">Difficulty</legend>
         <p className="mt-0.5 mb-2.5 text-xs text-muted">
@@ -2570,9 +2570,9 @@ function TourBasicsFields({ draft, patch, errors }: StepProps) {
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Field
-          label="Most guests per time"
+          label="Spots per time slot"
           error={errors.maxCapacity}
-          description="Everyone booked on one start time, together. Empty: no limit."
+          description="The most guests booked on one time slot, together. Empty: no limit."
         >
           <Input
             type="number"
@@ -2586,7 +2586,7 @@ function TourBasicsFields({ draft, patch, errors }: StepProps) {
         <Field
           label="Fewest guests to go ahead"
           error={errors.minParticipants}
-          description="If fewer book, you can call that time off."
+          description="If fewer book, you can call that time slot off."
         >
           <Input
             type="number"
@@ -2612,7 +2612,7 @@ function TourBasicsFields({ draft, patch, errors }: StepProps) {
 
       <div>
         <p className="text-[0.8125rem] font-medium">Guided in</p>
-        <p className="mt-0.5 mb-2 text-xs text-muted">Shown on the listing, so guests know they will follow along.</p>
+        <p className="mt-0.5 mb-2 text-xs text-muted">Shown on the storefront, so guests know they will follow along.</p>
         <LanguagePicker value={draft.languages ?? []} onChange={(languages) => patch({ languages })} />
       </div>
 
@@ -2643,7 +2643,7 @@ function CrewPicker({
     <section className="mt-6 border-t border-line-subtle pt-6">
       <p className="text-[0.8125rem] font-medium">Who leads it</p>
       <p className="mt-0.5 mb-2.5 text-xs text-muted">
-        Put on every {dining ? 'service' : 'start time'} by default and shown on the guest list. Change it for any
+        Put on every {dining ? 'service' : 'time slot'} by default and shown on the guest list. Change it for any
         single day from the calendar.
       </p>
       <div className="grid gap-1.5 sm:grid-cols-2">
@@ -2674,7 +2674,7 @@ function CrewPicker({
         })}
       </div>
       <p className="mt-2 text-xs text-subtle">
-        {selected.length === 0 ? 'Nobody yet. Leave it empty to pick people for each time on the calendar.' : `${selected.length} ${pluralize(selected.length, 'person', 'people')} on every one.`}
+        {selected.length === 0 ? 'Nobody yet. Leave it empty to pick people for each time slot on the calendar.' : `${selected.length} ${pluralize(selected.length, 'person', 'people')} on every one.`}
       </p>
     </section>
   )
@@ -2705,7 +2705,7 @@ const DESCRIPTION_COPY = {
     excludedPlaceholder: 'Drinks and wine pairing',
     requirements: 'Good to know',
     requirementsHelp: 'House rules shown at checkout and repeated in the confirmation email.',
-    requirementsPlaceholder: 'Tables are held for 15 minutes past the reservation time',
+    requirementsPlaceholder: 'Tables are held for 15 minutes past the booking time',
     venue: 'Venue and arrival',
     venueHelp: 'The address, the entrance to use, and where to park or be dropped off.',
     venuePlaceholder: 'Nikolaou Nomikou 24, Oia — take the outside steps down to the lower terrace; taxis drop at the top of the lane.',
@@ -2872,7 +2872,7 @@ function DescriptionStep({
               label={draft.arrivalMode === 'meet' ? 'Where exactly to meet' : 'Arrival notes'}
               optional
               error={errors.meetingPoint}
-              description={`The address comes from ${locationNames.join(', ')}, set on the Booking step. Add the exact spot: a slip, a sign, a desk or where to park.`}
+              description={`The address comes from ${locationNames.join(', ')}, set on the Booking step. Add the exact place: a slip, a sign, a desk or where to park.`}
             >
               <Textarea
                 rows={2}
@@ -2954,7 +2954,7 @@ function ReviewStep({
   onJump: (index: number) => void
 }) {
   const crewNames = crew.filter((member) => draft.crewIds.includes(member.id)).map((member) => member.name)
-  const crewRow = { label: 'Team', value: crewNames.length > 0 ? crewNames.join(', ') : 'Picked for each time', step: 4 }
+  const crewRow = { label: 'Team', value: crewNames.length > 0 ? crewNames.join(', ') : 'Picked for each time slot', step: 4 }
   const priced = draft.tiers.filter((tier) => tier.label.trim().length > 0)
   // Free tiers (infants, ride-alongs) are not the "from" price.
   const paid = priced.filter((tier) => tier.price > 0)
@@ -3032,7 +3032,7 @@ function ReviewStep({
           step: 3,
         },
         ...(locations.length > 0
-          ? [{ label: 'Runs from', value: locationNames.length > 0 ? locationNames.join(', ') : 'No location picked', step: 4 }]
+          ? [{ label: 'Starts from', value: locationNames.length > 0 ? locationNames.join(', ') : 'No location picked', step: 4 }]
           : []),
         {
           label: 'How guests book',
@@ -3081,7 +3081,7 @@ function ReviewStep({
       ]
     : [
         {
-          label: draft.schedule.mode === 'hours' ? 'Open days · next 14 days' : draft.schedule.mode === 'dates' ? 'Dates listed' : 'Start times · next 14 days',
+          label: draft.schedule.mode === 'hours' ? 'Open days · next 14 days' : draft.schedule.mode === 'dates' ? 'Dates listed' : 'Time slots · next 14 days',
           value: departures.toString(),
           icon: CalendarClock,
         },
@@ -3205,7 +3205,7 @@ function ReviewStep({
           <span className="font-medium text-foreground">
             {tenantSlug}.ezrapro.com/{slugify(draft.name) || 'new-activity'}
           </span>
-          . {dining ? 'Sittings are added from your services' : 'Start times are added from your schedule'} for the next 180 days and appear on the
+          . {dining ? 'Sittings are added from your services' : 'Time slots are added from your schedule'} for the next 180 days and appear on the
           calendar straight away.
         </p>
       </div>
@@ -3235,7 +3235,7 @@ function PackageBookingNote({ config, options, onEdit }: { config: PackageConfig
       <div>
         <h3 className="text-sm font-semibold">Booked on each activity&rsquo;s own times</h3>
         <p className="mt-0.5 text-xs text-subtle">
-          A package has no schedule or seat count of its own. Guests pick from the times you allowed for each part, and a day is only offered when every part has room for the whole group.
+          A package has no schedule or spot count of its own. Guests pick from the times you allowed for each part, and a day is only offered when every part has room for the whole group.
         </p>
       </div>
       <ol className="flex list-none flex-col divide-y divide-line-subtle rounded-lg border border-line-subtle p-0">
@@ -3247,7 +3247,7 @@ function PackageBookingNote({ config, options, onEdit }: { config: PackageConfig
                 <span className="mr-1.5 text-subtle tabular">{index + 1}.</span>
                 {part.label?.trim() || option?.name || 'Pick an activity'}
               </span>
-              <span className="text-xs text-subtle">{part.times.length > 0 ? part.times.map(clock).join(' or ') : 'Any time it runs'}</span>
+              <span className="text-xs text-subtle">{part.times.length > 0 ? part.times.map(clock).join(' or ') : 'Any of its time slots'}</span>
             </li>
           )
         })}

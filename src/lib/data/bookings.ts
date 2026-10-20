@@ -96,9 +96,9 @@ const SOURCES: Record<BookingChannel, string[]> = {
   website_widget: ['Storefront booking widget', 'Activity page widget', 'Embedded checkout'],
   direct: ['Direct — returning guest link', 'Email quote accepted', 'Gift card redemption'],
   ota: ['Viator', 'GetYourGuide', 'Expedia Local Expert', 'TripAdvisor Experiences', 'Klook'],
-  phone: ['Inbound call', 'Callback from enquiry form', 'Reservations line'],
+  phone: ['Inbound call', 'Callback from enquiry form', 'Bookings line'],
   walk_in: ['Harbour kiosk', 'Front desk', 'Dock walk-up'],
-  reseller: ['Hotel activity desk', 'Cruise shore excursions', 'Travel agent — retail'],
+  reseller: ['Hotel activity desk', 'Cruise ship partner desk', 'Travel agent — retail'],
   concierge: ['Resort concierge desk', 'Villa host', 'Luxury travel concierge'],
   google: ['Google Things to do', 'Google Business Profile'],
 }
@@ -487,10 +487,10 @@ const INTERNAL_NOTES = [
 ]
 
 const OPERATOR_CANCEL_REASONS = [
-  'Departure cancelled by the operator — weather',
-  'Departure cancelled by the operator — did not reach minimum numbers',
-  'Departure cancelled by the operator — vessel unavailable',
-  'Departure cancelled by the operator — crew illness',
+  'Time slot cancelled by the operator — weather',
+  'Time slot cancelled by the operator — did not reach minimum numbers',
+  'Time slot cancelled by the operator — vessel unavailable',
+  'Time slot cancelled by the operator — team member ill',
 ]
 
 const GUEST_CANCEL_REASONS = [

@@ -320,20 +320,20 @@ const RESOURCE_OUTAGES: ResourceOutage[] = [
    ========================================================================== */
 
 const OPS_NOTES = [
-  'Two guests have flagged limited mobility — brief the crew on the boarding ladder.',
+  'Two guests have flagged limited mobility — brief the team on the boarding ladder.',
   'Concierge hold for the resort; confirm the pickup list the night before.',
   'Photographer aboard for the marketing shoot.',
-  'Birthday party on the manifest — cake is in the galley fridge.',
+  'Birthday party on the guest list — cake is in the galley fridge.',
   'Swap to the backup radio; the primary handset is still in for service.',
   'Extra fuel stop booked — the afternoon tide is against us.',
-  'Trainee guide shadowing this departure.',
+  'Trainee guide shadowing this time slot.',
   'One guest is a certified instructor and has asked to buddy independently.',
 ]
 
 const CANCELLED_PAST_NOTES = [
-  'Cancelled — small craft advisory, all guests moved to the next available trip.',
+  'Cancelled — small craft advisory, all guests moved to the next available time slot.',
   'Cancelled — did not reach the minimum numbers.',
-  'Cancelled — crew illness, guests rebooked or refunded in full.',
+  'Cancelled — team member ill, guests rebooked or refunded in full.',
   'Cancelled — harbour closed for the afternoon.',
 ]
 
@@ -421,7 +421,7 @@ function buildDepartures(): Departure[] {
           let note: string | undefined
           if (rng() < 0.03) {
             capacity = Math.max(activity.minParticipants + 1, Math.round(capacity * 0.7))
-            note = `Reduced capacity today — ${capacity} seats released.`
+            note = `Reduced capacity today — ${capacity} spots released.`
           }
 
           /* ---- how full ---- */
@@ -475,7 +475,7 @@ function buildDepartures(): Departure[] {
             note = note ?? rngPick(rng, WEATHER_HOLD_NOTES)
           } else if (booked >= capacity || (exclusive && booked > 0)) {
             status = 'sold_out'
-            if (exclusive && !note) note = 'Private booking — the whole departure is committed.'
+            if (exclusive && !note) note = 'Private booking — the whole time slot is taken.'
           } else if (daysAhead <= 3 && booked >= activity.minParticipants) {
             status = 'confirmed'
           } else {

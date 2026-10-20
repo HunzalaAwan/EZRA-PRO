@@ -1048,7 +1048,7 @@ function BookingWidgetInner({
       <div className="flex items-start gap-3 rounded-xl border border-line bg-surface-sunken/50 px-3.5 py-3">
         <Zap className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
         <div className="min-w-0 text-xs text-muted">
-          <p className="text-sm font-medium text-foreground">{formatDurationShort(activity.durationMinutes)} per slot · arrive 15 minutes early</p>
+          <p className="text-sm font-medium text-foreground">{formatDurationShort(activity.durationMinutes)} per time slot · arrive 15 minutes early</p>
           {limits.length > 0 ? <p className="mt-1">Every rider: {limits.join(', ')}.</p> : null}
           {activity.route ? <p className="mt-1">{routeLabel(activity.route)}{activity.route.elevationM ? ` · ${activity.route.elevationM} m climb` : ''}</p> : null}
         </div>
@@ -1074,10 +1074,10 @@ function BookingWidgetInner({
         <GraduationCap className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
         <div className="min-w-0 text-xs text-muted">
           <p className="text-sm font-medium text-foreground">
-            {sessions > 1 ? `${sessions}-session course` : 'Single lesson'} · {LESSON_LEVELS.find((entry) => entry.value === level)?.label} · {ratio} per instructor
+            {sessions > 1 ? `${sessions}-lesson course` : 'Single lesson'} · {LESSON_LEVELS.find((entry) => entry.value === level)?.label} · {ratio} per instructor
           </p>
           {sessions > 1 && dateKey ? (
-            <p className="mt-1">Sessions {Array.from({ length: sessions }, (_, index) => shortDate(dateKey, index)).join(', ')}, same time each day.</p>
+            <p className="mt-1">Lessons on {Array.from({ length: sessions }, (_, index) => shortDate(dateKey, index)).join(', ')}, same time each day.</p>
           ) : null}
           {certification ? <p className="mt-1">Leads to {certification}.</p> : null}
           {activity.lesson.equipmentIncluded ? <p className="mt-1">All equipment included.</p> : null}
@@ -1126,7 +1126,7 @@ function BookingWidgetInner({
           </p>
         </div>
         {slot && slot.priceMultiplier > 1 ? (
-          <SimpleTooltip label="This departure is in high demand, so pricing has stepped up.">
+          <SimpleTooltip label="This time slot is in high demand, so pricing has stepped up.">
             <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-warning-soft px-2.5 py-1 text-xs font-semibold text-warning">
               <Sparkles className="size-3" aria-hidden="true" />
               Peak time
@@ -1171,7 +1171,7 @@ function BookingWidgetInner({
                       <span className="block truncate text-xs text-subtle">{locationAddress(site.location)}</span>
                     </span>
                     <span className="shrink-0 pt-0.5 text-xs text-subtle tabular-nums">
-                      {runs} {pluralize(runs, activity.format === 'open' ? 'slot' : 'departure')}
+                      {runs} {pluralize(runs, 'time slot')}
                     </span>
                   </button>
                 )
@@ -1219,7 +1219,7 @@ function BookingWidgetInner({
                 currency={currency}
                 selected={entry.dateKey === dateKey}
                 onSelect={() => setDateKey(entry.dateKey)}
-                emptyLabel={kind === 'trip' ? 'No trips' : kind === 'lesson' ? 'No class' : kind === 'activity' ? 'No slots' : 'Closed'}
+                emptyLabel={kind === 'trip' ? 'No times' : kind === 'lesson' ? 'No class' : kind === 'activity' ? 'No slots' : 'Closed'}
               />
             ))}
           </div>
@@ -1236,7 +1236,7 @@ function BookingWidgetInner({
             </h3>
             {day && day.slots.length > 0 ? (
               <span className="text-xs text-subtle">
-                {day.slots.length} {pluralize(day.slots.length, kind === 'activity' ? 'time slot' : kind === 'rental' ? 'start time' : kind === 'lesson' ? 'class' : kind === 'charter' ? 'charter' : activity.format === 'open' ? 'arrival slot' : activity.format === 'dates' ? 'time' : 'departure')}
+                {day.slots.length} {pluralize(day.slots.length, kind === 'activity' ? 'time slot' : kind === 'rental' ? 'start time' : kind === 'lesson' ? 'class' : kind === 'charter' ? 'charter' : activity.format === 'open' ? 'arrival slot' : activity.format === 'dates' ? 'time' : 'time slot')}
               </span>
             ) : null}
           </div>
@@ -1248,7 +1248,7 @@ function BookingWidgetInner({
                   key={entry.departureId}
                   slot={entry}
                   wholeGroup={kind === 'charter'}
-                  noun={kind === 'rental' ? rentalMeta.units : kind === 'lesson' || kind === 'activity' ? 'places' : 'seats'}
+                  noun={kind === 'rental' ? rentalMeta.units : 'spots'}
                   selected={entry.departureId === departureId}
                   onSelect={() => setDepartureId(entry.departureId)}
                 />
@@ -1257,7 +1257,7 @@ function BookingWidgetInner({
           ) : (
             <p className="mt-3 rounded-xl border border-dashed border-line-strong bg-surface-sunken px-4 py-5 text-center text-sm text-muted">
               Nothing scheduled on this date. Pick another day, or call us and we will look at
-              putting a private departure on.
+              adding a private time.
             </p>
           )}
         </div>
@@ -1277,7 +1277,7 @@ function BookingWidgetInner({
                   seatsLeft <= 4 ? 'text-warning' : 'text-subtle',
                 )}
               >
-                {seatsLeft} {pluralize(seatsLeft, kind === 'activity' || kind === 'lesson' ? 'place' : 'seat')} left
+                {seatsLeft} {pluralize(seatsLeft, 'spot')} left
               </span>
             ) : null}
           </div>
@@ -1320,7 +1320,7 @@ function BookingWidgetInner({
                       </span>
                       {tier.description ? <span className="truncate">· {tier.description}</span> : null}
                       {!tier.countsTowardCapacity ? (
-                        <span className="text-faint">· does not use a seat</span>
+                        <span className="text-faint">· does not use a spot</span>
                       ) : (tier.seats ?? 1) > 1 ? (
                         <span className="text-faint">· for {tier.seats}</span>
                       ) : null}
@@ -1381,7 +1381,7 @@ function BookingWidgetInner({
                 className="mt-2 flex items-center gap-2 overflow-hidden text-xs font-medium text-danger"
               >
                 <CircleAlert className="size-3.5 shrink-0" aria-hidden="true" />
-                Only {seatsLeft} {pluralize(seatsLeft, kind === 'activity' || kind === 'lesson' ? 'place' : 'seat')} left {kind === 'activity' ? 'in this time slot' : 'on this departure'}.
+                Only {seatsLeft} {pluralize(seatsLeft, 'spot')} left in this time slot.
               </motion.p>
             ) : null}
           </AnimatePresence>
@@ -1395,7 +1395,7 @@ function BookingWidgetInner({
           {activity.minParticipants > 1 ? (
             <p className="mt-2 flex items-center gap-2 text-xs text-subtle">
               <Users className="size-3.5 shrink-0" aria-hidden="true" />
-              Minimum {activity.minParticipants} guests for this experience.
+              Minimum {activity.minParticipants} guests for this activity.
             </p>
           ) : null}
         </div>
@@ -1568,7 +1568,7 @@ function BookingWidgetInner({
                 {!slot
                   ? kind === 'rental'
                     ? 'Choose a start time'
-                    : 'Choose a departure'
+                    : 'Choose a time'
                   : requestMode
                     ? 'Send request'
                     : overGroup
@@ -1626,7 +1626,7 @@ export function DateChip({
   currency,
   selected,
   onSelect,
-  emptyLabel = 'No trips',
+  emptyLabel = 'No times',
 }: {
   emptyLabel?: string
   day: AvailabilityDay
@@ -1695,7 +1695,7 @@ export function DateChip({
 
 export function TimeChip({
   slot,
-  noun = 'seats',
+  noun = 'spots',
   wholeGroup = false,
   selected,
   onSelect,

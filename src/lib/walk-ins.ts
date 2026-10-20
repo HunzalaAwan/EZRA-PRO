@@ -104,7 +104,7 @@ export function dayKeys(endKey: string, days: number): string[] {
 
 /** The log as a CSV the owner can open in a spreadsheet. */
 export function walkInsCsv(records: WalkInRecord[]): string {
-  const head = ['Reference', 'Sold at', 'Activity', 'Starts at', 'Guests', 'Guest name', 'Phone', 'Email', 'Country', 'Heard from', 'Marketing', 'Method', 'Status', 'Subtotal', 'Discount', 'Total', 'Staff']
+  const head = ['Reference', 'Sold at', 'Activity', 'Starts at', 'Guests', 'Guest name', 'Phone', 'Email', 'Country', 'Heard from', 'Marketing', 'Method', 'Status', 'Subtotal', 'Discount', 'Total', 'Team member']
   const cell = (value: string | number) => {
     const text = String(value)
     return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text

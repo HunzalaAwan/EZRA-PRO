@@ -109,7 +109,7 @@ export interface Blackout {
 const INITIAL_BLACKOUTS: Blackout[] = [
   { dateKey: toDateKey(addDays(NOW, 12)), reason: 'Annual hull inspection — Alii Nui out of water' },
   { dateKey: toDateKey(addDays(NOW, 13)), reason: 'Annual hull inspection — Alii Nui out of water' },
-  { dateKey: toDateKey(addDays(NOW, 27)), reason: 'Crew training day — no public departures' },
+  { dateKey: toDateKey(addDays(NOW, 27)), reason: 'Team training day — no public time slots' },
   { dateKey: toDateKey(addDays(NOW, 46)), reason: 'Private charter buyout, Maui Ocean Center' },
 ]
 
@@ -129,7 +129,7 @@ const SEASONS: Season[] = [
     start: new Date(2026, 5, 1),
     end: new Date(2026, 8, 15),
     note: 'Full timetable, two extra sunset sails a week.',
-    multiplier: '+18% on evening departures',
+    multiplier: '+18% on evening time slots',
   },
   {
     id: 'shoulder',
@@ -145,7 +145,7 @@ const SEASONS: Season[] = [
     start: new Date(2026, 11, 1),
     end: new Date(2027, 3, 15),
     note: 'Whale watch eco cruise returns; snorkel moves inshore.',
-    multiplier: '+12% on morning departures',
+    multiplier: '+12% on morning time slots',
   },
 ]
 
@@ -268,8 +268,8 @@ export function AvailabilityEditor({ observedHours }: AvailabilityEditorProps) {
               Weekly operating hours
             </CardTitle>
             <CardDescription>
-              Departures can only be generated inside these windows. Seeded from the last 90 days
-              of trips you actually ran.
+              Time slots can only be generated inside these windows. Seeded from the last 90 days
+              of time slots you actually ran.
             </CardDescription>
           </div>
           <CardToolbar>
@@ -395,7 +395,7 @@ export function AvailabilityEditor({ observedHours }: AvailabilityEditorProps) {
             </CardTitle>
             <CardDescription>
               Click a day to close it. Existing bookings are never touched — the date simply stops
-              generating and selling new departures.
+              generating and selling new time slots.
             </CardDescription>
           </div>
           <CardToolbar>

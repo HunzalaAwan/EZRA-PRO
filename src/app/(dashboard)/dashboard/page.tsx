@@ -26,7 +26,7 @@ export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'Overview',
-  description: 'Revenue, today’s departures and what needs your attention — at a glance.',
+  description: 'Revenue, today’s time slots and what needs your attention, at a glance.',
 }
 
 /**
@@ -68,7 +68,7 @@ export default async function DashboardOverviewPage() {
       ? `${formatDateLong(NOW)} · nothing scheduled today`
       : `${formatDateLong(NOW)} · ${formatNumber(overview.todayDepartures.length)} ${pluralize(
           overview.todayDepartures.length,
-          'departure',
+          'time slot',
         )} and ${formatNumber(todayGuests)} ${pluralize(todayGuests, 'guest')} on the books`
 
   // Payouts come from the same settlement seam as the Payments page, so the

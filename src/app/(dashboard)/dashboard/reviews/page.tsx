@@ -161,7 +161,7 @@ export default async function ReviewsPage() {
     <>
       <PageHeader
         title="Reviews"
-        description={`${mean.toFixed(2)} stars across ${total.toLocaleString('en-US')} rated trips. ${needsAttention} recent low ratings are still waiting on a reply.`}
+        description={`${mean.toFixed(2)} stars across ${total.toLocaleString('en-US')} rated bookings. ${needsAttention} recent low ratings are still waiting on a reply.`}
         actions={<ReviewsPageActions pendingCount={pendingRequests} />}
       />
 

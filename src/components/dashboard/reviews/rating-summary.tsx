@@ -106,7 +106,7 @@ export interface RatingSummaryProps {
   comparisonLabel: string
   /** Low ratings still waiting on a reply. */
   needsAttention: number
-  /** Share of completed trips that left a rating, 0-100. */
+  /** Share of completed bookings that left a rating, 0-100. */
   reviewRate: number
   className?: string
 }
@@ -176,7 +176,7 @@ export function RatingSummary({
 
           <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line-subtle pt-3">
             <span className="tabular rounded-md bg-surface-sunken px-1.5 py-0.5 text-xs font-medium text-muted">
-              {formatPercent(reviewRate, 0)} of trips reviewed
+              {formatPercent(reviewRate, 0)} of bookings reviewed
             </span>
             {needsAttention > 0 ? (
               <span className="tabular inline-flex items-center gap-1 rounded-md bg-warning-soft px-1.5 py-0.5 text-xs font-medium text-warning">
@@ -232,17 +232,17 @@ export function RatingSummary({
       <ChartContainer
         className="sm:col-span-2"
         title="Rating trend"
-        description="Weekly mean stars, attributed to the departure date"
+        description="Weekly mean stars, by the date of the activity"
         ariaLabel={`Average rating by week over the last ${trend.length} weeks. Period mean ${trendAverage.toFixed(2)} stars.`}
         height={196}
         empty={trend.length === 0}
-        emptyMessage="No rated departures in this window yet."
+        emptyMessage="No rated bookings in this window yet."
         footer={
           <p className="text-xs text-subtle">
             Period mean{' '}
             <span className="tabular font-medium text-foreground">{trendAverage.toFixed(2)}</span>{' '}
             stars across {formatNumber(trend.reduce((acc, point) => acc + point.count, 0))} rated
-            trips.
+            bookings.
           </p>
         }
         dataTable={

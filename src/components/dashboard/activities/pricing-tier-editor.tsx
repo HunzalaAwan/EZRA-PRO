@@ -65,7 +65,7 @@ const TIER_PRESETS: TierPreset[] = [
   { label: 'Adult', price: 14900, description: 'Ages 18 and over' },
   { label: 'Child (4–12)', price: 8900, description: 'Must be accompanied by an adult' },
   { label: 'Senior (65+)', price: 12900, description: '' },
-  { label: 'Infant (under 4)', price: 0, description: 'Lap seat, no equipment', counts: false },
+  { label: 'Infant (under 4)', price: 0, description: 'Sits on a lap, no equipment', counts: false },
   { label: 'Family (2 adults, 2 children)', price: 44900, description: 'One ticket for four', seats: 4 },
 ]
 
@@ -337,7 +337,7 @@ export function PricingTierEditor({
                       aria-label={`How many guests one ${tier.label || `price ${index + 1}`} ticket counts as`}
                       className="h-8 rounded-lg border border-line bg-surface px-2 text-xs text-foreground"
                     >
-                      <option value={0}>no one (free, no place)</option>
+                      <option value={0}>no one (free, no spot)</option>
                       {[1, 2, 3, 4, 5, 6].map((places) => (
                         <option key={places} value={places}>
                           {places} {places === 1 ? 'guest' : 'guests'}

@@ -143,7 +143,7 @@ export function OccupancySection({
             height={300}
             loading={loading}
             title="Occupancy by day and time"
-            description="Seats sold as a share of seats offered, across the trailing 90 days of departures."
+            description="Spots booked as a share of spots offered, across the trailing 90 days of time slots."
           />
         </div>
 
@@ -162,8 +162,8 @@ export function OccupancySection({
                 value={utilisation}
                 size={168}
                 thickness={13}
-                sublabel="of seats offered"
-                ariaLabel={`Capacity utilisation ${formatPercent(utilisation, 1)} of seats offered across ${rangeLabel.toLowerCase()}.`}
+                sublabel="of spots offered"
+                ariaLabel={`Capacity utilisation ${formatPercent(utilisation, 1)} of spots offered across ${rangeLabel.toLowerCase()}.`}
               />
             )}
           </div>
@@ -226,11 +226,11 @@ export function OccupancySection({
               </div>
               <p className="mt-2 max-w-xl text-[0.8125rem] leading-relaxed text-muted">
                 {analysis
-                  ? `${analysis.candidateCount} recurring weekday-and-hour combinations run at least ten points under your own ${formatPercent(
+                  ? `${analysis.candidateCount} recurring weekday-and-hour combinations sit at least ten points under your own ${formatPercent(
                       analysis.benchmark,
                       0,
-                    )} average. Each one is a departure you are already crewing and fuelling. These are the ${analysis.slots.length} worth the most.`
-                  : 'Not enough departure history in this window to score individual slots yet.'}
+                    )} average. Each one is a time slot you already run and pay for. These are the ${analysis.slots.length} worth the most.`
+                  : 'Not enough history in this window to score individual slots yet.'}
               </p>
             </div>
 
@@ -273,7 +273,7 @@ export function OccupancySection({
                       {WEEKDAYS[slot.cell.weekday]}
                     </span>
                     <span className="text-xs tabular-nums text-subtle">
-                      {hourLabel(slot.cell.hour)} departures
+                      {hourLabel(slot.cell.hour)} time slots
                     </span>
                   </div>
 
@@ -320,7 +320,7 @@ export function OccupancySection({
                       href="/dashboard/calendar"
                       aria-label={`Open the calendar on ${WEEKDAYS[slot.cell.weekday]} ${hourLabel(
                         slot.cell.hour,
-                      )} departures`}
+                      )} time slots`}
                     >
                       Fix slot
                       <ArrowUpRight aria-hidden="true" />
@@ -339,7 +339,7 @@ export function OccupancySection({
           {analysis && analysis.slots.length > 0 ? (
             <footer className="border-t border-line-subtle px-5 py-3 text-xs leading-relaxed text-faint">
               Scored across {formatNumber(analysis.analysed)} active slots. Each one is measured
-              on the trailing 90 days of departures and scaled up to your
+              on the trailing 90 days of time slots and scaled up to your
               selected range&rsquo;s average occupancy at unchanged capacity, then normalised
               from the 90-day window to a month. Lift is capped at +60% per slot, and the headline
               totals only the slots listed here — filling every soft slot at once is not a plan

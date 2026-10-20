@@ -66,7 +66,7 @@ export const HERO_OVERLAYS: { value: HeroOverlay; label: string; hint: string }[
 ]
 
 export const HERO_HEIGHTS: { value: HeroHeight; label: string; hint: string }[] = [
-  { value: 'compact', label: 'Compact', hint: 'Straight to the experiences.' },
+  { value: 'compact', label: 'Compact', hint: 'Straight to what you offer.' },
   { value: 'standard', label: 'Standard', hint: 'Room for the headline and the search bar.' },
   { value: 'tall', label: 'Tall', hint: 'Lets the photograph breathe.' },
 ]

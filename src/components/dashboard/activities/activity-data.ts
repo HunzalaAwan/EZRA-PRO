@@ -611,7 +611,7 @@ export function getActivityDetail(activityId: string): ActivityDetailData | unde
     },
     {
       key: 'guests',
-      label: 'Guests carried',
+      label: 'Guests',
       value: current.guests,
       format: 'number',
       deltaPercent: guestsDelta,
@@ -622,7 +622,7 @@ export function getActivityDetail(activityId: string): ActivityDetailData | unde
     },
     {
       key: 'occupancy',
-      label: 'Seat occupancy',
+      label: 'Spots filled',
       value: current.occupancy,
       format: 'percent',
       deltaPercent: occupancyDelta,

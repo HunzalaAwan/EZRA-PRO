@@ -609,7 +609,7 @@ const KPI_SPECS: KpiSpec[] = [
     format: 'number',
     pick: (a) => a.bookings,
     higherIsBetter: true,
-    hint: 'Reservations that survived to departure day.',
+    hint: 'Bookings that made it to the day of the activity.',
   },
   {
     key: 'guests',
@@ -617,15 +617,15 @@ const KPI_SPECS: KpiSpec[] = [
     format: 'number',
     pick: (a) => a.guests,
     higherIsBetter: true,
-    hint: 'Seats actually filled across every departure.',
+    hint: 'Spots actually filled across every time slot.',
   },
   {
     key: 'aov',
-    label: 'Average order value',
+    label: 'Average booking value',
     format: 'currency',
     pick: metricAov,
     higherIsBetter: true,
-    hint: 'Net revenue per reservation, add-ons included.',
+    hint: 'Net revenue per booking, add-ons included.',
     currency: true,
   },
   {
@@ -634,16 +634,16 @@ const KPI_SPECS: KpiSpec[] = [
     format: 'percent',
     pick: metricOccupancy,
     higherIsBetter: true,
-    hint: 'Seats sold as a share of seats offered.',
+    hint: 'Spots sold as a share of spots offered.',
     decimals: 1,
   },
   {
     key: 'revPerSeat',
-    label: 'Revenue per seat',
+    label: 'Revenue per spot',
     format: 'currency',
     pick: metricRevPerSeat,
     higherIsBetter: true,
-    hint: 'Yield per filled seat — price and mix in one number.',
+    hint: 'Revenue per filled spot — price and mix in one number.',
     currency: true,
   },
   {
@@ -652,7 +652,7 @@ const KPI_SPECS: KpiSpec[] = [
     format: 'percent',
     pick: metricCancelRate,
     higherIsBetter: false,
-    hint: 'Share of reservations cancelled before departure.',
+    hint: 'Share of bookings cancelled before the activity.',
     decimals: 1,
   },
   {
@@ -679,7 +679,7 @@ const KPI_SPECS: KpiSpec[] = [
     format: 'rating',
     pick: metricRating,
     higherIsBetter: true,
-    hint: 'Mean guest rating left on trips in this window.',
+    hint: 'Average guest rating left in this window.',
     decimals: 2,
   },
   {
@@ -688,7 +688,7 @@ const KPI_SPECS: KpiSpec[] = [
     format: 'number',
     pick: metricLeadDays,
     higherIsBetter: true,
-    hint: 'Days between a guest booking and their departure.',
+    hint: 'Days between a guest booking and their activity.',
     decimals: 1,
   },
 ]
@@ -1129,14 +1129,14 @@ function buildInsights(
           id: 'slot-arbitrage',
           severity: 'neutral',
           title: `${WEEKDAY_NAMES[hottest.weekday]} ${formatHour(hottest.hour)} is your strongest slot`,
-          body: `${WEEKDAY_NAMES[hottest.weekday]} ${formatHour(hottest.hour)} departures run at ${formatNumber(
+          body: `${WEEKDAY_NAMES[hottest.weekday]} ${formatHour(hottest.hour)} time slots run at ${formatNumber(
             hottest.occupancy,
             { decimals: 0 },
           )}% of capacity while ${WEEKDAY_NAMES[coldest.weekday]} ${formatHour(
             coldest.hour,
           )} sits at ${formatNumber(coldest.occupancy, {
             decimals: 0,
-          })}%. Moving one weekly ${WEEKDAY_NAMES[coldest.weekday]} departure into the ${
+          })}%. Moving one weekly ${WEEKDAY_NAMES[coldest.weekday]} time slot into the ${
             WEEKDAY_NAMES[hottest.weekday]
           } slot is worth roughly ${money(monthlyUpside)} a month at your current yield.`,
           metric: `${formatNumber(gap, { decimals: 0 })} pt gap`,
@@ -1179,7 +1179,7 @@ function buildInsights(
           decimals: 1,
         })}× your ${formatNumber(tenantCancelRate, {
           decimals: 1,
-        })}% average across ${formatNumber(worstCancel.placed)} reservations — about ${money(
+        })}% average across ${formatNumber(worstCancel.placed)} bookings — about ${money(
           excess,
         )} of avoidable churn in this window. Tightening the free-cancellation window or confirming weather earlier usually closes most of the gap.`,
         metric: formatNumber(worstCancel.rate, { decimals: 1 }) + '%',
@@ -1208,8 +1208,8 @@ function buildInsights(
       insight: {
         id: 'forward-book-soft',
         severity: 'warning',
-        title: `${formatNumber(softSeats)} seats are still unsold in the next ${horizon} days`,
-        body: `${formatNumber(softDepartures)} departures are running under half full, leaving ${money(
+        title: `${formatNumber(softSeats)} spots are still unsold in the next ${horizon} days`,
+        body: `${formatNumber(softDepartures)} time slots are running under half full, leaving ${money(
           atRisk,
         )} of perishable inventory on the table. A same-week offer to your ${formatNumber(
           Math.round(facts.repeatBookings),
@@ -1279,9 +1279,9 @@ function buildInsights(
             marketplaceRevenue,
           )}) came through OTAs and resellers, costing roughly ${money(
             commission,
-          )} in commission. Converting a quarter of those guests to your own widget on their next trip is worth ${money(
+          )} in commission. Converting a quarter of those guests to your own booking page on their next booking is worth ${money(
             shiftValue,
-          )} a window — the post-trip rebooking email is the cheapest lever you have.`,
+          )} a window — the rebooking email after their activity is the cheapest lever you have.`,
           metric: `${formatNumber(share, { decimals: 1 })}%`,
           href: '/bookings',
           actionLabel: 'See marketplace bookings',
@@ -1322,10 +1322,10 @@ function buildInsights(
           } per booking`,
           body: `Returning guests average ${money(Math.round(repeatAov))} a booking against ${money(
             Math.round(firstAov),
-          )} for first-timers, across ${formatNumber(repeatCount)} repeat reservations. They are ${formatNumber(
+          )} for first-timers, across ${formatNumber(repeatCount)} repeat bookings. They are ${formatNumber(
             metricRepeatRate(facts),
             { decimals: 0 },
-          )}% of your volume — a rebooking offer attached to the post-trip review request compounds directly on this.`,
+          )}% of your volume — a rebooking offer attached to the review request after the activity compounds directly on this.`,
           metric: money(Math.round(repeatAov)),
           href: '/dashboard/customers',
           actionLabel: 'Open the guest directory',
@@ -1357,14 +1357,14 @@ function buildInsights(
           severity: 'positive',
           title: `Dynamic pricing is holding ${formatNumber(averageMultiplier, { decimals: 2 })}× on ${formatNumber(
             priced.length,
-          )} departures`,
+          )} time slots`,
           body: `${formatNumber(
             surge.length,
-          )} forward departures are priced above list and are still taking bookings, worth about ${money(
+          )} upcoming time slots are priced above list and are still taking bookings, worth about ${money(
             upliftValue,
-          )} of extra yield on seats already sold. Only ${formatNumber(
+          )} of extra revenue on spots already sold. Only ${formatNumber(
             priced.length,
-          )} of your forward slots carry a pricing rule at all — extending it to high-occupancy weekends is the obvious next step.`,
+          )} of your upcoming time slots carry a pricing rule at all — extending it to high-occupancy weekends is the obvious next step.`,
           metric: `${formatNumber(averageMultiplier, { decimals: 2 })}×`,
           href: '/activities',
           actionLabel: 'Tune pricing rules',
@@ -1492,11 +1492,11 @@ function buildInsights(
         title: `Next 30 days are ${formatNumber(forwardFill, { decimals: 0 })}% sold`,
         body: `${formatNumber(
           forwardWindow.length,
-        )} departures are on the board with ${formatNumber(
+        )} time slots are on the board with ${formatNumber(
           forwardUnsold,
-        )} seats still to sell — ${money(
+        )} spots still to sell — ${money(
           Math.round(forwardUnsold * seatYield),
-        )} of inventory that expires on the day it sails. Forward fill always reads lower than completed weeks because the late-booking curve has not arrived yet; the number to watch is the direction, not the level.`,
+        )} of spots that expire on the day they run. Forward fill always reads lower than completed weeks because the late-booking curve has not arrived yet; the number to watch is the direction, not the level.`,
         metric: `${formatNumber(forwardFill, { decimals: 0 })}% sold`,
         href: '/calendar',
         actionLabel: 'Review the forward book',
@@ -1513,19 +1513,19 @@ function buildInsights(
       insight: {
         id: 'revenue-concentration',
         severity: share >= 35 ? 'warning' : 'neutral',
-        title: `${topActivity?.name ?? 'One product'} carries ${formatNumber(share, {
+        title: `${topActivity?.name ?? 'One activity'} carries ${formatNumber(share, {
           decimals: 0,
         })}% of revenue`,
         body: `It earned ${money(topRevenue)} of ${money(
           basisRevenue,
-        )} ${basisLabel}, across ${formatNumber(basisByActivity.size)} products on sale. ${
+        )} ${basisLabel}, across ${formatNumber(basisByActivity.size)} activities on sale. ${
           share >= 35
-            ? 'A fortnight of weather on that one product would take a third of your income with it — the hedge is a second product that runs in the conditions this one cannot.'
-            : 'That is a healthy spread; the products behind it are doing real work rather than padding the catalogue.'
+            ? 'A fortnight of weather on that one activity would take a third of your income with it — the hedge is a second activity that runs in the conditions this one cannot.'
+            : 'That is a healthy spread; the activities behind it are doing real work rather than padding the list.'
         }`,
         metric: `${formatNumber(share, { decimals: 0 })}%`,
         href: '/activities',
-        actionLabel: 'Compare products',
+        actionLabel: 'Compare activities',
       },
     })
   }

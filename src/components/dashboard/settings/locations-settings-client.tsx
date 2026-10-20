@@ -364,7 +364,7 @@ export function LocationsSettingsClient({ tenant, seeded, usage }: LocationsSett
           <div>
             <p className="font-medium text-foreground">The desk stays in one place</p>
             <p className="mt-1 leading-relaxed">
-              Reservations, the schedule and the manifest carry the location on every departure, so a Lahaina run never gets crewed from Kihei.
+              Bookings, the schedule and the guest list carry the location on every time slot, so your team always knows where to be.
             </p>
           </div>
           <div className="sm:col-span-3">
@@ -404,7 +404,7 @@ export function LocationsSettingsClient({ tenant, seeded, usage }: LocationsSett
               </Field>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Time zone" description="Departure times at this location are shown in it.">
+              <Field label="Time zone" description="Start times at this location are shown in it.">
                 <Select value={form.timezone} onValueChange={(value) => patch({ timezone: value })}>
                   <SelectTrigger aria-label="Time zone">
                     <SelectValue placeholder="Time zone" />

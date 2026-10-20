@@ -139,17 +139,17 @@ export type TriggerWhen =
 /** The moments a message can be tied to, for the editor. */
 export const TRIGGER_OPTIONS: { value: TriggerWhen; label: string; hours: 'before' | 'after' | 'none'; unit: 'hours' | 'days' }[] = [
   { value: 'on_booking', label: 'When they book', hours: 'none', unit: 'hours' },
-  { value: 'before', label: 'Before the trip', hours: 'before', unit: 'hours' },
-  { value: 'after', label: 'After the trip', hours: 'after', unit: 'hours' },
+  { value: 'before', label: 'Before the activity', hours: 'before', unit: 'hours' },
+  { value: 'after', label: 'After the activity', hours: 'after', unit: 'hours' },
   { value: 'signup', label: 'After they join the list', hours: 'after', unit: 'hours' },
   { value: 'browse', label: 'After viewing without booking', hours: 'after', unit: 'hours' },
-  { value: 'since_last', label: 'Days since their last trip', hours: 'after', unit: 'days' },
-  { value: 'anniversary', label: 'On the trip’s anniversary', hours: 'none', unit: 'days' },
+  { value: 'since_last', label: 'Days since their last booking', hours: 'after', unit: 'days' },
+  { value: 'anniversary', label: 'A year after their activity', hours: 'none', unit: 'days' },
   { value: 'review', label: 'After a 4 or 5 star review', hours: 'after', unit: 'hours' },
   { value: 'gift_expiry', label: 'Before a gift card runs out', hours: 'before', unit: 'days' },
   { value: 'birthday', label: 'Before their birthday', hours: 'before', unit: 'days' },
-  { value: 'waitlist', label: 'When a waitlisted seat opens', hours: 'none', unit: 'hours' },
-  { value: 'manual', label: 'Only when staff send it', hours: 'none', unit: 'hours' },
+  { value: 'waitlist', label: 'When a waitlisted spot opens', hours: 'none', unit: 'hours' },
+  { value: 'manual', label: 'Only when your team sends it', hours: 'none', unit: 'hours' },
 ]
 
 export const PLACEHOLDERS: { token: string; label: string }[] = [
@@ -212,7 +212,7 @@ export const DEFAULT_TEMPLATES: MessageTemplate[] = [
   {
     key: 'weather',
     name: 'Weather update',
-    purpose: 'Sent from the Weather page when a trip is held, moved or cancelled.',
+    purpose: 'Sent from the Weather page when an activity is held, moved or cancelled.',
     channel: 'both',
     subject: 'Update on your {activity}',
     body: 'Hi {first_name}, an update on {activity} on {date}: the forecast is uncertain and we are watching it closely. We will confirm by two hours before. Your options: {manage_link}',
@@ -245,7 +245,7 @@ export const DEFAULT_TEMPLATES: MessageTemplate[] = [
     purpose: 'A thank-you and a review link, the evening after.',
     channel: 'email',
     subject: 'How was {activity}?',
-    body: 'Hi {first_name}, thank you for coming out with us today. If you have a minute, a review helps a small crew more than anything. Photos from the day are in your booking: {manage_link}\n\nMahalo,\n{business}',
+    body: 'Hi {first_name}, thank you for joining us today. If you have a minute, a review helps a small team more than anything. Photos from the day are in your booking: {manage_link}\n\nThanks again,\n{business}',
     timing: { when: 'after', hours: 4 },
     enabled: true,
   },
@@ -261,11 +261,11 @@ export const DEFAULT_TEMPLATES: MessageTemplate[] = [
   },
   {
     key: 'cart_recovery',
-    name: 'Abandoned cart',
+    name: 'Unfinished booking',
     purpose: 'For guests who started checkout and left, one hour later.',
     channel: 'email',
-    subject: 'Your seats on {activity} are still open',
-    body: 'Hi {first_name}, you were a step away from booking {activity} on {date}. Seats are still open. Pick up where you left off: {manage_link}',
+    subject: 'Your spots on {activity} are still open',
+    body: 'Hi {first_name}, you were a step away from booking {activity} on {date}. Spots are still open. Pick up where you left off: {manage_link}',
     timing: { when: 'after', hours: 1 },
     enabled: true,
   },
@@ -273,11 +273,11 @@ export const DEFAULT_TEMPLATES: MessageTemplate[] = [
   {
     key: 'welcome',
     group: 'growth',
-    name: 'Welcome and first-trip code',
+    name: 'Welcome and first-booking code',
     purpose: 'Thanks new subscribers and sends the sign-up code.',
     channel: 'email',
     subject: 'Welcome to {business}: here is {offer_percent} off',
-    body: 'Hi {first_name}, thanks for joining us. Here is {offer_percent} off your first trip with code {offer_code}. Pick a date: {book_link}\n\nSee you on the water,\n{business}',
+    body: 'Hi {first_name}, thanks for joining us. Here is {offer_percent} off your first booking with code {offer_code}. Pick a date: {book_link}\n\nSee you soon,\n{business}',
     timing: { when: 'signup', hours: 0 },
     enabled: true,
     audienceId: 'aud_all',
@@ -288,10 +288,10 @@ export const DEFAULT_TEMPLATES: MessageTemplate[] = [
     key: 'browse_abandon',
     group: 'growth',
     name: 'Viewed but did not book',
-    purpose: 'A nudge to subscribers who looked at a trip and left.',
+    purpose: 'A nudge to subscribers who looked at an activity and left.',
     channel: 'email',
     subject: 'Still thinking about {activity}?',
-    body: 'Hi {first_name}, {activity} still has seats this week. Questions? Just reply. Book in a minute: {book_link}',
+    body: 'Hi {first_name}, {activity} still has spots this week. Questions? Just reply. Book in a minute: {book_link}',
     timing: { when: 'browse', hours: 3 },
     enabled: false,
     audienceId: 'aud_all',
@@ -300,11 +300,11 @@ export const DEFAULT_TEMPLATES: MessageTemplate[] = [
   {
     key: 'next_trip',
     group: 'growth',
-    name: 'Next-trip offer',
-    purpose: 'Two weeks after a trip, a code for the next one.',
+    name: 'Next-booking offer',
+    purpose: 'Two weeks after an activity, a code for the next one.',
     channel: 'email',
-    subject: '{first_name}, your next trip is {offer_percent} off',
-    body: 'Hi {first_name}, thanks again for coming out. Ready for the next one? Use {offer_code} for {offer_percent} off any trip in the next month: {book_link}',
+    subject: '{first_name}, your next booking is {offer_percent} off',
+    body: 'Hi {first_name}, thanks again for coming out. Ready for the next one? Use {offer_code} for {offer_percent} off any activity in the next month: {book_link}',
     timing: { when: 'after', hours: 336 },
     enabled: true,
     audienceId: 'aud_all',
@@ -318,7 +318,7 @@ export const DEFAULT_TEMPLATES: MessageTemplate[] = [
     purpose: 'Guests who have not been back in four months.',
     channel: 'email',
     subject: 'It has been a while, {first_name}',
-    body: 'Hi {first_name}, it has been a while since your last trip with us. Here is {offer_percent} off to come back: {offer_code}. New this season: {book_link}',
+    body: 'Hi {first_name}, it has been a while since your last booking with us. Here is {offer_percent} off to come back: {offer_code}. New this season: {book_link}',
     timing: { when: 'since_last', hours: 120 * 24 },
     enabled: true,
     audienceId: 'aud_lapsed',
@@ -328,8 +328,8 @@ export const DEFAULT_TEMPLATES: MessageTemplate[] = [
   {
     key: 'anniversary',
     group: 'growth',
-    name: 'A year since your trip',
-    purpose: 'On the anniversary of their trip, a memory and an invite back.',
+    name: 'A year since your activity',
+    purpose: 'On the anniversary of their activity, a memory and an invite back.',
     channel: 'email',
     subject: 'One year ago today: {activity}',
     body: 'Hi {first_name}, a year ago today you were out with us on {activity}. Fancy doing it again, or trying something new? {book_link}',
@@ -341,10 +341,10 @@ export const DEFAULT_TEMPLATES: MessageTemplate[] = [
     key: 'review_thanks',
     group: 'growth',
     name: 'Thanks for the review',
-    purpose: 'A thank-you after a 4 or 5 star review, with ideas for the next trip.',
+    purpose: 'A thank-you after a 4 or 5 star review, with ideas for the next booking.',
     channel: 'email',
     subject: 'Thank you, {first_name}',
-    body: 'Hi {first_name}, thank you for the lovely review. It means a lot to a small crew. When you are ready for the next one, here is what is coming up: {book_link}',
+    body: 'Hi {first_name}, thank you for the lovely review. It means a lot to a small team. When you are ready for the next one, here is what is coming up: {book_link}',
     timing: { when: 'review', hours: 24 },
     enabled: true,
     audienceId: 'aud_all',
@@ -356,7 +356,7 @@ export const DEFAULT_TEMPLATES: MessageTemplate[] = [
     purpose: 'Reminds the holder before a gift card expires.',
     channel: 'email',
     subject: 'Your {business} gift card runs out soon',
-    body: 'Hi {first_name}, your gift card still has credit on it and runs out soon. Book a trip and use it at checkout: {book_link}',
+    body: 'Hi {first_name}, your gift card still has credit on it and runs out soon. Book an activity and use it at checkout: {book_link}',
     timing: { when: 'gift_expiry', hours: 30 * 24 },
     enabled: true,
   },
@@ -367,7 +367,7 @@ export const DEFAULT_TEMPLATES: MessageTemplate[] = [
     purpose: 'For guests who gave a date of birth, a week before the day.',
     channel: 'email',
     subject: 'Happy birthday from {business}',
-    body: 'Hi {first_name}, happy early birthday! Celebrate with us: {offer_percent} off any trip this month with {offer_code}. {book_link}',
+    body: 'Hi {first_name}, happy early birthday! Celebrate with us: {offer_percent} off any activity this month with {offer_code}. {book_link}',
     timing: { when: 'birthday', hours: 7 * 24 },
     enabled: false,
     audienceId: 'aud_all',
@@ -376,11 +376,11 @@ export const DEFAULT_TEMPLATES: MessageTemplate[] = [
   {
     key: 'waitlist',
     group: 'growth',
-    name: 'A seat opened up',
-    purpose: 'Tells guests on the waitlist the moment a seat frees up.',
+    name: 'A spot opened up',
+    purpose: 'Tells guests on the waitlist the moment a spot frees up.',
     channel: 'sms',
-    subject: 'A seat opened on {activity}',
-    body: 'Hi {first_name}, a seat just opened on {activity} on {date} at {time}. First to book gets it: {book_link}',
+    subject: 'A spot opened on {activity}',
+    body: 'Hi {first_name}, a spot just opened on {activity} on {date} at {time}. First to book gets it: {book_link}',
     timing: { when: 'waitlist', hours: 0 },
     enabled: true,
   },
@@ -422,7 +422,7 @@ export function timingLabel(timing: MessageTemplate['timing']): string {
     case 'on_booking':
       return 'At booking'
     case 'manual':
-      return 'Sent by staff'
+      return 'Sent by your team'
     case 'before':
       return `${span} before the start`
     case 'after':
@@ -430,11 +430,11 @@ export function timingLabel(timing: MessageTemplate['timing']): string {
     case 'signup':
       return timing.hours === 0 ? 'When they join the list' : `${span} after they join`
     case 'browse':
-      return `${soon} after viewing a trip`
+      return `${soon} after viewing an activity`
     case 'since_last':
-      return `${span} after their last trip`
+      return `${span} after their last booking`
     case 'anniversary':
-      return 'On the trip’s anniversary'
+      return 'A year after their activity'
     case 'review':
       return `${soon} after a 4–5 star review`
     case 'gift_expiry':
@@ -442,7 +442,7 @@ export function timingLabel(timing: MessageTemplate['timing']): string {
     case 'birthday':
       return `${span} before their birthday`
     case 'waitlist':
-      return 'When a seat opens'
+      return 'When a spot opens'
   }
 }
 

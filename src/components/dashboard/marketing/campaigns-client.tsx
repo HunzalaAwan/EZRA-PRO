@@ -104,17 +104,17 @@ const STARTERS: { id: string; name: string; hint: string; channel: Campaign['cha
   },
   {
     id: 'lastminute',
-    name: 'Last-minute seats',
+    name: 'Last-minute spots',
     hint: 'Fill this week’s gaps',
     channel: 'sms',
     subject: '',
-    body: '{business}: a few seats left this week. {offer_percent} off with {offer_code} until Sunday: {book_link}',
+    body: '{business}: a few spots left this week. {offer_percent} off with {offer_code} until Sunday: {book_link}',
     offer: { percent: 15, code: 'LASTSEATS15' },
   },
   {
     id: 'launch',
     name: 'Something new',
-    hint: 'Announce a new trip or class',
+    hint: 'Announce a new activity or class',
     channel: 'email',
     subject: 'New: something we have been waiting to share',
     body: 'Hi {first_name},\n\nWe have something brand new and you are among the first to hear. Early bookers get {offer_percent} off with {offer_code}.\n\n{business}',
@@ -781,7 +781,7 @@ function CampaignEditor({
                 ? `Nobody in ${audience.name} said yes to ${draft.channel === 'sms' ? 'marketing texts' : 'marketing emails'}`
                 : `Everyone in ${audience.name} is held back by your marketing rules: ${[
                     breakdown.noConsent ? `${breakdown.noConsent} haven’t said yes to ${draft.channel === 'sms' ? 'texts' : 'emails'}` : '',
-                    breakdown.tripSoon ? `${breakdown.tripSoon} have a trip in the next ${settings.skipUpcoming.days} days` : '',
+                    breakdown.tripSoon ? `${breakdown.tripSoon} have a booking in the next ${settings.skipUpcoming.days} days` : '',
                     breakdown.weeklyLimit ? `${breakdown.weeklyLimit} already had this week’s limit` : '',
                   ]
                     .filter(Boolean)
@@ -898,7 +898,7 @@ function CampaignEditor({
                 <h3 className="text-sm font-semibold">Send as</h3>
                 <RadioGroup value={draft.channel} onValueChange={(value) => switchChannel(value as Campaign['channel'])} className="grid gap-2 sm:grid-cols-2">
                   <RadioGroupCard value="email" label="Email" description="Room for photos, a button and a code." icon={<Mail className="size-4" />} />
-                  <RadioGroupCard value="sms" label="Text message" description="Short and read within minutes. Best for last-minute seats." icon={<MessageSquareText className="size-4" />} />
+                  <RadioGroupCard value="sms" label="Text message" description="Short and read within minutes. Best for last-minute spots." icon={<MessageSquareText className="size-4" />} />
                 </RadioGroup>
               </section>
 
@@ -1184,7 +1184,7 @@ function CampaignEditor({
                       )
                     })}
                   </div>
-                  <p className="text-xs text-subtle">Mornings from 9 to 11 tend to get the most opens. Weekends work well for trips and days out.</p>
+                  <p className="text-xs text-subtle">Mornings from 9 to 11 tend to get the most opens. Weekends work well for activities and days out.</p>
                 </div>
               ) : null}
 
@@ -1485,7 +1485,7 @@ function Review({
   const rows: { label: string; value: number; note: string; on: boolean }[] = [
     { label: `Haven’t said yes to ${draft.channel === 'sms' ? 'texts' : 'emails'}`, value: breakdown.noConsent, note: 'Only guests who agreed to marketing on this channel get it.', on: true },
     {
-      label: `Have a trip in the next ${settings.skipUpcoming.days} ${settings.skipUpcoming.days === 1 ? 'day' : 'days'}`,
+      label: `Have a booking in the next ${settings.skipUpcoming.days} ${settings.skipUpcoming.days === 1 ? 'day' : 'days'}`,
       value: breakdown.tripSoon,
       note: 'They get their booking reminders instead.',
       on: settings.skipUpcoming.enabled,

@@ -177,7 +177,7 @@ function DepartureList({
   return (
     <ul
       className="flex gap-2 overflow-x-auto pb-1 no-scrollbar lg:flex-col lg:gap-1 lg:overflow-visible lg:pb-0"
-      aria-label="Departures"
+      aria-label="Time slots"
     >
       {rows.map((row) => {
         const { departure, activity } = row
@@ -222,7 +222,7 @@ function DepartureList({
                 <span className="block text-xs text-subtle tabular-nums">
                   {cancelled
                     ? 'Cancelled'
-                    : `${formatNumber(c.aboard)}/${formatNumber(c.expected)} aboard · ${departure.booked}/${departure.capacity} seats`}
+                    : `${formatNumber(c.aboard)}/${formatNumber(c.expected)} checked in · ${departure.booked}/${departure.capacity} spots`}
                 </span>
               </span>
               {!cancelled ? (
@@ -316,12 +316,12 @@ function DepartureDetail({
           <div className="flex shrink-0 items-center gap-3">
             {staff.length > 0 ? (
               <div className="text-right">
-                <p className="text-xs font-semibold tracking-wide text-subtle uppercase">Crew</p>
+                <p className="text-xs font-semibold tracking-wide text-subtle uppercase">Team</p>
                 <AvatarGroup
                   avatars={staff.map((u) => ({ id: u.id, name: u.name, src: u.avatarUrl }))}
                   size="sm"
                   max={3}
-                  label={`Crew on the ${formatTime(departure.startsAt)} departure`}
+                  label={`Team on the ${formatTime(departure.startsAt)} time slot`}
                   ringClassName="ring-surface"
                   className="mt-1"
                 />
@@ -337,7 +337,7 @@ function DepartureDetail({
             held={departure.held}
             size="md"
             showLabel
-            unit="seat"
+            unit="spot"
           />
           <div className="flex flex-wrap items-center gap-1.5 text-xs">
             <Badge variant="neutral" size="sm" className="tabular-nums">
@@ -482,14 +482,14 @@ export function ManifestView({ initialManifest, className }: ManifestViewProps) 
       return draft
     })
     toast.success(`${row.activity.name} is fully checked in`, {
-      description: `${formatTime(row.departure.startsAt)} departure · ${row.departure.booked} guests aboard.`,
+      description: `${formatTime(row.departure.startsAt)} time slot · ${row.departure.booked} guests checked in.`,
     })
   }
 
   const markNoShow = (bookingId: string) => {
     setNoShows((prev) => ({ ...prev, [bookingId]: true }))
     toast.error('Marked as a no-show', {
-      description: 'The seat stays sold; the crew sheet now shows the party did not arrive.',
+      description: 'The spots stay sold; the guest list now shows the party did not arrive.',
     })
   }
 
@@ -497,11 +497,11 @@ export function ManifestView({ initialManifest, className }: ManifestViewProps) 
   const checkedPct = totals.guests === 0 ? 0 : Math.round((totals.aboard / totals.guests) * 100)
 
   const summary: { label: string; value: string; icon: LucideIcon; tone: 'primary' | 'success' | 'warning' | 'neutral' }[] = [
-    { label: `Departure${manifest.length === 1 ? '' : 's'}`, value: formatNumber(manifest.length), icon: Ship, tone: 'primary' },
+    { label: `Time slot${manifest.length === 1 ? '' : 's'}`, value: formatNumber(manifest.length), icon: Ship, tone: 'primary' },
     { label: 'Guests expected', value: formatNumber(totals.guests), icon: Users, tone: 'neutral' },
     { label: `Checked in · ${checkedPct}%`, value: formatNumber(totals.aboard), icon: Users, tone: 'success' },
     { label: 'No-shows', value: formatNumber(totals.noShowGuests), icon: UserX, tone: totals.noShowGuests > 0 ? 'warning' : 'neutral' },
-    { label: 'On the water', value: formatCurrency(totals.revenue, tenant.currency, { compact: true }), icon: Wallet, tone: 'primary' },
+    { label: 'Booked value', value: formatCurrency(totals.revenue, tenant.currency, { compact: true }), icon: Wallet, tone: 'primary' },
   ]
 
   return (
@@ -536,7 +536,7 @@ export function ManifestView({ initialManifest, className }: ManifestViewProps) 
             size="sm"
             leftIcon={<RefreshCw />}
             onClick={() =>
-              toast.success('Manifest refreshed', { description: 'Pulled the latest bookings, crew and weather.' })
+              toast.success('Guest list refreshed', { description: 'Pulled the latest bookings, team and weather.' })
             }
           >
             <span className="hidden sm:inline">Refresh</span>
@@ -588,7 +588,7 @@ export function ManifestView({ initialManifest, className }: ManifestViewProps) 
           variant="no-data"
           icon={CalendarDays}
           title="Nothing scheduled on this day"
-          description="No departures are on the calendar for this date. Step forward to the next trading day, or open the calendar to schedule one."
+          description="No time slots are on the calendar for this date. Step forward to the next trading day, or open the calendar to schedule one."
           action={
             <Button variant="secondary" onClick={() => setOffset((o) => o + 1)}>
               Next day
@@ -602,7 +602,7 @@ export function ManifestView({ initialManifest, className }: ManifestViewProps) 
             <aside className="min-w-0 lg:col-span-4 xl:col-span-3">
               <div className="rounded-2xl border border-line bg-surface p-2 lg:sticky lg:top-20">
                 <p className="px-2 pt-1 pb-2 text-xs font-semibold tracking-wide text-subtle uppercase">
-                  {manifest.length} {manifest.length === 1 ? 'departure' : 'departures'}
+                  {manifest.length} {manifest.length === 1 ? 'time slot' : 'time slots'}
                 </p>
                 <div className="lg:max-h-[calc(100vh-14rem)] lg:overflow-y-auto">
                   <DepartureList

@@ -365,11 +365,12 @@ export function DepartureDetailSheet({
                   capacity={departure.capacity}
                   held={departure.held}
                   size="md"
+                  unit="spot"
                 />
                 {departure.held > 0 ? (
                   <p className="mt-2 text-xs text-subtle">
-                    {departure.held} {departure.held === 1 ? 'seat is' : 'seats are'} held by carts
-                    in progress.
+                    {departure.held} {departure.held === 1 ? 'spot is' : 'spots are'} held by guests
+                    still checking out.
                   </p>
                 ) : null}
               </div>
@@ -429,7 +430,7 @@ export function DepartureDetailSheet({
                         <dt className="text-subtle">Status</dt>
                         <dd className="font-medium text-foreground">
                           {weather.goConfidence >= 80
-                            ? 'Good to run'
+                            ? 'Good to go'
                             : weather.goConfidence >= 55
                               ? 'Monitor'
                               : 'At risk'}
@@ -454,7 +455,7 @@ export function DepartureDetailSheet({
               {/* Crew + resources */}
               <div className="grid gap-5 sm:grid-cols-2">
                 <div>
-                  <SectionTitle count={crew.length}>Crew</SectionTitle>
+                  <SectionTitle count={crew.length}>Team</SectionTitle>
                   <ul className="flex flex-col gap-2.5">
                     {crew.map((user) => (
                       <li key={user.id} className="flex items-center gap-2.5">
@@ -468,7 +469,7 @@ export function DepartureDetailSheet({
                       </li>
                     ))}
                     {crew.length === 0 ? (
-                      <li className="text-[0.8125rem] text-subtle">No crew assigned.</li>
+                      <li className="text-[0.8125rem] text-subtle">No team assigned.</li>
                     ) : null}
                   </ul>
                 </div>
@@ -508,7 +509,7 @@ export function DepartureDetailSheet({
 
               {/* Manifest */}
               <div>
-                <SectionTitle count={guests.length}>Guest manifest</SectionTitle>
+                <SectionTitle count={guests.length}>Guest list</SectionTitle>
                 <ul className="overflow-hidden rounded-xl border border-line">
                   {seededGuests.map(({ booking, customer }, index) => (
                     <li
@@ -557,7 +558,7 @@ export function DepartureDetailSheet({
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[0.8125rem] font-medium text-foreground">{entry.name}</p>
                         <p className="truncate text-xs text-subtle">
-                          <span className="font-mono">{entry.reference}</span> · {entry.packageName ? `Package · ${entry.packageName}` : entry.source === 'dashboard' ? 'Booked by staff' : 'Booked online'}
+                          <span className="font-mono">{entry.reference}</span> · {entry.packageName ? `Package · ${entry.packageName}` : entry.source === 'dashboard' ? 'Booked by your team' : 'Booked online'}
                         </p>
                       </div>
                       <span className="tabular shrink-0 text-[0.75rem] font-semibold text-muted">
@@ -568,7 +569,7 @@ export function DepartureDetailSheet({
                   ))}
                   {guests.length === 0 && detail.extra.length === 0 ? (
                     <li className="bg-surface px-3 py-6 text-center text-[0.8125rem] text-subtle">
-                      No bookings on this departure yet.
+                      No bookings on this time slot yet.
                     </li>
                   ) : null}
                 </ul>
@@ -603,19 +604,19 @@ export function DepartureDetailSheet({
                     variant="outline"
                     size="sm"
                     leftIcon={<UserPlus aria-hidden="true" />}
-                    onClick={() => notify('Crew assignment', 'Pick from available crew for this slot.')}
+                    onClick={() => notify('Assign team', 'Pick from available team members for this time slot.')}
                   >
-                    Assign crew
+                    Assign team
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
                     leftIcon={<ClipboardList aria-hidden="true" />}
                     onClick={() =>
-                      notify('Manifest ready', `${guests.length} bookings · ${departure.booked} guests`)
+                      notify('Guest list ready', `${guests.length} bookings · ${departure.booked} guests`)
                     }
                   >
-                    Manifest
+                    Guest list
                   </Button>
                   <Button
                     variant="outline"
@@ -661,7 +662,7 @@ export function DepartureDetailSheet({
               leftIcon={<Pencil aria-hidden="true" />}
               onClick={() => notify('Editor opened', `${activity.name} · ${formatTime(start)}`)}
             >
-              Edit departure
+              Edit time slot
             </Button>
           </SheetFooter>
         </SheetContent>
@@ -671,7 +672,7 @@ export function DepartureDetailSheet({
       <Dialog open={confirmCancel} onOpenChange={setConfirmCancel}>
         <DialogContent size="sm">
           <DialogHeader>
-            <DialogTitle>Cancel this departure?</DialogTitle>
+            <DialogTitle>Cancel this time slot?</DialogTitle>
             <DialogDescription>
               {guests.length > 0
                 ? `${recipients.length} ${recipients.length === 1 ? 'booking' : 'bookings'} covering ${departure.booked} guests are cancelled, refunded in full because you called it off, and sent "Booking cancelled".`
@@ -691,7 +692,7 @@ export function DepartureDetailSheet({
           </DialogBody>
           <DialogFooter>
             <Button variant="ghost" size="sm" onClick={() => setConfirmCancel(false)}>
-              Keep departure
+              Keep time slot
             </Button>
             <Button
               variant="danger"
@@ -699,12 +700,12 @@ export function DepartureDetailSheet({
               onClick={() => {
                 cancelEveryone()
                 setConfirmCancel(false)
-                toast.error('Departure cancelled', {
+                toast.error('Time slot cancelled', {
                   description: `${activity.name} · ${formatTime(start)}: ${recipients.length} ${recipients.length === 1 ? 'booking' : 'bookings'} refunded in full and told.`,
                 })
               }}
             >
-              Cancel departure
+              Cancel time slot
             </Button>
           </DialogFooter>
         </DialogContent>

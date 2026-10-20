@@ -245,7 +245,7 @@ export function WalkInRevenue({
       <section className="rounded-2xl border border-line bg-surface p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h3 className="text-sm font-semibold">When walk-ins come in</h3>
-          <p className="text-xs text-muted">{busiest.count > 0 ? `Busiest around ${hourLabel(busiest.hour)}. Staff the desk then.` : 'No sales yet.'}</p>
+          <p className="text-xs text-muted">{busiest.count > 0 ? `Busiest around ${hourLabel(busiest.hour)}. Have someone on the desk then.` : 'No sales yet.'}</p>
         </div>
         <div className="mt-4 flex h-28 items-end gap-2" aria-hidden="true">
           {hours.map((entry) => (

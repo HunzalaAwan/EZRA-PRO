@@ -95,7 +95,7 @@ export function FormsClient({ tenant: tenantRecord, nowIso }: { tenant: Tenant; 
         <CardHeader className="flex flex-row items-start justify-between gap-3">
           <div>
             <CardTitle>Storefront pop-up</CardTitle>
-            <CardDescription>Shows once to new visitors, offers a code for the first trip and adds them to the list. {bySource('popup') > 0 ? `${bySource('popup')} sign-ups so far.` : ''}</CardDescription>
+            <CardDescription>Shows once to people new to your site, offers a code for their first booking and adds them to the list. {bySource('popup') > 0 ? `${bySource('popup')} sign-ups so far.` : ''}</CardDescription>
           </div>
           <Switch
             checked={popup.enabled}
@@ -155,7 +155,7 @@ export function FormsClient({ tenant: tenantRecord, nowIso }: { tenant: Tenant; 
                 <div className="flex items-start justify-between gap-3">
                   <p className="flex items-center gap-1.5 text-sm font-medium">
                     <Tag className="size-4 text-subtle" aria-hidden="true" />
-                    First-trip code
+                    First-booking code
                   </p>
                   <Switch
                     checked={popup.offer.enabled}
@@ -164,7 +164,7 @@ export function FormsClient({ tenant: tenantRecord, nowIso }: { tenant: Tenant; 
                       setPopup({ offer })
                       syncPromo(offer, popup.enabled, enabled ? '' : popup.offer.code)
                     }}
-                    aria-label="First-trip code"
+                    aria-label="First-booking code"
                   />
                 </div>
                 {popup.offer.enabled ? (

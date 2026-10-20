@@ -157,7 +157,7 @@ export function LossesCard({ losses, currency, loading = false, className }: Los
         href="/dashboard/bookings"
         className="mt-auto inline-flex w-fit items-center gap-1 pt-4 text-xs font-semibold text-primary transition-colors hover:text-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
       >
-        Cancelled reservations
+        Cancelled bookings
         <ChevronRight aria-hidden="true" className="size-3.5" />
       </Link>
     </Card>

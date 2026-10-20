@@ -200,7 +200,7 @@ function ImagePicker({ value, onChange, activities, compact }: { value: string; 
       <Input size="sm" placeholder="Or paste an image link" leftIcon={<Link2 className="size-3.5" />} value={value.startsWith('data:') ? '' : value} onChange={(e) => onChange(e.target.value)} aria-label="Image link" />
       {photos.length > 0 ? (
         <div>
-          <p className="text-xs text-subtle">Your trip photos</p>
+          <p className="text-xs text-subtle">Your activity photos</p>
           <div className={cn('mt-1.5 grid gap-1.5', compact ? 'grid-cols-5' : 'grid-cols-4')}>
             {photos.slice(0, compact ? 5 : 8).map((activity) => (
               <button

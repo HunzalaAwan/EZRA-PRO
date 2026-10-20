@@ -190,7 +190,7 @@ export function AnalyticsShell({ initialSnapshot }: AnalyticsShellProps) {
   const handleRefresh = React.useCallback(() => {
     setNonce((n) => n + 1)
     toast.success('Analytics recomputed', {
-      description: `Rebuilt from every booking, departure and payment through ${TODAY_KEY}.`,
+      description: `Rebuilt from every booking, time slot and payment through ${TODAY_KEY}.`,
     })
   }, [])
 
@@ -361,7 +361,7 @@ export function AnalyticsShell({ initialSnapshot }: AnalyticsShellProps) {
               </div>
 
               {/* ---------- the products ---------- */}
-              <SectionLabel eyebrow="Products" title="What sells" hint="Every experience in the range, sortable, with the cuts that matter" />
+              <SectionLabel eyebrow="Activities" title="What sells" hint="Every activity in the range, sortable, with the cuts that matter" />
               <TopExperiencesTable items={snapshot.topActivities} currency={tenant.currency} rangeLabel={rangeLabel} loading={pending} />
 
               {insights}

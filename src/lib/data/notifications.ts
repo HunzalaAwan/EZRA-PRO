@@ -102,7 +102,7 @@ export function getNotifications(tenantId: string): NotificationItem[] {
       title: `New booking · ${activity?.name ?? 'Activity'}`,
       body: `${guestName(getCustomerById(booking.customerId))} booked ${booking.partySize} ${pluralize(
         booking.partySize,
-        'seat',
+        'spot',
       )} for ${departureLabel(booking.departureAt)} · ${formatCurrency(booking.total, currency)}`,
       createdAt: booking.createdAt,
       href: `/bookings/${booking.id}`,
@@ -124,7 +124,7 @@ export function getNotifications(tenantId: string): NotificationItem[] {
       title: `Cancellation · ${activity?.name ?? 'Activity'}`,
       body: `${guestName(getCustomerById(booking.customerId))} cancelled ${
         booking.partySize
-      } ${pluralize(booking.partySize, 'seat')} on ${departureLabel(booking.departureAt)}${
+      } ${pluralize(booking.partySize, 'spot')} on ${departureLabel(booking.departureAt)}${
         booking.refundAmount ? ` · ${formatCurrency(booking.refundAmount, currency)} refunded` : ''
       }. ${booking.cancellationReason ?? 'No reason given.'}`,
       createdAt: booking.cancelledAt,
@@ -146,13 +146,13 @@ export function getNotifications(tenantId: string): NotificationItem[] {
       title:
         remaining === 0
           ? `Sold out · ${activity?.name ?? 'Activity'}`
-          : `${remaining} ${pluralize(remaining, 'seat')} left · ${activity?.name ?? 'Activity'}`,
+          : `${remaining} ${pluralize(remaining, 'spot')} left · ${activity?.name ?? 'Activity'}`,
       body:
         remaining === 0
-          ? `${departureLabel(departure.startsAt)} is full at ${departure.booked} guests. Open a waitlist or add a second departure while demand is live.`
+          ? `${departureLabel(departure.startsAt)} is full at ${departure.booked} guests. Open a waitlist or add another time slot while demand is live.`
           : `${departureLabel(departure.startsAt)} is ${Math.round(
               fillRate(departure.booked, departure.capacity),
-            )}% full with ${remaining} ${pluralize(remaining, 'seat')} unsold.`,
+            )}% full with ${remaining} ${pluralize(remaining, 'spot')} left.`,
       createdAt: localIso(addMinutes(NOW, -rngInt(rng, 25, 400))),
       href: '/calendar',
     })
@@ -189,7 +189,7 @@ export function getNotifications(tenantId: string): NotificationItem[] {
       title: 'Payment failed',
       body: `${formatCurrency(failed.amount, currency)} on ${
         booking?.reference ?? failed.bookingId
-      } was declined${booking ? ` for ${guestName(getCustomerById(booking.customerId))}` : ''}. Send a new payment link before the departure cut-off.`,
+      } was declined${booking ? ` for ${guestName(getCustomerById(booking.customerId))}` : ''}. Send a new payment link before the activity starts.`,
       createdAt: failed.createdAt,
       href: booking ? `/bookings/${booking.id}` : '/payments',
     })
@@ -206,7 +206,7 @@ export function getNotifications(tenantId: string): NotificationItem[] {
       title: 'Balance due',
       body: `${formatCurrency(pending.amount, currency)} outstanding on ${
         booking?.reference ?? pending.bookingId
-      }${booking ? ` · departs ${departureLabel(booking.departureAt)}` : ''}. Automatic capture runs 48 hours out.`,
+      }${booking ? ` · starts ${departureLabel(booking.departureAt)}` : ''}. Automatic capture runs 48 hours out.`,
       createdAt: pending.createdAt,
       href: '/payments',
     })
@@ -243,8 +243,8 @@ export function getNotifications(tenantId: string): NotificationItem[] {
       title: `${downResource.name} is in maintenance`,
       body: `${downResource.notes ?? 'Scheduled maintenance.'} ${
         affected.length > 0
-          ? `${affected.length} ${pluralize(affected.length, 'departure')} in the next seven days still reference it.`
-          : 'No departures in the next seven days are affected.'
+          ? `${affected.length} ${pluralize(affected.length, 'time slot')} in the next seven days still reference it.`
+          : 'No time slots in the next seven days are affected.'
       }`,
       createdAt: localIso(addMinutes(NOW, -rngInt(rng, 200, 1400))),
       href: '/settings',
@@ -327,7 +327,7 @@ export function getActivityFeed(tenantId: string, limit = 22): ActivityFeedItem[
       actor: guestName(customer),
       ...(customer?.avatarUrl ? { actorAvatar: customer.avatarUrl } : {}),
       verb: 'booked',
-      target: `${booking.partySize} ${pluralize(booking.partySize, 'seat')} on ${
+      target: `${booking.partySize} ${pluralize(booking.partySize, 'spot')} on ${
         activity?.name ?? 'an activity'
       } · ${departureLabel(booking.departureAt)}`,
       createdAt: booking.createdAt,
@@ -407,7 +407,7 @@ export function getActivityFeed(tenantId: string, limit = 22): ActivityFeedItem[
       ...(member?.avatarUrl ? { actorAvatar: member.avatarUrl } : {}),
       verb: 'checked in',
       target: `${departure.booked} ${pluralize(departure.booked, 'guest')} on ${
-        activity?.name ?? 'a departure'
+        activity?.name ?? 'an activity'
       } · ${formatTime(departure.startsAt)}`,
       createdAt: departure.startsAt,
       kind: 'booking',
@@ -424,7 +424,7 @@ export function getActivityFeed(tenantId: string, limit = 22): ActivityFeedItem[
       actor: member?.name ?? 'Operations',
       ...(member?.avatarUrl ? { actorAvatar: member.avatarUrl } : {}),
       verb: 'placed a weather hold on',
-      target: `${activity?.name ?? 'a departure'} · ${departureLabel(departure.startsAt)}`,
+      target: `${activity?.name ?? 'an activity'} · ${departureLabel(departure.startsAt)}`,
       createdAt: localIso(addMinutes(NOW, -rngInt(rng, 30, 210))),
       kind: 'system',
     })
@@ -438,7 +438,7 @@ export function getActivityFeed(tenantId: string, limit = 22): ActivityFeedItem[
     push({
       actor: 'EZRA Pro',
       verb: 'closed sales on',
-      target: `${activity?.name ?? 'a departure'} · ${departureLabel(
+      target: `${activity?.name ?? 'an activity'} · ${departureLabel(
         departure.startsAt,
       )} sold out at ${departure.booked}`,
       createdAt: localIso(addMinutes(NOW, -rngInt(rng, 60, 900))),
@@ -454,7 +454,7 @@ export function getActivityFeed(tenantId: string, limit = 22): ActivityFeedItem[
       actor: member?.name ?? 'EZRA Pro',
       ...(member?.avatarUrl ? { actorAvatar: member.avatarUrl } : {}),
       verb: 'applied a pricing rule to',
-      target: `${activity?.name ?? 'a departure'} · ${departure.priceMultiplier}× on ${departureLabel(
+      target: `${activity?.name ?? 'an activity'} · ${departure.priceMultiplier}× on ${departureLabel(
         departure.startsAt,
       )}`,
       createdAt: localIso(addMinutes(NOW, -rngInt(rng, 120, 2600))),
@@ -469,7 +469,7 @@ export function getActivityFeed(tenantId: string, limit = 22): ActivityFeedItem[
       actor: member.name,
       actorAvatar: member.avatarUrl,
       verb: 'published the roster for',
-      target: 'next week’s departures',
+      target: 'next week’s time slots',
       createdAt: localIso(addMinutes(NOW, -rngInt(rng, 300, 2000))),
       kind: 'system',
     })

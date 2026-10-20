@@ -53,7 +53,7 @@ export function EmailContentCard({
           <p className="text-sm font-medium text-foreground">{design ? 'Designed email' : 'Simple letter'}</p>
           <p className="mt-0.5 text-xs text-subtle">
             {design
-              ? `${design.blocks.length} blocks · add photos, buttons, trips and a code in the designer.`
+              ? `${design.blocks.length} blocks · add photos, buttons, activities and a code in the designer.`
               : 'Goes as a plain, friendly letter made from the text below. Design it to add photos, buttons and your colours.'}
           </p>
         </div>

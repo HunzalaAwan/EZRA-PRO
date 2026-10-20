@@ -16,9 +16,9 @@ import { cn } from '@/lib/utils'
 export type ComparisonMode = 'previous' | 'year'
 
 export const METRIC_OPTIONS: { value: RevenueMetric; label: string; hint: string }[] = [
-  { value: 'revenue', label: 'Net revenue', hint: 'Money by departure date' },
-  { value: 'bookings', label: 'Bookings', hint: 'Reservations by departure date' },
-  { value: 'guests', label: 'Guests', hint: 'Seats sold' },
+  { value: 'revenue', label: 'Net revenue', hint: 'Money by activity date' },
+  { value: 'bookings', label: 'Bookings', hint: 'Bookings by activity date' },
+  { value: 'guests', label: 'Guests', hint: 'Spots booked' },
   { value: 'occupancy', label: 'Occupancy', hint: 'Share of capacity sold' },
 ]
 

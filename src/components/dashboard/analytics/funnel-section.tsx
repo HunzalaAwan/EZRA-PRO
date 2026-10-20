@@ -191,11 +191,11 @@ export function FunnelSection({
 
               <p className="mt-3 text-[0.8125rem] leading-relaxed text-muted">
                 {formatNumber(analysis.leak.dropped)} of {formatNumber(analysis.leak.entering)}{' '}
-                sessions stop here. At{' '}
+                visits stop here. At{' '}
                 <span className="font-medium text-foreground">
                   {formatCurrency(aov, currency)}
                 </span>{' '}
-                average order value, every single point you claw back is worth{' '}
+                average booking value, every single point you claw back is worth{' '}
                 <span className="font-semibold text-success">
                   {formatCurrency(analysis.perPoint, currency)}
                 </span>{' '}
@@ -233,7 +233,7 @@ export function FunnelSection({
                   <span className="font-semibold text-success">
                     {formatCurrency(analysis.recover, currency)}
                   </span>{' '}
-                  without a single extra visitor.
+                  without a single extra visit.
                 </p>
               ) : (
                 <p className="mt-3 text-[0.8125rem] leading-relaxed text-muted">
@@ -377,7 +377,7 @@ export function FunnelSection({
 
         <CardFooter separated>
           <p className="text-xs leading-relaxed text-faint">
-            Category medians are the EZRA network median for watersports and tour operators over the
+            Category medians are the EZRA network median for activity businesses like yours over the
             trailing twelve months. They are context for judging a number, not a target to hit.
           </p>
         </CardFooter>

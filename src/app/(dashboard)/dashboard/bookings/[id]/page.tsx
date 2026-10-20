@@ -15,9 +15,9 @@ interface BookingPageProps {
 export async function generateMetadata({ params }: BookingPageProps): Promise<Metadata> {
   const { id } = await params
   const detail = getBookingDetail(id)
-  if (!detail) return { title: 'Reservation not found · EZRA Pro' }
+  if (!detail) return { title: 'Booking not found' }
   return {
-    title: `${detail.booking.reference} · ${detail.customer.firstName} ${detail.customer.lastName} · EZRA Pro`,
+    title: `${detail.booking.reference} · ${detail.customer.firstName} ${detail.customer.lastName}`,
     description: `${detail.activity.name} · ${detail.booking.partySize} guests`,
   }
 }
@@ -39,7 +39,7 @@ export default async function BookingDetailPage({ params }: BookingPageProps) {
         } · booked via ${detail.booking.channel.replace(/_/g, ' ')}`}
         actions={
           <Button asChild variant="secondary" leftIcon={<ArrowLeft />}>
-            <Link href="/dashboard/bookings">All reservations</Link>
+            <Link href="/dashboard/bookings">All bookings</Link>
           </Button>
         }
       />

@@ -153,7 +153,7 @@ function WeekdayBars({
           <div key={WEEKDAY_NAMES[i]} className="flex flex-col items-center gap-1">
             <div className="flex h-12 w-full items-end rounded-md bg-well">
               <div
-                title={value === null ? 'No departures' : `${WEEKDAY_NAMES[i]} · ${format(value)}`}
+                title={value === null ? 'No time slots' : `${WEEKDAY_NAMES[i]} · ${format(value)}`}
                 className="w-full rounded-md transition-[height] duration-700 ease-[var(--ease-out-expo)]"
                 style={{
                   height: value === null ? '0%' : `${Math.max(8, (value / (max || 1)) * 100)}%`,
@@ -212,7 +212,7 @@ export function RevenueSummaryCard({
 
   return (
     <Card className={cn('flex flex-col p-5', className)}>
-      <CardTop title="Net revenue" hint="After refunds, by departure date" icon={Wallet} />
+      <CardTop title="Net revenue" hint="After refunds, by activity date" icon={Wallet} />
 
       <div className="mt-4 flex items-end justify-between gap-3">
         <div>
@@ -240,7 +240,7 @@ export function RevenueSummaryCard({
           </dd>
         </div>
         <div>
-          <dt className="text-xs text-subtle">Average order</dt>
+          <dt className="text-xs text-subtle">Average booking</dt>
           <dd className="mt-0.5 text-sm font-semibold text-foreground tabular-nums">{formatCurrency(Math.round(aov), currency)}</dd>
         </div>
         {best ? (
@@ -299,17 +299,17 @@ export function OccupancyGaugeCard({
   const fullDays = points.filter((p) => p.occupancy >= 95).length
 
   const legend = [
-    { label: 'Seats sold', value: formatPercent(occupancy, 1), color: 'var(--series-occupancy)' },
+    { label: 'Spots booked', value: formatPercent(occupancy, 1), color: 'var(--series-occupancy)' },
     { label: 'Left empty', value: formatPercent(empty, 1), color: 'var(--border-strong)' },
     { label: 'Cancelled', value: formatPercent(cancelRate, 1), color: 'var(--series-cancellations)' },
   ]
 
   return (
     <Card className={cn('flex flex-col p-5', className)}>
-      <CardTop title="Capacity" hint="Seats sold across every departure" icon={Gauge} />
+      <CardTop title="Capacity" hint="Spots booked across every time slot" icon={Gauge} />
 
       <div className="mt-2 flex items-center justify-between gap-4">
-        <RadialGauge value={occupancy} size={136} thickness={11} label="sold" showTicks={false} ariaLabel="Seats sold" />
+        <RadialGauge value={occupancy} size={136} thickness={11} label="booked" showTicks={false} ariaLabel="Spots booked" />
         <ul className="flex flex-1 flex-col gap-2.5">
           {legend.map((item) => (
             <li key={item.label} className="flex items-center gap-2.5">
@@ -487,7 +487,7 @@ export function TopChannelsCard({
         ) : null}
         {richest ? (
           <div className="min-w-0">
-            <dt className="text-xs text-subtle">Highest avg order</dt>
+            <dt className="text-xs text-subtle">Highest avg booking</dt>
             <dd className="mt-0.5 flex items-center gap-1.5 text-sm font-semibold text-foreground tabular-nums">
               <span className="truncate">{richest.channel.label}</span>
               <span className="text-muted">{formatCurrency(Math.round(richest.aov), currency)}</span>

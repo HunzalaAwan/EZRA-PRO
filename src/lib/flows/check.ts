@@ -259,7 +259,7 @@ function unavailableTokens(subjects: TriggerSubject[], allowed: Set<string>): (t
 const SUBJECT_WORD: Record<TriggerSubject, string> = {
   guest: 'a guest rather than a booking',
   booking: 'a booking',
-  departure: 'a trip or visit rather than one booking',
+  departure: 'a time slot rather than one booking',
 }
 
 const isMessage = (step: FlowStep): step is EmailStep | SmsStep => step.type === 'email' || step.type === 'sms'
@@ -324,7 +324,7 @@ export function checkFlow(flow: Flow, ctx: Partial<CheckContext> = {}): FlowIssu
       add({
         code: 'trigger-fill',
         severity: 'blocker',
-        text: 'Choose how empty a trip or visit has to be before this starts, for example under 50% full.',
+        text: 'Choose how empty a time slot has to be before this starts, for example under 50% full.',
         fix: { label: 'Use under 50% full', apply: (f) => ({ ...f, trigger: { ...f.trigger, fillBelow: 50 } }) },
       })
     }

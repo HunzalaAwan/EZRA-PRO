@@ -507,7 +507,7 @@ export function PaymentSettingsClient({ tenant: CURRENT_TENANT, now: NOW, kpis }
             Tipping
           </CardTitle>
           <CardDescription>
-            Crews at operators with post-trip tipping enabled take home an average of 11% more per
+            Teams at businesses with tipping after the activity enabled take home an average of 11% more per
             season.
           </CardDescription>
         </CardHeader>
@@ -516,7 +516,7 @@ export function PaymentSettingsClient({ tenant: CURRENT_TENANT, now: NOW, kpis }
           <div className="flex items-start justify-between gap-4 rounded-xl border border-line bg-surface p-3.5">
             <div className="min-w-0 flex-1">
               <Label htmlFor="tipping-enabled" className="cursor-pointer">
-                Offer tipping at checkout and after the trip
+                Offer tipping at checkout and after the activity
               </Label>
               <p className="mt-0.5 text-xs leading-relaxed text-muted">
                 Tips are never subject to the EZRA Pro service fee.
@@ -559,8 +559,8 @@ export function PaymentSettingsClient({ tenant: CURRENT_TENANT, now: NOW, kpis }
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="crew_pool" description="Split evenly across the manifest">
-                      Crew pool for that departure
+                    <SelectItem value="crew_pool" description="Split evenly across the team working it">
+                      Team pool for that time slot
                     </SelectItem>
                     <SelectItem value="assigned_guide" description="Paid with the next payout run">
                       The assigned guide

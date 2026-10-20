@@ -252,7 +252,7 @@ export function ActivityDetailView({
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted transition-colors hover:text-primary"
           >
             <ArrowLeft className="size-3.5" aria-hidden="true" />
-            All experiences
+            All activities
           </Link>
 
           <div className="mt-4 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
@@ -429,7 +429,7 @@ export function ActivityDetailView({
             </nav>
 
             {/* ---------- about ---------- */}
-            <Section id="about" title="About this experience">
+            <Section id="about" title="About this activity">
               <ClampedText text={activity.description} />
 
               <ul className="mt-4 flex flex-wrap gap-2">
@@ -780,11 +780,11 @@ export function ActivityDetailView({
             </p>
             <p className="mt-1 truncate text-xs text-subtle">
               {nextOpen
-                ? `Next departure ${new Intl.DateTimeFormat('en-US', {
+                ? `Next start time ${new Intl.DateTimeFormat('en-US', {
                     weekday: 'short',
                     hour: 'numeric',
                     minute: '2-digit',
-                  }).format(new Date(nextOpen.startsAt))} · ${nextOpen.seatsLeft} seats`
+                  }).format(new Date(nextOpen.startsAt))} · ${nextOpen.seatsLeft} ${pluralize(nextOpen.seatsLeft, 'spot')} left`
                 : 'Call us for the next available date'}
             </p>
           </div>

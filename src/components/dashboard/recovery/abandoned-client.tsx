@@ -161,7 +161,7 @@ export function AbandonedClient({ rows: initialRows, currency, nowIso, recoveryD
     )
     const what = discount ? `${recoveryDiscountPercent}% off` : channel === 'sms' ? 'a text' : 'a reminder'
     toast.success(ids.length === 1 ? `Sent ${what}` : `Sent ${what} to ${ids.length} guests`, {
-      description: 'The link reopens their cart with the seats still selected.',
+      description: 'The link reopens their booking with the spots still selected.',
     })
     setSelectedIds([])
   }
@@ -174,8 +174,8 @@ export function AbandonedClient({ rows: initialRows, currency, nowIso, recoveryD
 
   const dismiss = (ids: string[]) => {
     update(ids, (row) => ({ ...row, status: 'expired' }))
-    toast(ids.length === 1 ? 'Cart dismissed' : `${ids.length} carts dismissed`, {
-      description: 'Their seats go back on sale.',
+    toast(ids.length === 1 ? 'Dismissed' : `${ids.length} dismissed`, {
+      description: 'Their spots go back on sale.',
     })
     setSelectedIds([])
   }
@@ -216,7 +216,7 @@ export function AbandonedClient({ rows: initialRows, currency, nowIso, recoveryD
       },
       {
         id: 'activity',
-        header: 'Experience',
+        header: 'Activity',
         sortable: true,
         hideBelow: 'lg',
         cell: ({ activity }) => (
@@ -228,7 +228,7 @@ export function AbandonedClient({ rows: initialRows, currency, nowIso, recoveryD
       },
       {
         id: 'departure',
-        header: 'Departure',
+        header: 'Start time',
         sortable: true,
         width: '9rem',
         cellClassName: 'whitespace-nowrap',
@@ -276,7 +276,7 @@ export function AbandonedClient({ rows: initialRows, currency, nowIso, recoveryD
       },
       {
         id: 'abandoned',
-        header: 'Abandoned',
+        header: 'Left',
         sortable: true,
         defaultSortDir: 'desc',
         width: '8rem',
@@ -363,14 +363,14 @@ export function AbandonedClient({ rows: initialRows, currency, nowIso, recoveryD
   const cards = [
     { key: 'open', label: 'Open', hint: 'No reminder yet', count: stats.open.count, line: `worth ${formatCurrency(stats.open.value, currency, { compact: true })}`, tone: 'bg-warning' },
     { key: 'reminded', label: 'Reminded', hint: 'Waiting on the guest', count: stats.reminded.count, line: `worth ${formatCurrency(stats.reminded.value, currency, { compact: true })}`, tone: 'bg-info' },
-    { key: 'recovered', label: 'Recovered', hint: 'Came back and paid', count: stats.recovered.count, line: `${formatCurrency(stats.recovered.value, currency, { compact: true })} back · ${stats.recovered.rate}% of closed carts`, tone: 'bg-success' },
-    { key: 'expired', label: 'Expired', hint: 'Departure passed', count: stats.expired.count, line: `${formatCurrency(stats.expired.value, currency, { compact: true })} not recovered`, tone: 'bg-line-strong' },
+    { key: 'recovered', label: 'Recovered', hint: 'Came back and paid', count: stats.recovered.count, line: `${formatCurrency(stats.recovered.value, currency, { compact: true })} back · ${stats.recovered.rate}% of those closed`, tone: 'bg-success' },
+    { key: 'expired', label: 'Expired', hint: 'Start time passed', count: stats.expired.count, line: `${formatCurrency(stats.expired.value, currency, { compact: true })} not recovered`, tone: 'bg-line-strong' },
   ] as const
 
   return (
     <div className="flex flex-col gap-6">
       {/* ---------- numbers ---------- */}
-      <div role="group" aria-label="Filter carts by state" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div role="group" aria-label="Filter unfinished bookings by state" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => {
           const active = filter === card.key
           return (
@@ -402,7 +402,7 @@ export function AbandonedClient({ rows: initialRows, currency, nowIso, recoveryD
           {/* ---------- toolbar ---------- */}
           <div className="flex flex-col gap-3 border-b border-line-subtle px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-              <SearchInput value={query} onValueChange={setQuery} placeholder="Search guest, email or experience…" size="sm" aria-label="Search abandoned carts" fieldClassName="w-full sm:w-64" />
+              <SearchInput value={query} onValueChange={setQuery} placeholder="Search guest, email or activity…" size="sm" aria-label="Search unfinished bookings" fieldClassName="w-full sm:w-64" />
               <Segmented size="sm" label="Filter by state" options={FILTERS} value={filter} onValueChange={setFilter} />
               {filter !== 'all' || query ? (
                 <Button variant="ghost" size="xs" leftIcon={<X className="size-3.5" />} onClick={() => { setFilter('all'); setQuery('') }}>
@@ -422,7 +422,7 @@ export function AbandonedClient({ rows: initialRows, currency, nowIso, recoveryD
                 </>
               ) : (
                 <p className="hidden text-xs text-subtle tabular-nums sm:block">
-                  {sorted.length === 0 ? 'No carts' : `${formatNumber(sorted.length)} ${sorted.length === 1 ? 'cart' : 'carts'}`}
+                  {sorted.length === 0 ? 'None' : `${formatNumber(sorted.length)} ${sorted.length === 1 ? 'unfinished booking' : 'unfinished bookings'}`}
                 </p>
               )}
             </div>
@@ -441,14 +441,14 @@ export function AbandonedClient({ rows: initialRows, currency, nowIso, recoveryD
               onSelectionChange={setSelectedIds}
               stickyHeader
               rowHeight="compact"
-              ariaLabel="Abandoned carts"
+              ariaLabel="Unfinished bookings"
               empty={
                 <EmptyState
                   variant="no-results"
                   size="sm"
                   icon={ShoppingCart}
-                  title={rows.length === 0 ? 'No abandoned carts' : 'Nothing matches those filters'}
-                  description={rows.length === 0 ? 'Every checkout started this fortnight was paid for.' : 'Try another state, or search by guest or experience.'}
+                  title={rows.length === 0 ? 'No unfinished bookings' : 'Nothing matches those filters'}
+                  description={rows.length === 0 ? 'Every checkout started this fortnight was paid for.' : 'Try another state, or search by guest or activity.'}
                 />
               }
             />
@@ -457,7 +457,7 @@ export function AbandonedClient({ rows: initialRows, currency, nowIso, recoveryD
           {/* ---------- phone cards ---------- */}
           <CardContent className="md:hidden">
             {sorted.length === 0 ? (
-              <EmptyState variant="no-results" size="sm" icon={ShoppingCart} title="No carts match" description="Try another state or search term." />
+              <EmptyState variant="no-results" size="sm" icon={ShoppingCart} title="Nothing matches" description="Try another state or search term." />
             ) : (
               <ul className="divide-y divide-line-subtle">
                 {sorted.map((row) => {
@@ -494,25 +494,25 @@ export function AbandonedClient({ rows: initialRows, currency, nowIso, recoveryD
         <Card className="h-fit">
           <CardHeader>
             <CardTitle className="text-sm">Automatic recovery</CardTitle>
-            <CardDescription>What happens to every cart without you.</CardDescription>
+            <CardDescription>What happens to every unfinished booking without you.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4 text-[0.8125rem] text-muted">
             <ol className="flex flex-col gap-3">
               <li className="flex gap-3">
                 <span className="grid size-6 shrink-0 place-items-center rounded-full bg-surface-sunken text-xs text-foreground tabular-nums">1</span>
                 <span>
-                  <span className="text-foreground">{recoveryDelayMinutes} minutes</span> after a cart is left, an email with the link back to their seats.
+                  <span className="text-foreground">{recoveryDelayMinutes} minutes</span> after a booking is left unfinished, an email with the link back to their spots.
                 </span>
               </li>
               <li className="flex gap-3">
                 <span className="grid size-6 shrink-0 place-items-center rounded-full bg-surface-sunken text-xs text-foreground tabular-nums">2</span>
                 <span>
-                  The next morning, a second email with <span className="text-foreground">{recoveryDiscountPercent}% off</span> if the departure still has seats.
+                  The next morning, a second email with <span className="text-foreground">{recoveryDiscountPercent}% off</span> if the time slot still has spots.
                 </span>
               </li>
               <li className="flex gap-3">
                 <span className="grid size-6 shrink-0 place-items-center rounded-full bg-surface-sunken text-xs text-foreground tabular-nums">3</span>
-                <span>Then it stops. Held seats go back on sale when the departure is 24 hours out.</span>
+                <span>Then it stops. Held spots go back on sale when the time slot is 24 hours out.</span>
               </li>
             </ol>
             <p className="text-xs text-subtle">

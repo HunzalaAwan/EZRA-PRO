@@ -345,7 +345,7 @@ function RowMenu({ row, onAction }: { row: BookingRow; onAction: (action: Bookin
         </DropdownMenuLabel>
         <DropdownMenuItem onSelect={() => onAction('open', row)}>
           <ArrowUpRight />
-          Open reservation
+          Open booking
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onAction('message', row)}>
           <MessageSquare />
@@ -358,7 +358,7 @@ function RowMenu({ row, onAction }: { row: BookingRow; onAction: (action: Bookin
         </DropdownMenuItem>
         <DropdownMenuItem tone="danger" onSelect={() => onAction('cancel', row)} disabled={closed}>
           <Ban />
-          Cancel reservation
+          Cancel booking
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -640,7 +640,7 @@ export function BookingsTable({
       },
       {
         id: 'activity',
-        header: 'Experience',
+        header: 'Activity',
         sortable: true,
         hideBelow: 'lg',
         cell: ({ activity, departure }) => (
@@ -741,7 +741,7 @@ export function BookingsTable({
   const empty = (
     <EmptyState
       variant="no-results"
-      title="No reservations match these filters"
+      title="No bookings match these filters"
       description="Try widening the date range, clearing the channel filter, or searching by confirmation reference instead."
       action={
         <Button variant="secondary" onClick={onClearFilters} leftIcon={<X />}>
@@ -770,7 +770,7 @@ export function BookingsTable({
           empty={empty}
           stickyHeader
           rowHeight={density}
-          ariaLabel="Reservations"
+          ariaLabel="Bookings"
           containerClassName="type-crm rounded-2xl border border-line bg-surface"
           groupBy={grouped ? groupBy : undefined}
           renderGroupHeader={renderGroupHeader}

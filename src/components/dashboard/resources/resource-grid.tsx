@@ -129,7 +129,7 @@ export function ResourceGrid({
                 {meta.plural}
               </h3>
               <span className="text-xs text-faint tabular-nums">
-                {items.length} · {formatNumber(totalSeats)} {pluralize(totalSeats, 'seat')} at once
+                {items.length} · {formatNumber(totalSeats)} {pluralize(totalSeats, 'spot')} at once
               </span>
               <Button variant="ghost" size="xs" className="ml-auto" onClick={() => onAdd(kind)}>
                 Add {meta.label.toLowerCase()}
@@ -274,9 +274,9 @@ function ResourceCard({
         </div>
 
         <dl className="grid grid-cols-3 gap-2 rounded-xl bg-well px-3 py-2.5">
-          <Figure label="Capacity" value={formatNumber(resource.capacity)} hint={pluralize(resource.capacity, 'seat')} />
+          <Figure label="Capacity" value={formatNumber(resource.capacity)} hint={pluralize(resource.capacity, 'spot')} />
           <Figure label="Units" value={formatNumber(resource.quantity)} hint="in the fleet" />
-          <Figure label="At once" value={formatNumber(resource.capacity * resource.quantity)} hint="seats" />
+          <Figure label="At once" value={formatNumber(resource.capacity * resource.quantity)} hint="spots" />
         </dl>
 
         <div className="flex flex-col gap-1.5">
@@ -286,7 +286,7 @@ function ResourceCard({
               Next 14 days
             </span>
             <span className="font-medium text-foreground tabular-nums">
-              {upcoming} {pluralize(upcoming, 'departure')}
+              {upcoming} {pluralize(upcoming, 'time slot')}
             </span>
           </div>
           <Progress value={utilisation} size="sm" tone={maintenance ? 'warning' : utilisation >= 80 ? 'accent' : 'primary'} />

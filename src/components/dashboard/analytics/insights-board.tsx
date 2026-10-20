@@ -72,11 +72,11 @@ const SEVERITY: Record<Insight['severity'], SeverityStyle> = {
 const METHOD_NOTES: { title: string; body: string }[] = [
   {
     title: 'Where the numbers come from',
-    body: 'Every figure on this board is computed from your own bookings, departures and payments — not from a forecast, a model or a benchmark. Revenue is net of refunds and attributed to the departure date, so a booking taken in March for a July trip counts in July.',
+    body: 'Every figure on this board is computed from your own bookings, time slots and payments — not from a forecast, a model or a benchmark. Revenue is net of refunds and counted on the date of the activity, so a booking taken in March for a July activity counts in July.',
   },
   {
     title: 'How a slot gets flagged',
-    body: 'We score every weekday-and-hour combination over the trailing 90 days of departures and compare each one against the average capacity utilisation the business already achieves across your selected range. A slot is flagged when it sits ten or more points under that average with enough volume behind it to be a pattern rather than one quiet week. The prize is that slot’s realised revenue scaled up to the average at unchanged capacity, capped at a 60% lift, and only the shortlist shown is added up.',
+    body: 'We score every weekday-and-hour combination over the trailing 90 days of time slots and compare each one against the average capacity utilisation the business already achieves across your selected range. A slot is flagged when it sits ten or more points under that average with enough volume behind it to be a pattern rather than one quiet week. The prize is that slot’s realised revenue scaled up to the average at unchanged capacity, capped at a 60% lift, and only the shortlist shown is added up.',
   },
   {
     title: 'How comparisons are made',

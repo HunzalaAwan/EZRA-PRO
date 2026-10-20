@@ -150,7 +150,7 @@ export function PickupRunSheet({ sheets, drivers, tenantSlug }: { sheets: Sheet[
         <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-line bg-surface px-6 py-12 text-center">
           <Bus className="size-6 text-faint" aria-hidden="true" />
           <p className="text-sm font-semibold">No pickups {today ? 'today' : `on ${dayLabel(sheet.dayKey, dayIndex)} ${shortDate(sheet.dayKey)}`}</p>
-          <p className="max-w-md text-sm text-muted">Guests who choose hotel pickup at checkout appear here in collection order, grouped by the trip they are going to.</p>
+          <p className="max-w-md text-sm text-muted">Guests who choose hotel pickup at checkout appear here in collection order, grouped by the time slot they are going to.</p>
         </div>
       ) : (
         <>
@@ -197,7 +197,7 @@ export function PickupRunSheet({ sheets, drivers, tenantSlug }: { sheets: Sheet[
                       <div className="min-w-0">
                         <h3 className="truncate text-base font-semibold">{run.activityName}</h3>
                         <p className="text-xs text-muted">
-                          Departs {formatTime(run.departureAt)} · {run.stops.length} {pluralize(run.stops.length, 'stop')} · {people} guests · first pickup {formatTime(later(run.stops[0].time, delay))}
+                          Starts {formatTime(run.departureAt)} · {run.stops.length} {pluralize(run.stops.length, 'stop')} · {people} guests · first pickup {formatTime(later(run.stops[0].time, delay))}
                           {delay ? <span className="font-medium text-warning"> · running {delay} min late</span> : null}
                         </p>
                       </div>
@@ -313,7 +313,7 @@ function StopRow({
         </p>
         {showRun ? (
           <p className="truncate text-xs text-subtle">
-            {stop.activityName} · departs {formatTime(stop.departureAt)}
+            {stop.activityName} · starts {formatTime(stop.departureAt)}
           </p>
         ) : null}
       </div>

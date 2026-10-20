@@ -359,8 +359,8 @@ export const tenantBySlug = new Map(TENANTS.map((t) => [t.slug, t]))
 function releaseBody(business: string) {
   return [
     `I am taking part voluntarily in activities run by ${business}. I understand they involve risks, including injury from water, weather, equipment, wildlife and other guests, and I accept those risks for myself and anyone I sign for.`,
-    'I confirm that everyone I sign for is in good health, has told the crew about any medical condition, and will follow every safety briefing and instruction from the guides and captain.',
-    `I release ${business}, its crew and partners from claims for injury, loss or damage, except where caused by their gross negligence. I agree to pay for equipment lost or damaged through misuse.`,
+    'I confirm that everyone I sign for is in good health, has told the team about any medical condition, and will follow every safety briefing and instruction from the guides and captain.',
+    `I release ${business}, its team and partners from claims for injury, loss or damage, except where caused by their gross negligence. I agree to pay for equipment lost or damaged through misuse.`,
     'I consent to emergency first aid and medical treatment if it is needed, and I allow photos taken during the activity to be shared with me.',
   ].join('\n\n')
 }
@@ -836,7 +836,7 @@ export const USERS: User[] = [
     email: 'sofia@bluehorizonmaui.com',
     role: 'staff',
     avatarUrl: av(47),
-    title: 'Reservations Lead',
+    title: 'Bookings Lead',
     phone: '+1 (808) 555-0109',
     status: 'active',
     lastActiveAt: '2026-09-11T08:58:00',
@@ -1506,7 +1506,7 @@ function buildMedia(slug: string, name: string, ids: string[]): ActivityMedia[] 
   return ids.map((id, i) => ({
     id: `med_${slug}_${i + 1}`,
     url: `https://images.unsplash.com/${id}?auto=format&fit=crop&w=1600&q=80`,
-    alt: `${name} — ${PHOTO_ALT[id] ?? 'scenic view from the experience'}`,
+    alt: `${name} — ${PHOTO_ALT[id] ?? 'scenic view from the activity'}`,
     type: 'image' as const,
     isPrimary: i === 0,
   }))

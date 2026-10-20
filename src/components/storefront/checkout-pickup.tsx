@@ -90,7 +90,7 @@ export function CheckoutPickup({
         <h2 id="step-pickup" className="font-display text-xl font-semibold tracking-tight">
           Getting there
         </h2>
-        <p className="mt-1.5 text-sm text-muted">{required ? 'This trip collects every guest from their hotel.' : 'Meet us there, or let the shuttle collect you.'}</p>
+        <p className="mt-1.5 text-sm text-muted">{required ? 'We collect every guest from their hotel for this activity.' : 'Meet us there, or let the shuttle collect you.'}</p>
       </div>
 
       {required ? null : (

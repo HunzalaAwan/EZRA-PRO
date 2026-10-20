@@ -12,7 +12,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { SearchInput } from '@/components/ui/search-input'
 import { Segmented } from '@/components/ui/segmented'
 import { toast } from '@/components/ui/toaster'
-import { cn, formatCurrency, formatNumber, formatPercent } from '@/lib/utils'
+import { cn, formatCurrency, formatNumber, formatPercent, pluralize } from '@/lib/utils'
 import type { ActivityPerformance, CurrencyCode } from '@/types'
 import { DeltaPill } from './overview-cards'
 
@@ -83,7 +83,7 @@ export function TopExperiencesTable({ items, currency, rangeLabel, loading = fal
     () => [
       {
         id: 'name',
-        header: 'Experience',
+        header: 'Activity',
         sortable: true,
         cell: (item) => (
           <span className="flex min-w-[12rem] max-w-[22rem] items-center gap-2.5">
@@ -162,7 +162,7 @@ export function TopExperiencesTable({ items, currency, rangeLabel, loading = fal
     <Card className={cn('overflow-hidden', className)}>
       <div className="flex flex-col gap-3 px-5 pt-5 pb-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
-          <h3 className="font-display text-base font-semibold tracking-[-0.015em] text-foreground">Top experiences</h3>
+          <h3 className="font-display text-base font-semibold tracking-[-0.015em] text-foreground">Top activities</h3>
           <p className="mt-0.5 text-[0.8125rem] text-subtle">
             {formatNumber(items.length)} products · {rangeLabel}
           </p>
@@ -171,16 +171,16 @@ export function TopExperiencesTable({ items, currency, rangeLabel, loading = fal
           <SearchInput
             value={query}
             onValueChange={setQuery}
-            placeholder="Search experiences…"
+            placeholder="Search activities…"
             size="sm"
-            aria-label="Search experiences"
+            aria-label="Search activities"
             fieldClassName="w-full sm:w-56"
           />
           <Button
             variant="outline"
             size="sm"
             leftIcon={<Download className="size-4" />}
-            onClick={() => toast.success('Export queued', { description: `${formatNumber(rows.length)} experiences · ${rangeLabel}` })}
+            onClick={() => toast.success('Export queued', { description: `${formatNumber(rows.length)} ${pluralize(rows.length, 'activity', 'activities')} · ${rangeLabel}` })}
           >
             Export
           </Button>
@@ -202,13 +202,13 @@ export function TopExperiencesTable({ items, currency, rangeLabel, loading = fal
           loading={loading}
           loadingRowCount={6}
           rowHeight="compact"
-          ariaLabel="Top experiences"
+          ariaLabel="Top activities"
           containerClassName="type-crm"
           empty={
             <EmptyState
               variant="no-results"
               size="sm"
-              title="No experiences match"
+              title="No activities match"
               description="Try another cut or clear the search."
             />
           }

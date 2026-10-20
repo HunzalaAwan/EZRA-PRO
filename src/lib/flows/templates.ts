@@ -82,13 +82,13 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
   },
   {
     id: 'last-minute-seats',
-    name: 'Last-minute seats',
-    blurb: 'When a trip or visit is under half full 3 days out, offer the seats to past guests.',
+    name: 'Last-minute spots',
+    blurb: 'When a time slot is under half full 3 days out, offer the spots to past guests.',
     icon: 'Armchair',
     goal: 'fill_seats',
     purpose: 'marketing',
     build: make('last-minute-seats', {
-      name: 'Last-minute seats',
+      name: 'Last-minute spots',
       description: 'Fills quiet times with guests who already know you.',
       goal: 'fill_seats',
       purpose: 'marketing',
@@ -97,7 +97,7 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
       messages: [
         {
           channel: 'email',
-          subject: 'A few seats left on {activity}, {date}',
+          subject: 'A few spots left on {activity}, {date}',
           body: 'Hi {first_name},\n\nWe still have room on {activity} on {date} at {time}. Use {offer_code} for {offer_percent}% off if you would like to join us.\n\nBook here: {book_link}\n\n{business}',
         },
       ],

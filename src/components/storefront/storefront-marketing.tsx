@@ -137,7 +137,7 @@ export function SignupPopup({ tenant: tenantRecord }: { tenant: Tenant }) {
                 </button>
               </>
             ) : (
-              <p className="mt-2 text-sm text-muted">Thanks. We will be in touch with new trips and last-minute seats.</p>
+              <p className="mt-2 text-sm text-muted">Thanks. We will be in touch with new activities and last-minute spots.</p>
             )}
             <Button className="mt-4 w-full" onClick={() => setOpen(false)}>Start browsing</Button>
           </div>

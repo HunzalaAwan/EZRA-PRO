@@ -361,7 +361,7 @@ export function RouteFields({ value, onChange }: { value: DraftRoute; onChange: 
     <div className="flex flex-col gap-3">
       <Toggle
         label="Has a distance or track"
-        hint="For a hiking trail, a ride route or a circuit. Shown on the listing."
+        hint="For a hiking trail, a ride route or a circuit. Shown on the storefront."
         checked={value.enabled}
         onChange={(enabled) => set({ enabled })}
       />
@@ -447,9 +447,9 @@ export function KindFields({
     const ride = settings.activity
     return shell(
       <>
-        <Section title="Each time" hint="Guests pick a time and turn up. Which times are offered is set on the Booking step.">
+        <Section title="Each time slot" hint="Guests pick a time slot and turn up. Which time slots are offered is set on the Booking step.">
           <DurationField
-            label="Each time lasts"
+            label="Each time slot lasts"
             error={errors.durationMinutes}
             minutes={shared.durationMinutes}
             unit={shared.durationUnit === 'days' ? 'minutes' : shared.durationUnit}
@@ -458,7 +458,7 @@ export function KindFields({
             allowFlexible={false}
           />
           <div className="grid gap-4 sm:grid-cols-3">
-            <Field label="Most guests per time" required error={errors.maxCapacity} description="Everyone booked on one time, together.">
+            <Field label="Spots per time slot" required error={errors.maxCapacity} description="The most guests booked on one time slot, together.">
               {(control) => <Input {...control} type="number" min={1} value={shared.maxCapacity || ''} placeholder="8" onChange={(e) => onShared({ maxCapacity: num(e.target.value) })} />}
             </Field>
             <Field label="Intensity">
@@ -678,7 +678,7 @@ export function KindFields({
     const addVessel = () => {
       if (vesselProblem) return
       const label = vesselDraft.name.trim()
-      const crewWord = vesselDraft.crew.trim() || 'Crew'
+      const crewWord = vesselDraft.crew.trim() || 'Team'
       ownVessels.add({ label, hint: crewWord })
       set('charter', { vessel: 'other', vesselLabel: label, crewLabel: crewWord })
       setAddingVessel(false)
@@ -696,7 +696,7 @@ export function KindFields({
                   if (value.startsWith('own:')) {
                     const label = value.slice(4)
                     const entry = ownVessels.categories.find((item) => item.label === label)
-                    return set('charter', { vessel: 'other', vesselLabel: label, crewLabel: entry?.hint || charter.crewLabel || 'Crew' })
+                    return set('charter', { vessel: 'other', vesselLabel: label, crewLabel: entry?.hint || charter.crewLabel || 'Team' })
                   }
                   set('charter', { vessel: value as DraftKindSettings['charter']['vessel'], vesselLabel: '', crewLabel: '' })
                 }}
@@ -711,7 +711,7 @@ export function KindFields({
                     </SelectItem>
                   ))}
                   {ownVessels.categories.map((entry) => (
-                    <SelectItem key={entry.label} value={`own:${entry.label}`} description={`Yours · ${entry.hint || 'Crew'} included`}>
+                    <SelectItem key={entry.label} value={`own:${entry.label}`} description={`Yours · ${entry.hint || 'Team'} included`}>
                       {entry.label}
                     </SelectItem>
                   ))}
@@ -740,7 +740,7 @@ export function KindFields({
                   {(control) => <Input {...control} autoFocus value={vesselDraft.name} placeholder="Glass-bottom boat" onChange={(e) => setVesselDraft((d) => ({ ...d, name: e.target.value.slice(0, 40) }))} />}
                 </Field>
                 <Field label="Who comes with it" optional description="Shown as “… included”.">
-                  {(control) => <Input {...control} value={vesselDraft.crew} placeholder="Skipper and deckhand" onChange={(e) => setVesselDraft((d) => ({ ...d, crew: e.target.value.slice(0, 40) }))} />}
+                  {(control) => <Input {...control} value={vesselDraft.crew} placeholder="Driver and guide" onChange={(e) => setVesselDraft((d) => ({ ...d, crew: e.target.value.slice(0, 40) }))} />}
                 </Field>
               </div>
               <div className="flex gap-2">
@@ -811,12 +811,12 @@ export function KindFields({
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Sessions" required error={errors['lesson.sessions']} description="1 for a single lesson. Courses run on consecutive days.">
+            <Field label="Days in the course" required error={errors['lesson.sessions']} description="1 for a single lesson. Courses run on consecutive days.">
               {(control) => <Input {...control} type="number" min={1} max={14} value={lesson.sessions} onChange={(e) => set('lesson', { sessions: num(e.target.value) })} />}
             </Field>
           </div>
           <DurationField
-            label={lesson.sessions > 1 ? 'Each session lasts' : 'Lesson length'}
+            label={lesson.sessions > 1 ? "Each day's lesson lasts" : 'Lesson length'}
             error={errors.durationMinutes}
             minutes={shared.durationMinutes}
             unit={shared.durationUnit === 'days' ? 'hours' : shared.durationUnit}

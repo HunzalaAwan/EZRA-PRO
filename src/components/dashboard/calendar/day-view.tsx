@@ -135,8 +135,8 @@ export function DayView({
           <EmptyState
             variant="no-data"
             icon={CalendarClock}
-            title="Nothing on the water today"
-            description="No departures are scheduled for this day. Schedule one and it will appear on every view instantly."
+            title="Nothing scheduled this day"
+            description="No time slots are scheduled for this day. Schedule one and it will appear on every view instantly."
             action={
               <Button size="sm" onClick={() => onCreate(day)}>
                 Add availability
@@ -186,7 +186,7 @@ export function DayView({
               value={summary.utilisation}
               size={148}
               label="Capacity sold"
-              sublabel={`${formatNumber(summary.booked)} of ${formatNumber(summary.capacity)} seats`}
+              sublabel={`${formatNumber(summary.booked)} of ${formatNumber(summary.capacity)} spots`}
               ariaLabel={`Capacity utilisation ${Math.round(summary.utilisation)} percent`}
             />
           </div>
@@ -194,7 +194,7 @@ export function DayView({
           <div className="mt-2 grid gap-2">
             <RailStat
               icon={CalendarClock}
-              label="Departures"
+              label="Time slots"
               value={formatNumber(summary.running)}
               hint={
                 summary.cancelled > 0
@@ -206,7 +206,7 @@ export function DayView({
               icon={Users}
               label="Guests"
               value={formatNumber(summary.booked)}
-              hint={`${formatNumber(Math.max(summary.capacity - summary.booked, 0))} seats still sellable`}
+              hint={`${formatNumber(Math.max(summary.capacity - summary.booked, 0))} spots still to sell`}
             />
             <RailStat
               icon={Wallet}
@@ -231,7 +231,7 @@ export function DayView({
           </div>
 
           {crew.length === 0 ? (
-            <p className="text-[0.8125rem] text-subtle">No crew assigned for this day yet.</p>
+            <p className="text-[0.8125rem] text-subtle">No team assigned for this day yet.</p>
           ) : (
             <ul className="flex flex-col gap-2.5">
               {crew.map((user) => (

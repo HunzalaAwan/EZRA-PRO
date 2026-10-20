@@ -33,7 +33,7 @@ export async function generateMetadata({
   const activity = storefront?.activities.find((item) => item.slug === activitySlug)
 
   if (!storefront || !activity) {
-    return { title: { absolute: 'Experience not found' } }
+    return { title: { absolute: 'Activity not found' } }
   }
 
   const image = activity.media.find((m) => m.isPrimary) ?? activity.media[0]
@@ -62,7 +62,7 @@ export async function generateMetadata({
    ========================================================================== */
 
 function partyLabel(size: number) {
-  if (size <= 1) return 'Solo traveller'
+  if (size <= 1) return 'Solo · 1 guest'
   if (size === 2) return 'Couple · 2 guests'
   if (size <= 4) return `Family · ${size} guests`
   return `Group of ${size}`

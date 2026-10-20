@@ -100,12 +100,12 @@ export function TodaysDepartures({ events, staff, nowIso, className }: TodaysDep
           <CardTitle>Today&rsquo;s schedule</CardTitle>
           <CardDescription>
             {events.length === 0
-              ? 'Nothing on the water today.'
-              : `${formatNumber(events.length)} ${pluralize(events.length, 'departure')} · ${formatNumber(
+              ? 'Nothing scheduled today.'
+              : `${formatNumber(events.length)} ${pluralize(events.length, 'time slot')} · ${formatNumber(
                   totals.guests,
-                )} of ${formatNumber(totals.seats)} seats sold · ${formatNumber(
+                )} of ${formatNumber(totals.seats)} spots sold · ${formatNumber(
                   totals.remaining,
-                )} still to run`}
+                )} still to start`}
           </CardDescription>
         </div>
         <CardToolbar>
@@ -120,11 +120,11 @@ export function TodaysDepartures({ events, staff, nowIso, className }: TodaysDep
           <EmptyState
             variant="no-data"
             icon={Sun}
-            title="No departures scheduled"
-            description="Today is clear. Add a departure or open the calendar to publish availability for the week."
+            title="No time slots scheduled"
+            description="Today is clear. Add a time slot or open the calendar to publish availability for the week."
             action={
               <Button asChild size="sm" leftIcon={<CalendarPlus />}>
-                <Link href="/dashboard/availability">Add a departure</Link>
+                <Link href="/dashboard/availability">Add a time slot</Link>
               </Button>
             }
           />
@@ -204,6 +204,7 @@ export function TodaysDepartures({ events, staff, nowIso, className }: TodaysDep
                         held={departure.held}
                         size="sm"
                         showLabel={false}
+                        unit="spot"
                         className="min-w-0 flex-1"
                       />
                       <span className="shrink-0 text-xs font-semibold text-muted tabular-nums">
@@ -219,7 +220,7 @@ export function TodaysDepartures({ events, staff, nowIso, className }: TodaysDep
                             max={3}
                             size="xs"
                             ringClassName="ring-surface"
-                            label={`Crew on ${activity.name}`}
+                            label={`Team on ${activity.name}`}
                           />
                         ) : (
                           <span className="text-xs text-faint">Unassigned</span>
@@ -227,7 +228,7 @@ export function TodaysDepartures({ events, staff, nowIso, className }: TodaysDep
                         <span className="truncate text-xs text-faint">
                           {seatsLeft === 0
                             ? 'Sold out'
-                            : `${seatsLeft} ${pluralize(seatsLeft, 'seat')} left`}
+                            : `${seatsLeft} ${pluralize(seatsLeft, 'spot')} left`}
                         </span>
                       </div>
 
@@ -240,7 +241,7 @@ export function TodaysDepartures({ events, staff, nowIso, className }: TodaysDep
                         )}
                       >
                         <ClipboardList aria-hidden="true" className="size-3" />
-                        View manifest
+                        View guest list
                         <ArrowRight
                           aria-hidden="true"
                           className="size-3 transition-transform duration-300 ease-[var(--ease-out-expo)] group-hover:translate-x-0.5"

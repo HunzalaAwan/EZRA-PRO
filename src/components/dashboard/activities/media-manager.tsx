@@ -49,7 +49,7 @@ const SAMPLE_ALT = [
   'Catamaran under sail at golden hour off the coast',
   'Aerial view of a crescent bay with anchored boats',
   'Paddleboarders crossing a calm lagoon at sunrise',
-  'Crew briefing on the dive deck before departure',
+  'Team briefing on the dive deck before setting off',
   'Sunset over the water from the bow of the vessel',
 ]
 

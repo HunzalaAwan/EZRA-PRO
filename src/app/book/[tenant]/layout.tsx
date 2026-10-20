@@ -49,7 +49,7 @@ export async function generateMetadata({
       ? `${tenant.name} in ${tenant.city}: reserve a table, order for pickup or delivery, and book the tasting menu. Live availability and instant confirmation.`
       : kind === 'hotel'
         ? `${tenant.name} in ${tenant.city}: rooms, the restaurant and experiences, booked direct with instant confirmation and the best rate.`
-        : `Book ${activities.length} guided experiences with ${tenant.name} in ${tenant.city}. Live availability, instant confirmation and free cancellation.`
+        : `Book ${activities.length} ${activities.length === 1 ? 'activity' : 'activities'} with ${tenant.name} in ${tenant.city}. Live availability, instant confirmation and free cancellation.`
 
   return {
     title: { absolute: kind === 'restaurant' ? `${tenant.name} — Reserve & order` : kind === 'hotel' ? `${tenant.name} — Book a stay` : `${tenant.name} — Book online` },

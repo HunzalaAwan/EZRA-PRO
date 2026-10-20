@@ -84,25 +84,25 @@ export type IconName =
 
 export type TriggerGroup =
   | 'Bookings'
-  | 'Around the trip'
+  | 'Around the activity'
   | 'Money'
   | 'Guests and your list'
   | 'Reviews'
   | 'Gift cards'
   | 'Requests'
-  | 'Seats and weather'
+  | 'Spots and weather'
   | 'Your team'
 
 /** Display order of the trigger picker. */
 export const TRIGGER_GROUPS: TriggerGroup[] = [
   'Bookings',
-  'Around the trip',
+  'Around the activity',
   'Money',
   'Guests and your list',
   'Reviews',
   'Gift cards',
   'Requests',
-  'Seats and weather',
+  'Spots and weather',
   'Your team',
 ]
 
@@ -129,7 +129,7 @@ export interface TriggerMeta {
   goal: FlowGoal
   /** One plain sentence with an example. */
   help: string
-  /** The trip or visit is still ahead when it starts, so "wait until before the start" works. */
+  /** The booking is still ahead when it starts, so "wait until before the start" works. */
   startsAhead?: boolean
   /** Reaches people about something they have not booked: always marketing. */
   marketingOnly?: boolean
@@ -175,12 +175,12 @@ export const TRIGGERS: TriggerMeta[] = [
     goal: 'recover',
     help: 'Starts when a guest or your team cancels, for example to offer another date before they look elsewhere.',
   },
-  /* ---------- Around the trip ---------- */
+  /* ---------- Around the activity ---------- */
   {
     type: 'before_start',
-    label: 'Before a trip or visit starts',
+    label: 'Before a booking starts',
     short: 'Before the start',
-    group: 'Around the trip',
+    group: 'Around the activity',
     subject: 'booking',
     icon: 'AlarmClock',
     offset: { label: 'before the start', default: { amount: 2, unit: 'days' }, units: ['minutes', 'hours', 'days'] },
@@ -191,9 +191,9 @@ export const TRIGGERS: TriggerMeta[] = [
   },
   {
     type: 'after_end',
-    label: 'After a trip or visit ends',
+    label: 'After a booking ends',
     short: 'After it ends',
-    group: 'Around the trip',
+    group: 'Around the activity',
     subject: 'booking',
     icon: 'CalendarCheck',
     offset: { label: 'after it ends', default: { amount: 3, unit: 'hours' }, units: ['minutes', 'hours', 'days'] },
@@ -205,7 +205,7 @@ export const TRIGGERS: TriggerMeta[] = [
     type: 'checked_in',
     label: 'A guest checks in',
     short: 'Checked in',
-    group: 'Around the trip',
+    group: 'Around the activity',
     subject: 'booking',
     icon: 'UserCheck',
     defaultPurpose: 'booking',
@@ -216,7 +216,7 @@ export const TRIGGERS: TriggerMeta[] = [
     type: 'no_show',
     label: 'A guest doesn’t show up',
     short: 'No-show',
-    group: 'Around the trip',
+    group: 'Around the activity',
     subject: 'booking',
     icon: 'UserX',
     defaultPurpose: 'booking',
@@ -246,7 +246,7 @@ export const TRIGGERS: TriggerMeta[] = [
     icon: 'CreditCard',
     defaultPurpose: 'booking',
     goal: 'recover',
-    help: 'Starts when a card is declined, for example to ask the guest to try another card before the seats go.',
+    help: 'Starts when a card is declined, for example to ask the guest to try another card before the spots go.',
     startsAhead: true,
     volume: 'low',
   },
@@ -260,7 +260,7 @@ export const TRIGGERS: TriggerMeta[] = [
     icon: 'MailPlus',
     defaultPurpose: 'marketing',
     goal: 'welcome',
-    help: 'Starts when someone signs up on your website, at checkout or at the desk, for example a welcome with a first-trip code.',
+    help: 'Starts when someone signs up on your website, at checkout or at the desk, for example a welcome with a first-booking code.',
     marketingOnly: true,
   },
   {
@@ -273,7 +273,7 @@ export const TRIGGERS: TriggerMeta[] = [
     offset: { label: 'after they leave', default: { amount: 1, unit: 'hours' }, units: ['minutes', 'hours', 'days'] },
     defaultPurpose: 'marketing',
     goal: 'recover',
-    help: 'Starts a set time after someone gives their email at checkout and leaves, for example a note that their seats are still open.',
+    help: 'Starts a set time after someone gives their email at checkout and leaves, for example a note that their spots are still open.',
   },
   {
     type: 'lapsed',
@@ -282,7 +282,7 @@ export const TRIGGERS: TriggerMeta[] = [
     group: 'Guests and your list',
     subject: 'guest',
     icon: 'History',
-    offset: { label: 'since their last trip', default: { amount: 120, unit: 'days' }, units: ['days'] },
+    offset: { label: 'since their last booking', default: { amount: 120, unit: 'days' }, units: ['days'] },
     defaultPurpose: 'marketing',
     goal: 'come_back',
     help: 'Starts when this long has passed since a guest last came out with you, for example a “we miss you” note with a code.',
@@ -302,15 +302,15 @@ export const TRIGGERS: TriggerMeta[] = [
   },
   {
     type: 'trip_anniversary',
-    label: 'A year since their trip',
-    short: 'Trip anniversary',
+    label: 'A year since their booking',
+    short: 'Booking anniversary',
     group: 'Guests and your list',
     subject: 'booking',
     icon: 'CalendarHeart',
     offset: { label: 'before the anniversary', default: { amount: 0, unit: 'days' }, units: ['days'] },
     defaultPurpose: 'marketing',
     goal: 'come_back',
-    help: 'Starts a year after a trip, or a little before, for example “a year ago today you were out with us”.',
+    help: 'Starts a year after a booking, or a little before, for example “a year ago today you were out with us”.',
     marketingOnly: true,
   },
   /* ---------- Reviews ---------- */
@@ -323,7 +323,7 @@ export const TRIGGERS: TriggerMeta[] = [
     icon: 'Star',
     defaultPurpose: 'marketing',
     goal: 'reviews',
-    help: 'Starts when a guest rates their trip, for example a thank-you for 4 and 5 stars, or a note to your team for 1 to 3.',
+    help: 'Starts when a guest rates their activity, for example a thank-you for 4 and 5 stars, or a note to your team for 1 to 3.',
   },
   /* ---------- Gift cards ---------- */
   {
@@ -364,31 +364,31 @@ export const TRIGGERS: TriggerMeta[] = [
     help: 'Starts when someone asks for a quote or a booking you need to confirm, for example to tell them when you will reply.',
     volume: 'low',
   },
-  /* ---------- Seats and weather ---------- */
+  /* ---------- Spots and weather ---------- */
   {
     type: 'low_fill',
-    label: 'A trip or visit has empty seats',
-    short: 'Empty seats',
-    group: 'Seats and weather',
+    label: 'A time slot has empty spots',
+    short: 'Empty spots',
+    group: 'Spots and weather',
     subject: 'departure',
     icon: 'Armchair',
     offset: { label: 'before it starts', default: { amount: 3, unit: 'days' }, units: ['hours', 'days'] },
     defaultPurpose: 'marketing',
     goal: 'fill_seats',
-    help: 'Starts when a trip or visit is still under a set share full, for example to offer the spare seats to past guests 3 days out.',
+    help: 'Starts when a time slot is still under a set share full, for example to offer the spare spots to past guests 3 days out.',
     startsAhead: true,
     marketingOnly: true,
   },
   {
     type: 'weather_alert',
-    label: 'The weather puts a trip or visit at risk',
+    label: 'The weather puts a time slot at risk',
     short: 'Weather risk',
-    group: 'Seats and weather',
+    group: 'Spots and weather',
     subject: 'departure',
     icon: 'CloudLightning',
     defaultPurpose: 'booking',
     goal: 'prepare_guests',
-    help: 'Starts when a trip or visit is put on weather hold or the forecast looks doubtful, for example a heads-up to everyone booked on it.',
+    help: 'Starts when a time slot is put on weather hold or the forecast looks doubtful, for example a heads-up to everyone booked on it.',
     startsAhead: true,
   },
   /* ---------- Your team ---------- */
@@ -484,9 +484,9 @@ export const JOIN_SOURCE_LABEL: Record<NonNullable<FlowTrigger['sources']>[numbe
 
 export type ConditionFieldKind = 'list' | 'number' | 'money' | 'days' | 'bool' | 'enum'
 
-export type ConditionFieldGroup = 'About the guest' | 'About the booking' | 'About the trip or visit' | 'What they did in this automation'
+export type ConditionFieldGroup = 'About the guest' | 'About the booking' | 'About the time slot' | 'What they did in this automation'
 
-export const CONDITION_FIELD_GROUPS: ConditionFieldGroup[] = ['About the guest', 'About the booking', 'About the trip or visit', 'What they did in this automation']
+export const CONDITION_FIELD_GROUPS: ConditionFieldGroup[] = ['About the guest', 'About the booking', 'About the time slot', 'What they did in this automation']
 
 /** Where a list field's choices come from. The fixed ones resolve with `optionsFor`. */
 export type ConditionOptionSource = 'activities' | 'tags' | 'countries' | 'channels' | 'segments' | 'kinds' | 'locations' | 'addOns'
@@ -593,7 +593,7 @@ export const CONDITION_FIELDS: ConditionFieldMeta[] = [
   },
   {
     field: 'guest.daysSinceLastTrip',
-    label: 'Days since their last trip',
+    label: 'Days since their last booking',
     group: 'About the guest',
     subjects: EVERYWHERE,
     kind: 'days',
@@ -601,7 +601,7 @@ export const CONDITION_FIELDS: ConditionFieldMeta[] = [
     defaultOp: 'at_least',
     defaultValue: 90,
     unit: 'days',
-    help: 'How long ago their most recent trip or visit was.',
+    help: 'How long ago their most recent booking was.',
   },
   {
     field: 'guest.bookedActivity',
@@ -636,13 +636,13 @@ export const CONDITION_FIELDS: ConditionFieldMeta[] = [
   },
   {
     field: 'guest.hasUpcomingTrip',
-    label: 'Has a trip coming up',
+    label: 'Has a booking coming up',
     group: 'About the guest',
     subjects: EVERYWHERE,
     kind: 'bool',
     ops: BOOL_OPS,
     defaultOp: 'no',
-    help: 'They already have a booking in the future. Handy for not offering a trip to someone who is already coming.',
+    help: 'They already have a booking in the future. Handy for not offering an activity to someone who is already coming.',
   },
   {
     field: 'guest.local',
@@ -675,7 +675,7 @@ export const CONDITION_FIELDS: ConditionFieldMeta[] = [
     ops: LIST_OPS,
     defaultOp: 'any_of',
     options: 'kinds',
-    help: 'Scheduled trip, activity, private charter, rental, lesson, pass or package.',
+    help: 'Group activity, activity, private charter, rental, lesson, pass or package.',
   },
   {
     field: 'booking.partySize',
@@ -773,7 +773,7 @@ export const CONDITION_FIELDS: ConditionFieldMeta[] = [
     defaultOp: 'at_least',
     defaultValue: 3,
     unit: 'days',
-    help: 'How far away the trip or visit is right now.',
+    help: 'How far away the booking is right now.',
   },
   {
     field: 'booking.location',
@@ -808,23 +808,23 @@ export const CONDITION_FIELDS: ConditionFieldMeta[] = [
     defaultOp: 'yes',
     help: 'This is the first time they have booked with you.',
   },
-  /* ---------- About the trip or visit (seat and weather starts) ---------- */
+  /* ---------- About the time slot (spot and weather starts) ---------- */
   {
     field: 'departure.fill',
     label: 'How full it is',
-    group: 'About the trip or visit',
+    group: 'About the time slot',
     subjects: ['departure'],
     kind: 'number',
     ops: RANGE_OPS,
     defaultOp: 'at_most',
     defaultValue: 50,
     unit: '% full',
-    help: 'Seats booked as a share of the seats it has.',
+    help: 'Spots booked as a share of the spots it has.',
   },
   {
     field: 'departure.weather',
     label: 'Weather forecast',
-    group: 'About the trip or visit',
+    group: 'About the time slot',
     subjects: ['departure'],
     kind: 'enum',
     ops: LIST_OPS,
@@ -935,7 +935,7 @@ const CHANNEL_OPTION_LABEL: Record<BookingChannel, string> = {
 
 /** Kinds as they read mid-sentence: "it’s a private charter". */
 export const ACTIVITY_KIND_LOWER: Record<string, string> = {
-  trip: 'a scheduled trip',
+  trip: 'a group activity',
   activity: 'an activity',
   charter: 'a private charter',
   rental: 'a rental',
@@ -1034,7 +1034,7 @@ export function paletteItem(step: Pick<FlowStep, 'type'> & { action?: FlowAction
 export const ASSIGNEE_LABEL: Record<NonNullable<ActionStep['assignee']>, string> = {
   owner: 'the owner',
   managers: 'managers',
-  guides: 'guides and crew',
+  guides: 'your guides',
   everyone: 'everyone on your team',
 }
 
@@ -1050,12 +1050,12 @@ export interface FlowGoalMeta {
 }
 
 export const FLOW_GOALS: FlowGoalMeta[] = [
-  { goal: 'fill_seats', label: 'Fill empty seats', blurb: 'Offer spare seats to the guests most likely to take them.', icon: 'Armchair' },
+  { goal: 'fill_seats', label: 'Fill empty spots', blurb: 'Offer spare spots to the guests most likely to take them.', icon: 'Armchair' },
   { goal: 'prepare_guests', label: 'Get guests ready', blurb: 'Reminders, what to bring, waivers and balances, so the day runs smoothly.', icon: 'Backpack' },
   { goal: 'reviews', label: 'Get more reviews', blurb: 'Ask at the right moment, thank the happy ones and hear the unhappy ones first.', icon: 'Star' },
-  { goal: 'come_back', label: 'Bring guests back', blurb: 'Turn one visit into the next with timely offers.', icon: 'Repeat' },
+  { goal: 'come_back', label: 'Bring guests back', blurb: 'Turn one booking into the next with timely offers.', icon: 'Repeat' },
   { goal: 'sell_more', label: 'Sell more extras', blurb: 'Photos, upgrades and add-ons offered before and after the day.', icon: 'ShoppingBag' },
-  { goal: 'welcome', label: 'Welcome new subscribers', blurb: 'Greet people who join your list and help them book a first trip.', icon: 'Smile' },
+  { goal: 'welcome', label: 'Welcome new subscribers', blurb: 'Greet people who join your list and help them make a first booking.', icon: 'Smile' },
   { goal: 'recover', label: 'Save lost bookings', blurb: 'Win back left checkouts, cancellations, no-shows and failed payments.', icon: 'LifeBuoy' },
   { goal: 'gift_cards', label: 'Gift cards', blurb: 'Thank buyers and remind holders to use their credit before it runs out.', icon: 'Gift' },
   { goal: 'team', label: 'Keep your team in the loop', blurb: 'Heads-ups and to-dos for your team when something needs a person.', icon: 'Users' },
@@ -1090,7 +1090,7 @@ const P = {
   reference: { token: '{reference}', label: 'Booking code', sample: 'EZ-4821' },
   balance: { token: '{balance}', label: 'Balance owed', sample: '$120' },
   manage_link: { token: '{manage_link}', label: 'Manage booking link', sample: 'a link to manage their booking' },
-  seats_left: { token: '{seats_left}', label: 'Seats left', sample: '4' },
+  seats_left: { token: '{seats_left}', label: 'Spots left', sample: '4' },
   offer_code: { token: '{offer_code}', label: 'Discount code', sample: 'THANKS-7QK2' },
   offer_percent: { token: '{offer_percent}', label: 'Discount %', sample: '10%' },
 } satisfies Record<string, FlowPlaceholder>
@@ -1231,8 +1231,8 @@ const EMAIL_DEFAULT: Record<TriggerSubject, { subject: string; body: string }> =
     body: 'Hi {first_name},\n\nA quick note about your {activity} on {date} at {time}. If you need to change anything, you can do it here: {manage_link}\n\nSee you soon,\n{business}',
   },
   departure: {
-    subject: 'Seats open on {activity}, {date}',
-    body: 'Hi {first_name},\n\nWe still have {seats_left} seats on {activity} on {date} at {time}. If you have been meaning to come out with us, now is a good time: {book_link}\n\nSee you soon,\n{business}',
+    subject: 'Spots open on {activity}, {date}',
+    body: 'Hi {first_name},\n\nWe still have {seats_left} spots on {activity} on {date} at {time}. If you have been meaning to join us, now is a good time: {book_link}\n\nSee you soon,\n{business}',
   },
 }
 
@@ -1240,7 +1240,7 @@ const EMAIL_DEFAULT: Record<TriggerSubject, { subject: string; body: string }> =
 const SMS_DEFAULT: Record<TriggerSubject, string> = {
   guest: 'Hi {first_name}, this is {business}. New dates are open, book here: {book_link}',
   booking: 'Hi {first_name}, this is {business} about {activity} on {date} at {time}. Details: {manage_link}',
-  departure: 'Hi {first_name}, {business} here. {seats_left} seats left on {activity}, {date} at {time}. Book: {book_link}',
+  departure: 'Hi {first_name}, {business} here. {seats_left} spots left on {activity}, {date} at {time}. Book: {book_link}',
 }
 
 /** Weather news goes to guests already booked, so it gets its own starting words. */
@@ -1258,7 +1258,7 @@ const TEAM_DEFAULT: Record<TriggerSubject, { notify: string; task: string }> = {
     notify: '{first_name}: {party} on {activity}, {date} at {time} (booking {reference}).',
     task: 'Call {first_name} about {activity} on {date}',
   },
-  departure: { notify: '{activity} on {date} at {time} still has {seats_left} seats.', task: 'Check the seats on {activity}, {date}' },
+  departure: { notify: '{activity} on {date} at {time} still has {seats_left} spots.', task: 'Check the spots on {activity}, {date}' },
 }
 
 /**
@@ -1389,7 +1389,7 @@ export const PURPOSE_LABEL: Record<FlowPurpose, string> = { booking: 'Booking me
 
 export const PURPOSE_HELP: Record<FlowPurpose, string> = {
   booking:
-    'About a booking they made, like reminders and balances. Goes to everyone it applies to, because they need it for their trip.',
+    'About a booking they made, like reminders and balances. Goes to everyone it applies to, because they need it for their booking.',
   marketing:
     'Offers and news. Only goes to guests who agreed to hear from you on that channel, follows your weekly limit and quiet hours, and always carries an unsubscribe link.',
 }

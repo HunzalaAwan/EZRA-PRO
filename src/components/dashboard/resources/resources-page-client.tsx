@@ -56,7 +56,7 @@ export type { ResourceImage }
    ========================================================================== */
 
 const resourceSchema = z.object({
-  name: z.string().trim().min(3, 'Give it a name the crew will recognise on the dock.'),
+  name: z.string().trim().min(3, 'Give it a name your team will recognise.'),
   kind: z.string().min(1, 'Pick what type of resource this is.'),
   capacity: z.coerce.number().int().min(1, 'Capacity has to be at least one.').max(500),
   quantity: z.coerce.number().int().min(1, 'You need at least one unit.').max(200),
@@ -168,7 +168,7 @@ function PhotoField({
             Use
           </Button>
         </div>
-        <p className="text-xs text-subtle">Landscape works best. The crew sees it on the run sheet and the storefront.</p>
+        <p className="text-xs text-subtle">Landscape works best. It shows on the guest list and the storefront.</p>
       </div>
     </div>
   )
@@ -263,9 +263,9 @@ export function ResourcesPageClient({
     toast.success(`${names ?? 'Resource'} ${STATUS_VERB[status]}`, {
       description:
         status === 'available'
-          ? 'Departures that need it can sell again.'
+          ? 'Time slots that need it can sell again.'
           : status === 'maintenance'
-            ? 'New departures that need it stay closed until it returns.'
+            ? 'New time slots that need it stay closed until it returns.'
             : 'Kept on the books for history; nothing can be scheduled on it.',
     })
   }, [])
@@ -410,7 +410,7 @@ export function ResourcesPageClient({
       <PageHeader
         className="mb-0"
         title="Resources"
-        description="Everything a departure needs: vessels, vehicles, kit and rooms. Keep it in service here and the calendar never double-books it."
+        description="Everything a time slot needs: vessels, vehicles, kit and rooms. Keep it in service here and the calendar never double-books it."
         actions={
           <Button size="sm" leftIcon={<Plus />} onClick={() => openAdd()}>
             Add resource
@@ -428,13 +428,13 @@ export function ResourcesPageClient({
         />
         <Stat
           icon={<Users className="size-4" />}
-          label="Seats at once"
+          label="Spots at once"
           value={formatNumber(seatsAtOnce)}
           hint={`${inService.length} of ${resources.length} in service right now`}
         />
         <Stat
           icon={<CalendarClock className="size-4" />}
-          label="Runs · next 14 days"
+          label="Time slots · next 14 days"
           value={formatNumber(runsAhead)}
           hint={busiest && (UPCOMING_USE[busiest.id] ?? 0) > 0 ? `Busiest: ${busiest.name.split(' (')[0]}` : 'Nothing assigned yet'}
         />
@@ -464,7 +464,7 @@ export function ResourcesPageClient({
             <h3 className="text-[0.8125rem] font-semibold text-foreground">
               {maintenanceList.length} {pluralize(maintenanceList.length, 'resource')} in maintenance
             </h3>
-            <span className="text-xs text-subtle">Departures that need {maintenanceList.length === 1 ? 'it' : 'them'} stay closed for sale.</span>
+            <span className="text-xs text-subtle">Time slots that need {maintenanceList.length === 1 ? 'it' : 'them'} stay closed for sale.</span>
           </div>
           <ul className="divide-y divide-line-subtle border-t border-line-subtle">
             {maintenanceList.map((r) => (
@@ -623,7 +623,7 @@ export function ResourcesPageClient({
                 <Anchor className="size-4 text-primary" aria-hidden="true" />
                 {editing ? `Edit ${editing.name}` : 'Add a resource'}
               </DialogTitle>
-              <DialogDescription>Capacity is per unit. A fleet of eight two-seat jet skis is capacity 2, quantity 8.</DialogDescription>
+              <DialogDescription>Capacity is per unit. A fleet of eight two-person jet skis is capacity 2, quantity 8.</DialogDescription>
             </DialogHeader>
 
             <DialogBody className="py-5">
@@ -634,7 +634,7 @@ export function ResourcesPageClient({
                   </div>
                 </Field>
 
-                <Field label="Name" required error={errors.name} className="sm:col-span-2" description="Include the model or size — the crew reads this on the run sheet.">
+                <Field label="Name" required error={errors.name} className="sm:col-span-2" description="Include the model or size — your team reads this on the guest list.">
                   <Input value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="Alii Nui (49ft sailing catamaran)" />
                 </Field>
 
@@ -665,7 +665,7 @@ export function ResourcesPageClient({
                         <SelectItem value="available" description="Schedulable right now">
                           In service
                         </SelectItem>
-                        <SelectItem value="maintenance" description="Blocked from new departures">
+                        <SelectItem value="maintenance" description="Blocked from new time slots">
                           In maintenance
                         </SelectItem>
                         <SelectItem value="retired" description="Kept for historical records">
@@ -677,7 +677,7 @@ export function ResourcesPageClient({
                 </Field>
 
                 <Field label="Capacity per unit" required error={errors.capacity}>
-                  <Input type="number" min={1} max={500} value={form.capacity} onChange={(e) => set('capacity', e.target.value)} suffix="seats" />
+                  <Input type="number" min={1} max={500} value={form.capacity} onChange={(e) => set('capacity', e.target.value)} suffix="spots" />
                 </Field>
 
                 <Field label="Units in the fleet" required error={errors.quantity}>
@@ -694,7 +694,7 @@ export function ResourcesPageClient({
                     maxLength={300}
                     value={form.notes}
                     onChange={(e) => set('notes', e.target.value)}
-                    placeholder="Certifications, service intervals, anything the crew should know."
+                    placeholder="Certifications, service intervals, anything your team should know."
                   />
                 </Field>
               </FieldGroup>

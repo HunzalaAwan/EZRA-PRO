@@ -61,7 +61,7 @@ export async function generateMetadata({
   const { tenant, activities } = storefront
   return {
     title: {
-      absolute: `${tenant.name} — ${activities.length} experiences in ${tenant.city}`,
+      absolute: `${tenant.name} — ${activities.length} ${pluralize(activities.length, 'activity', 'activities')} in ${tenant.city}`,
     },
   }
 }
@@ -112,14 +112,14 @@ const VERTICAL_STORY: Record<string, { heading: string; body: string[] }> = {
     heading: 'Run by people who live on this water',
     body: [
       'We started with one boat, two captains and a shared conviction that the best day on the water is a small one — fewer guests, more time in the right spot, nobody rushed back to the dock.',
-      'Every skipper on the roster holds a current master licence and has worked these channels for years. They read the swell before the forecast does, and they will tell you honestly when a trip is not worth running.',
+      'Every skipper on the roster holds a current master licence and has worked these channels for years. They read the swell before the forecast does, and they will tell you honestly when a day is not worth going out.',
     ],
   },
   island: {
     heading: 'The reef, without the crowd',
     body: [
-      'Our fleet is fast on purpose. Getting to the outer reef quickly is what buys you the quiet moorings, the untouched bommies and the hours the day-tripper boats never have.',
-      'Every trip carries a marine biologist and a dive master, and our permits are tied to a reef-health programme we report into every quarter.',
+      'Our fleet is fast on purpose. Getting to the outer reef quickly is what buys you the quiet moorings, the untouched bommies and the hours the big day boats never have.',
+      'Every boat carries a marine biologist and a dive master, and our permits are tied to a reef-health programme we report into every quarter.',
     ],
   },
   hotels: {
@@ -140,7 +140,7 @@ const VERTICAL_STORY: Record<string, { heading: string; body: string[] }> = {
     heading: 'Guides who have earned the ridge',
     body: [
       'Every guide on the team is qualified to lead in alpine terrain, and most of them grew up in these valleys. They know which route is in condition today and which one to save for next week.',
-      'Group sizes stay small, gear is replaced on a schedule rather than when it fails, and no trip runs unless the conditions genuinely support it.',
+      'Group sizes stay small, gear is replaced on a schedule rather than when it fails, and nothing goes ahead unless the conditions genuinely support it.',
     ],
   },
   tours: {
@@ -153,7 +153,7 @@ const VERTICAL_STORY: Record<string, { heading: string; body: string[] }> = {
   wellness: {
     heading: 'Space to actually switch off',
     body: [
-      'Sessions are small and unhurried, in places chosen because they are quiet.',
+      'Groups are small and unhurried, in places chosen because they are quiet.',
       'Everything you need is laid out before you arrive. Turn up, and let the rest go.',
     ],
   },
@@ -195,7 +195,7 @@ export default async function StorefrontHomePage({
       id: departure.id,
       startsAt: departure.startsAt,
       seatsLeft: seatsRemaining(departure.capacity, departure.booked, departure.held),
-      name: activity?.name ?? 'Departure',
+      name: activity?.name ?? 'Activity',
       slug: activity?.slug ?? '',
       price: activity?.basePrice ?? 0,
     }
@@ -270,7 +270,7 @@ export default async function StorefrontHomePage({
                   Live availability
                 </p>
                 <h2 className="mt-2 font-display text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
-                  Next departures
+                  Next available times
                 </h2>
               </div>
               <p className="text-sm text-muted">
@@ -305,7 +305,7 @@ export default async function StorefrontHomePage({
                             : 'text-xs text-subtle'
                         }
                       >
-                        {departure.seatsLeft} {pluralize(departure.seatsLeft, 'seat')} left
+                        {departure.seatsLeft} {pluralize(departure.seatsLeft, 'spot')} left
                       </span>
                       <span className="text-sm font-semibold tabular text-foreground">
                         {formatCurrency(departure.price, tenant.currency)}
@@ -355,7 +355,7 @@ export default async function StorefrontHomePage({
                 {[
                   { value: `${2026 - foundedYear}`, label: 'Years operating' },
                   { value: formatNumber(guestsHosted, { compact: true }), label: 'Guests hosted' },
-                  { value: String(tenant.stats.teamSize), label: 'Crew on the team' },
+                  { value: String(tenant.stats.teamSize), label: 'Team members' },
                   { value: rating.toFixed(2), label: 'Average rating' },
                 ].map((stat) => (
                   <div key={stat.label}>
@@ -374,7 +374,7 @@ export default async function StorefrontHomePage({
             <Reveal delay={0.1}>
               <div className="rounded-2xl border border-line bg-surface p-6 shadow-sm">
                 <h3 className="font-display text-lg font-semibold tracking-tight text-foreground">
-                  Meet the crew
+                  Meet the team
                 </h3>
                 <p className="mt-1.5 text-sm text-muted">
                   The people who will actually be with you on the day.
@@ -564,7 +564,7 @@ function ContactBand({ tenant, base }: { tenant: Tenant; base: string }) {
                       Groups of 10 or more
                     </dt>
                     <dd className="mt-1 text-sm leading-relaxed text-foreground">
-                      Private departures and charters are quoted the same day.
+                      Private bookings and charters are quoted the same day.
                     </dd>
                   </div>
                 </div>
@@ -585,7 +585,7 @@ function ContactBand({ tenant, base }: { tenant: Tenant; base: string }) {
               <Separator className="my-6" />
 
               <Button asChild fullWidth rightIcon={<ArrowRight aria-hidden="true" />}>
-                <Link href={`${base}#experiences`}>Browse experiences</Link>
+                <Link href={`${base}#experiences`}>Browse activities</Link>
               </Button>
             </div>
           </Reveal>

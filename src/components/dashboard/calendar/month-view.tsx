@@ -230,7 +230,7 @@ export function MonthView({
                           outside ? 'text-faint' : 'text-muted',
                         )}
                       >
-                        {summary.live} {summary.live === 1 ? 'run' : 'runs'} ·{' '}
+                        {summary.live} {summary.live === 1 ? 'time slot' : 'time slots'} ·{' '}
                         {formatNumber(summary.booked)}g
                       </button>
                     </PopoverTrigger>
@@ -241,8 +241,8 @@ export function MonthView({
                             {formatDateLong(day)}
                           </p>
                           <p className="text-xs text-subtle tabular-nums">
-                            {events.length} departures · {formatNumber(summary.booked)} of{' '}
-                            {formatNumber(summary.capacity)} seats
+                            {events.length} {events.length === 1 ? 'time slot' : 'time slots'} · {formatNumber(summary.booked)} of{' '}
+                            {formatNumber(summary.capacity)} spots
                           </p>
                         </div>
                         <Button size="xs" variant="ghost" onClick={() => onOpenDay(day)}>

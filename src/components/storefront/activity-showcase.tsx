@@ -226,13 +226,13 @@ export function ActivityShowcase({
               The catalogue
             </p>
             <h2 className="mt-3 font-display text-display-sm font-semibold tracking-tight text-foreground">
-              Every experience we run
+              Every activity we offer
             </h2>
             <p className="mt-3 text-base leading-relaxed text-muted">
               {active === 'all'
-                ? `${formatNumber(activities.length)} ${pluralize(activities.length, 'experience')}${grouped ? ` in ${groups.length} categories` : ''}, all with live availability.`
+                ? `${formatNumber(activities.length)} ${pluralize(activities.length, 'activity', 'activities')}${grouped ? ` in ${groups.length} categories` : ''}, all with live availability.`
                 : `${formatNumber(activeItems.length)} in ${STOREFRONT_GROUPS[active].label.toLowerCase()}. ${STOREFRONT_GROUPS[active].blurb}`}{' '}
-              Pick a date and your place is held the moment you reserve.
+              Pick a date and your spot is held the moment you book.
             </p>
           </div>
 
@@ -242,7 +242,7 @@ export function ActivityShowcase({
               <SelectTrigger
                 className="w-[13.5rem]"
                 icon={<SlidersHorizontal aria-hidden="true" />}
-                aria-label="Sort experiences"
+                aria-label="Sort activities"
               >
                 <SelectValue />
               </SelectTrigger>

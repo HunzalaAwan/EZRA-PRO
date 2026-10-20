@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { ExternalLink, Mail, MapPin, Phone, ShieldCheck } from 'lucide-react'
 
 import { getStorefront } from '@/lib/demo'
+import { getWorkspaceProfile } from '@/lib/workspace-profile'
 import { SITE } from '@/lib/site-config'
 import { FooterSignup } from '@/components/storefront/storefront-marketing'
 import { cn, initials } from '@/lib/utils'
@@ -47,6 +48,8 @@ export function StorefrontFooter({ tenant, className }: StorefrontFooterProps) {
   const base = `/book/${tenant.slug}`
   const storefront = getStorefront(tenant.slug)
   const experiences = (storefront?.activities ?? []).slice(0, 6)
+  /* Hotels and restaurants keep their own word for what they sell. */
+  const listHeading = getWorkspaceProfile(tenant.vertical).storefront === 'experiences' ? 'Activities' : 'Experiences'
   const websiteHost = tenant.contact.website.replace(/^https?:\/\//, '')
   const foundedYear = new Date(tenant.createdAt).getFullYear()
 
@@ -159,9 +162,9 @@ export function StorefrontFooter({ tenant, className }: StorefrontFooterProps) {
           </div>
 
           {/* ---------- experiences ---------- */}
-          <nav aria-label="Experiences" className="min-w-0">
+          <nav aria-label={listHeading} className="min-w-0">
             <h2 className="font-display text-[0.8125rem] font-semibold uppercase tracking-[0.12em] text-faint">
-              Experiences
+              {listHeading}
             </h2>
             <ul className="mt-4 space-y-2.5">
               {experiences.map((activity) => (

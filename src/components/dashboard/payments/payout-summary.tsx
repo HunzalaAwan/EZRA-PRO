@@ -100,7 +100,7 @@ export function PayoutSummary({ balance, currency, className }: PayoutSummaryPro
             value: balance.available,
             format: 'currency',
             currency,
-            hint: 'Takings from trips that have already run this week. They go out in the next weekly batch.',
+            hint: 'Takings from bookings that have already taken place this week. They go out in the next weekly batch.',
           }}
           footer={
             <span className="flex items-center gap-1.5">
@@ -118,7 +118,7 @@ export function PayoutSummary({ balance, currency, className }: PayoutSummaryPro
             value: balance.inTransit,
             format: 'currency',
             currency,
-            hint: 'Last week’s trips, already sent to your bank — typically lands within one business day.',
+            hint: 'Last week’s bookings, already sent to your bank — typically lands within one business day.',
           }}
           footer={
             <span className="flex items-center gap-1.5">
@@ -201,7 +201,7 @@ export function PayoutSummary({ balance, currency, className }: PayoutSummaryPro
               size="sm"
               onClick={() =>
                 toast.info('Payout schedule', {
-                  description: 'Weekly. Each Monday–Sunday of trips is paid the Friday after it closes.',
+                  description: 'Weekly. Each Monday–Sunday of bookings is paid the Friday after it closes.',
                 })
               }
             >

@@ -252,8 +252,8 @@ export function GuestDetailsStep({
         </h2>
         <p className="mt-1.5 text-sm text-muted">
           {showGuests
-            ? 'The crew uses this to prep gear and keep everyone safe. It takes a minute and saves time at check-in.'
-            : 'The crew uses this to get ready for your group.'}
+            ? 'Our team uses this to prep gear and keep everyone safe. It takes a minute and saves time at check-in.'
+            : 'Our team uses this to get ready for your group.'}
         </p>
       </div>
 

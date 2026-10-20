@@ -65,8 +65,8 @@ import { toast } from '@/components/ui/toaster'
    ========================================================================== */
 
 const STEPS = [
-  { id: 'experience', label: 'Experience', icon: Ship },
-  { id: 'departure', label: 'Departure', icon: CalendarDays },
+  { id: 'experience', label: 'Activity', icon: Ship },
+  { id: 'departure', label: 'Time slot', icon: CalendarDays },
   { id: 'tickets', label: 'Tickets', icon: Users },
   { id: 'guest', label: 'Guest', icon: UserPlus },
   { id: 'payment', label: 'Payment', icon: Wallet },
@@ -88,19 +88,19 @@ const PAYMENT_METHODS = [
   {
     value: 'link',
     label: 'Send a payment link',
-    description: 'Holds the seats for 24 hours while the guest pays online.',
+    description: 'Holds the spots for 24 hours while the guest pays online.',
     icon: Link2,
   },
   {
     value: 'deposit',
-    label: 'Deposit now, balance at the dock',
-    description: 'Charges 25% today and flags the balance on the manifest.',
+    label: 'Deposit now, balance on the day',
+    description: 'Charges 25% today and flags the balance on the guest list.',
     icon: Wallet,
   },
   {
     value: 'cash',
     label: 'Cash on arrival',
-    description: 'Nothing captured now — the crew collects before boarding.',
+    description: 'Nothing captured now. Your team collects it at check-in.',
     icon: Banknote,
   },
 ] as const
@@ -433,8 +433,8 @@ export function NewBookingDialog({ open, onOpenChange }: NewBookingDialogProps) 
     window.setTimeout(() => {
       setSubmitting(false)
       onOpenChange(false)
-      toast.success(`Reservation confirmed for ${name}`, {
-        description: `${pricing.seats} ${pricing.seats === 1 ? 'seat' : 'seats'} on ${
+      toast.success(`Booking confirmed for ${name}`, {
+        description: `${pricing.seats} ${pricing.seats === 1 ? 'spot' : 'spots'} on ${
           activity.name
         } · ${formatDateShort(selectedEvent.departure.startsAt)} ${formatTime(
           selectedEvent.departure.startsAt,
@@ -464,9 +464,9 @@ export function NewBookingDialog({ open, onOpenChange }: NewBookingDialogProps) 
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent size="xl" className="max-h-[min(46rem,calc(100dvh-2rem))]">
         <DialogHeader divider>
-          <DialogTitle>New reservation</DialogTitle>
+          <DialogTitle>New booking</DialogTitle>
           <DialogDescription>
-            Take a booking over the phone or at the desk — seats are held the moment you confirm.
+            Take a booking over the phone or at the desk. Spots are held the moment you confirm.
           </DialogDescription>
           <div className="pt-3">
             <StepRail current={stepIndex} />
@@ -489,8 +489,8 @@ export function NewBookingDialog({ open, onOpenChange }: NewBookingDialogProps) 
                     value={activityQuery}
                     onValueChange={setActivityQuery}
                     debounceMs={0}
-                    label="Search experiences"
-                    placeholder="Search the catalogue…"
+                    label="Search activities"
+                    placeholder="Search activities…"
                     shortcut={false}
                   />
                   <div className="grid gap-2.5 sm:grid-cols-2">
@@ -621,7 +621,7 @@ export function NewBookingDialog({ open, onOpenChange }: NewBookingDialogProps) 
                         value={departureId ?? ''}
                         onValueChange={setDepartureId}
                         className="gap-2 sm:grid-cols-2"
-                        aria-label="Departure time"
+                        aria-label="Start time"
                       >
                         {(days.find(([key]) => key === dayKey)?.[1] ?? []).map((event) => (
                           <RadioGroupCard
@@ -632,7 +632,7 @@ export function NewBookingDialog({ open, onOpenChange }: NewBookingDialogProps) 
                                 {formatTime(event.departure.startsAt)}
                               </span>
                             }
-                            description={`${event.seatsLeft} of ${event.departure.capacity} seats left · ${Math.round(
+                            description={`${event.seatsLeft} of ${event.departure.capacity} spots left · ${Math.round(
                               event.fillRate,
                             )}% sold`}
                             trailing={
@@ -659,7 +659,7 @@ export function NewBookingDialog({ open, onOpenChange }: NewBookingDialogProps) 
                       </RadioGroup>
                     ) : (
                       <p className="rounded-xl border border-dashed border-line px-3 py-6 text-center text-[0.8125rem] text-subtle">
-                        Choose a day above to see its departure times.
+                        Choose a day above to see its start times.
                       </p>
                     )}
                   </div>
@@ -786,7 +786,7 @@ export function NewBookingDialog({ open, onOpenChange }: NewBookingDialogProps) 
                     <p className="flex items-center gap-2 rounded-xl border border-[color-mix(in_oklab,var(--danger)_30%,transparent)] bg-danger-soft px-3 py-2.5 text-[0.8125rem] text-danger">
                       <CircleAlert aria-hidden="true" className="size-4 shrink-0" />
                       That is {pricing.seats - seatsLeft} more{' '}
-                      {pricing.seats - seatsLeft === 1 ? 'seat' : 'seats'} than this departure has
+                      {pricing.seats - seatsLeft === 1 ? 'spot' : 'spots'} than this time slot has
                       left. Reduce the party or pick another time.
                     </p>
                   ) : null}
@@ -866,7 +866,7 @@ export function NewBookingDialog({ open, onOpenChange }: NewBookingDialogProps) 
                     <div className="flex items-center gap-2 rounded-xl border border-[color-mix(in_oklab,var(--success)_30%,transparent)] bg-success-soft px-3 py-2.5 text-[0.8125rem] text-success">
                       <Check aria-hidden="true" className="size-4 shrink-0" />
                       Booking as {existingGuest.firstName} {existingGuest.lastName} — their details
-                      and trip history carry over.
+                      and booking history carry over.
                       <Button
                         variant="ghost"
                         size="xs"
@@ -938,7 +938,7 @@ export function NewBookingDialog({ open, onOpenChange }: NewBookingDialogProps) 
                         )}
                       </Field>
                       <Field
-                        label="Notes for the crew"
+                        label="Notes for the team"
                         description="Allergies, mobility, celebrations."
                         className="sm:col-span-2"
                       >
@@ -985,7 +985,7 @@ export function NewBookingDialog({ open, onOpenChange }: NewBookingDialogProps) 
                                   {formatCurrency(Math.round(pricing.total * 0.25), currency)}
                                 </span>
                               ) : option.value === 'cash' ? (
-                                <span className="text-xs text-subtle">due at dock</span>
+                                <span className="text-xs text-subtle">due on the day</span>
                               ) : (
                                 <span className="text-[0.8125rem] font-semibold text-foreground tabular-nums">
                                   {formatCurrency(pricing.total, currency)}
@@ -1002,7 +1002,7 @@ export function NewBookingDialog({ open, onOpenChange }: NewBookingDialogProps) 
                   <div className="rounded-xl border border-line bg-surface-sunken p-3.5">
                     <div className="mb-2.5 flex items-center gap-2">
                       <Receipt aria-hidden="true" className="size-4 text-subtle" />
-                      <p className="text-[0.8125rem] font-semibold text-foreground">Order summary</p>
+                      <p className="text-[0.8125rem] font-semibold text-foreground">Booking summary</p>
                       <Badge variant="neutral" size="sm" className="ml-auto tabular-nums">
                         {pricing.seats} {pricing.seats === 1 ? 'guest' : 'guests'}
                       </Badge>
@@ -1089,7 +1089,7 @@ export function NewBookingDialog({ open, onOpenChange }: NewBookingDialogProps) 
             </Button>
             {step === 'payment' ? (
               <Button onClick={submit} loading={submitting} leftIcon={<Check />}>
-                Confirm reservation
+                Confirm booking
               </Button>
             ) : (
               <Button onClick={goNext} disabled={!canAdvance} rightIcon={<ArrowRight />}>

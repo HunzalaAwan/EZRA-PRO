@@ -368,7 +368,7 @@ export function CommandPalette() {
                 icon={<Plus />}
                 tint="bg-primary-soft text-primary"
                 label="New booking"
-                hint="Take a reservation on any departure"
+                hint="Book a guest onto any time slot"
               />
               <PaletteItem
                 value="action create activity new product experience"
@@ -376,7 +376,7 @@ export function CommandPalette() {
                 icon={<Waves />}
                 tint="bg-success-soft text-success"
                 label="Create activity"
-                hint="Add a new sellable experience"
+                hint="Add a new activity to sell"
               />
               <PaletteItem
                 value="action toggle theme dark light appearance"

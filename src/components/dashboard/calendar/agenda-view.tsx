@@ -102,7 +102,7 @@ export function AgendaView({
         <EmptyState
           variant="no-results"
           icon={CalendarRange}
-          title="No departures in this window"
+          title="No time slots in this window"
           description="Nothing matches the current filters over the next two weeks. Widen the filters or schedule something new."
           action={
             <Button size="sm" onClick={() => onCreate(from)}>
@@ -152,7 +152,7 @@ export function AgendaView({
 
                 <span className="tabular ml-auto flex items-center gap-3 text-xs text-subtle">
                   <span>
-                    {group.events.length} {group.events.length === 1 ? 'run' : 'runs'}
+                    {group.events.length} {group.events.length === 1 ? 'time slot' : 'time slots'}
                   </span>
                   <span className="hidden sm:inline">{formatNumber(group.guests)} guests</span>
                   <span className="font-semibold text-muted">
@@ -238,12 +238,13 @@ export function AgendaView({
                             held={departure.held}
                             size="sm"
                             showLabel={false}
+                            unit="spot"
                           />
                           <p className="tabular mt-1 text-xs text-subtle">
                             <span className="font-semibold text-muted">
                               {departure.booked}/{departure.capacity}
                             </span>{' '}
-                            seats · {seatsLeft === 0 ? 'sold out' : `${seatsLeft} left`}
+                            spots · {seatsLeft === 0 ? 'sold out' : `${seatsLeft} left`}
                           </p>
                         </div>
 
@@ -256,7 +257,7 @@ export function AgendaView({
                                 max={3}
                                 size="xs"
                                 ringClassName="ring-surface"
-                                label="Crew assigned"
+                                label="Team assigned"
                               />
                             ) : null}
                             <StatusBadge

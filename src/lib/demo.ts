@@ -220,19 +220,19 @@ const EMAIL_DOMAINS = ['gmail.com', 'outlook.com', 'icloud.com', 'proton.me', 'h
 
 const CUSTOMER_TAGS = [
   'Repeat guest', 'Honeymoon', 'Concierge referral', 'Group leader', 'Photographer',
-  'Dive certified', 'Newsletter', 'Cruise passenger', 'Local resident', 'Corporate',
+  'Dive certified', 'Newsletter', 'Cruise ship guest', 'Local resident', 'Corporate',
   'Anniversary', 'Family travel',
 ]
 
 const CUSTOMER_NOTES = [
-  'Prefers the 09:30 departure — gets seasick on the dawn run.',
+  'Prefers the 09:30 time slot — gets seasick early in the morning.',
   'Travels with two children under 10, always needs flotation vests.',
   'Corporate account — invoice to the front office, not the card on file.',
   'Vegetarian, no shellfish. Flag to the galley on every booking.',
   'Books the same week every year. Send the early-bird list in February.',
-  'Photographer — asks for the port rail seat on sunset sailings.',
+  'Photographer — asks for the port rail spot on the sunset sail.',
   'Requested the same guide as last visit.',
-  'Cruise passenger, hard 15:30 back-on-board time.',
+  'Cruise ship guest, hard 15:30 back-on-board time.',
   'Certified diver, card on file, expires 2028.',
   'Allergic to latex — no rubber wetsuit tops.',
 ]
@@ -447,13 +447,13 @@ const REVIEWS_LOW = [
 ]
 
 const DEPARTURE_NOTES = [
-  'Private group booking attached — brief the crew on the surprise.',
+  'Private group booking attached — brief the team on the surprise.',
   'Two guests with mobility needs, boarding assistance arranged.',
   'Photographer aboard for the marketing shoot.',
-  'Running one crew short — cover confirmed.',
+  'Running one team member short — cover confirmed.',
   'Birthday cake stowed in the galley fridge.',
   'Swell forecast building through the afternoon, monitor conditions.',
-  'Fuel top-up scheduled before this run.',
+  'Fuel top-up scheduled before this time slot.',
 ]
 
 const WEATHER_CONDITIONS: [WeatherSnapshot['condition'], number][] = [
@@ -482,7 +482,7 @@ const INTERNAL_NOTES = [
   'Repeat guest — comp a round at the bar.',
   'OTA booking, commission already deducted at source.',
   'Guest called to confirm pickup time, reconfirmed by SMS.',
-  'Flagged for follow-up review request after the trip.',
+  'Flagged for follow-up review request after the activity.',
   'Card declined once, retried successfully.',
   'Concierge asked for a handwritten welcome note.',
 ]
@@ -1809,16 +1809,16 @@ function buildAnalytics(tenantId: string, preset: RangePreset): AnalyticsSnapsho
 
   const kpis: KpiMetric[] = [
     kpi('net_revenue', 'Net Revenue', cur.revenue, prev.revenue, 'currency', spark.revenue, true,
-      'Ticket, add-on, fee and tax revenue net of refunds, attributed to the departure date.'),
+      'Ticket, add-on, fee and tax revenue net of refunds, attributed to the activity date.'),
     kpi('bookings', 'Bookings', cur.bookings, prev.bookings, 'number', spark.bookings, true,
-      'Confirmed, checked-in and completed bookings departing in this range.'),
+      'Confirmed, checked-in and completed bookings starting in this range.'),
     kpi('guests', 'Guests', cur.guests, prev.guests, 'number', spark.guests, true,
-      'Total seats sold across all departures in this range.'),
-    kpi('aov', 'Average Order Value', cur.aov, prev.aov, 'currency', spark.aov, true,
+      'Total spots sold across all time slots in this range.'),
+    kpi('aov', 'Average Booking Value', cur.aov, prev.aov, 'currency', spark.aov, true,
       'Net revenue divided by booking count.'),
     kpi('occupancy', 'Capacity Utilisation', Math.round(cur.occupancy * 10) / 10,
       Math.round(prev.occupancy * 10) / 10, 'percent', spark.occupancy, true,
-      'Seats sold as a share of seats offered on departures that ran.'),
+      'Spots sold as a share of spots offered on time slots that ran.'),
     kpi('cancellation_rate', 'Cancellation Rate', Math.round(cur.cancelRate * 10) / 10,
       Math.round(prev.cancelRate * 10) / 10, 'percent', spark.cancelRate, false,
       'Cancelled and refunded bookings as a share of all bookings.'),
@@ -1827,10 +1827,10 @@ function buildAnalytics(tenantId: string, preset: RangePreset): AnalyticsSnapsho
       'Share of bookings placed by guests with more than one booking on file.'),
     kpi('avg_rating', 'Average Rating', Math.round(cur.rating * 100) / 100,
       Math.round(prev.rating * 100) / 100, 'rating', spark.rating, true,
-      'Mean guest rating left against departures in this range.'),
+      'Average guest rating left for activities in this range.'),
     kpi('lead_time', 'Average Lead Time', Math.round(cur.leadDays * 10) / 10,
       Math.round(prev.leadDays * 10) / 10, 'number', spark.lead, true,
-      'Days between a booking being placed and the departure it is for.'),
+      'Days between a booking being placed and the activity it is for.'),
   ]
 
   /* ---- timeseries ---- */
@@ -2096,12 +2096,12 @@ function buildInsights(ctx: {
         id: 'ins_slot_gap',
         severity: 'positive',
         title: `${WEEKDAY_NAMES[best.weekday]} ${hourLabel(best.hour)} runs at ${best.occupancy.toFixed(0)}% while ${WEEKDAY_NAMES[worst.weekday]} ${hourLabel(worst.hour)} sits at ${worst.occupancy.toFixed(0)}%`,
-        body: `Move one ${WEEKDAY_NAMES[worst.weekday]} departure into the ${WEEKDAY_NAMES[best.weekday]} window.`,
+        body: `Move one ${WEEKDAY_NAMES[worst.weekday]} time slot into the ${WEEKDAY_NAMES[best.weekday]} window.`,
         metric: `+${formatCurrency(monthlyUplift, currency, { compact: true })}/mo`,
         impact: {
           value: formatCurrency(monthlyUplift, currency, { compact: true }),
           unit: '/mo',
-          caption: 'recoverable at your current seat value',
+          caption: 'recoverable at your current value per spot',
           direction: 'up',
         },
         visual: {
@@ -2130,12 +2130,12 @@ function buildInsights(ctx: {
     out.push({
       id: 'ins_sellout',
       severity: 'warning',
-      title: `${activity.name} sold out ${pressure.soldOut} of ${pressure.total} departures`,
-      body: `About ${formatNumber(turnaways)} guests you could not seat. Add a second daily departure or a larger vessel on peak days.`,
+      title: `${activity.name} sold out ${pressure.soldOut} of ${pressure.total} time slots`,
+      body: `About ${formatNumber(turnaways)} guests you had no spots for. Add a second daily time slot or a larger vessel on peak days.`,
       metric: `${formatCurrency(value, currency, { compact: true })} unmet`,
       impact: {
         value: formatCurrency(value, currency, { compact: true }),
-        caption: `unmet demand · ${pressure.soldOut} of ${pressure.total} departures sold out`,
+        caption: `unmet demand · ${pressure.soldOut} of ${pressure.total} time slots sold out`,
         direction: 'up',
       },
       visual: {
@@ -2243,7 +2243,7 @@ function buildInsights(ctx: {
     impact: {
       value: cur.leadDays.toFixed(1),
       unit: ' days',
-      caption: `average booking lead time · ${formatCurrency(cur.aov, currency)} average order`,
+      caption: `average booking lead time · ${formatCurrency(cur.aov, currency)} average booking`,
       direction: cur.leadDays >= prev.leadDays ? 'up' : 'down',
     },
     visual: {
@@ -2308,7 +2308,7 @@ export function getActivityFeed(tenantId: string, limit = 14): ActivityFeedItem[
         tenantId,
         actor,
         actorAvatar: customer.avatarUrl,
-        verb: b.partySize > 1 ? `booked ${b.partySize} seats on` : 'booked a seat on',
+        verb: b.partySize > 1 ? `booked ${b.partySize} spots on` : 'booked a spot on',
         target: activity.name,
         createdAt: b.createdAt,
         kind: b.paymentStatus === 'paid' ? 'payment' : 'booking',
@@ -2341,7 +2341,7 @@ export function getNotifications(tenantId: string): NotificationItem[] {
       tenantId,
       kind: 'booking',
       title: `New booking — ${formatCurrency(bigBooking.total, bigBooking.currency)}`,
-      body: `${c ? `${c.firstName} ${c.lastName}` : 'A guest'} booked ${bigBooking.partySize} seats on ${a?.name ?? 'an activity'} (${bigBooking.reference}).`,
+      body: `${c ? `${c.firstName} ${c.lastName}` : 'A guest'} booked ${bigBooking.partySize} spots on ${a?.name ?? 'an activity'} (${bigBooking.reference}).`,
       createdAt: bigBooking.createdAt,
       read: false,
       href: `/dashboard/bookings/${bigBooking.id}`,
@@ -2374,8 +2374,8 @@ export function getNotifications(tenantId: string): NotificationItem[] {
       id: `ntf_${soldOut.id}_so`,
       tenantId,
       kind: 'capacity',
-      title: `${a?.name ?? 'Departure'} is sold out`,
-      body: `${soldOut.startsAt.slice(11, 16)} on ${soldOut.startsAt.slice(0, 10)} is full at ${soldOut.capacity} seats. ${tenant.features.waitlists ? 'The waitlist is open and already collecting names.' : 'Turn on waitlists to capture the overflow.'}`,
+      title: `${a?.name ?? 'Time slot'} is sold out`,
+      body: `${soldOut.startsAt.slice(11, 16)} on ${soldOut.startsAt.slice(0, 10)} is full at ${soldOut.capacity} spots. ${tenant.features.waitlists ? 'The waitlist is open and already collecting names.' : 'Turn on waitlists to capture the overflow.'}`,
       createdAt: isoLocal(addDays(NOW, -1)),
       read: false,
       href: '/dashboard/calendar',
@@ -2390,7 +2390,7 @@ export function getNotifications(tenantId: string): NotificationItem[] {
       id: `ntf_${hold.id}_wx`,
       tenantId,
       kind: 'system',
-      title: `Weather hold on ${a?.name ?? 'a departure'}`,
+      title: `Weather hold on ${a?.name ?? 'an activity'}`,
       body: `${hold.startsAt.slice(0, 10)} ${hold.startsAt.slice(11, 16)} is on hold — ${hold.weather ? `${hold.weather.windKts} kt wind, go-confidence ${hold.weather.goConfidence}%` : 'conditions under review'}. ${hold.booked} guests are booked and need a decision by 16:00 today.`,
       createdAt: isoLocal(addDays(NOW, -1)),
       read: false,
@@ -2422,7 +2422,7 @@ export function getNotifications(tenantId: string): NotificationItem[] {
       tenantId,
       kind: 'payment',
       title: 'Payment outstanding',
-      body: `${unpaid.reference} is confirmed but unpaid — ${formatCurrency(unpaid.total, unpaid.currency)} due before departure on ${unpaid.departureAt.slice(0, 10)}.`,
+      body: `${unpaid.reference} is confirmed but unpaid — ${formatCurrency(unpaid.total, unpaid.currency)} due before the activity on ${unpaid.departureAt.slice(0, 10)}.`,
       createdAt: unpaid.updatedAt,
       read: true,
       href: `/dashboard/bookings/${unpaid.id}`,
@@ -2437,7 +2437,7 @@ export function getNotifications(tenantId: string): NotificationItem[] {
       tenantId,
       kind: 'payment',
       title: `Deposit received — ${formatCurrency(deposit.amountPaid, deposit.currency)}`,
-      body: `Balance of ${formatCurrency(deposit.total - deposit.amountPaid, deposit.currency)} on ${deposit.reference} is collected automatically 48 hours before departure.`,
+      body: `Balance of ${formatCurrency(deposit.total - deposit.amountPaid, deposit.currency)} on ${deposit.reference} is collected automatically 48 hours before the activity starts.`,
       createdAt: deposit.createdAt,
       read: true,
       href: `/dashboard/bookings/${deposit.id}`,
@@ -2452,7 +2452,7 @@ export function getNotifications(tenantId: string): NotificationItem[] {
       tenantId,
       kind: 'system',
       title: `${maintenance.name} is out of service`,
-      body: maintenance.notes ?? 'Scheduled maintenance — departures using this resource need reassigning.',
+      body: maintenance.notes ?? 'Scheduled maintenance — time slots using this resource need reassigning.',
       createdAt: isoLocal(addDays(NOW, -3)),
       read: true,
       href: '/dashboard/resources',
@@ -2478,8 +2478,8 @@ export function getNotifications(tenantId: string): NotificationItem[] {
     kind: 'system',
     title: `You are on the ${tenant.plan} plan`,
     body: tenant.features.dynamicPricing
-      ? 'Dynamic pricing is active on departures above 85% capacity.'
-      : 'Dynamic pricing and the channel manager unlock on Scale — most operators see a 6-9% lift in average order value.',
+      ? 'Dynamic pricing is active on time slots above 85% full.'
+      : 'Dynamic pricing and the channel manager unlock on Scale — most operators see a 6-9% lift in average booking value.',
     createdAt: isoLocal(addDays(NOW, -6)),
     read: true,
     href: '/dashboard/settings/billing',

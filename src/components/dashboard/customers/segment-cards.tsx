@@ -72,7 +72,7 @@ export const SEGMENT_META: Record<CustomerSegment, SegmentMeta> = {
   },
   returning: {
     label: 'Returning',
-    blurb: 'Two or more trips',
+    blurb: 'Two or more bookings',
     icon: Repeat2,
     growthIsGood: true,
     text: 'text-primary',
@@ -83,7 +83,7 @@ export const SEGMENT_META: Record<CustomerSegment, SegmentMeta> = {
   },
   vip: {
     label: 'VIP',
-    blurb: '3+ trips or $2k lifetime',
+    blurb: '3+ bookings or $2k lifetime',
     icon: Crown,
     growthIsGood: true,
     text: 'text-warning',

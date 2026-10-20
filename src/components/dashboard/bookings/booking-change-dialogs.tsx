@@ -313,7 +313,7 @@ export function CancelBookingDialog({
     }
     onOpenChange(false)
     toast.success(`${target.reference} cancelled`, {
-      description: `${target.party} ${target.party === 1 ? 'seat' : 'seats'} back on sale${refund > 0 ? `, ${money(refund)} refunded` : ''}${notify ? '. The guest has been told.' : '.'}`,
+      description: `${target.party} ${target.party === 1 ? 'spot' : 'spots'} back on sale${refund > 0 ? `, ${money(refund)} refunded` : ''}${notify ? '. The guest has been told.' : '.'}`,
     })
   }
 

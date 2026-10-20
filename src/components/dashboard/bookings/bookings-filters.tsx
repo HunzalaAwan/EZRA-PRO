@@ -25,7 +25,7 @@ import { BookingDatePicker } from '@/components/dashboard/bookings/booking-date-
 export type DeskView = 'today' | 'upcoming' | 'recent' | 'attention' | 'cancelled' | 'all'
 
 export const DESK_VIEWS: { id: DeskView; label: string; hint: string }[] = [
-  { id: 'today', label: 'Today', hint: 'Everything running today, in time order' },
+  { id: 'today', label: 'Today', hint: 'Every booking for today, by start time' },
   { id: 'upcoming', label: 'Next 7 days', hint: 'Today to a week out, soonest first. Pick any later date on the calendar.' },
   { id: 'recent', label: 'Recently booked', hint: 'Made in the last 7 days, newest first' },
   { id: 'attention', label: 'Needs attention', hint: 'This week: waiting to be confirmed, or money still to collect' },
@@ -156,13 +156,13 @@ function FiltersPopover({ filters, onFiltersChange, activities, locations }: Fil
           </Select>
         </FilterField>
 
-        <FilterField label="Experience">
+        <FilterField label="Activity">
           <Select value={filters.activityId} onValueChange={(value) => set('activityId', value)}>
-            <SelectTrigger aria-label="Filter by experience" icon={<Ship className="size-4" />}>
-              <SelectValue placeholder="Experience" />
+            <SelectTrigger aria-label="Filter by activity" icon={<Ship className="size-4" />}>
+              <SelectValue placeholder="Activity" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All experiences</SelectItem>
+              <SelectItem value="all">All activities</SelectItem>
               {sortedActivities.map((activity) => (
                 <SelectItem key={activity.id} value={activity.id}>
                   {activity.name}
@@ -231,7 +231,7 @@ function FiltersPopover({ filters, onFiltersChange, activities, locations }: Fil
 function ActiveChips({ filters, onFiltersChange, activities, locations }: FiltersPopoverProps) {
   const chips = [
     filters.status !== 'all' ? { key: 'status' as const, label: STATUS_LABEL[filters.status] } : null,
-    filters.activityId !== 'all' ? { key: 'activityId' as const, label: activities.find((entry) => entry.id === filters.activityId)?.name ?? 'Experience' } : null,
+    filters.activityId !== 'all' ? { key: 'activityId' as const, label: activities.find((entry) => entry.id === filters.activityId)?.name ?? 'Activity' } : null,
     filters.locationId !== 'all' ? { key: 'locationId' as const, label: locations.find((entry) => entry.id === filters.locationId)?.name ?? 'Location' } : null,
     filters.channel !== 'all' ? { key: 'channel' as const, label: CHANNEL_LABELS[filters.channel] } : null,
     filters.payment !== 'all' ? { key: 'payment' as const, label: PAYMENT_OPTIONS.find((entry) => entry.value === filters.payment)?.label ?? 'Payment' } : null,
@@ -293,7 +293,7 @@ export function BookingsFilters({
         value={filters.search}
         onValueChange={(value) => onFiltersChange({ ...filters, search: value })}
         debounceMs={180}
-        label="Search reservations"
+        label="Search bookings"
         placeholder="Reference, guest name or email…"
         shortcut={false}
         fieldClassName="w-full rounded-lg sm:w-64"

@@ -255,7 +255,7 @@ export function PackageWidget({
                       <div key={slot.departureId} className="flex flex-col gap-1">
                         <TimeChip
                           slot={blocked ? { ...slot, soldOut: true } : slot}
-                          noun="places"
+                          noun="spots"
                           selected={picked[index] === slot.departureId}
                           onSelect={() => setPicked({ ...picked, [index]: slot.departureId })}
                         />

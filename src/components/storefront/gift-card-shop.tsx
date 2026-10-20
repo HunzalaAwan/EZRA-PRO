@@ -84,7 +84,7 @@ export function GiftCardShop({ tenantSlug, tenantName, currency, todayKey }: { t
           Gift card sent
         </p>
         <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">{card.recipient} has a gift from you</h1>
-        <p className="mt-2 text-muted">We emailed it to {card.recipientEmail} and your receipt to {form.fromEmail}. It is valid for three years on anything we run.</p>
+        <p className="mt-2 text-muted">We emailed it to {card.recipientEmail} and your receipt to {form.fromEmail}. It is valid for three years on anything we offer.</p>
         <div className="mt-6">{preview}</div>
         <div className="mt-6 flex flex-wrap gap-2">
           <Button
@@ -102,7 +102,7 @@ export function GiftCardShop({ tenantSlug, tenantName, currency, todayKey }: { t
             Copy code
           </Button>
           <Button asChild>
-            <Link href={`/book/${tenantSlug}`}>Browse experiences</Link>
+            <Link href={`/book/${tenantSlug}`}>Browse activities</Link>
           </Button>
         </div>
       </div>
@@ -112,8 +112,8 @@ export function GiftCardShop({ tenantSlug, tenantName, currency, todayKey }: { t
   return (
     <div className="mx-auto w-full max-w-5xl px-4 pb-24 pt-28 sm:px-6">
       <p className="text-xs font-semibold tracking-[0.12em] text-faint uppercase">Gift cards</p>
-      <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight sm:text-4xl">Give a day on the water</h1>
-      <p className="mt-2 max-w-2xl text-muted">Good for any trip, rental or lesson with {tenantName}, for three years. Sent by email, instantly or on the day you choose.</p>
+      <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight sm:text-4xl">Give a day out</h1>
+      <p className="mt-2 max-w-2xl text-muted">Good for any activity, rental or lesson with {tenantName}, for three years. Sent by email, instantly or on the day you choose.</p>
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <form

@@ -238,11 +238,11 @@ export function BookingDetailContent({
     return (
       <EmptyState
         variant="error"
-        title="Reservation not found"
+        title="Booking not found"
         description="This confirmation reference does not match anything in the current workspace."
         action={
           <Button asChild variant="secondary">
-            <Link href="/dashboard/bookings">Back to reservations</Link>
+            <Link href="/dashboard/bookings">Back to bookings</Link>
           </Button>
         }
       />
@@ -321,7 +321,7 @@ export function BookingDetailContent({
     {
       id: 'created',
       at: booking.createdAt,
-      title: 'Reservation created',
+      title: 'Booking created',
       body: `${CHANNEL_LABELS[booking.channel]}${booking.source ? ` · ${booking.source}` : ''} · ${
         booking.partySize
       } ${booking.partySize === 1 ? 'guest' : 'guests'}`,
@@ -363,7 +363,7 @@ export function BookingDetailContent({
     timeline.push({
       id: 'reminder',
       at: reminderAt,
-      title: 'Trip reminder sent',
+      title: 'Reminder sent',
       body: `Meeting point, kit list and arrival time · SMS + email`,
       icon: Send,
       tone: 'info',
@@ -374,7 +374,7 @@ export function BookingDetailContent({
     timeline.push({
       id: 'checked-in',
       at: shiftIso(departure.startsAt, -25),
-      title: 'Party checked in at the dock',
+      title: 'Party checked in',
       body: `${booking.partySize} of ${booking.partySize} guests scanned`,
       icon: BadgeCheck,
       tone: 'success',
@@ -385,7 +385,7 @@ export function BookingDetailContent({
     timeline.push({
       id: 'completed',
       at: departure.endsAt,
-      title: 'Trip completed',
+      title: 'Activity completed',
       body: booking.rating
         ? `Guest left ${booking.rating.toFixed(1)}★${booking.reviewText ? ' with a written review' : ''}`
         : 'Awaiting guest review',
@@ -398,7 +398,7 @@ export function BookingDetailContent({
     timeline.push({
       id: 'cancelled',
       at: booking.cancelledAt,
-      title: 'Reservation cancelled',
+      title: 'Booking cancelled',
       body: booking.cancellationReason ?? 'No reason recorded',
       icon: Ban,
       tone: 'danger',
@@ -449,14 +449,14 @@ export function BookingDetailContent({
         `Refund of ${formatCurrency(result.refunds.reduce((sum, r) => sum + r.amount, 0), currency)} queued`,
         {
           description: result.cancelBooking
-            ? 'Seats released. Funds return to the original payment method in 5-10 business days.'
+            ? 'Spots released. Funds return to the original payment method in 5-10 business days.'
             : 'Funds return to the original payment method in 5-10 business days.',
         },
       ),
     cancel: () =>
       toast.error(`${booking.reference} cancelled`, {
         description: `${booking.partySize} ${
-          booking.partySize === 1 ? 'seat' : 'seats'
+          booking.partySize === 1 ? 'spot' : 'spots'
         } released back to ${formatDateShort(departure.startsAt)} · ${formatTime(departure.startsAt)}.`,
       }),
   }
@@ -520,7 +520,7 @@ export function BookingDetailContent({
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <IconButton aria-label="More reservation actions" size="sm" variant="secondary">
+              <IconButton aria-label="More booking actions" size="sm" variant="secondary">
                 <Ellipsis />
               </IconButton>
             </DropdownMenuTrigger>
@@ -552,7 +552,7 @@ export function BookingDetailContent({
                 disabled={isClosed}
               >
                 <Ban />
-                Cancel reservation
+                Cancel booking
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -563,9 +563,9 @@ export function BookingDetailContent({
             <TriangleAlert aria-hidden="true" className="size-4 shrink-0 text-warning" />
             <p className="text-[0.8125rem] text-foreground">
               <span className="font-semibold text-warning">
-                {formatCurrency(balance, currency)} outstanding
+                {formatCurrency(balance, currency)} balance due
               </span>{' '}
-              — collect before boarding on {formatDateShort(departure.startsAt)}.
+              Collect it at check-in on {formatDateShort(departure.startsAt)}.
             </p>
           </div>
         ) : null}
@@ -579,7 +579,7 @@ export function BookingDetailContent({
         <div className={cn('flex min-w-0 flex-col gap-4', mainClass)}>
           {/* Departure */}
           <SectionCard
-            title="Departure"
+            title="Time slot"
             icon={CalendarDays}
             toolbar={
               <Button asChild variant="ghost" size="xs" rightIcon={<ChevronRight />}>
@@ -639,12 +639,12 @@ export function BookingDetailContent({
                   avatars={staff.map((u) => ({ id: u.id, name: u.name, src: u.avatarUrl }))}
                   size="sm"
                   max={4}
-                  label="Crew assigned to this departure"
+                  label="Team assigned to this time slot"
                   ringClassName="ring-surface"
                 />
                 <div className="min-w-0">
                   <p className="text-[0.8125rem] font-medium text-foreground">
-                    {staff.length > 0 ? staff.map((u) => u.name).join(', ') : 'Crew not assigned'}
+                    {staff.length > 0 ? staff.map((u) => u.name).join(', ') : 'No team assigned'}
                   </p>
                   <p className="text-xs text-subtle">
                     {staff.length > 0 ? staff.map((u) => u.title).join(' · ') : 'Assign from the calendar'}
@@ -661,7 +661,7 @@ export function BookingDetailContent({
 
           {/* Participants */}
           <SectionCard
-            title={`Participants · ${booking.participants.length}`}
+            title={`Guests · ${booking.participants.length}`}
             icon={Users}
             toolbar={
               <Button
@@ -921,7 +921,7 @@ export function BookingDetailContent({
               </h4>
               {payments.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-line px-3 py-4 text-center text-[0.8125rem] text-subtle">
-                  No payment captured yet — this reservation is held on account.
+                  No payment captured yet. This booking is held on account.
                 </p>
               ) : (
                 <ul className="flex flex-col gap-2">
@@ -1059,7 +1059,7 @@ export function BookingDetailContent({
                   {formatCurrency(customer.lifetimeValue, currency)}
                 </span>
               </DataRow>
-              <DataRow label="Trips booked" icon={Ticket}>
+              <DataRow label="Bookings" icon={Ticket}>
                 <Link
                   href={`/dashboard/customers/${customer.id}`}
                   className="inline-flex items-center gap-1 text-primary transition-colors hover:text-primary-hover hover:underline"
@@ -1164,7 +1164,7 @@ export function BookingDetailContent({
                       leftIcon={<Check />}
                       onClick={() => {
                         setNotesSaved(true)
-                        toast.success('Note saved to the reservation')
+                        toast.success('Note saved to the booking')
                       }}
                     >
                       Save
@@ -1256,7 +1256,7 @@ const PAYMENT_METHOD_LABEL: Record<Payment['method'], string> = {
   card: 'Card',
   apple_pay: 'Apple Pay',
   google_pay: 'Google Pay',
-  cash: 'Cash at the dock',
+  cash: 'Cash on the day',
   bank_transfer: 'Bank transfer',
   gift_card: 'Gift card',
 }

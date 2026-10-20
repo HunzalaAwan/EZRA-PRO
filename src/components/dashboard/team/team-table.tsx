@@ -54,14 +54,14 @@ export const ROLE_META: Record<
     blurb: 'Runs the schedule, pricing and the team roster.',
   },
   staff: {
-    label: 'Staff',
+    label: 'Team member',
     variant: 'neutral',
     blurb: 'Takes bookings, checks guests in, handles the desk.',
   },
   guide: {
     label: 'Guide',
     variant: 'success',
-    blurb: 'Sees only their own departures and manifests.',
+    blurb: 'Sees only their own time slots and guest lists.',
   },
   viewer: {
     label: 'Viewer',
@@ -160,7 +160,7 @@ export function TeamTable({
                     {ROLE_META[member.role].label}
                   </Badge>
                   {member.isBookable ? (
-                    <p className="mt-1 text-xs text-subtle">Assignable to departures</p>
+                    <p className="mt-1 text-xs text-subtle">Assignable to time slots</p>
                   ) : null}
                 </Td>
 

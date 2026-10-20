@@ -122,7 +122,7 @@ export function ChangesPolicyEditor({
 
       <div className="flex flex-col divide-y divide-line-subtle border-t border-line-subtle pt-4">
         <p className="pb-3 text-[0.8125rem] font-medium">What guests can do from their booking page</p>
-        <Toggle title="Move to another time" text="They pick a new time with room for the group; the old seats go back on sale." checked={changes.reschedule} onChange={(reschedule) => setChanges({ reschedule })}>
+        <Toggle title="Move to another time slot" text="They pick a new time slot with room for the group; the old spots go back on sale." checked={changes.reschedule} onChange={(reschedule) => setChanges({ reschedule })}>
           <div className="grid gap-4 sm:grid-cols-3">
             <Field label="Until" labelSize="sm" description="Before the start.">
               {({ id }) => <BeforeInput id={id} hours={changes.rescheduleHours} onHours={(rescheduleHours) => setChanges({ rescheduleHours })} />}

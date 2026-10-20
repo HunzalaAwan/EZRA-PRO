@@ -46,7 +46,7 @@ export default async function EditActivityPage({ params }: EditActivityPageProps
           { label: 'Edit' },
         ]}
         title={`Edit ${activity.name}`}
-        description="Change anything about the listing. The preview on the right shows how it will read on the storefront, and nothing changes for guests until you save."
+        description="Change anything about this activity. The preview on the right shows how it will read on the storefront, and nothing changes for guests until you save."
         actions={
           <Button variant="ghost" asChild>
             <Link href={`/dashboard/activities/${activity.id}`}>Back to activity</Link>

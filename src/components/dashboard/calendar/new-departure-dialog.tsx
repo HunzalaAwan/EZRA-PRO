@@ -58,9 +58,9 @@ const schema = z
     times: z.array(z.string()).min(1, 'Add at least one start time'),
     capacity: z
       .number()
-      .min(1, 'Capacity must be at least one seat')
-      .max(500, 'Capacity looks too high — check the vessel'),
-    staffIds: z.array(z.string()).min(1, 'Assign at least one crew member'),
+      .min(1, 'Capacity must be at least one spot')
+      .max(500, 'Capacity looks too high. Check the number.'),
+    staffIds: z.array(z.string()).min(1, 'Assign at least one team member'),
     priceOverride: z.number().min(0, 'Price cannot be negative').nullable(),
     repeat: z.boolean(),
     weekdays: z.array(z.number()),
@@ -71,7 +71,7 @@ const schema = z
     path: ['weekdays'],
   })
   .refine((value) => !value.repeat || (value.until.length > 0 && value.until > value.date), {
-    message: 'The repeat end date must be after the first departure',
+    message: 'The repeat end date must be after the first time slot',
     path: ['until'],
   })
 
@@ -232,7 +232,7 @@ export function NewDepartureDialog({
       setSubmitting(false)
       onOpenChange(false)
       toast.success(
-        totalDepartures === 1 ? 'Availability added' : `${totalDepartures} slots added`,
+        totalDepartures === 1 ? 'Availability added' : `${totalDepartures} time slots added`,
         {
           description: `${activity?.name ?? 'Activity'} · ${times.join(', ')} · ${
             repeat ? `repeating until ${until}` : date
@@ -250,8 +250,8 @@ export function NewDepartureDialog({
         <DialogHeader divider>
           <DialogTitle>Add availability</DialogTitle>
           <DialogDescription>
-            One time slot or a repeating pattern, for a departure, a sitting, a class or an event.
-            Capacity, crew and pricing can differ from the activity defaults.
+            One time slot or a repeating pattern, for any activity, class or event.
+            Capacity, team and pricing can differ from the activity defaults.
           </DialogDescription>
         </DialogHeader>
 
@@ -315,7 +315,7 @@ export function NewDepartureDialog({
                   max={500}
                   inputMode="numeric"
                   value={capacity}
-                  suffix="seats"
+                  suffix="spots"
                   onChange={(event) => setCapacity(event.target.value)}
                 />
               </Field>
@@ -326,7 +326,7 @@ export function NewDepartureDialog({
               label="Start times"
               error={errors.times}
               required
-              description="Each time creates its own slot on the selected date."
+              description="Each time creates its own time slot on the selected date."
             >
               {(control) => (
                 <div className="flex flex-col gap-2">
@@ -388,10 +388,10 @@ export function NewDepartureDialog({
 
             {/* Crew */}
             <Field
-              label="Crew"
+              label="Team"
               error={errors.staffIds}
               required
-              description="Assigned crew appear on the manifest and the day rail."
+              description="Assigned team members appear on the guest list and the day view."
             >
               <div className="grid gap-1.5 sm:grid-cols-2">
                 {crew.map((user) => {
@@ -530,7 +530,7 @@ export function NewDepartureDialog({
             <p className="tabular mr-auto hidden text-[0.75rem] text-subtle sm:block">
               {totalDepartures > 0 ? (
                 <>
-                  <span className="font-semibold text-foreground">{totalDepartures}</span> slot
+                  <span className="font-semibold text-foreground">{totalDepartures}</span> time slot
                   {totalDepartures === 1 ? '' : 's'} will be created
                   {repeat ? ` across ${occurrences} day${occurrences === 1 ? '' : 's'}` : ''}
                 </>
@@ -553,7 +553,7 @@ export function NewDepartureDialog({
               loading={submitting}
               leftIcon={<CalendarPlus aria-hidden="true" />}
             >
-              {totalDepartures > 1 ? `Add ${totalDepartures} slots` : 'Add availability'}
+              {totalDepartures > 1 ? `Add ${totalDepartures} time slots` : 'Add availability'}
             </Button>
           </DialogFooter>
         </form>

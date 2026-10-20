@@ -32,11 +32,11 @@ import { imageIsOptimisable, useStorefrontBrand } from '@/components/storefront/
 const HERO_COPY: Record<VerticalKey, { eyebrow: string; sub: string }> = {
   watersports: {
     eyebrow: 'Reef, swell & open water',
-    sub: 'Small-group trips run by captains and guides who have been reading this water their whole lives.',
+    sub: 'Small groups on the water with captains and guides who have been reading it their whole lives.',
   },
   island: {
     eyebrow: 'Outer reef & island days',
-    sub: 'Fast catamarans, quiet moorings and the parts of the reef the day-tripper fleet never reaches.',
+    sub: 'Fast catamarans, quiet moorings and the parts of the reef the big day boats never reach.',
   },
   tours: {
     eyebrow: 'Guided days out',
@@ -56,7 +56,7 @@ const HERO_COPY: Record<VerticalKey, { eyebrow: string; sub: string }> = {
   },
   wellness: {
     eyebrow: 'Rest & reset',
-    sub: 'Quiet sessions in beautiful places, with everything you need already laid out.',
+    sub: 'Quiet, unhurried time in beautiful places, with everything you need already laid out.',
   },
 }
 
@@ -120,7 +120,7 @@ export function StorefrontHero({
   const stats = [
     { value: rating.toFixed(2), label: 'Guest rating' },
     { value: formatNumber(guestsHosted, { compact: true }), label: 'Guests hosted' },
-    { value: String(activities.length), label: 'Experiences' },
+    { value: String(activities.length), label: 'Activities' },
     { value: `${years} yrs`, label: `On the water since ${foundedYear}` },
   ]
 
@@ -232,7 +232,7 @@ export function StorefrontHero({
           <span className="hidden h-4 w-px bg-white/25 sm:block" />
           <p className="text-sm text-white/70">
             {formatNumber(guestsHosted)} guests hosted · {activities.length}{' '}
-            {pluralize(activities.length, 'experience')} running
+            {pluralize(activities.length, 'activity', 'activities')} on offer
           </p>
         </motion.div>
 
@@ -253,12 +253,12 @@ export function StorefrontHero({
               <Search className="size-4 shrink-0 text-primary" aria-hidden="true" />
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="text-xs font-semibold uppercase tracking-[0.1em] text-faint">
-                  Experience
+                  Activity
                 </span>
                 <select
                   value={activityId}
                   onChange={(e) => setActivityId(e.target.value)}
-                  aria-label="Choose an experience"
+                  aria-label="Choose an activity"
                   className="mt-0.5 w-full cursor-pointer appearance-none truncate bg-transparent pr-5 text-sm font-semibold text-foreground outline-hidden"
                 >
                   {activities.map((activity) => (

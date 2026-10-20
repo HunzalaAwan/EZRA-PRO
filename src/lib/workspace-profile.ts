@@ -104,14 +104,14 @@ const EXPERIENCES: WorkspaceProfile = {
   vocab: {
     booking: 'booking',
     bookings: 'bookings',
-    item: 'experience',
-    items: 'experiences',
+    item: 'activity',
+    items: 'activities',
     catalogue: 'Activities',
-    unit: 'seat',
-    units: 'seats',
-    slot: 'departure',
-    slots: 'departures',
-    team: 'Crew',
+    unit: 'spot',
+    units: 'spots',
+    slot: 'time slot',
+    slots: 'time slots',
+    team: 'Team',
     newBooking: 'New booking',
     newBookingHref: '/dashboard/bookings?new=1',
   },
@@ -127,7 +127,7 @@ const EXPERIENCES: WorkspaceProfile = {
     '/dashboard/housekeeping': '/dashboard/manifest',
     '/dashboard/rates': '/dashboard/availability',
   },
-  overviewHint: 'departures',
+  overviewHint: 'time slots',
 }
 
 /* --------------------------------------------------------------------------

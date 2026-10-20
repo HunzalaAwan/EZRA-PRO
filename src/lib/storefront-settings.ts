@@ -61,8 +61,8 @@ export interface StorefrontSettings {
 }
 
 export const SECTION_META: { key: StorefrontSectionKey; label: string; hint: string }[] = [
-  { key: 'departures', label: 'Next departures', hint: 'A live strip of the next six departures. Built for tour operators.' },
-  { key: 'about', label: 'About and crew', hint: 'Your story, the numbers, and the people on the day.' },
+  { key: 'departures', label: 'Next time slots', hint: 'A live strip of the next six time slots. Good for activities with set start times.' },
+  { key: 'about', label: 'About and team', hint: 'Your story, the numbers, and the people on the day.' },
   { key: 'reviews', label: 'Guest reviews', hint: 'Six recent reviews with the overall rating.' },
   { key: 'contact', label: 'Contact and directions', hint: 'Phone, email, hours and the meeting point.' },
 ]
@@ -91,14 +91,14 @@ export function sectionMetaFor(vertical: VerticalKey) {
 }
 
 export const MOBILE_LAYOUTS: { value: MobileLayout; label: string; hint: string }[] = [
-  { value: 'cards', label: 'Cards', hint: 'One tall photo card per experience.' },
+  { value: 'cards', label: 'Cards', hint: 'One tall photo card each.' },
   { value: 'grid', label: 'Grid', hint: 'Two compact cards per row.' },
   { value: 'list', label: 'List', hint: 'Photo on the left, details on the right.' },
 ]
 
 export const DESKTOP_LAYOUTS: { value: DesktopLayout; label: string; hint: string }[] = [
   { value: 'grid', label: 'Grid', hint: 'Three cards per row.' },
-  { value: 'list', label: 'List', hint: 'One wide row per experience.' },
+  { value: 'list', label: 'List', hint: 'One wide row each.' },
 ]
 
 export function defaultStorefrontSettings(vertical: VerticalKey): StorefrontSettings {

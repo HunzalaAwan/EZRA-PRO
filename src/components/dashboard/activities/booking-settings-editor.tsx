@@ -18,7 +18,7 @@ import type { BookingSettings } from '@/types'
    ========================================================================== */
 
 const METHODS: { value: BookingSettings['method']; title: string; text: string; icon: typeof CalendarClock }[] = [
-  { value: 'instant', title: 'Book online', text: 'Guests pick a time from your schedule and pay. Booked straight away.', icon: CalendarClock },
+  { value: 'instant', title: 'Book online', text: 'Guests pick a time slot from your schedule and pay. Booked straight away.', icon: CalendarClock },
   { value: 'request', title: 'Request to book', text: 'Guests send the time and group they want, or call you. You confirm and send a payment link.', icon: MessageSquareText },
 ]
 

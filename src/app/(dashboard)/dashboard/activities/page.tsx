@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'Activities',
-  description: 'Every experience you sell — pricing, availability and performance in one catalog.',
+  description: 'Every activity you sell — pricing, availability and performance in one catalog.',
 }
 
 export default async function ActivitiesPage() {
@@ -55,9 +55,9 @@ export default async function ActivitiesPage() {
             label: 'Live activities',
             value: totals.live,
             format: 'number',
-            hint: `${totals.total} experiences in the catalog, including drafts and archives.`,
+            hint: `${totals.total} activities in the catalog, including drafts and archives.`,
           }}
-          footer={`${formatNumber(upcoming)} scheduled ${pluralize(upcoming, 'departure')} ahead`}
+          footer={`${formatNumber(upcoming)} scheduled ${pluralize(upcoming, 'time slot')} ahead`}
         />
         <StatCard
           icon={<Ticket />}
@@ -85,7 +85,7 @@ export default async function ActivitiesPage() {
             direction: totals.revenueDeltaPercent >= 0 ? 'up' : 'down',
             comparisonLabel: 'vs previous 30 days',
           }}
-          footer="Attributed to the departure date"
+          footer="Counted on the date of the time slot"
         />
         <StatCard
           icon={<Gauge />}
@@ -95,7 +95,7 @@ export default async function ActivitiesPage() {
             value: totals.occupancy30d,
             format: 'percent',
             decimals: 1,
-            hint: 'Seats sold against seats offered on every departure in the last 30 days.',
+            hint: 'Spots sold against spots offered on every time slot in the last 30 days.',
           }}
           footer={`Catalog rating ${totals.avgRating.toFixed(2)} / 5`}
         />

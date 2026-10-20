@@ -130,7 +130,7 @@ export function WaiversSettingsClient({ tenant, seeded, usage }: WaiversSettings
             Question library
           </CardTitle>
           <CardDescription>
-            Ready-made questions for the Description step of any activity. Sizes feed the gear prep list on the manifest; limits stop a booking that would not be safe.
+            Ready-made questions for the Description step of any activity. Sizes feed the gear prep list on the guest list; limits stop a booking that would not be safe.
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">

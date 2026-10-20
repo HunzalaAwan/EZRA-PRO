@@ -111,13 +111,13 @@ function templatesFor(review: ReviewItem, operatorName: string) {
   const first = review.guestName.split(' ')[0]
   if (review.rating >= 4) {
     return [
-      `Thank you ${first} — the crew will be thrilled to read this. Come see us again soon!`,
+      `Thank you ${first} — the team will be thrilled to read this. Come see us again soon!`,
       `So glad you enjoyed ${review.activityName}, ${first}. We’ve passed your note to the whole team.`,
     ]
   }
   return [
     `${first}, thank you for the honest feedback — this isn’t the standard we hold ourselves to. I’d like to make it right; I’ll email you today. — ${operatorName}`,
-    `I’m sorry ${review.activityName} fell short, ${first}. We’ve reviewed this with the crew and would love another chance to host you.`,
+    `I’m sorry ${review.activityName} fell short, ${first}. We’ve reviewed this with the team and would love another chance to host you.`,
   ]
 }
 
@@ -260,7 +260,7 @@ export function ReviewsList({
             <SearchInput
               value={query}
               onValueChange={setQuery}
-              placeholder="Search guest, trip or wording…"
+              placeholder="Search guest, activity or wording…"
               size="sm"
               aria-label="Search reviews"
               fieldClassName="w-full sm:w-64"

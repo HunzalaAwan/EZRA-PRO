@@ -70,7 +70,7 @@ const ADDON_PRESETS: AddOnPreset[] = [
   {
     label: 'Lunch & drinks',
     price: 3200,
-    description: 'Island plate, fruit and cold drinks on board.',
+    description: 'A light lunch and cold drinks.',
     per: 'guest',
     icon: Sandwich,
   },
@@ -120,8 +120,8 @@ export function AddonEditor({ addOns, onChange, currency, errors, presets = ADDO
           </span>
           <p className="mt-2.5 text-sm font-semibold">No add-ons yet</p>
           <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-muted">
-            Add-ons are offered after the guest picks a time. One well-chosen extra typically lifts
-            average order value by around 12%.
+            Add-ons are offered after the guest picks a time slot. One well-chosen extra typically lifts
+            average booking value by around 12%.
           </p>
         </div>
       ) : (

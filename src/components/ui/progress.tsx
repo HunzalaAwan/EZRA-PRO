@@ -154,7 +154,7 @@ const CapacityBar = React.forwardRef<HTMLDivElement, CapacityBarProps>(function 
     held = 0,
     size = 'md',
     showLabel = true,
-    unit = 'seat',
+    unit = 'spot',
     ...props
   },
   ref,

@@ -133,7 +133,7 @@ export function DepartureChip({
           ? cn(EVENT_TINT_STRONG, EVENT_BORDER, EVENT_INK, SOLD_OUT_RING)
           : cn(EVENT_TINT, EVENT_BORDER, EVENT_INK)
 
-  const accessibleName = `${time} · ${activity.name} · ${departure.booked} of ${departure.capacity} seats booked${
+  const accessibleName = `${time} · ${activity.name} · ${departure.booked} of ${departure.capacity} spots booked${
     cancelled ? ' · cancelled' : soldOut ? ' · sold out' : ''
   }`
 

@@ -202,7 +202,7 @@ export function CalendarFilters({ tenantId, filters, onChange, className }: Cale
         className="w-[min(21rem,calc(100vw-2rem))] overflow-hidden"
       >
         <div className="flex items-center justify-between border-b border-line px-4 py-3">
-          <p className="text-sm font-semibold text-foreground">Filter departures</p>
+          <p className="text-sm font-semibold text-foreground">Filter time slots</p>
           <button
             type="button"
             onClick={() => onChange(DEFAULT_CALENDAR_FILTERS)}
@@ -274,7 +274,7 @@ export function CalendarFilters({ tenantId, filters, onChange, className }: Cale
             </div>
           </Section>
 
-          <Section title="Crew" count={filters.staffIds.length}>
+          <Section title="Team" count={filters.staffIds.length}>
             <div className="flex flex-col">
               {staff.map((user) => (
                 <FilterRow
@@ -303,7 +303,7 @@ export function CalendarFilters({ tenantId, filters, onChange, className }: Cale
                   Show cancelled
                 </span>
                 <span className="text-xs text-subtle">
-                  Keep cancelled departures visible on the grid
+                  Keep cancelled time slots visible on the calendar
                 </span>
               </span>
               <Switch
@@ -363,7 +363,7 @@ export function ActiveFilterPills({ tenantId, filters, onChange }: ActiveFilterP
     })),
     ...filters.staffIds.map((id) => ({
       key: `staff-${id}`,
-      label: staffNames.get(id) ?? 'Crew',
+      label: staffNames.get(id) ?? 'Team member',
       onRemove: () => onChange({ ...filters, staffIds: filters.staffIds.filter((v) => v !== id) }),
     })),
   ]

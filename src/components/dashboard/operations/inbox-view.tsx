@@ -29,10 +29,10 @@ const CHANNEL: Record<ThreadChannel, { label: string; icon: typeof Mail }> = {
 }
 
 const QUICK_REPLIES = [
-  'No problem, we will hold your seats. Head straight to the check-in desk when you arrive.',
-  'Yes, the trip is on. We check conditions again at 6 am and will text you if anything changes.',
+  'No problem, we will hold your spots. Head straight to the check-in desk when you arrive.',
+  'Yes, the activity is on. We check conditions again at 6 am and will text you if anything changes.',
   'Done, I have moved you. The new time is in your booking link.',
-  'Let me check with the captain and come back to you within the hour.',
+  'Let me check with the team and come back to you within the hour.',
 ]
 
 type Filter = 'open' | 'all' | 'closed'

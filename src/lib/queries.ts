@@ -1076,7 +1076,7 @@ function buildTimeline(booking: Booking, payments: Payment[]): BookingTimelineEv
     events.push({
       id: `${booking.id}-completed`,
       kind: 'completed',
-      label: 'Trip completed',
+      label: 'Activity completed',
       at: booking.departureAt,
     })
   }
@@ -1940,7 +1940,7 @@ function buildSearchIndex(tenantId: string): SearchIndex {
       type: 'activity' as const,
       title: activity.name,
       subtitle: activity.tagline,
-      meta: `${activity.status} · ${activity.maxCapacity} seats`,
+      meta: `${activity.status} · ${activity.maxCapacity} spots`,
       href: `/activities/${activity.id}`,
       score: 0,
     }),
@@ -1957,7 +1957,7 @@ function buildSearchIndex(tenantId: string): SearchIndex {
       subtitle: `${row.activity.name} · ${formatDateShort(row.booking.departureAt)} ${formatTime(
         row.booking.departureAt,
       )}`,
-      meta: `${row.booking.status} · ${row.booking.partySize} pax`,
+      meta: `${row.booking.status} · ${row.booking.partySize} ${row.booking.partySize === 1 ? 'guest' : 'guests'}`,
       href: `/bookings/${row.booking.id}`,
       score: 0,
     }),
@@ -1989,7 +1989,7 @@ function buildSearchIndex(tenantId: string): SearchIndex {
           id: departure.id,
           type: 'departure' as const,
           title: `${activity.name} · ${label}`,
-          subtitle: `${departure.booked}/${departure.capacity} seats`,
+          subtitle: `${departure.booked}/${departure.capacity} spots`,
           meta: departure.status,
           href: `/calendar?departure=${departure.id}`,
           score: 0,

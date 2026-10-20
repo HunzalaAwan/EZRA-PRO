@@ -477,8 +477,8 @@ export function BookingsPageClient({ tenant, allRows: firstRows, activities, loc
     const n = result.refunds.length
     const reason = REFUND_REASONS.find((r) => r.value === result.reason)?.label ?? result.reason
     toast.success(`Refunded ${formatCurrency(total, tenant.currency)}`, {
-      description: `${n} ${n === 1 ? 'reservation' : 'reservations'} · ${reason}${
-        result.cancelBooking ? ' · seats released' : ''
+      description: `${n} ${n === 1 ? 'booking' : 'bookings'} · ${reason}${
+        result.cancelBooking ? ' · spots released' : ''
       }${result.notifyGuest ? ' · receipt emailed' : ''}`,
     })
     setSelectedIds([])
@@ -503,7 +503,7 @@ export function BookingsPageClient({ tenant, allRows: firstRows, activities, loc
 
   const bulkAction = (action: 'confirm' | 'message' | 'export' | 'cancel' | 'refund', ids: string[]) => {
     const n = ids.length
-    const noun = n === 1 ? 'reservation' : 'reservations'
+    const noun = n === 1 ? 'booking' : 'bookings'
     if (action === 'refund') {
       openRefund(allRows.filter((row) => ids.includes(row.booking.id)))
       return
@@ -518,7 +518,7 @@ export function BookingsPageClient({ tenant, allRows: firstRows, activities, loc
         setComposeFor(allRows.filter((row) => ids.includes(row.booking.id)))
         return
       case 'export':
-        toast.success(`Exported ${n} ${noun}`, { description: 'reservations.csv is downloading.' })
+        toast.success(`Exported ${n} ${noun}`, { description: 'bookings.csv is downloading.' })
         break
       case 'cancel': {
         // Each booking is cancelled under its own activity's policy and told.
@@ -535,8 +535,8 @@ export function BookingsPageClient({ tenant, allRows: firstRows, activities, loc
         }
         const template = templates.find((entry) => entry.key === 'cancelled')
         if (template) sendToGuests(rows.map(recipientOf), { tenantSlug: tenant.slug, business: tenant.name, subject: template.subject, body: template.body, extra: { refund_line: 'Any refund due under the policy is on its way to your card.' } })
-        toast.error(`${rows.length} ${rows.length === 1 ? 'reservation' : 'reservations'} cancelled`, {
-          description: `Seats back on sale, ${formatCurrency(refunded, tenant.currency)} refunded by each policy, guests told.`,
+        toast.error(`${rows.length} ${rows.length === 1 ? 'booking' : 'bookings'} cancelled`, {
+          description: `Spots back on sale, ${formatCurrency(refunded, tenant.currency)} refunded by each policy, guests told.`,
         })
         break
       }
@@ -553,15 +553,15 @@ export function BookingsPageClient({ tenant, allRows: firstRows, activities, loc
     <div className="flex flex-col gap-5 pb-24">
       <PageHeader
         className="mb-0"
-        title="Reservations"
-        description={`Every booking across ${activities.length} experiences — search, filter and action without leaving the desk.`}
+        title="Bookings"
+        description={`Find, filter and manage every booking across ${activities.length} ${activities.length === 1 ? 'activity' : 'activities'}.`}
         actions={
           <div className="flex items-center gap-2">
             <Button
               variant="secondary"
               leftIcon={<Printer />}
               className="hidden sm:inline-flex"
-              onClick={() => toast.success('Run sheet sent to the printer')}
+              onClick={() => toast.success('Booking list sent to the printer')}
             >
               Print
             </Button>
@@ -569,8 +569,8 @@ export function BookingsPageClient({ tenant, allRows: firstRows, activities, loc
               variant="secondary"
               leftIcon={<Download />}
               onClick={() =>
-                toast.success(`Exported ${formatNumber(sortedRows.length)} reservations`, {
-                  description: 'reservations.csv is downloading.',
+                toast.success(`Exported ${formatNumber(sortedRows.length)} bookings`, {
+                  description: 'bookings.csv is downloading.',
                 })
               }
             >
@@ -591,7 +591,7 @@ export function BookingsPageClient({ tenant, allRows: firstRows, activities, loc
           accent="lagoon"
           icon={CalendarCheck}
           stat={{
-            label: 'Departing today',
+            label: 'Starting today',
             value: kpis.todayBookings,
             format: 'number',
             deltaPercent: kpis.bookingsDelta,
@@ -602,7 +602,7 @@ export function BookingsPageClient({ tenant, allRows: firstRows, activities, loc
           }}
           footer={
             <Link href="/dashboard/manifest" className="text-primary transition-colors hover:underline">
-              Open today&rsquo;s manifest →
+              Open today&rsquo;s guest list →
             </Link>
           }
         />
@@ -614,7 +614,7 @@ export function BookingsPageClient({ tenant, allRows: firstRows, activities, loc
             value: kpis.pending,
             format: 'number',
             higherIsBetter: false,
-            hint: 'Pending reservations on departures that have not sailed yet.',
+            hint: 'Pending bookings on time slots that have not started yet.',
           }}
           footer={
             <button
@@ -664,7 +664,7 @@ export function BookingsPageClient({ tenant, allRows: firstRows, activities, loc
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
           <div className="-mx-1 min-w-0 overflow-x-auto px-1 no-scrollbar">
-            <Segmented options={viewOptions} value={view} onValueChange={applyView} label="Reservation views" size="md" className="min-w-max" />
+            <Segmented options={viewOptions} value={view} onValueChange={applyView} label="Booking views" size="md" className="min-w-max" />
           </div>
           {viewHint ? <p className="text-xs text-subtle">{viewHint}</p> : null}
         </div>

@@ -51,7 +51,7 @@ const TAG_SUGGESTIONS = [
   'Photographer',
   'Dive certified',
   'Newsletter',
-  'Cruise passenger',
+  'Cruise ship guest',
   'Local resident',
   'Corporate',
   'Anniversary',
@@ -72,7 +72,7 @@ export async function generateMetadata({ params }: RouteProps): Promise<Metadata
   const name = `${customer.firstName} ${customer.lastName}`
   return {
     title: name,
-    description: `Trip history, lifetime value and reviews for ${name}.`,
+    description: `Booking history, lifetime value and reviews for ${name}.`,
   }
 }
 
@@ -176,7 +176,7 @@ export default async function CustomerDetailPage({ params }: RouteProps) {
     <>
       <PageHeader
         title={fullName}
-        description={`${customer.totalBookings} ${customer.totalBookings === 1 ? 'trip' : 'trips'} with ${tenant.name}, ${stats.guestsHosted} ${stats.guestsHosted === 1 ? 'guest' : 'guests'} hosted.`}
+        description={`${customer.totalBookings} ${customer.totalBookings === 1 ? 'booking' : 'bookings'} with ${tenant.name}, ${stats.guestsHosted} ${stats.guestsHosted === 1 ? 'guest' : 'guests'} hosted.`}
         breadcrumb={[
           { label: 'Guests', href: '/dashboard/customers' },
           { label: fullName },

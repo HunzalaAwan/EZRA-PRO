@@ -224,7 +224,7 @@ export function MarketingSettingsClient({ tenant: tenantRecord, nowIso }: { tena
             </Field>
           </Row>
           <Row
-            title="Skip guests with a trip coming up"
+            title="Skip guests with a booking coming up"
             text="No offers to someone already booked for the next few days. They get their reminders instead."
             checked={s.skipUpcoming.enabled}
             onChange={(enabled) => set({ skipUpcoming: { ...s.skipUpcoming, enabled } })}
@@ -267,7 +267,7 @@ export function MarketingSettingsClient({ tenant: tenantRecord, nowIso }: { tena
             />
             <Row
               title="Tag links so you can see what brought each booking"
-              text="Adds a short label to the end of every link in marketing, so Google Analytics and similar tools can tell which message a visitor came from."
+              text="Adds a short label to the end of every link in marketing, so Google Analytics and similar tools can tell which message someone came from."
               checked={s.utm.enabled}
               onChange={(enabled) => set({ utm: { ...s.utm, enabled } })}
             >

@@ -34,7 +34,7 @@ export interface AbandonedCheckout {
   recoveredAt: string | null
   /** Set when a reminder carried a discount. */
   discountPercent: number | null
-  /** The link that reopens their cart with the seats still selected. */
+  /** The link that reopens their booking with the spots still selected. */
   checkoutUrl: string
 }
 
@@ -42,7 +42,7 @@ export const ABANDONED_STATUS_META: Record<AbandonedStatus, { label: string; ton
   open: { label: 'Open', tone: 'bg-warning', hint: 'No reminder sent yet.' },
   reminded: { label: 'Reminded', tone: 'bg-info', hint: 'At least one reminder has gone out.' },
   recovered: { label: 'Recovered', tone: 'bg-success', hint: 'They came back and paid.' },
-  expired: { label: 'Expired', tone: 'bg-line-strong', hint: 'The departure passed or the seats were released.' },
+  expired: { label: 'Expired', tone: 'bg-line-strong', hint: 'The time slot passed or the spots were released.' },
 }
 
 export const ABANDONED_STAGE_LABEL: Record<AbandonedStage, string> = {

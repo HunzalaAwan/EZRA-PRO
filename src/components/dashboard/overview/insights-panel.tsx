@@ -109,7 +109,7 @@ export function InsightsPanel({
             variant="no-data"
             icon={Sparkles}
             title="Nothing needs your attention"
-            description="We re-read your departures, pricing and channel mix every morning. You are all clear today."
+            description="We re-read your time slots, pricing and channel mix every morning. You are all clear today."
           />
         </div>
       ) : (

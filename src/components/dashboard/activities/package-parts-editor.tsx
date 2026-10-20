@@ -77,7 +77,7 @@ export function PackagePartsEditor({
       <div>
         <h3 className="text-sm font-semibold">What&rsquo;s in the package</h3>
         <p className="mt-0.5 text-xs text-subtle">
-          Two or more of your activities, sold as one booking. Guests pick a time for each from the times it already has, and share the places with everyone else booked on them.
+          Two or more of your activities, sold as one booking. Guests pick a time slot for each from the ones it already has, and share the spots with everyone else booked on them.
         </p>
       </div>
 
@@ -126,8 +126,8 @@ export function PackagePartsEditor({
               {option ? (
                 <div className="mt-3 flex flex-col gap-3 pl-8">
                   <div>
-                    <p className="text-[0.8125rem] font-medium">Times guests can pick</p>
-                    <p className="text-xs text-subtle">Leave all off to offer every time it has that day.</p>
+                    <p className="text-[0.8125rem] font-medium">Start times guests can pick</p>
+                    <p className="text-xs text-subtle">Leave all off to offer every time slot it has that day.</p>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {option.times.map((time) => {
                         const on = part.times.includes(time)

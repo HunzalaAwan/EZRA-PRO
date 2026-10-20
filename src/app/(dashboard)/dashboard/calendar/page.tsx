@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 export const metadata: Metadata = {
   title: 'Calendar',
   description:
-    'Every departure, seat and crew assignment on one timeline — month, week, day and agenda views.',
+    'Every time slot, spot and team assignment on one calendar, by month, week, day or list.',
 }
 
 /**
@@ -26,7 +26,7 @@ export default async function CalendarPage() {
     <div className="flex flex-col gap-4">
       <PageHeader
         title="Calendar"
-        description="Every departure, seat and crew assignment on one timeline. Switch views with M, W, D or A — and press T to jump back to today."
+        description="Every time slot, spot and team assignment on one calendar. Switch views with M, W, D or A, and press T to jump back to today."
       />
       <CalendarShell
         tenantSlug={tenant.slug}

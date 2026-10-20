@@ -20,7 +20,7 @@ export const dynamic = 'force-dynamic'
 export const metadata: Metadata = {
   title: 'Guests',
   description:
-    'Every guest who has ever booked, segmented by value and recency, with lifetime spend and trip history.',
+    'Every guest who has ever booked, segmented by value and recency, with lifetime spend and booking history.',
 }
 
 /* --------------------------------------------------------------------------
@@ -202,7 +202,7 @@ export default async function CustomersPage() {
     <>
       <PageHeader
         title="Guests"
-        description={`${customers.length.toLocaleString('en-US')} people have booked with ${tenant.name}. ${repeatRate.toFixed(0)}% of them have come back for a second trip.`}
+        description={`${customers.length.toLocaleString('en-US')} people have booked with ${tenant.name}. ${repeatRate.toFixed(0)}% of them have come back for a second booking.`}
         actions={<CustomersPageActions totalCount={customers.length} />}
       />
 

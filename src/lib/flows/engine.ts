@@ -968,7 +968,7 @@ function emptyNote(trigger: FlowTrigger, days: number): string {
     case 'payment_failed':
       return `No payments failed over the last ${days} days.`
     case 'trip_anniversary':
-      return 'Your bookings don’t go back a full year yet, so no trip anniversaries fell in this time.'
+      return 'Your bookings don’t go back a full year yet, so no booking anniversaries fell in this time.'
     default:
       return `Nothing started this over the last ${days} days.`
   }
@@ -1048,7 +1048,7 @@ function eachStep(steps: FlowStep[], fn: (step: FlowStep) => void) {
 }
 
 /** Unfilled details read as their friendly label in journeys, never as a raw {token}. */
-const PLACEHOLDER_LABEL = new Map([...PLACEHOLDERS.map((p) => [p.token.slice(1, -1), p.label] as const), ['seats_left', 'Seats left'] as const])
+const PLACEHOLDER_LABEL = new Map([...PLACEHOLDERS.map((p) => [p.token.slice(1, -1), p.label] as const), ['seats_left', 'Spots left'] as const])
 
 /** Phrases for a branch's outcome when it asks one plain question. */
 const FLOW_PHRASE: Record<string, [string, string]> = {
@@ -1402,8 +1402,8 @@ export function simulate(flow: Flow, world: FlowWorld, opts: SimulateOptions = {
     // Marketing's "don't send just before a trip": only for flows not about a booking (a pre-trip upsell is meant to land then).
     if (isMarketing && !j.entry.booking && marketing.skipUpcoming.enabled && tripSoon(j.guest.id, j.clock, marketing.skipUpcoming.days)) {
       if (past) {
-        record(j, j.clock, 'skipped', () => `Skipped ${label()}: they have a trip in the next ${marketing.skipUpcoming.days} ${marketing.skipUpcoming.days === 1 ? 'day' : 'days'}`, step.id)
-        skipMessage(j, 'Has a trip coming up')
+        record(j, j.clock, 'skipped', () => `Skipped ${label()}: they have a booking in the next ${marketing.skipUpcoming.days} ${marketing.skipUpcoming.days === 1 ? 'day' : 'days'}`, step.id)
+        skipMessage(j, 'Has a booking coming up')
       }
       return
     }
@@ -1881,7 +1881,7 @@ function previewEntry(flow: Flow, world: FlowWorld, guestId: string, pseudo: Map
     const d = b ? world.departureById.get(b.departureId) : undefined
     if (!b || !d) return null
     const booked = trigger.reach === 'booked_guests' || (trigger.type === 'weather_alert' && !trigger.reach)
-    return { at: world.nowMs, guest, booking: booked ? b : undefined, departure: d, text: trigger.type === 'low_fill' ? `Seats are free on ${d.activityName}` : `Weather may affect ${d.activityName}`, key: d.id, preview: true }
+    return { at: world.nowMs, guest, booking: booked ? b : undefined, departure: d, text: trigger.type === 'low_fill' ? `Spots are free on ${d.activityName}` : `Weather may affect ${d.activityName}`, key: d.id, preview: true }
   }
   if (trigger.type === 'manual') return { at: world.nowMs, guest, booking: latest[0], about: latest[0] ? { activityName: latest[0].activityName } : undefined, text: 'Your team started it', key: guestId, preview: true }
   return { at: world.nowMs, guest, about: latest[0] ? { activityName: latest[0].activityName } : undefined, text: 'Started now, as a preview', key: guestId, preview: true }

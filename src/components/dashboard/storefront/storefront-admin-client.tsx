@@ -172,13 +172,13 @@ export function StorefrontAdminClient({
         ? `Reserve a table, order pickup or delivery in ${tenant.city} | ${tenant.branding.logoText}`
         : tenant.vertical === 'hotels'
           ? `Rooms, dining and experiences in ${tenant.city} | ${tenant.branding.logoText}`
-          : `Boat tours, snorkel & dive trips in ${tenant.city} | ${tenant.branding.logoText}`,
+          : `Catamaran sails, snorkelling & diving in ${tenant.city} | ${tenant.branding.logoText}`,
     description:
       tenant.vertical === 'restaurants'
         ? `Book a table or order ahead from ${tenant.name}. Live availability, instant confirmation, pickup and delivery.`
         : tenant.vertical === 'hotels'
           ? `Book direct at ${tenant.name} for the lowest rate, free cancellation on flexible plans and breakfast on the roof.`
-          : 'Small-group catamaran sails, Molokini snorkel trips and two-tank dives out of Maalaea Harbor. Free cancellation up to 24 hours before departure.',
+          : 'Small-group catamaran sails, Molokini snorkelling and two-tank dives out of Maalaea Harbor. Free cancellation up to 24 hours before the start time.',
     socialImage:
       tenant.branding.coverImage ??
       'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=80',
@@ -220,7 +220,7 @@ export function StorefrontAdminClient({
               </div>
               <p className="mt-0.5 text-sm text-muted">
                 {STOREFRONT.activities.length} live{' '}
-                {STOREFRONT.activities.length === 1 ? 'experience' : 'experiences'} ·{' '}
+                {STOREFRONT.activities.length === 1 ? 'activity' : 'activities'} ·{' '}
                 {STOREFRONT.featured.length} featured on the homepage
               </p>
             </div>
@@ -380,7 +380,7 @@ export function StorefrontAdminClient({
                   Layout and sections
                 </CardTitle>
                 <CardDescription>
-                  Choose what the homepage shows and how experiences are laid out. The preview
+                  Choose what the homepage shows and how it is laid out. The preview
                   follows as you go, and so does the live site.
                 </CardDescription>
               </div>
@@ -401,7 +401,7 @@ export function StorefrontAdminClient({
                           {meta.label}
                           {meta.key === 'departures' && tenant.vertical !== 'tours' ? (
                             <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-xs font-medium text-subtle">
-                              Off by default outside tours
+                              Off by default for this business type
                             </span>
                           ) : null}
                         </p>
@@ -424,7 +424,7 @@ export function StorefrontAdminClient({
 
               <div className="grid gap-5 sm:grid-cols-2">
                 <div>
-                  <p className="text-sm font-medium text-foreground">Experiences on phones</p>
+                  <p className="text-sm font-medium text-foreground">Activities on phones</p>
                   <p className="mt-0.5 min-h-8 text-xs text-muted">
                     {MOBILE_LAYOUTS.find((l) => l.value === settings.mobileLayout)?.hint}
                   </p>
@@ -441,7 +441,7 @@ export function StorefrontAdminClient({
                   />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-foreground">Experiences on desktop</p>
+                  <p className="text-sm font-medium text-foreground">Activities on desktop</p>
                   <p className="mt-0.5 min-h-8 text-xs text-muted">
                     {DESKTOP_LAYOUTS.find((l) => l.value === settings.desktopLayout)?.hint}
                   </p>
@@ -564,7 +564,7 @@ export function StorefrontAdminClient({
                       {tenant.branding.logoText.slice(0, 1)}
                     </span>
                     {domain}
-                    <span className="text-faint">› experiences</span>
+                    <span className="text-faint">› book</span>
                   </p>
                   <p className="mt-1 text-base leading-snug text-info hover:underline">
                     {truncate(seo.title, 60)}
@@ -652,7 +652,7 @@ export function StorefrontAdminClient({
               <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs text-subtle">
                   Rendered from live data — {formatNumber(STOREFRONT.activities.length)} bookable
-                  experiences.
+                  activities.
                 </p>
                 <Button variant="ghost" size="xs" rightIcon={<ExternalLink />} asChild>
                   <Link href={PUBLIC_PATH}>Open</Link>
@@ -845,10 +845,10 @@ function StorefrontFrame({
         </div>
       </div>
 
-      {/* Next departures */}
+      {/* Next time slots */}
       {settings.sections.departures ? (
         <div className="border-b border-line px-3.5 py-2.5">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em]" style={{ color: brand.primaryColor }}>Next departures</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em]" style={{ color: brand.primaryColor }}>Next time slots</p>
           <div className="mt-1.5 flex gap-1.5 overflow-hidden">
             {activities.slice(0, compact ? 2 : 3).map((activity, i) => (
               <span key={activity.id} className="flex min-w-0 flex-1 flex-col rounded-lg border border-line bg-surface-raised px-2 py-1.5">
@@ -860,7 +860,7 @@ function StorefrontFrame({
         </div>
       ) : null}
 
-      {/* Experiences */}
+      {/* Activities */}
       <div
         className={cn(
           'grid p-3.5',
@@ -920,13 +920,13 @@ function StorefrontFrame({
         })}
       </div>
       <p className="px-3.5 pb-3 text-center text-xs text-subtle">
-        + {Math.max(activities.length - cards.length, 0)} more experiences
+        + {Math.max(activities.length - cards.length, 0)} more activities
       </p>
 
       {/* The bands below the catalogue */}
       {(
         [
-          ['about', 'About us · Meet the crew'],
+          ['about', 'About us · Meet the team'],
           ['reviews', `Guest reviews · ${rating.toFixed(2)} out of 5`],
           ['contact', `Contact · ${tenant.contact.phone}`],
         ] as const

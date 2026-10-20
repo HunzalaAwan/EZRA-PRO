@@ -231,7 +231,7 @@ function SettingsFields({ flow, onFlow, onDelete }: PanelProps) {
             { value: 'marketing', label: 'Subscribers only' },
           ]}
         />
-        <p className="text-xs text-subtle">{flow.purpose === 'marketing' ? 'Offers and news: only guests who agreed to marketing.' : 'Trip details: every guest it applies to.'}</p>
+        <p className="text-xs text-subtle">{flow.purpose === 'marketing' ? 'Offers and news: only guests who agreed to marketing.' : 'Booking details: every guest it applies to.'}</p>
       </Row>
       <SwitchRow label="Stop when they book again" checked={flow.exit.onBooked} onChange={(onBooked) => onFlow({ ...flow, exit: { ...flow.exit, onBooked } })} />
       <SwitchRow label="Stop if the booking is cancelled" checked={flow.exit.onCancelled} onChange={(onCancelled) => onFlow({ ...flow, exit: { ...flow.exit, onCancelled } })} />
@@ -445,7 +445,7 @@ function ConditionFields({ step, flow, activities, tags, onStep }: PanelProps & 
 const ASSIGNEES: { value: NonNullable<ActionStep['assignee']>; label: string }[] = [
   { value: 'owner', label: 'Owner' },
   { value: 'managers', label: 'Managers' },
-  { value: 'guides', label: 'Guides and crew' },
+  { value: 'guides', label: 'Guides' },
   { value: 'everyone', label: 'Everyone' },
 ]
 

@@ -65,7 +65,7 @@ const profileSchema = z.object({
   addressLine: z.string().trim().min(6, 'A full street address keeps receipts tax-compliant.'),
   city: z.string().trim().min(2, 'Which city do you operate out of?'),
   country: z.string().trim().min(2, 'Required for tax and payout routing.'),
-  timezone: z.string().min(1, 'Departure times are stored in this timezone.'),
+  timezone: z.string().min(1, 'Start times are stored in this timezone.'),
   currency: z.string().min(1, 'Pick the currency you are paid in.'),
   locale: z.string().min(1, 'Sets the date, number and address format guests see.'),
 })
@@ -308,8 +308,8 @@ export function GeneralSettingsClient({ tenant: CURRENT_TENANT, now: NOW }: Gene
               Contact & location
             </CardTitle>
             <CardDescription>
-              Where guests, OTAs and our support team reach you — and where your departures
-              physically leave from.
+              Where guests, OTAs and our support team reach you — and where your activities
+              physically start from.
             </CardDescription>
           </CardHeader>
 
@@ -411,7 +411,7 @@ export function GeneralSettingsClient({ tenant: CURRENT_TENANT, now: NOW }: Gene
               Regional settings
             </CardTitle>
             <CardDescription>
-              Departure times are stored in your operating timezone; prices are charged and paid
+              Start times are stored in your operating timezone; prices are charged and paid
               out in your settlement currency.
             </CardDescription>
           </CardHeader>
@@ -572,7 +572,7 @@ const DANGER_COPY: Record<
   pause: {
     title: 'Pause this workspace',
     description:
-      'Your storefront stops accepting new bookings immediately. Existing bookings, manifests and payouts continue exactly as scheduled, and you can resume in one click.',
+      'Your storefront stops accepting new bookings immediately. Existing bookings, guest lists and payouts continue exactly as scheduled, and you can resume in one click.',
     confirmLabel: 'Pause workspace',
     phrase: 'PAUSE',
     toast: 'Workspace paused',
@@ -581,7 +581,7 @@ const DANGER_COPY: Record<
   delete: {
     title: 'Delete this workspace',
     description:
-      'This permanently removes every activity, departure, booking, guest record and payout history. Deletion cannot be undone and support cannot recover the data.',
+      'This permanently removes every activity, time slot, booking, guest record and payout history. Deletion cannot be undone and support cannot recover the data.',
     confirmLabel: 'Delete workspace forever',
     phrase: 'DELETE BLUE HORIZON',
     toast: 'Deletion scheduled',
@@ -638,7 +638,7 @@ function DangerZone() {
             <DangerRow
               icon={<PauseCircle className="size-4" />}
               title="Pause bookings"
-              body="Take the storefront offline without losing anything. Scheduled departures still run."
+              body="Take the storefront offline without losing anything. Booked time slots still go ahead."
               action={
                 <Button variant="outline" size="sm" onClick={() => open('pause')}>
                   Pause workspace

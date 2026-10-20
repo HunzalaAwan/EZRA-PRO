@@ -150,7 +150,7 @@ export function CheckInScanner({ tickets, currency, todayKey }: { tickets: Ticke
         {missing ? (
           <div role="alert" className="rounded-2xl border border-danger/40 bg-danger-soft/40 px-5 py-4 text-sm">
             <p className="font-semibold text-danger">No ticket {missing} for today or tomorrow.</p>
-            <p className="mt-1 text-muted">Check the code, or find the guest on the manifest.</p>
+            <p className="mt-1 text-muted">Check the code, or find the guest on the guest list.</p>
           </div>
         ) : null}
 

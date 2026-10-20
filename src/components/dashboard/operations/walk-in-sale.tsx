@@ -328,7 +328,7 @@ function WalkInTill({
   }
 
   if (activities.length === 0) {
-    return <EmptyState icon={Banknote} title="Nothing left to sell today" description="Every departure today and tomorrow is full or has gone." />
+    return <EmptyState icon={Banknote} title="Nothing left to sell today" description="Every time slot today and tomorrow is full or has passed." />
   }
 
   if (receipt) {
@@ -436,7 +436,7 @@ function WalkInTill({
                 <UserRound className="size-4 text-faint" aria-hidden="true" />
                 Guest details
               </p>
-              <p className="text-xs text-subtle">Goes on the ticket, the manifest and the guest list.</p>
+              <p className="text-xs text-subtle">Goes on the ticket and the guest list.</p>
             </div>
 
             {match && !alreadyFilled ? (
@@ -593,7 +593,7 @@ function WalkInTill({
           </Button>
           {touched && !canPay ? (
             <p className="mt-2 text-xs font-medium text-danger">
-              {shortTier ? `Every booking needs at least ${shortTier.min} ${shortTier.label}.` : nameMissing ? 'Add the lead guest name first.' : emailBad ? 'Fix the email, or leave it empty.' : overSeats ? 'Too many for the places left.' : method === 'cash' && change < 0 ? 'Not enough cash handed over.' : 'Pick a time and at least one guest.'}
+              {shortTier ? `Every booking needs at least ${shortTier.min} ${shortTier.label}.` : nameMissing ? 'Add the lead guest name first.' : emailBad ? 'Fix the email, or leave it empty.' : overSeats ? 'Too many for the spots left.' : method === 'cash' && change < 0 ? 'Not enough cash handed over.' : 'Pick a time and at least one guest.'}
             </p>
           ) : null}
         </div>

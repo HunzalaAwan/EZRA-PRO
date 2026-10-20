@@ -106,15 +106,15 @@ export function ResourceSheet({
 
               {/* ---------- figures ---------- */}
               <dl className="grid grid-cols-3 gap-2 rounded-xl bg-well px-4 py-3">
-                <Figure label="Per unit" value={formatNumber(resource.capacity)} hint={pluralize(resource.capacity, 'seat')} />
+                <Figure label="Per unit" value={formatNumber(resource.capacity)} hint={pluralize(resource.capacity, 'spot')} />
                 <Figure label="Units" value={formatNumber(resource.quantity)} hint="in the fleet" />
-                <Figure label="At once" value={formatNumber(resource.capacity * resource.quantity)} hint="seats" />
+                <Figure label="At once" value={formatNumber(resource.capacity * resource.quantity)} hint="spots" />
               </dl>
 
               {/* ---------- status ---------- */}
               <section>
                 <h4 className="text-[0.8125rem] font-semibold text-foreground">Status</h4>
-                <p className="mt-0.5 text-xs text-subtle">Anything not in service is held back from new departures.</p>
+                <p className="mt-0.5 text-xs text-subtle">Anything not in service is held back from new time slots.</p>
                 <Segmented
                   size="sm"
                   fullWidth
@@ -134,7 +134,7 @@ export function ResourceSheet({
                     Next 14 days
                   </h4>
                   <span className="text-xs text-muted tabular-nums">
-                    {upcoming} {pluralize(upcoming, 'departure')}
+                    {upcoming} {pluralize(upcoming, 'time slot')}
                   </span>
                 </div>
                 <Progress value={utilisation} size="sm" className="mt-2" tone={resource.status === 'maintenance' ? 'warning' : utilisation >= 80 ? 'accent' : 'primary'} />

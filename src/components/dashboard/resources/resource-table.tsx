@@ -260,7 +260,7 @@ export function ResourceTable({
           <span className="text-[0.8125rem] font-semibold text-foreground">{meta.plural}</span>
           <span className="text-xs text-subtle tabular-nums">
             {groupRows.length} {pluralize(groupRows.length, 'resource')} · {formatNumber(units)} {pluralize(units, 'unit')} ·{' '}
-            {formatNumber(seats)} seats at once
+            {formatNumber(seats)} spots at once
             {down > 0 ? <span className="text-warning"> · {down} out of service</span> : null}
           </span>
           <Button variant="ghost" size="xs" leftIcon={<Plus />} className="ml-auto" onClick={() => onAdd(kind)}>
@@ -299,7 +299,7 @@ export function ResourceTable({
         width: '6rem',
         cell: (r) => (
           <span className="text-sm text-foreground">
-            {formatNumber(r.capacity)} <span className="text-faint">{pluralize(r.capacity, 'seat')}</span>
+            {formatNumber(r.capacity)} <span className="text-faint">{pluralize(r.capacity, 'spot')}</span>
           </span>
         ),
         cellClassName: 'px-3',

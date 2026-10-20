@@ -209,7 +209,7 @@ export function BillingSettingsClient({
             />
             <UsageMeter
               icon={<Users className="size-4" />}
-              label="Team seats"
+              label="Team members"
               used={SEATS_USED}
               limit={LIMITS.seats}
             />
@@ -253,7 +253,7 @@ export function BillingSettingsClient({
           <CardTitle>Compare plans</CardTitle>
           <CardDescription>
             Every plan includes unlimited activities, next-day payouts and the full mobile
-            manifest. Commission is what changes.
+            guest list. Commission is what changes.
           </CardDescription>
           <CardToolbar>
             <Segmented

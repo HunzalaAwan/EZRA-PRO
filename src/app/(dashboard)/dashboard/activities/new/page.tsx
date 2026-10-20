@@ -12,7 +12,7 @@ import { packageOptionsFor } from '@/components/dashboard/activities/activity-da
 
 export const metadata: Metadata = {
   title: 'New activity',
-  description: 'Create a bookable experience — pricing, media, schedule and storefront copy.',
+  description: 'Create a bookable activity — pricing, media, schedule and storefront copy.',
 }
 
 export default async function NewActivityPage() {
@@ -28,10 +28,10 @@ export default async function NewActivityPage() {
           { label: 'New activity' },
         ]}
         title="New activity"
-        description={`Seven steps to a bookable listing on the ${tenant.name} storefront. Your progress is kept if you step away.`}
+        description={`Seven steps to a bookable activity on the ${tenant.name} storefront. Your progress is kept if you step away.`}
         actions={
           <Button variant="ghost" asChild>
-            <Link href="/dashboard/activities">Back to catalog</Link>
+            <Link href="/dashboard/activities">Back to activities</Link>
           </Button>
         }
       />

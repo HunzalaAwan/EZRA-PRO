@@ -5,7 +5,7 @@
  * paginated roster beneath, and a card list that takes over below `md` so the
  * table never side-scrolls on a phone.
  *
- * Built like the reservations list: one line per guest, numbers right-aligned
+ * Built like the bookings list: one line per guest, numbers right-aligned
  * in tabular figures, colour reserved for the segment chip. When the roster is
  * ordered by last booking it is cut into recency bands, so "who has gone
  * quiet" is a heading rather than a calculation.
@@ -309,7 +309,7 @@ export function CustomersTable({
         },
         {
           id: 'bookings',
-          header: 'Trips',
+          header: 'Bookings',
           sortable: true,
           align: 'right',
           numeric: true,
@@ -607,7 +607,7 @@ export function CustomersPageActions({ totalCount }: { totalCount: number }) {
         leftIcon={<UserRoundPlus className="size-4" />}
         onClick={() => toast.success('New guest form opened')}
       >
-        New customer
+        New guest
       </Button>
     </>
   )

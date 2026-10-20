@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'Weather & conditions',
-  description: 'Hold, cancel or move the week’s departures together when the weather turns, with one message to every guest.',
+  description: 'Hold, cancel or move the week’s time slots together when the weather turns, with one message to every guest.',
 }
 
 export default async function WeatherPage() {
@@ -20,7 +20,7 @@ export default async function WeatherPage() {
       <PageHeader
         className="mb-0"
         title="Weather & conditions"
-        description="The week’s departures with guests and their forecast. Select the runs at risk and hold, move or cancel them together."
+        description="The week’s time slots with guests and their forecast. Select the ones at risk and hold, move or cancel them together."
       />
       <WeatherBoard runs={board.runs} days={board.days} business={tenant.name} currency={tenant.currency} />
     </div>

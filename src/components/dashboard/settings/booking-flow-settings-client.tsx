@@ -102,8 +102,8 @@ export function BookingFlowSettingsClient({ tenant }: BookingFlowSettingsClientP
             badge={tenant.features.waitlists ? undefined : <Badge variant="warning" size="sm">Growth plan</Badge>}
           />
           <ToggleRow
-            title="Offer freed places to the waitlist"
-            body="When someone cancels or moves, the next guest on the list gets 30 minutes to take the place."
+            title="Offer freed spots to the waitlist"
+            body="When someone cancels or moves, the next guest on the list gets 30 minutes to take the spot."
             checked={rules.waitlistAutoPromote}
             disabled={!rules.waitlistsEnabled}
             onCheckedChange={(value) => set('waitlistAutoPromote', value)}

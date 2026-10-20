@@ -27,7 +27,7 @@ import type { CurrencyCode } from '@/types'
 
 /* ==========================================================================
    WEATHER & CONDITIONS
-   The week's departures with guests and their forecast. Select the runs
+   The week's time slots with guests and their forecast. Select the ones
    the weather puts at risk and hold, cancel or move them in one go, with
    the guest message and the offer (rebook, credit or refund) decided once.
    ========================================================================== */
@@ -45,10 +45,10 @@ const OFFER_LABEL: Record<Offer, string> = {
 
 function messageFor(action: Action, offer: Offer, business: string, moveTo?: string) {
   if (action === 'hold') {
-    return `Hi {first_name}, a heads-up from ${business}: the forecast for your {activity} on {date} at {time} is uncertain. We are holding the trip and will confirm by two hours before. Nothing to do for now.`
+    return `Hi {first_name}, a heads-up from ${business}: the forecast for your {activity} on {date} at {time} is uncertain. We are holding your booking and will confirm by two hours before. Nothing to do for now.`
   }
   if (action === 'move') {
-    return `Hi {first_name}, conditions for your {activity} on {date} are not safe, so we have moved you to ${moveTo ?? 'the next good day'}. Same seats, same price. Reply if the new time does not work and we will find another.`
+    return `Hi {first_name}, conditions for your {activity} on {date} are not safe, so we have moved you to ${moveTo ?? 'the next good day'}. Same spots, same price. Reply if the new time does not work and we will find another.`
   }
   const offerLine = offer === 'refund' ? 'A full refund is on its way to your card.' : offer === 'credit' ? 'You have a credit for 110% of your booking, valid for a year.' : 'Pick any other date from the link below at no cost.'
   return `Hi {first_name}, we are sorry: your {activity} on {date} at {time} is cancelled because of the weather. ${offerLine}`
@@ -99,7 +99,7 @@ export function WeatherBoard({ runs: initial, days, business, currency }: { runs
     const via = [channels.email && 'email', channels.sms && 'text'].filter(Boolean).join(' and ')
     const refund = chosen.reduce((sum, run) => sum + run.revenue, 0)
     toast.success(
-      `${chosen.length} ${pluralize(chosen.length, 'departure')} ${action === 'hold' ? 'on weather hold' : action === 'cancel' ? 'cancelled' : 'moved'}`,
+      `${chosen.length} ${pluralize(chosen.length, 'time slot')} ${action === 'hold' ? 'on weather hold' : action === 'cancel' ? 'cancelled' : 'moved'}`,
       {
         description: `${guests} ${pluralize(guests, 'guest')} messaged by ${via || 'no channel'}${action === 'cancel' && offer === 'refund' ? ` · ${formatCurrency(refund, currency)} in refunds queued` : action === 'cancel' ? ` · ${OFFER_LABEL[offer].toLowerCase()}` : ''}.`,
       },
@@ -109,7 +109,7 @@ export function WeatherBoard({ runs: initial, days, business, currency }: { runs
   }
 
   if (runs.length === 0) {
-    return <EmptyState icon={Cloud} title="Nothing on the water this week" description="Departures with guests show here with their forecast." />
+    return <EmptyState icon={Cloud} title="Nothing booked this week" description="Time slots with guests show here with their forecast." />
   }
 
   return (
@@ -132,7 +132,7 @@ export function WeatherBoard({ runs: initial, days, business, currency }: { runs
       </div>
 
       {visible.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-line px-4 py-8 text-center text-sm text-subtle">No departures with guests on this day.</p>
+        <p className="rounded-xl border border-dashed border-line px-4 py-8 text-center text-sm text-subtle">No time slots with guests on this day.</p>
       ) : (
         <ul className="flex list-none flex-col gap-2 p-0">
           {visible.map((run) => {
@@ -179,7 +179,7 @@ export function WeatherBoard({ runs: initial, days, business, currency }: { runs
       {selected.length > 0 ? (
         <div className="sticky bottom-4 z-20 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface-raised px-4 py-3 shadow-xl">
           <p className="text-sm font-medium">
-            {chosen.length} {pluralize(chosen.length, 'departure')} · {guests} {pluralize(guests, 'guest')}
+            {chosen.length} {pluralize(chosen.length, 'time slot')} · {guests} {pluralize(guests, 'guest')}
           </p>
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" size="sm" leftIcon={<PauseCircle />} onClick={() => open('hold')}>Hold</Button>
@@ -196,7 +196,7 @@ export function WeatherBoard({ runs: initial, days, business, currency }: { runs
               {action === 'hold' ? 'Put on weather hold' : action === 'move' ? 'Move to another time' : 'Cancel for weather'}
             </DialogTitle>
             <DialogDescription>
-              {chosen.length} {pluralize(chosen.length, 'departure')} · {guests} {pluralize(guests, 'guest')} get the message below.
+              {chosen.length} {pluralize(chosen.length, 'time slot')} · {guests} {pluralize(guests, 'guest')} get the message below.
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="flex flex-col gap-4 py-4">

@@ -602,7 +602,7 @@ function PhoneSection({ tenant, settings, save }: { tenant: Tenant } & Pick<Retu
             <label className="flex items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-3">
               <span>
                 <span className="block text-sm font-medium">Text back missed calls</span>
-                <span className="block text-xs text-subtle">&ldquo;Sorry we missed you, we are out on a trip. Book or ask here: {storefrontHost(settings, tenant.slug)}&rdquo;</span>
+                <span className="block text-xs text-subtle">&ldquo;Sorry we missed you, we are busy with guests. Book or ask here: {storefrontHost(settings, tenant.slug)}&rdquo;</span>
               </span>
               <Switch checked={phone.missedCallText} onCheckedChange={(missedCallText) => setPhone({ missedCallText })} aria-label="Text back missed calls" />
             </label>

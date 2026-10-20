@@ -224,7 +224,7 @@ function ManageBookingInner({ tenant, booking, guest, activity, departure, waive
 
   const todo = [
     waiver && unsigned > 0 ? { key: 'waiver' as const, icon: FileSignature, title: `Sign the waiver`, detail: `${unsigned} of ${booking.participants.length} ${pluralize(booking.participants.length, 'guest')} still to sign` } : null,
-    missingDetails > 0 ? { key: 'details' as const, icon: ClipboardList, title: 'Add guest details', detail: `${missingDetails} ${pluralize(missingDetails, 'answer')} the crew needs` } : null,
+    missingDetails > 0 ? { key: 'details' as const, icon: ClipboardList, title: 'Add guest details', detail: `${missingDetails} ${pluralize(missingDetails, 'answer')} our team needs` } : null,
     balance > 0 ? { key: 'balance' as const, icon: CreditCard, title: `Pay the balance of ${formatCurrency(balance, currency)}`, detail: 'Due before the day' } : null,
   ].filter((item): item is NonNullable<typeof item> => Boolean(item))
 
@@ -234,7 +234,7 @@ function ManageBookingInner({ tenant, booking, guest, activity, departure, waive
     <div className="mx-auto w-full max-w-3xl px-4 pb-24 pt-28 sm:px-6">
       <p className="text-xs font-semibold tracking-[0.12em] text-faint uppercase">Your booking with {tenant.name}</p>
       <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight">{activity.name}</h1>
-      <p className="mt-1 text-muted">Hi {guest.firstName}, everything about your trip is here.</p>
+      <p className="mt-1 text-muted">Hi {guest.firstName}, everything about your booking is here.</p>
 
       <div className="mt-6 overflow-hidden rounded-2xl border border-line bg-surface">
         {activity.image ? (
@@ -359,7 +359,7 @@ function ManageBookingInner({ tenant, booking, guest, activity, departure, waive
                 if (Object.keys(found).length > 0) return
                 update({ detailsDone: true })
                 setOpen(null)
-                toast.success('Details saved', { description: 'The crew has what it needs.' })
+                toast.success('Details saved', { description: 'Our team has what it needs.' })
               }}
             >
               Save details
@@ -464,7 +464,7 @@ function ManageBookingInner({ tenant, booking, guest, activity, departure, waive
                 <IconButton aria-label="Fewer guests" size="sm" variant="outline" disabled={adding <= 1} onClick={() => setAdding((n) => n - 1)}><Minus aria-hidden="true" /></IconButton>
                 <span className="w-6 text-center text-base font-semibold tabular-nums">{adding}</span>
                 <IconButton aria-label="More guests" size="sm" variant="outline" disabled={adding >= seatsLeftNow} onClick={() => setAdding((n) => n + 1)}><Plus aria-hidden="true" /></IconButton>
-                <span className="text-sm text-muted">more at {formatCurrency(activity.pricePerGuest, currency)} each · {seatsLeftNow} seats left</span>
+                <span className="text-sm text-muted">more at {formatCurrency(activity.pricePerGuest, currency)} each · {seatsLeftNow} {pluralize(seatsLeftNow, 'spot')} left</span>
               </div>
               <Button
                 onClick={() => {
@@ -504,7 +504,7 @@ function ManageBookingInner({ tenant, booking, guest, activity, departure, waive
       <section className={cn(section, 'mt-6')}>
         <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <MessageCircle className="size-4 text-primary" aria-hidden="true" />
-          Message the crew
+          Message the team
         </h2>
         {conversation && conversation.messages.length > 0 ? (
           <div className="mt-3 flex flex-col gap-2.5">
@@ -518,7 +518,7 @@ function ManageBookingInner({ tenant, booking, guest, activity, departure, waive
             ))}
           </div>
         ) : (
-          <p className="mt-1 text-xs text-subtle">Questions about the day, the pickup or your group? The crew usually replies within the hour.</p>
+          <p className="mt-1 text-xs text-subtle">Questions about the day, the pickup or your group? Our team usually replies within the hour.</p>
         )}
         <form
           className="mt-3 flex items-end gap-2"
@@ -527,10 +527,10 @@ function ManageBookingInner({ tenant, booking, guest, activity, departure, waive
             if (!message.trim()) return
             sendGuestMessage(tenant.slug, threadMeta, message.trim())
             setMessage('')
-            toast.success('Message sent', { description: 'The crew will reply here and by email.' })
+            toast.success('Message sent', { description: 'Our team will reply here and by email.' })
           }}
         >
-          <Textarea rows={2} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Type your message" aria-label="Message the crew" className="flex-1" />
+          <Textarea rows={2} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Type your message" aria-label="Message the team" className="flex-1" />
           <Button type="submit" leftIcon={<Send />} disabled={!message.trim()}>Send</Button>
         </form>
       </section>

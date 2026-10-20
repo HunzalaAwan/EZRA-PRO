@@ -37,7 +37,7 @@ export default async function PaymentsPage() {
     <>
       <PageHeader
         title="Payments"
-        description={`${settled.length.toLocaleString('en-US')} charges have settled against trips that ran. Your next payout lands ${formatDateLong(balance.nextPayoutAt)}.`}
+        description={`${settled.length.toLocaleString('en-US')} charges have settled against bookings that have taken place. Your next payout lands ${formatDateLong(balance.nextPayoutAt)}.`}
         actions={<PaymentsPageActions />}
       />
 

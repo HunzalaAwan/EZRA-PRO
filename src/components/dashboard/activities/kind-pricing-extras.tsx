@@ -21,14 +21,14 @@ import type { ActivityKind, CurrencyCode, PrivateOption } from '@/types'
 
 export const KIND_PRICING: Record<ActivityKind, { title: string; text: (sessions: number) => string }> = {
   trip: { title: 'Ticket prices', text: () => 'One price per person, by type: adults, children, seniors, a family ticket. The first sets the “from” price.' },
-  activity: { title: 'Prices per rider', text: () => 'Per rider, or per ride for two or three together. A tandem ticket takes two places in the slot.' },
-  charter: { title: 'Charter options', text: () => 'One price for the whole group, per option: a half day, a full day, a sunset run. How long each runs is set on Basics.' },
+  activity: { title: 'Prices per rider', text: () => 'Per rider, or per ride for two or three together. A tandem ticket takes two spots in the time slot.' },
+  charter: { title: 'Charter options', text: () => 'One price for the whole group, per option: a half day, a full day, a sunset cruise. How long each one lasts is set on Basics.' },
   rental: { title: 'Items and prices', text: () => 'Set on each item.' },
   lesson: {
     title: 'Prices per student',
-    text: (sessions) => (sessions > 1 ? `One price for the whole course: all ${sessions} sessions. Students book once.` : 'One price per student, per lesson.'),
+    text: (sessions) => (sessions > 1 ? `One price for the whole ${sessions}-day course. Students book once.` : 'One price per student, per lesson.'),
   },
-  pass: { title: 'Ticket types', text: () => 'Entry for the day, per ticket. A family ticket can cover four places at one price.' },
+  pass: { title: 'Ticket types', text: () => 'Entry for the day, per ticket. A family ticket can cover four spots at one price.' },
   package: { title: 'Package prices', text: () => 'One price per person for every part together. Show the saving against booking them apart.' },
 }
 

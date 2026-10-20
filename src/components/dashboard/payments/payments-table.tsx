@@ -55,7 +55,7 @@ export interface PaymentRow {
   id: string
   /** When the card was charged. */
   createdAt: string
-  /** When the funds settled — the day the trip ran. */
+  /** When the funds settled — the day the activity ran. */
   settledAt: string
   bookingId: string
   reference: string
@@ -429,7 +429,7 @@ export function PaymentsTable({
               <SearchInput
                 value={query}
                 onValueChange={setQuery}
-                placeholder="Reference, guest, card or trip…"
+                placeholder="Reference, guest, card or activity…"
                 size="sm"
                 aria-label="Search transactions"
                 fieldClassName="w-full sm:w-72"
@@ -586,7 +586,7 @@ export function PaymentsTable({
               size="sm"
             />
             <p className="text-xs text-faint">
-              Card volume settles against delivery, so a charge clears on the day its trip runs.
+              Card volume settles against delivery, so a charge clears on the day its activity takes place.
               Showing the {formatNumber(payments.length)} most recently settled of{' '}
               {formatNumber(totalPayments)} charges.
             </p>

@@ -80,7 +80,7 @@ export function RecentBookings({ rows, nowIso, channelLabels, className }: Recen
           <CardDescription>
             {rows.length === 0
               ? 'Nothing has come in yet.'
-              : `The last ${formatNumber(rows.length)} reservations across every channel.`}
+              : `The last ${formatNumber(rows.length)} bookings across every channel.`}
           </CardDescription>
         </div>
         <CardToolbar>
@@ -121,7 +121,7 @@ export function RecentBookings({ rows, nowIso, channelLabels, className }: Recen
             variant="no-data"
             icon={Inbox}
             title="No bookings yet"
-            description="New reservations land here the moment they are taken — on the widget, over the phone or at the desk."
+            description="New bookings land here the moment they are taken — on the widget, over the phone or at the desk."
             action={
               <Button asChild size="sm">
                 <Link href="/dashboard/bookings?new=1">Take a booking</Link>
