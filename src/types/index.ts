@@ -197,6 +197,111 @@ export interface PriceTier {
   countsTowardCapacity: boolean
   /** Places one ticket takes: 2 for a tandem or a couple, 4 for a family ticket. Absent: 1. */
   seats?: number
+  /** Optional age range shown with the name: "Child · 4–12". */
+  ageMin?: number
+  ageMax?: number
+}
+
+/* ---------- pricing: how an activity charges and how its prices change ---------- */
+
+/** How the price is counted. Absent: worked out from the kind (per person, a charter per group, a rental per item). */
+export type ChargeBy = 'person' | 'group' | 'item' | 'duration'
+
+/** Per group: one price for the group up to a number of guests, then a price per extra guest. */
+export interface GroupPrice {
+  /** Minor units, for up to `includedGuests`. */
+  price: number
+  includedGuests: number
+  /** Minor units per guest over `includedGuests`. 0: the group can't grow past it. */
+  extraGuest: number
+  /** The most guests one booking can have. 0: the activity's spots. */
+  maxGuests: number
+}
+
+/** "From 6 guests, 10% off": the best rung the booking reaches applies to its tickets. */
+export interface GroupDiscount {
+  fromGuests: number
+  percentOff: number
+}
+
+export type PriceChangeKind = 'season' | 'weekdays' | 'time_of_day' | 'dates' | 'early_bird' | 'last_minute' | 'filling_up' | 'slow_time'
+
+/** One of the activity's own price changes, read as a sentence in the editor. */
+export interface PriceChange {
+  id: string
+  /** Optional name: "Summer", "Christmas week". */
+  name?: string
+  kind: PriceChangeKind
+  /** season: day keys (YYYY-MM-DD), inclusive. */
+  from?: string
+  to?: string
+  /** weekdays: 0=Sun … 6=Sat. */
+  weekdays?: number[]
+  /** time_of_day: the start times it applies to (HH:MM). */
+  times?: string[]
+  /** dates: day keys. */
+  dates?: string[]
+  /** early_bird: booked at least this many days ahead. */
+  daysAhead?: number
+  /** last_minute / slow_time: within this many hours of the start. */
+  hoursBefore?: number
+  /** filling_up: at least this % booked. slow_time: under this % booked. */
+  soldPercent?: number
+  /** percent: +/- (−10 = 10% off). amount: +/- minor units per ticket. set: this price (minor units). */
+  effect: { type: 'percent' | 'amount' | 'set'; value: number }
+  /** Only these price tiers. Empty or absent: all of them. */
+  tierIds?: string[]
+  active: boolean
+}
+
+/* ---------- scheduling: seasons, changes and the booking window ---------- */
+
+/** Weekday keys for schedules: '0' = Sunday … '6' = Saturday. */
+export type WeekdayKey = '0' | '1' | '2' | '3' | '4' | '5' | '6'
+
+/** One season (or the whole year) of an activity's schedule. Later seasons win where they overlap. */
+export interface ActivitySchedule {
+  id: string
+  /** "All year", "Summer", "Winter". */
+  name: string
+  /** Day key it starts on. null: from today. */
+  from: string | null
+  /** Day key it ends on (inclusive). null: no end date. */
+  to: string | null
+  /** times: set start times. hours: opening hours, a start time every `every` minutes. */
+  mode: 'times' | 'hours'
+  /** times: the start times on each weekday (HH:MM). An empty list: closed that day. */
+  days: Record<WeekdayKey, string[]>
+  /** hours: open and close on each weekday. null: closed that day. */
+  hours?: Record<WeekdayKey, { open: string; close: string } | null>
+  /** hours: minutes between start times. */
+  every?: number
+  /** Spots per time slot in this season. Absent: the activity's own number. */
+  capacity?: number
+  /** For activities that run from more than one location. Absent: every location / the only one. */
+  locationId?: string
+}
+
+/** A change to the schedule on given days: closed, different times, an extra time, or different spots. */
+export interface ScheduleChange {
+  id: string
+  /** Day keys (YYYY-MM-DD) it applies to. */
+  dates: string[]
+  /** closed: no time slots. times: these times instead. add: these times as well. spots: this many spots. */
+  action: 'closed' | 'times' | 'add' | 'spots'
+  /** times / add: start times. closed with times: only those times close (absent: the whole day). */
+  times?: string[]
+  spots?: number
+  /** "Public holiday", "Boat maintenance". */
+  reason?: string
+  locationId?: string
+}
+
+/** A business-wide closed day (Settings / Availability). */
+export interface BusinessClosure {
+  id: string
+  dates: string[]
+  reason: string
 }
 
 /** Book a whole time for one group: a private tour, a private lesson. */
@@ -704,6 +809,24 @@ export interface Activity {
   priceCap?: number
   /** Bookings close this many hours before the start. 0 or absent: book until it starts. */
   noticeHours?: number
+  /** How the price is counted. Absent: from the kind. */
+  chargeBy?: ChargeBy
+  /** chargeBy 'group': the group price. */
+  groupPrice?: GroupPrice
+  /** Group-size discounts on per-person tickets. */
+  groupDiscounts?: GroupDiscount[]
+  /** A booking pays at least this for its tickets, minor units. */
+  minimumCharge?: number
+  /** The activity's own price changes: seasons, weekends, times of day, dates, book early, last minute, filling up, quiet times. */
+  priceChanges?: PriceChange[]
+  /** Seasons of the schedule. Absent: one all-year schedule worked out from `locations`. */
+  schedules?: ActivitySchedule[]
+  /** Closed days, different times, extra times and spot changes on given days. */
+  scheduleChanges?: ScheduleChange[]
+  /** How far ahead guests can book. Absent: the business default (Settings → Booking flow). */
+  bookingWindow?: { monthsAhead: number }
+  /** Runs even on the business's closed days and public holidays. */
+  runsOnClosures?: boolean
   /** How guests book. Absent: instant booking. */
   booking?: Partial<BookingSettings>
   /** Checkout offers a tip for the crew: 5–25% or an amount of the guest's own. */
