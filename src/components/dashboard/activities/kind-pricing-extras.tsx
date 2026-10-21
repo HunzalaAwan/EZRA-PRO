@@ -9,24 +9,19 @@ import type { ActivityKind, CurrencyCode, PrivateOption } from '@/types'
 import { MoneyInput } from './pricing-tier-editor'
 
 /* ==========================================================================
-   Pricing by kind — what each kind of product needs beyond its price
-   list. Trips, activities and lessons can be booked privately for one
-   group price. Charters price per group and can charge for guests over a
-   number. Date, day and demand changes live in the Pricing step's own
-   Price changes list.
+   Pricing by kind — the title and one line over each kind's prices, and
+   private booking: shared activities and lessons can be booked by one group
+   for one price. A private activity is one price for the whole group.
    ========================================================================== */
 
 export const KIND_PRICING: Record<ActivityKind, { title: string; text: (sessions: number) => string }> = {
-  trip: { title: 'Ticket prices', text: () => 'The first paid price is the “from” price.' },
-  activity: { title: 'Ticket prices', text: () => 'The first paid price is the “from” price.' },
-  charter: { title: 'Charter options', text: () => 'One price for the whole group, per option.' },
+  trip: { title: 'Prices', text: () => 'Per person. The first paid price is the “from” price.' },
+  activity: { title: 'Prices', text: () => 'Per person. The first paid price is the “from” price.' },
+  charter: { title: 'Prices', text: () => 'One price for the whole group.' },
   rental: { title: 'Items and prices', text: () => 'Set on each item.' },
-  lesson: {
-    title: 'Prices per student',
-    text: (sessions) => (sessions > 1 ? `One price for the whole ${sessions}-day course.` : 'One price per student, per lesson.'),
-  },
-  pass: { title: 'Ticket types', text: () => 'Entry for the day, per ticket.' },
-  package: { title: 'Package prices', text: () => 'One price per person for every part together.' },
+  lesson: { title: 'Prices', text: (sessions) => (sessions > 1 ? `Per person, for the whole ${sessions}-day course.` : 'Per person, per lesson.') },
+  pass: { title: 'Prices', text: () => 'Per ticket, for the day.' },
+  package: { title: 'Prices', text: () => 'Per person, for every part together.' },
 }
 
 /** Kinds that can be booked privately for one group price. */
@@ -83,73 +78,5 @@ export function PrivateBookingFields({
         </div>
       ) : null}
     </section>
-  )
-}
-
-/** Charters: the price covers a number of guests; each one over pays a set amount. */
-export function CharterGroupFields({
-  currency,
-  maxGuests,
-  included,
-  extra,
-  onChange,
-}: {
-  currency: CurrencyCode
-  /** The most guests the charter carries. */
-  maxGuests: number
-  included: number
-  extra: number
-  onChange: (included: number, extra: number) => void
-}) {
-  return (
-    <section className="flex flex-col gap-3 rounded-xl border border-line px-3.5 py-3">
-      <div>
-        <span className="block text-sm font-medium">Bigger groups</span>
-        <span className="block text-xs text-subtle">Up to {maxGuests} guests per time slot.</span>
-      </div>
-      <div className="grid grid-cols-2 gap-3 sm:max-w-md">
-        <label className={label}>
-          The price covers
-          <Input type="number" size="sm" min={0} max={maxGuests} placeholder={`All ${maxGuests}`} suffix="guests" inputClassName="tabular" value={included || ''} onChange={(event) => onChange(Math.min(maxGuests, whole(event.target.value)), extra)} />
-        </label>
-        <label className={label}>
-          Each guest over
-          <MoneyInput value={extra} onValueChange={(next) => onChange(included, next)} currency={currency} size="sm" allowEmpty placeholder="Free" ariaLabel="Each guest over" />
-        </label>
-      </div>
-    </section>
-  )
-}
-
-/** Both pieces as one block; kept for older callers. The Pricing step places them on their own. */
-export function KindPricingExtras({
-  kind,
-  currency,
-  privateOption,
-  onPrivateOption,
-  maxGuests,
-  charterIncluded,
-  charterExtra,
-  onCharter,
-  leadPrice,
-}: {
-  kind: ActivityKind
-  currency: CurrencyCode
-  privateOption: PrivateOption
-  onPrivateOption: (next: PrivateOption) => void
-  /** Seats per time, or the most a charter carries. */
-  maxGuests: number
-  charterIncluded: number
-  charterExtra: number
-  onCharter: (included: number, extra: number) => void
-  leadPrice: number
-}) {
-  return (
-    <div className="flex flex-col gap-3">
-      {canBookPrivately(kind) ? (
-        <PrivateBookingFields kind={kind} currency={currency} value={privateOption} onChange={onPrivateOption} maxGuests={maxGuests} leadPrice={leadPrice} />
-      ) : null}
-      {kind === 'charter' ? <CharterGroupFields currency={currency} maxGuests={maxGuests} included={charterIncluded} extra={charterExtra} onChange={onCharter} /> : null}
-    </div>
   )
 }

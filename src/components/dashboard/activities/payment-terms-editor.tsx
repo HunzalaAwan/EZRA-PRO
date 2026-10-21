@@ -30,16 +30,19 @@ export function PaymentTermsEditor({
   examplePrice,
   wholeGroup = false,
   businessWide = false,
+  followsDefault = false,
 }: {
   value: PaymentTerms
   onChange: (next: PaymentTerms) => void
   currency: CurrencyCode
   /** The lead price, for the worked example. */
   examplePrice: number
-  /** Charters and rentals: a booking is one group, so "per guest" reads oddly. */
+  /** Private activities, group prices and rentals: a booking is one group, so "per guest" reads oddly. */
   wholeGroup?: boolean
   /** Settings → Booking flow: the default for every activity, not one activity's own. */
   businessWide?: boolean
+  /** The activity shows the business default it follows; a change gives it its own terms. */
+  followsDefault?: boolean
 }) {
   const set = (patch: Partial<PaymentTerms>) => onChange({ ...value, ...patch })
   const symbol = formatCurrency(0, currency).replace(/[\d.,\s]/g, '') || '$'
@@ -51,7 +54,11 @@ export function PaymentTermsEditor({
     <section className="flex flex-col gap-4 rounded-xl border border-line p-4">
       <div>
         <h3 className="text-sm font-semibold">How guests pay</h3>
-        <p className="mt-0.5 text-xs text-subtle">{businessWide ? 'Refunds follow the cancellation policy below.' : 'For this activity only. Refunds follow the cancellation policy on the Booking step.'}</p>
+        <p className="mt-0.5 text-xs text-subtle">{businessWide
+            ? 'Refunds follow the cancellation policy below.'
+            : followsDefault
+              ? 'Your business default. A change here is for this activity only.'
+              : 'For this activity only. Refunds follow the cancellation policy on the Booking step.'}</p>
       </div>
 
       <div role="radiogroup" aria-label="How guests pay" className="grid gap-2 sm:grid-cols-3">
@@ -86,7 +93,8 @@ export function PaymentTermsEditor({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="percent">A share of the total</SelectItem>
-                  {wholeGroup ? null : <SelectItem value="per_guest">A set amount per guest</SelectItem>}
+                  {/* Kept when already chosen (a business default), so the field never shows blank. */}
+                  {wholeGroup && value.depositType !== 'per_guest' ? null : <SelectItem value="per_guest">A set amount per guest</SelectItem>}
                   <SelectItem value="per_booking">A set amount per booking</SelectItem>
                 </SelectContent>
               </Select>

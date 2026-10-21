@@ -42,7 +42,7 @@ import { useBookingDefaults } from '@/hooks/use-booking-defaults'
 import type { BookingDefaults } from '@/lib/booking-defaults'
 import { ActivityMessagesEditor } from './activity-messages-editor'
 import type { ChargeBy, GroupDiscount, GroupPrice, PriceChange } from '@/types'
-import { PricingStep, defaultPricingDraft, draftFromPrice, draftStartTimes, effectiveChargeBy, pricingDraftOf, pricingErrors, pricingFieldsOfDraft, pricingSummary } from './pricing-step'
+import { PricingStep, defaultPricingDraft, draftFromPrice, effectiveChargeBy, pricingDraftOf, pricingErrors, pricingFieldsOfDraft, pricingSummary } from './pricing-step'
 import { ChangesPolicyEditor, type DraftCancellation } from './changes-policy-editor'
 import { DEFAULT_CHANGES, DEFAULT_PAYMENT, changesOf, changesSummary, depositLabel, paymentOf, policySummary, presetOf } from '@/lib/booking-policy'
 import { BookingSettingsEditor } from './booking-settings-editor'
@@ -103,7 +103,6 @@ import {
   LESSON_LEVELS,
   isTimedKind,
   defaultTheme,
-  rentalCategoryMeta,
   routeLabel,
   themeLabel,
   themeOf,
@@ -248,22 +247,27 @@ export interface ActivityDraft {
   guestNote: string
   /** Trips, activities and lessons: a whole time for one group. */
   privateOption: PrivateOption
-  /** Charters: guests the price covers, and each one over. */
-  charterIncluded: number
-  charterExtra: number
   /** How the price is counted; null: the kind's own way. */
   chargeBy: ChargeBy | null
   /** Per group: the price, the guests it covers, each extra guest, the most guests. */
   groupPrice: GroupPrice
-  /** Per person: bigger groups pay less per ticket. */
+  /** Always empty: group discounts are price rules (Pricing → Price rules) now. Kept for the pricing helpers' shape. */
   groupDiscounts: GroupDiscount[]
-  /** A booking pays at least this for its tickets, minor units. 0: none. */
+  /** Always 0: a minimum charge is not set on the activity any more. */
   minimumCharge: number
-  /** The activity's own price changes. */
+  /** Always empty: price changes are price rules (Pricing → Price rules) now. */
   priceChanges: PriceChange[]
 }
 
 const STORAGE_KEY = 'ezra:activity-wizard:v14'
+
+/**
+ * Pricing the activity setup no longer shows: group discounts, the activity's
+ * own price changes and a minimum charge are set as price rules on Pricing →
+ * Price rules. Cleared on open, on restore and on save, so nothing the owner
+ * cannot see changes a price.
+ */
+const RETIRED_PRICING: Pick<ActivityDraft, 'groupDiscounts' | 'priceChanges' | 'minimumCharge'> = { groupDiscounts: [], priceChanges: [], minimumCharge: 0 }
 
 /** Dining is the one category whose product is a table, not a departure. */
 export const isDining = (draft: Pick<ActivityDraft, 'category'>) => draft.category === 'restaurants'
@@ -325,8 +329,6 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
     changes: { ...DEFAULT_CHANGES },
     guestNote: '',
     privateOption: { enabled: false, price: 0, includedGuests: 6, extraGuest: 0 },
-    charterIncluded: 0,
-    charterExtra: 0,
     ...defaultPricingDraft(),
     freeCancellationHours: 24,
     crewIds: [],
@@ -392,8 +394,7 @@ function kindOverride(draft: ActivityDraft) {
         // Asked for on the Booking step now.
         requestToBook: (draft.booking?.method ?? 'instant') === 'request',
         noticeHours: draft.noticeHours ?? 0,
-        ...(draft.charterIncluded > 0 && draft.charterExtra > 0 ? { includedGuests: draft.charterIncluded, extraGuestPrice: draft.charterExtra } : {}),
-        ...(rest.vessel === 'other' ? { vesselLabel: vesselLabel.trim() || 'Charter', crewLabel: crewLabel.trim() || 'Crew' } : {}),
+        ...(rest.vessel === 'other' ? { vesselLabel: vesselLabel.trim() || 'Private group', crewLabel: crewLabel.trim() || 'Crew' } : {}),
       },
     }
   }
@@ -482,13 +483,11 @@ export function seatsFor(draft: ActivityDraft): ScheduleSeats {
   const settings = normalizeKindSettings(draft.kindSettings)
   const n = draft.maxCapacity
   if (kind === 'rental') {
-    const meta = rentalCategoryMeta(settings.rental.category)
-    void meta
     const units = draft.tiers.reduce((sum, tier) => sum + draftItemOf(settings.rental, tier.id).stock, 0)
     return { capacity: units, one: 'item', many: 'items', summary: `${units} ${units === 1 ? 'item' : 'items'} in stock, across ${draft.tiers.length} ${draft.tiers.length === 1 ? 'kind' : 'kinds'}` }
   }
   if (kind === 'charter') {
-    return { capacity: 1, one: 'charter', many: 'charters', summary: `One group each, up to ${settings.charter.maxGuests} guests` }
+    return { capacity: 1, one: 'group', many: 'groups', summary: `One group each, up to ${settings.charter.maxGuests} guests` }
   }
   if (kind === 'lesson') return { capacity: n, one: 'spot', many: 'spots', summary: `${n} ${pluralize(n, 'student')} per class`, varies: true }
   if (kind === 'pass') return { capacity: n, one: 'ticket', many: 'tickets', summary: `${n} ${pluralize(n, 'ticket')} per day`, varies: true }
@@ -751,9 +750,8 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
     changes: changesOf(activity),
     guestNote: activity.guestNote ?? '',
     privateOption: activity.privateOption ?? { enabled: false, price: 0, includedGuests: Math.min(6, activity.maxCapacity || 6), extraGuest: 0 },
-    charterIncluded: activity.charter?.includedGuests ?? 0,
-    charterExtra: activity.charter?.extraGuestPrice ?? 0,
     ...pricingDraftOf(activity),
+    ...RETIRED_PRICING,
     kindSettings: (() => {
       const blank = defaultKindSettings()
       const rental = activity.rental
@@ -841,7 +839,7 @@ export function withCategory(draft: ActivityDraft, category: VerticalKey): Activ
 const CATEGORY_OPTIONS: { value: VerticalKey; label: string; hint: string }[] = [
   { value: 'watersports', label: 'Watersports', hint: 'Snorkel, dive, surf, paddle' },
   { value: 'tours', label: 'Sightseeing', hint: 'City walks, culture, food' },
-  { value: 'island', label: 'Island & boat', hint: 'Boat days, charters, transfers' },
+  { value: 'island', label: 'Island & boat', hint: 'Boat days, private trips, transfers' },
   { value: 'adventure', label: 'Adventure', hint: 'Hike, bike, climb, ride' },
   { value: 'restaurants', label: 'Dining', hint: 'Tastings, chef tables, seatings' },
   { value: 'wellness', label: 'Wellness', hint: 'Retreats, spa, yoga' },
@@ -852,8 +850,10 @@ const CATEGORY_OPTIONS: { value: VerticalKey; label: string; hint: string }[] = 
    ========================================================================== */
 
 const TOUR_STEPS = [
-  { id: 'basics', label: 'Basics', hint: 'What you sell and its setup', icon: Compass },
-  { id: 'description', label: 'Details & photos', hint: 'What guests read and see', icon: FileText },
+  { id: 'basics', label: 'Basics', hint: 'What you sell', icon: Compass },
+  { id: 'description', label: 'Details', hint: 'What guests read', icon: FileText },
+  // The media manager takes images only, so the hint does not promise video.
+  { id: 'media', label: 'Photos', hint: 'What guests see', icon: Images },
   { id: 'pricing', label: 'Pricing', hint: 'Prices and extras', icon: Tag },
   { id: 'schedule', label: 'Schedule', hint: 'When it runs', icon: CalendarDays },
   { id: 'booking', label: 'Booking', hint: 'How guests book', icon: CalendarClock },
@@ -861,8 +861,19 @@ const TOUR_STEPS = [
   { id: 'review', label: 'Review', hint: 'Publish', icon: Rocket },
 ] as const
 
+type TourStepId = (typeof TOUR_STEPS)[number]['id']
+
 /** Tour step positions, for jumping back from the Review step. */
-const TOUR_STEP_INDEX = { basics: 0, description: 1, pricing: 2, schedule: 3, booking: 4, guests: 5 } as const
+const TOUR_STEP_INDEX = Object.fromEntries(TOUR_STEPS.map((entry, index) => [entry.id, index])) as Record<TourStepId, number>
+
+/**
+ * The tour steps a session draft saved before Photos was its own step again
+ * (it stored only a position). Read so a restored draft opens where it was.
+ */
+const PREVIOUS_TOUR_STEP_IDS: readonly TourStepId[] = ['basics', 'description', 'pricing', 'schedule', 'booking', 'guests', 'review']
+
+/** Other names a link can use for a step: `?step=photos`, `?step=details`. */
+const STEP_ALIASES: Record<string, string> = { photos: 'media', details: 'description' }
 
 const DINING_STEPS = [
   { id: 'basics', label: 'Basics', hint: 'Name, format, covers', icon: UtensilsCrossed },
@@ -873,13 +884,14 @@ const DINING_STEPS = [
   { id: 'review', label: 'Review', hint: 'Publish', icon: Rocket },
 ] as const
 
+const DINING_STEP_INDEX = Object.fromEntries(DINING_STEPS.map((entry, index) => [entry.id, index])) as Record<(typeof DINING_STEPS)[number]['id'], number>
+
 interface WizardStep {
   id: string
   label: string
   hint: string
   icon: typeof Compass
 }
-const STEPS: readonly WizardStep[] = TOUR_STEPS
 const stepsFor = (dining: boolean): readonly WizardStep[] => (dining ? DINING_STEPS : TOUR_STEPS)
 
 const nonEmptyList = (min: number, message: string) =>
@@ -972,10 +984,11 @@ const TOUR_SCHEMA_LIST = [
   }),
 ]
 
-/** Each tour step's checks, by step id. Details & photos checks the copy and the photos; Schedule has its own checks. */
+/** Each tour step's checks, by step id. Schedule has its own checks. */
 const STEP_SCHEMAS: Record<string, z.ZodTypeAny[] | undefined> = {
   basics: [TOUR_SCHEMA_LIST[0]],
-  description: [TOUR_SCHEMA_LIST[1], TOUR_SCHEMA_LIST[2]],
+  description: [TOUR_SCHEMA_LIST[1]],
+  media: [TOUR_SCHEMA_LIST[2]],
   pricing: [TOUR_SCHEMA_LIST[3]],
   guests: [ARRIVAL_SCHEMA],
 }
@@ -1124,7 +1137,7 @@ function validateStep(step: number, draft: ActivityDraft): FieldErrors {
       todayKey: TODAY_KEY,
     })
   }
-  // Pricing: a group price that is set, a minimum charge under the cap.
+  // Pricing: a group price that is set, ages the right way round.
   if (id === 'pricing' && !isDining(draft)) Object.assign(errors, pricingErrors(draft))
   // A rental prices each item per hour and/or per day; every rate that is on needs a price.
   if (id === 'pricing' && !isDining(draft) && (draft.kind ?? 'trip') === 'rental') {
@@ -1674,7 +1687,10 @@ export function ActivityWizard({
   // What guests actually get: the activity's own terms, or the business default it follows.
   const pay = effectiveDraftPayment(draft, bookingDefaults)
   const cancel = effectiveDraftCancellation(draft, bookingDefaults)
-  const openingStep = React.useMemo(() => Math.max(0, stepsFor(isDining(initial)).findIndex((entry) => entry.id === initialStep)), [initial, initialStep])
+  const openingStep = React.useMemo(() => {
+    const wanted = initialStep ? (STEP_ALIASES[initialStep] ?? initialStep) : undefined
+    return Math.max(0, stepsFor(isDining(initial)).findIndex((entry) => entry.id === wanted))
+  }, [initial, initialStep])
   const [step, setStep] = React.useState(openingStep)
   const [furthest, setFurthest] = React.useState(openingStep)
   const [direction, setDirection] = React.useState(1)
@@ -1696,10 +1712,11 @@ export function ActivityWizard({
     try {
       const raw = window.sessionStorage.getItem(storageKey)
       if (!raw) return
-      const parsed = JSON.parse(raw) as { draft?: Partial<ActivityDraft>; step?: number; base?: Partial<DraftBase> }
+      const parsed = JSON.parse(raw) as { draft?: Partial<ActivityDraft>; step?: number; stepId?: string; base?: Partial<DraftBase> }
       if (parsed.draft) {
         typedRef.current = true
-        let restoredDraft = parsed.draft
+        // Group discounts, price changes and the minimum charge are set on Pricing → Price rules now.
+        let restoredDraft: Partial<ActivityDraft> = { ...parsed.draft, ...RETIRED_PRICING }
         let merged = false
         if (editing) {
           // Saved elsewhere since this draft began (a time slot cancelled on the calendar): keep those changes.
@@ -1714,10 +1731,21 @@ export function ActivityWizard({
         setDraft((current) => deriveForKind({ ...current, ...restoredDraft }))
         setRestored({ merged })
       }
-      if (typeof parsed.step === 'number' && !initialStep) {
-        const next = Math.min(Math.max(parsed.step, 0), STEPS.length - 1)
-        setStep(next)
-        setFurthest(next)
+      if (!initialStep && (typeof parsed.stepId === 'string' || typeof parsed.step === 'number')) {
+        // Reopen on the same step by its id. An older save kept only a position, from the steps before Photos was split out.
+        const restoredDining = isDining({ category: parsed.draft?.category ?? initial.category })
+        const list = stepsFor(restoredDining)
+        const id =
+          typeof parsed.stepId === 'string'
+            ? parsed.stepId
+            : restoredDining
+              ? list[parsed.step ?? 0]?.id
+              : PREVIOUS_TOUR_STEP_IDS[parsed.step ?? 0]
+        const next = list.findIndex((entry) => entry.id === id)
+        if (next >= 0) {
+          setStep(next)
+          setFurthest(next)
+        }
       }
     } catch {
       // A corrupt or blocked store simply means starting fresh.
@@ -1729,7 +1757,7 @@ export function ActivityWizard({
     // Only once something was changed: an untouched visit leaves nothing to restore over a later save.
     if (!typedRef.current) return
     try {
-      window.sessionStorage.setItem(storageKey, JSON.stringify({ draft, step, base: baseRef.current }))
+      window.sessionStorage.setItem(storageKey, JSON.stringify({ draft, step, stepId: stepsFor(isDining(draft))[step]?.id, base: baseRef.current }))
     } catch {
       // Private mode or a full quota — the wizard still works in memory.
     }
@@ -1783,7 +1811,7 @@ export function ActivityWizard({
       })
       return
     }
-    if (step === STEPS.length - 1) return
+    if (step === stepsFor(isDining(draft)).length - 1) return
     goTo(step + 1, 1)
   }
 
@@ -1878,8 +1906,9 @@ export function ActivityWizard({
             return { ...policy, summary: policySummary(policy, pay) }
           })(),
           priceCap: draft.priceCap ?? 0,
-          // How it charges, the group price, the ladder, the minimum and the activity's own price changes.
+          // How it charges and the group price. Group discounts, price changes and a minimum charge are price rules now: saved empty.
           ...pricingFieldsOfDraft(draft, isDining(draft)),
+          ...RETIRED_PRICING,
           noticeHours: draft.noticeHours ?? 0,
           customCategory: draft.customCategory?.trim() || null,
           accessibility: draft.accessibility ?? [],
@@ -2017,26 +2046,7 @@ export function ActivityWizard({
                   {currentStep.id === 'basics' ? (
                     <BasicsStep draft={draft} patch={patch} errors={errors} currency={currency} tenantSlug={tenantSlug} packageOptions={packageOptions.filter((option) => option.id !== activityId)} />
                   ) : null}
-                  {currentStep.id === 'description' ? (
-                    dining ? (
-                      <DescriptionStep draft={draft} patch={patch} errors={errors} />
-                    ) : (
-                      // Details & photos: the copy, then the photos, in one step.
-                      <div className="flex flex-col gap-8">
-                        <DescriptionStep draft={draft} patch={patch} errors={errors} part="copy" />
-                        <section className="flex flex-col gap-3 border-t border-line-subtle pt-6">
-                          <h3 className="text-sm font-semibold">Photos</h3>
-                          <MediaManager media={draft.media} onChange={(media) => patch({ media })} errors={errors} />
-                          {errors.media ? (
-                            <p className="flex items-center gap-1.5 text-xs font-medium text-danger">
-                              <CircleAlert className="size-3.5" aria-hidden="true" />
-                              {errors.media}
-                            </p>
-                          ) : null}
-                        </section>
-                      </div>
-                    )
-                  ) : null}
+                  {currentStep.id === 'description' ? <DescriptionStep draft={draft} patch={patch} errors={errors} part={dining ? undefined : 'copy'} /> : null}
                   {currentStep.id === 'guests' ? (
                     <div className="flex flex-col gap-6">
                     <DescriptionStep
@@ -2109,12 +2119,8 @@ export function ActivityWizard({
                       errors={errors}
                       currency={currency}
                       dining={dining}
-                      tenantSlug={tenantSlug}
                       activitySlug={activity?.slug ?? slugify(draft.name)}
-                      nowIso={nowIso}
-                      startTimes={draftStartTimes(draft)}
                       payment={pay}
-                      paymentSummary={paymentLine(pay, currency)}
                     />
                   ) : null}
                   {currentStep.id === 'schedule' ? (
@@ -2179,8 +2185,9 @@ export function ActivityWizard({
                           value={draft.booking ?? DEFAULT_BOOKING}
                           onChange={(booking) => patch({ booking })}
                           businessPhone={businessPhone}
-                          groupWord={groupUnit(draft.kind, normalizeKindSettings(draft.kindSettings).rental.category, draft.booking?.groupCountBy).many}
-                          rentedWord={(draft.kind ?? 'trip') === 'rental' ? rentalCategoryMeta(normalizeKindSettings(draft.kindSettings).rental.category).units : undefined}
+                          // A rental counts "items", whatever it lends out (no category is picked in setup).
+                          groupWord={groupUnit(draft.kind, undefined, draft.booking?.groupCountBy).many}
+                          rentedWord={(draft.kind ?? 'trip') === 'rental' ? 'items' : undefined}
                         />
                         {policyEditor}
                       </div>
@@ -2277,7 +2284,8 @@ export function ActivityWizard({
 
 const STEP_COPY: Record<string, string> = {
   basics: 'What you sell, who it suits, and how many can book each time slot.',
-  description: 'What guests read and see before they book.',
+  description: 'What guests read before they book.',
+  media: 'The photos guests see before they book.',
   pricing: 'What it costs, and the extras you offer once a time slot is picked.',
   schedule: 'When it runs, all year, and how far ahead guests can book.',
   booking: 'How guests book, changes and cancellations, and who leads it.',
@@ -2569,7 +2577,7 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
         }
       >
         <Input
-          placeholder={dining ? 'Sunset Tasting Menu on the Terrace' : kind === 'rental' ? 'Island Jeep Rental' : kind === 'charter' ? 'Private Sportfishing Charter' : kind === 'lesson' ? 'Beginner Surf Lesson' : kind === 'pass' ? 'Beach Club Day Pass' : kind === 'activity' ? 'Upcountry Horseback Ride' : 'Molokini Crater Dawn Patrol'}
+          placeholder={dining ? 'Sunset Tasting Menu on the Terrace' : kind === 'rental' ? 'Island Jeep Rental' : kind === 'charter' ? 'Private Sunset Sail' : kind === 'lesson' ? 'Beginner Surf Lesson' : kind === 'pass' ? 'Beach Club Day Pass' : kind === 'activity' ? 'Upcountry Horseback Ride' : 'Molokini Crater Dawn Patrol'}
           value={draft.name}
           onChange={(event) => patch({ name: event.target.value })}
         />
@@ -2937,7 +2945,8 @@ function ReviewStep({
   onJump: (index: number) => void
 }) {
   const crewNames = crew.filter((member) => draft.crewIds.includes(member.id)).map((member) => member.name)
-  const crewRow = { label: 'Team', value: crewNames.length > 0 ? crewNames.join(', ') : 'Picked for each time slot', step: 4 }
+  // Dining picks the team on Services, everything else on Booking.
+  const crewRow = { label: 'Team', value: crewNames.length > 0 ? crewNames.join(', ') : 'Picked for each time slot', step: isDining(draft) ? DINING_STEP_INDEX.schedule : TOUR_STEP_INDEX.booking }
   const { defaults: bookingDefaults } = useBookingDefaults(tenantSlug)
   const reviewPay = effectiveDraftPayment(draft, bookingDefaults)
   const reviewCancel = effectiveDraftCancellation(draft, bookingDefaults)
@@ -3012,18 +3021,18 @@ function ReviewStep({
               ? `${waivers.find((waiver) => waiver.id === draft.waiverId)?.title ?? 'Waiver'}, signed by ${draft.waiverSigning === 'each' ? 'each guest' : 'the booker'}`
               : 'no waiver',
           ].join(' · '),
-          step: 5,
+          step: TOUR_STEP_INDEX.guests,
         },
         { label: 'Category', value: draft.customCategory || themeLabel(draft.theme ?? defaultTheme(draft.category)), step: 0 },
         // A rental's charging, items, stock, deposits and late fee are all set on Pricing.
         { label: 'Setup', value: kindFacts(draft).join(' · '), step: (draft.kind ?? 'trip') === 'rental' ? TOUR_STEP_INDEX.pricing : TOUR_STEP_INDEX.basics },
-        { label: 'Highlights', value: `${draft.highlights.filter(Boolean).length} bullets`, step: 1 },
+        { label: 'Highlights', value: `${draft.highlights.filter(Boolean).length} bullets`, step: TOUR_STEP_INDEX.description },
         {
           label: draft.arrivalMode === 'meet' ? 'Meeting point' : draft.arrivalMode === 'venue' ? 'Venue' : 'Arrival',
           value: draft.meetingPoint || 'No fixed place',
-          step: 5,
+          step: TOUR_STEP_INDEX.guests,
         },
-        { label: 'Photos', value: `${draft.media.length} ${pluralize(draft.media.length, 'image')}`, step: TOUR_STEP_INDEX.description },
+        { label: 'Photos', value: `${draft.media.length} ${pluralize(draft.media.length, 'image')}`, step: TOUR_STEP_INDEX.media },
         {
           label: 'Pricing',
           value: pricingSummary(draft, currency),
@@ -3038,24 +3047,24 @@ function ReviewStep({
             const b = draft.booking ?? DEFAULT_BOOKING
             const extras = [
               b.method === 'instant' && b.groupLimit > 0
-                ? `over ${b.groupLimit} ${groupUnit(draft.kind, normalizeKindSettings(draft.kindSettings).rental.category, b.groupCountBy).many} ask first`
+                ? `over ${b.groupLimit} ${groupUnit(draft.kind, undefined, b.groupCountBy).many} ask first`
                 : null,
               b.method === 'instant' && b.otherDates ? 'other dates on request' : null,
               b.method === 'instant' && b.customQuote ? 'custom quotes' : null,
             ].filter(Boolean)
             return [METHOD_LABEL[b.method], ...extras].join(' · ')
           })(),
-          step: 4,
+          step: TOUR_STEP_INDEX.booking,
         },
         {
           label: 'How guests pay',
-          value: `${paymentLine(reviewPay, currency)}${draft.payment?.useDefault ? ' (business default)' : ''}`,
+          value: paymentLine(reviewPay, currency),
           step: TOUR_STEP_INDEX.pricing,
         },
         {
           label: 'Cancellations',
           value: `${policySummary(reviewCancel, reviewPay)}${draft.cancellation?.useDefault ? ' (business default)' : ''} ${changesSummary(draft.changes ?? DEFAULT_CHANGES, (minor) => formatCurrency(minor, currency))}`,
-          step: 4,
+          step: TOUR_STEP_INDEX.booking,
         },
         {
           label: 'Schedule',

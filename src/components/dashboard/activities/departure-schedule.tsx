@@ -536,7 +536,7 @@ function AddRunDialog({ open, onOpenChange, noun, isOpenEntry, activityName, max
               </div>
             </Field>
           ) : null}
-          <Field label="Note for your team" optional>{(control) => <Textarea {...control} rows={2} placeholder="Charter for the Okada family, pick up at the north pier…" />}</Field>
+          <Field label="Note for your team" optional>{(control) => <Textarea {...control} rows={2} placeholder="Private group for the Okada family, pick up at the north pier…" />}</Field>
         </DialogBody>
         <DialogFooter divider>
           <Button variant="ghost" size="sm" leftIcon={<X />} onClick={() => onOpenChange(false)}>

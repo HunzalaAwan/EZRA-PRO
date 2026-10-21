@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Camera, Car, Gift, Plus, Sandwich, ShoppingBag, Trash2, Waves } from 'lucide-react'
+import { Backpack, Camera, Car, Gift, Plus, Sandwich, ShoppingBag, Trash2 } from 'lucide-react'
 
 import type { CurrencyCode } from '@/types'
 import { cn, formatCurrency } from '@/lib/utils'
@@ -54,42 +54,13 @@ export interface AddOnPreset {
   icon: typeof Camera
 }
 
+/** Extras most businesses offer; each can be renamed or priced. */
 const ADDON_PRESETS: AddOnPreset[] = [
-  {
-    label: 'Photo package',
-    price: 4500,
-    description: 'Edited gallery delivered the same evening.',
-    per: 'booking',
-    icon: Camera,
-  },
-  {
-    label: 'Hotel pickup',
-    price: 2500,
-    description: 'Air-conditioned transfer from anywhere in the resort strip.',
-    per: 'guest',
-    icon: Car,
-  },
-  {
-    label: 'Lunch & drinks',
-    price: 3200,
-    description: 'A light lunch and cold drinks.',
-    per: 'guest',
-    icon: Sandwich,
-  },
-  {
-    label: 'Wetsuit hire',
-    price: 1500,
-    description: 'Full-length 3mm suit, sized at the dock.',
-    per: 'guest',
-    icon: Waves,
-  },
-  {
-    label: 'Gift wrap',
-    price: 900,
-    description: 'Printed voucher in a keepsake envelope.',
-    per: 'booking',
-    icon: Gift,
-  },
+  { label: 'Photos', price: 4500, description: 'Edited photos sent after.', per: 'booking', icon: Camera },
+  { label: 'Pickup', price: 2500, description: 'From where you are staying.', per: 'guest', icon: Car },
+  { label: 'Food & drinks', price: 3200, description: 'A light meal and drinks.', per: 'guest', icon: Sandwich },
+  { label: 'Equipment', price: 1500, description: 'Ready when you arrive.', per: 'guest', icon: Backpack },
+  { label: 'Gift wrap', price: 900, description: 'A printed voucher in an envelope.', per: 'booking', icon: Gift },
 ]
 
 /* ==========================================================================
@@ -101,7 +72,7 @@ export interface AddonEditorProps {
   onChange: (addOns: DraftAddOn[]) => void
   currency: CurrencyCode
   errors?: Record<string, string>
-  /** One-click starting points; defaults to the tour-operator set. */
+  /** One-click starting points; defaults to a set most businesses offer. */
   presets?: AddOnPreset[]
   className?: string
 }
@@ -120,11 +91,7 @@ export function AddonEditor({ addOns, onChange, currency, errors, presets = ADDO
           <span className="mx-auto grid size-10 place-items-center rounded-xl bg-accent-soft text-accent">
             <ShoppingBag className="size-4.5" aria-hidden="true" />
           </span>
-          <p className="mt-2.5 text-sm font-semibold">No add-ons yet</p>
-          <p className="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-muted">
-            Add-ons are offered after the guest picks a time slot. One well-chosen extra typically lifts
-            average booking value by around 12%.
-          </p>
+          <p className="mt-2.5 text-sm font-semibold">No extras yet</p>
         </div>
       ) : (
         addOns.map((addOn, index) => (
@@ -138,8 +105,8 @@ export function AddonEditor({ addOns, onChange, currency, errors, presets = ADDO
                   <Input
                     value={addOn.label}
                     onChange={(event) => update(index, { label: event.target.value })}
-                    placeholder="Extra, e.g. Photo package"
-                    aria-label={`Add-on ${index + 1} name`}
+                    placeholder="Extra, e.g. Photos"
+                    aria-label={`Extra ${index + 1} name`}
                     size="sm"
                     className="flex-1"
                     inputClassName="font-medium"
@@ -151,7 +118,7 @@ export function AddonEditor({ addOns, onChange, currency, errors, presets = ADDO
                       onValueChange={(price) => update(index, { price })}
                       currency={currency}
                       size="sm"
-                      ariaLabel={`Price for ${addOn.label || `add-on ${index + 1}`}`}
+                      ariaLabel={`Price for ${addOn.label || `extra ${index + 1}`}`}
                     />
                   </div>
                 </div>
@@ -165,7 +132,7 @@ export function AddonEditor({ addOns, onChange, currency, errors, presets = ADDO
                   value={addOn.description}
                   onChange={(event) => update(index, { description: event.target.value })}
                   placeholder="One line the guest reads at checkout"
-                  aria-label={`Description for ${addOn.label || `add-on ${index + 1}`}`}
+                  aria-label={`Description for ${addOn.label || `extra ${index + 1}`}`}
                   size="sm"
                   className="mt-2.5"
                 />
@@ -173,7 +140,7 @@ export function AddonEditor({ addOns, onChange, currency, errors, presets = ADDO
                 <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2.5">
                   <div
                     role="radiogroup"
-                    aria-label={`How ${addOn.label || `add-on ${index + 1}`} is charged`}
+                    aria-label={`How ${addOn.label || `extra ${index + 1}`} is charged`}
                     className="inline-flex h-8 items-center rounded-lg border border-line bg-surface-sunken p-0.5"
                   >
                     {([
@@ -204,7 +171,7 @@ export function AddonEditor({ addOns, onChange, currency, errors, presets = ADDO
                       size="sm"
                       checked={addOn.required}
                       onCheckedChange={(checked) => update(index, { required: checked })}
-                      aria-label={`Require ${addOn.label || `add-on ${index + 1}`}`}
+                      aria-label={`Require ${addOn.label || `extra ${index + 1}`}`}
                     />
                     Required
                   </label>
@@ -220,7 +187,7 @@ export function AddonEditor({ addOns, onChange, currency, errors, presets = ADDO
               <SimpleTooltip label="Remove extra">
                 <IconButton
                   type="button"
-                  aria-label={`Remove ${addOn.label || `add-on ${index + 1}`}`}
+                  aria-label={`Remove ${addOn.label || `extra ${index + 1}`}`}
                   size="xs"
                   variant="ghost"
                   className="shrink-0 text-danger hover:bg-danger-soft"

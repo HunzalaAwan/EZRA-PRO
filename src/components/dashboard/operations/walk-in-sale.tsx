@@ -295,12 +295,14 @@ function WalkInTill({
 
   const guests = activity ? activity.tiers.reduce((sum, tier) => sum + (qty[tier.id] ?? 0), 0) : 0
   const seatsUsed = activity ? activity.tiers.reduce((sum, tier) => sum + (tier.seat ? (qty[tier.id] ?? 0) : 0), 0) : 0
-  const rules = activity && slot ? applyRules(pricing.rules, { activitySlug: activity.slug, startsAt: slot.startsAt, nowIso, guests: Math.max(1, guests) }) : { multiplier: 1, applied: [] }
+  // How full the time slot is, for filling-up and quiet-time rules.
+  const slotBooked = slot ? (slot.booked ?? (slot.capacity !== undefined ? Math.max(0, slot.capacity - slot.seatsLeft) : undefined)) : undefined
+  const rules = activity && slot ? applyRules(pricing.rules, { activitySlug: activity.slug, startsAt: slot.startsAt, nowIso, guests: Math.max(1, guests), capacity: slot.capacity, booked: slotBooked }) : { multiplier: 1, applied: [] }
   // The price engine on the activity with its saved price edits: the same prices as the storefront and checkout.
   const overrides = useActivityOverrides()
   const engineActivity = React.useMemo(() => (activity?.source ? applyPricingOverride(activity.source, overrides[activity.source.id]) : undefined), [activity, overrides])
   const priceCtx: PriceContext | undefined = slot
-    ? { startsAt: slot.startsAt, nowIso, capacity: slot.capacity, booked: slot.booked ?? (slot.capacity !== undefined ? Math.max(0, slot.capacity - slot.seatsLeft) : undefined), priceMultiplier: slot.priceMultiplier, businessRules: pricing.rules }
+    ? { startsAt: slot.startsAt, nowIso, capacity: slot.capacity, booked: slotBooked, priceMultiplier: slot.priceMultiplier, businessRules: pricing.rules }
     : undefined
   const priced = activity && engineActivity && priceCtx ? priceBooking({ ...priceCtx, activity: engineActivity, lines: activity.tiers.map((tier) => ({ tierId: tier.id, qty: qty[tier.id] ?? 0 })) }) : undefined
   /** A ticket's price at this time: the engine's, or the plain price with the business rules. */

@@ -133,17 +133,13 @@ export const TIER_PRESETS: TierPreset[] = [
 /** Starting points that fit how each kind is sold. */
 export const KIND_TIER_PRESETS: Partial<Record<ActivityKind, TierPreset[]>> = {
   trip: TIER_PRESETS,
-  activity: [
-    { label: 'Single rider', price: 11900, description: '' },
-    { label: 'Tandem', price: 19900, description: 'Two people, one ride', seats: 2, ratio: 1.7 },
-    { label: 'Child rider', price: 8900, description: '', ageMin: 6, ageMax: 12, ratio: 0.75 },
-    { label: 'Ride-along', price: 3900, description: 'Comes along, does not ride', counts: false, ratio: 0.3 },
-    { label: 'Local', price: 9900, description: 'Local ID at check-in', ratio: 0.85 },
-  ],
+  activity: TIER_PRESETS,
+  // A private activity: one price for the whole group, per length.
   charter: [
-    { label: 'Half day (4 hours)', price: 89900, description: '' },
-    { label: 'Full day (8 hours)', price: 149900, description: '' },
-    { label: 'Sunset (2 hours)', price: 59900, description: '' },
+    { label: '1 hour', price: 19900, description: '' },
+    { label: '2 hours', price: 34900, description: '' },
+    { label: 'Half day', price: 59900, description: '' },
+    { label: 'Full day', price: 99900, description: '' },
   ],
   lesson: [
     { label: 'Student', price: 12900, description: '' },
@@ -279,13 +275,13 @@ export interface PricingTierEditorProps {
   errors?: Record<string, string>
   /** One-click starting points; defaults to the per-person set. */
   presets?: TierPreset[]
-  /** Charters price per group: no places per ticket, no "at least". */
+  /** A private activity (kind 'charter') is one price for the whole group: no ages, places per ticket or "at least". */
   kind?: ActivityKind
   /** Menus and other lists where a place is not counted per ticket. */
   hidePlaces?: boolean
   /** Per group: the rows only say who is counted, the group price is set elsewhere. */
   priceless?: boolean
-  /** The word for one row: "price", "option", "guest type". */
+  /** The word for one row: "price", "menu", "guest type". */
   noun?: string
   className?: string
 }
@@ -529,11 +525,11 @@ export interface GuestPricePreviewProps {
   className?: string
 }
 
-const PREVIEW_UNIT: Partial<Record<ActivityKind, string>> = { charter: 'per charter, from', lesson: 'per student, from', pass: 'per ticket, from', activity: 'per rider, from', package: 'per person, from' }
+const PREVIEW_UNIT: Partial<Record<ActivityKind, string>> = { charter: 'per group, from', lesson: 'per person, from', pass: 'per ticket, from', package: 'per person, from' }
 
 export function GuestPricePreview({ tiers, addOns, currency, kind = 'trip', className }: GuestPricePreviewProps) {
   const priced = tiers.filter((tier) => tier.label.trim().length > 0)
-  // A representative cart: two of the lead tier, one of the next. A charter is one option for one group.
+  // A representative cart: two of the lead tier, one of the next. A private activity is one price for one group.
   const sample = priced.map((tier, index) => ({
     tier,
     quantity: kind === 'charter' ? (index === 0 ? 1 : 0) : index === 0 ? 2 : index === 1 ? 1 : 0,

@@ -19,7 +19,8 @@ import { formatCurrency } from '@/lib/utils'
      5. at most one demand change (book early, last minute, filling up, quiet
         time): the one that is best for the guest
      6. the time slot's dynamic multiplier, then the business's price rules
-        (Pricing → Price rules, `applyRules`, never below half price)
+        (Pricing → Price rules, `applyRules`: the start time and how full the
+        time slot is count too; never below half price)
      7. rounded to whole minor units
    Then on the booking: rental item caps, the booking's price cap and the
    minimum charge. Extras, fees and tax are added by `buildQuote`.
@@ -390,7 +391,10 @@ function runSteps(activity: PricedActivity, scope: Scope, base: number, ctx: Pri
   }
   const rules = ctx.businessRules ?? []
   if (rules.length > 0 && ctx.startsAt) {
-    const result = applyRules(rules, { activitySlug: activity.slug, startsAt: ctx.startsAt, nowIso: ctx.nowIso ?? ctx.startsAt, guests: Math.max(1, guests) })
+    // How full the time slot is, for filling-up and quiet-time rules. A private activity's time slot
+    // is one group's, booked or not, so those rules leave it out.
+    const fill = (activity.kind ?? 'trip') === 'charter' ? {} : { capacity: ctx.capacity, booked: ctx.booked }
+    const result = applyRules(rules, { activitySlug: activity.slug, startsAt: ctx.startsAt, nowIso: ctx.nowIso ?? ctx.startsAt, guests: Math.max(1, guests), ...fill })
     if (result.applied.length > 0) {
       scale *= result.multiplier
       for (const rule of result.applied) {
@@ -656,7 +660,10 @@ export interface PriceCalendarDay {
 }
 
 export interface PriceCalendarOptions {
-  /** Business rules; only season and weekday rules apply unless `withDemand` is on. */
+  /**
+   * Business rules; only the date ones (season, weekday, set dates) and, on days priced at
+   * start times, time-of-day rules apply unless `withDemand` is on.
+   */
   businessRules?: PricingRule[]
   /** Start times to price each day at; the lowest wins. Without them, start-time changes are left out. */
   times?: string[]
@@ -671,6 +678,9 @@ export interface PriceCalendarOptions {
   rental?: RentalPricing
 }
 
+/** Business rules the price calendar shows without demand: the ones that go by the date or start time. */
+const CALENDAR_RULE_KINDS = new Set<PricingRule['kind']>(['season', 'weekday', 'dates', 'time_of_day'])
+
 const pad = (n: number) => String(n).padStart(2, '0')
 const keyOf = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 
@@ -681,7 +691,9 @@ const keyOf = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}
 export function priceCalendar(activity: PricedActivity, fromKey: string, months = 12, options: PriceCalendarOptions = {}): PriceCalendarDay[] {
   // The plain price for the same rental mode and length the days are priced in.
   const base = options.rental ? leadPrice({ ...activity, priceChanges: [], groupDiscounts: [] }, { rental: options.rental }) : fromPrice(activity)
-  const rules = (options.businessRules ?? []).filter((rule) => options.withDemand || rule.kind === 'season' || rule.kind === 'weekday')
+  const rules = (options.businessRules ?? []).filter((rule) => options.withDemand || CALENDAR_RULE_KINDS.has(rule.kind))
+  // A day priced without a start time has no time for a time-of-day rule to match.
+  const untimedRules = rules.filter((rule) => rule.kind !== 'time_of_day')
   const kept = (activity.priceChanges ?? []).filter((change) => options.withDemand || !DEMAND_KINDS.has(change.kind))
   const allTimes = options.times && options.times.length > 0 ? options.times : ['']
   // Without start times, a start-time change has nothing to match.
@@ -700,7 +712,7 @@ export function priceCalendar(activity: PricedActivity, fromKey: string, months 
     let best: { price: number; changes: string[] } | undefined
     for (const time of times) {
       const startsAt = `${dateKey}T${time || '00:00'}:00`
-      const ctx: PriceContext = { startsAt, nowIso: options.withDemand ? options.nowIso : undefined, businessRules: rules, rental: options.rental }
+      const ctx: PriceContext = { startsAt, nowIso: options.withDemand ? options.nowIso : undefined, businessRules: time ? rules : untimedRules, rental: options.rental }
       for (const candidate of candidates) {
         const detail = unitPriceDetail(priced, candidate.tierId, { ...ctx, rental: candidate.rental ?? ctx.rental })
         if (!best || detail.price < best.price) best = { price: detail.price, changes: detail.applied.map((change) => change.label) }

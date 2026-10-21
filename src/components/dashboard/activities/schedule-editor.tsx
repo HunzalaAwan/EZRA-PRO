@@ -1028,7 +1028,7 @@ function DayCapacity({
           <p className="mt-0.5 text-xs text-muted">
             {on
               ? `The most ${word} on one day, across all its start times. Leave a day empty for no limit.`
-              : `Each start time takes up to ${one === 'charter' ? 'one group' : `its ${many}`}. Add a limit for the whole day, for example when only one team is working.`}
+              : `Each start time takes up to ${one === 'group' ? 'one group' : `its ${many}`}. Add a limit for the whole day, for example when only one team is working.`}
           </p>
         </div>
         <Switch

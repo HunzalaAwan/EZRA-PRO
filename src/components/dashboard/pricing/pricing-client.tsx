@@ -1,7 +1,6 @@
 'use client'
 
 import * as React from 'react'
-import Link from 'next/link'
 import { Ban, Check, Gift, Pencil, Plus, RotateCcw, Tag, TrendingUp, X } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
@@ -34,7 +33,9 @@ import { clockTime, expandSchedules, scheduleContextOf, shiftDayKey, slotId } fr
 import { getActivityBySlug, tenantBySlug } from '@/lib/demo-core'
 import { effectLabel, priceBooking } from '@/lib/price-engine'
 import {
+  DEMAND_RULE_KINDS,
   RULE_KIND_LABEL,
+  dayLabel,
   newGiftCode,
   ruleSummary,
   type GiftCard,
@@ -127,8 +128,20 @@ type Pricing = ReturnType<typeof usePricing>
 
 const BLANK_RULE: PricingRule = { id: '', name: '', kind: 'early_bird', percent: -10, activitySlugs: [], daysAhead: 30, active: true }
 
+/** "All activities", "Sunset sail, Reef snorkel", "Sunset sail, Reef snorkel and 3 more". */
+function appliesTo(slugs: string[], activities: PricingActivity[]): string {
+  if (slugs.length === 0) return 'All activities'
+  const names = slugs.map((slug) => activities.find((entry) => entry.slug === slug)?.name ?? slug)
+  return names.length <= 3 ? names.join(', ') : `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`
+}
+
+const EVERY = '__all'
+
 function RulesTab({ pricing, tenantSlug, activities, currency, nowIso, peaks, fills }: { pricing: Pricing; tenantSlug: string; activities: PricingActivity[]; currency: CurrencyCode; nowIso: string; peaks: Record<string, number>; fills?: Record<string, SlotFill> }) {
   const [editing, setEditing] = React.useState<PricingRule | null>(null)
+  /** The rules shown: all of them, or the ones that apply to one activity. */
+  const [forSlug, setForSlug] = React.useState(EVERY)
+  const shown = forSlug === EVERY ? pricing.rules : pricing.rules.filter((rule) => rule.activitySlugs.length === 0 || rule.activitySlugs.includes(forSlug))
 
   const save = (rule: PricingRule) => {
     if (!rule.name.trim()) return
@@ -145,16 +158,24 @@ function RulesTab({ pricing, tenantSlug, activities, currency, nowIso, peaks, fi
           <div>
             <CardTitle>Price rules</CardTitle>
             <CardDescription>Applied one after another to the ticket price. They never take a price below half.</CardDescription>
-            <p className="mt-1 text-xs text-subtle">
-              Each activity can also have its own price changes, set on its Pricing step in{' '}
-              <Link href="/dashboard/activities" className="font-medium text-primary hover:underline">Activities</Link>.
-            </p>
           </div>
-          <Button size="sm" leftIcon={<Plus />} onClick={() => setEditing({ ...BLANK_RULE })}>Add rule</Button>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Select value={forSlug} onValueChange={setForSlug}>
+              <SelectTrigger size="sm" aria-label="Show the rules for" className="w-52"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value={EVERY}>All activities</SelectItem>
+                {activities.map((entry) => (
+                  <SelectItem key={entry.slug} value={entry.slug}>{entry.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button size="sm" leftIcon={<Plus />} onClick={() => setEditing({ ...BLANK_RULE, activitySlugs: forSlug === EVERY ? [] : [forSlug] })}>Add rule</Button>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
+          {shown.length === 0 ? <p className="px-5 pb-6 text-sm text-subtle">{forSlug === EVERY ? 'No price rules yet' : 'No rules for this activity yet'}</p> : null}
           <ul className="flex list-none flex-col divide-y divide-line-subtle p-0">
-            {pricing.rules.map((rule) => (
+            {shown.map((rule) => (
               <li key={rule.id} className={cn('flex items-start gap-4 px-5 py-4', !rule.active && 'opacity-60')}>
                 <span aria-hidden="true" className={cn('grid size-10 shrink-0 place-items-center rounded-xl', rule.percent < 0 ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning')}>
                   <TrendingUp className={cn('size-[1.125rem]', rule.percent < 0 && 'rotate-180')} />
@@ -165,9 +186,7 @@ function RulesTab({ pricing, tenantSlug, activities, currency, nowIso, peaks, fi
                     <Badge variant="neutral" size="sm">{RULE_KIND_LABEL[rule.kind]}</Badge>
                   </p>
                   <p className="mt-0.5 text-sm text-muted">{ruleSummary(rule)}</p>
-                  <p className="mt-0.5 text-xs text-subtle">
-                    {rule.activitySlugs.length === 0 ? 'Every activity' : rule.activitySlugs.map((slug) => activities.find((entry) => entry.slug === slug)?.name ?? slug).join(', ')}
-                  </p>
+                  <p className="mt-0.5 text-xs text-subtle">{appliesTo(rule.activitySlugs, activities)}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <Switch checked={rule.active} onCheckedChange={(checked) => pricing.setRules(pricing.rules.map((entry) => (entry.id === rule.id ? { ...entry, active: checked } : entry)))} aria-label={`${rule.name} on`} />
@@ -179,16 +198,16 @@ function RulesTab({ pricing, tenantSlug, activities, currency, nowIso, peaks, fi
         </CardContent>
       </Card>
 
-      <PriceCheck tenantSlug={tenantSlug} activities={activities} currency={currency} nowIso={nowIso} rules={pricing.rules} peaks={peaks} fills={fills} />
+      <PriceCheck tenantSlug={tenantSlug} activities={activities} currency={currency} nowIso={nowIso} rules={pricing.rules} peaks={peaks} fills={fills} focusSlug={forSlug === EVERY ? undefined : forSlug} />
 
-      <RuleDialog rule={editing} activities={activities} onClose={() => setEditing(null)} onSave={save} onDelete={(id) => { pricing.setRules(pricing.rules.filter((entry) => entry.id !== id)); setEditing(null); toast('Rule removed') }} />
+      <RuleDialog rule={editing} activities={activities} todayKey={nowIso.slice(0, 10)} onClose={() => setEditing(null)} onSave={save} onDelete={(id) => { pricing.setRules(pricing.rules.filter((entry) => entry.id !== id)); setEditing(null); toast('Rule removed') }} />
     </div>
   )
 }
 
 /* --------------------------------------------------------------------------
    Price check — the price engine on one activity, as the storefront prices
-   it: its saved prices and own price changes, then the price rules above.
+   it: its saved prices, then the price rules above.
    -------------------------------------------------------------------------- */
 
 /**
@@ -219,7 +238,7 @@ function checkPrice(activity: Activity, count: number, ctx: { startsAt: string; 
   return { result, before: result.ticketLines.reduce((sum, line) => sum + line.baseUnitPrice * line.quantity, 0) }
 }
 
-function PriceCheck({ tenantSlug, activities, currency, nowIso, rules, peaks, fills }: { tenantSlug: string; activities: PricingActivity[]; currency: CurrencyCode; nowIso: string; rules: PricingRule[]; peaks: Record<string, number>; fills?: Record<string, SlotFill> }) {
+function PriceCheck({ tenantSlug, activities, currency, nowIso, rules, peaks, fills, focusSlug }: { tenantSlug: string; activities: PricingActivity[]; currency: CurrencyCode; nowIso: string; rules: PricingRule[]; peaks: Record<string, number>; fills?: Record<string, SlotFill>; /** The activity the rules list is showing: the check follows it. */ focusSlug?: string }) {
   const overrides = useActivityOverrides()
   const { defaults } = useBookingDefaults(tenantSlug)
   const ledger = useBookingLedger(tenantSlug)
@@ -229,6 +248,9 @@ function PriceCheck({ tenantSlug, activities, currency, nowIso, rules, peaks, fi
   const [dateKey, setDateKey] = React.useState(() => shiftDayKey(todayKey, 35))
   const [picked, setPicked] = React.useState('')
   const [count, setCount] = React.useState(2)
+  React.useEffect(() => {
+    if (focusSlug) setSlug(focusSlug)
+  }, [focusSlug])
 
   const seeded = tenant ? getActivityBySlug(tenant.id, slug) : undefined
   const override = seeded ? overrides[seeded.id] : undefined
@@ -264,7 +286,9 @@ function PriceCheck({ tenantSlug, activities, currency, nowIso, rules, peaks, fi
     try {
       // A seeded time slot's peak or off-peak pricing, as the storefront applies it.
       const multiplier = time ? peaks[`${slug}|${dateKey}T${time}`] : undefined
-      return checkPrice(applyPricingOverride(seeded, override), count, { startsAt: `${dateKey}T${time || '12:00'}:00`, nowIso, rules, multiplier, capacity: fill?.capacity, booked: fill?.booked })
+      // With no start time picked, a time-of-day rule has nothing to match.
+      const checked = time ? rules : rules.filter((rule) => rule.kind !== 'time_of_day')
+      return checkPrice(applyPricingOverride(seeded, override), count, { startsAt: `${dateKey}T${time || '12:00'}:00`, nowIso, rules: checked, multiplier, capacity: fill?.capacity, booked: fill?.booked })
     } catch {
       return null
     }
@@ -340,38 +364,124 @@ function PriceCheck({ tenantSlug, activities, currency, nowIso, rules, peaks, fi
   )
 }
 
-function ActivityPicker({ value, onChange, activities }: { value: string[]; onChange: (value: string[]) => void; activities: PricingActivity[] }) {
+type Scope = 'all' | 'chosen'
+
+const scopeOf = (slugs: string[] | undefined): Scope => ((slugs ?? []).length > 0 ? 'chosen' : 'all')
+
+/**
+ * Which activities a rule or code is for: all of them, or the ones ticked.
+ * The dialog holds the scope, so "Chosen activities" with nothing ticked yet
+ * stays chosen (and can't be saved) instead of quietly meaning all.
+ */
+function ActivityPicker({ scope, onScopeChange, value, onChange, activities }: { scope: Scope; onScopeChange: (scope: Scope) => void; value: string[]; onChange: (value: string[]) => void; activities: PricingActivity[] }) {
+  const picked = value.filter((slug) => activities.some((entry) => entry.slug === slug))
+  const everyOne = activities.length > 0 && picked.length === activities.length
   return (
-    <div>
-      <label className="mb-2 inline-flex items-center gap-2 text-sm">
-        <Checkbox checked={value.length === 0} onCheckedChange={(checked) => onChange(checked === true ? [] : [activities[0]?.slug ?? ''])} />
-        Every activity
-      </label>
-      {value.length > 0 ? (
-        <div className="grid max-h-44 gap-1.5 overflow-y-auto rounded-xl border border-line p-2 sm:grid-cols-2">
-          {activities.map((entry) => (
-            <label key={entry.slug} className="flex items-center gap-2 text-sm">
-              <Checkbox
-                checked={value.includes(entry.slug)}
-                onCheckedChange={(checked) => {
-                  const next = checked === true ? [...value, entry.slug] : value.filter((slug) => slug !== entry.slug)
-                  onChange(next.length === 0 ? [entry.slug] : next)
-                }}
-              />
-              <span className="truncate">{entry.name}</span>
-            </label>
-          ))}
+    <div className="flex flex-col gap-2">
+      <Segmented
+        label="Which activities"
+        size="sm"
+        className="self-start"
+        value={scope}
+        onValueChange={(next) => {
+          onScopeChange(next)
+          if (next === 'all') onChange([])
+        }}
+        options={[
+          { value: 'all', label: 'All activities' },
+          { value: 'chosen', label: 'Chosen activities' },
+        ]}
+      />
+      {scope === 'chosen' ? (
+        <div className="rounded-xl border border-line">
+          <div className="flex items-center justify-between gap-3 border-b border-line-subtle px-3 py-2 text-xs">
+            <span className={picked.length === 0 ? 'text-danger' : 'text-subtle'}>{picked.length === 0 ? 'Tick at least one' : `${picked.length} of ${activities.length} chosen`}</span>
+            <button type="button" className="font-medium text-primary hover:underline" onClick={() => onChange(everyOne ? [] : activities.map((entry) => entry.slug))}>
+              {everyOne ? 'Clear' : 'Tick all'}
+            </button>
+          </div>
+          <div className="grid max-h-52 gap-0.5 overflow-y-auto p-1.5 sm:grid-cols-2">
+            {activities.map((entry) => (
+              <label key={entry.slug} className="flex min-w-0 cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-surface-sunken">
+                <Checkbox
+                  checked={picked.includes(entry.slug)}
+                  onCheckedChange={(checked) => onChange(checked === true ? [...picked, entry.slug] : picked.filter((slug) => slug !== entry.slug))}
+                />
+                <span className="truncate">{entry.name}</span>
+              </label>
+            ))}
+          </div>
         </div>
       ) : null}
     </div>
   )
 }
 
-function RuleDialog({ rule, activities, onClose, onSave, onDelete }: { rule: PricingRule | null; activities: PricingActivity[]; onClose: () => void; onSave: (rule: PricingRule) => void; onDelete: (id: string) => void }) {
+/** A rule has a name, the activities it is for, and what its kind goes by. */
+function ruleReady(rule: PricingRule, scope: Scope): boolean {
+  if (!rule.name.trim()) return false
+  if (scope === 'chosen' && rule.activitySlugs.length === 0) return false
+  switch (rule.kind) {
+    case 'season':
+      return Boolean(rule.from && rule.to)
+    case 'weekday':
+      return (rule.weekdays ?? []).length > 0
+    case 'time_of_day':
+      return Boolean(rule.fromTime && rule.toTime)
+    case 'dates':
+      return (rule.dates ?? []).length > 0
+    default:
+      return true
+  }
+}
+
+/** A "MM-DD" day as the next time it comes round. */
+function nextKey(mmdd: string, todayKey: string): string {
+  const year = Number(todayKey.slice(0, 4))
+  const key = `${year}-${mmdd}`
+  return key < todayKey ? `${year + 1}-${mmdd}` : key
+}
+
+/** A whole number typed into a field, kept between min and max. */
+const whole = (value: string, min: number, max: number) => Math.max(min, Math.min(max, Math.floor(Number(value)) || min))
+
+function RuleDialog({ rule, activities, todayKey, onClose, onSave, onDelete }: { rule: PricingRule | null; activities: PricingActivity[]; todayKey: string; onClose: () => void; onSave: (rule: PricingRule) => void; onDelete: (id: string) => void }) {
   const [draft, setDraft] = React.useState<PricingRule | null>(rule)
-  React.useEffect(() => setDraft(rule), [rule])
+  const [scope, setScope] = React.useState<Scope>(scopeOf(rule?.activitySlugs))
+  const [pendingDate, setPendingDate] = React.useState('')
+  React.useEffect(() => {
+    setDraft(rule)
+    setScope(scopeOf(rule?.activitySlugs))
+    setPendingDate('')
+  }, [rule])
   if (!draft) return null
   const set = (patch: Partial<PricingRule>) => setDraft({ ...draft, ...patch })
+  // A kind starts with what its sentence needs.
+  const switchKind = (kind: RuleKind) => {
+    const patch: Partial<PricingRule> = { kind }
+    if (kind === 'time_of_day') Object.assign(patch, { fromTime: draft.fromTime ?? '07:00', toTime: draft.toTime ?? '11:00' })
+    if (kind === 'filling_up' && draft.kind !== 'filling_up') patch.soldPercent = 80
+    if (kind === 'slow_time' && draft.kind !== 'slow_time') Object.assign(patch, { soldPercent: 50, hoursWithin: draft.hoursWithin ?? 24 })
+    set(patch)
+  }
+  const dates = draft.dates ?? []
+  const yearly = dates.length > 0 && dates.every((date) => date.length === 5)
+  const addDate = () => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(pendingDate)) return
+    const key = yearly ? pendingDate.slice(5) : pendingDate
+    if (!dates.includes(key)) set({ dates: [...dates, key].sort() })
+    setPendingDate('')
+  }
+  const toggleYearly = (on: boolean) =>
+    set({ dates: [...new Set(dates.map((date) => (on ? date.slice(-5) : date.length === 5 ? nextKey(date, todayKey) : date)))].sort() })
+  const note =
+    draft.kind === 'group'
+      ? 'Group sizes don’t add up: a booking gets the biggest size it reaches.'
+      : DEMAND_RULE_KINDS.includes(draft.kind)
+        ? 'Early bird, last minute, filling up and quiet times don’t add up: guests get the best one.'
+        : null
+  const forWhom = scope === 'all' ? 'all activities' : draft.activitySlugs.length === 0 ? 'no activities yet' : appliesTo(draft.activitySlugs, activities)
+
   return (
     <Dialog open={rule !== null} onOpenChange={(value) => !value && onClose()}>
       <DialogContent size="md">
@@ -389,7 +499,7 @@ function RuleDialog({ rule, activities, onClose, onSave, onDelete }: { rule: Pri
             </Field>
           </div>
           <Field label="When it applies">
-            <Select value={draft.kind} onValueChange={(value) => set({ kind: value as RuleKind })}>
+            <Select value={draft.kind} onValueChange={(value) => switchKind(value as RuleKind)}>
               <SelectTrigger aria-label="Rule type"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {(Object.keys(RULE_KIND_LABEL) as RuleKind[]).map((kind) => (
@@ -416,17 +526,103 @@ function RuleDialog({ rule, activities, onClose, onSave, onDelete }: { rule: Pri
               })}
             </div>
           ) : null}
+          {draft.kind === 'time_of_day' ? (
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Start times from">{(control) => <Input {...control} type="time" value={draft.fromTime ?? ''} onChange={(e) => set({ fromTime: e.target.value || undefined })} />}</Field>
+              <Field label="To">{(control) => <Input {...control} type="time" value={draft.toTime ?? ''} onChange={(e) => set({ toTime: e.target.value || undefined })} />}</Field>
+            </div>
+          ) : null}
+          {draft.kind === 'dates' ? (
+            <Field label="On these dates">
+              {(control) => (
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Input
+                      {...control}
+                      type="date"
+                      className="w-44"
+                      value={pendingDate}
+                      onChange={(e) => setPendingDate(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          addDate()
+                        }
+                      }}
+                    />
+                    <Button variant="secondary" size="sm" leftIcon={<Plus />} disabled={!pendingDate} onClick={addDate}>Add</Button>
+                    {dates.length > 0 ? (
+                      <label className="ml-auto inline-flex items-center gap-2 text-sm text-muted">
+                        <Switch size="sm" checked={yearly} onCheckedChange={toggleYearly} aria-label="Every year" />
+                        Every year
+                      </label>
+                    ) : null}
+                  </div>
+                  {dates.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {dates.map((date) => (
+                        <span key={date} className="inline-flex h-8 items-center gap-1 rounded-full border border-line bg-surface pr-1 pl-2.5 text-[0.8125rem] font-medium tabular-nums">
+                          {dayLabel(date)}
+                          {date.length === 10 && date.slice(0, 4) !== todayKey.slice(0, 4) ? <span className="text-faint">{date.slice(0, 4)}</span> : null}
+                          <button type="button" aria-label={`Remove ${dayLabel(date)}`} onClick={() => set({ dates: dates.filter((entry) => entry !== date) })} className="grid size-5 place-items-center rounded-full text-faint hover:bg-surface-sunken hover:text-danger">
+                            <X className="size-3" aria-hidden="true" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </Field>
+          ) : null}
           {draft.kind === 'early_bird' ? <Field label="Booked at least this many days ahead">{(control) => <Input {...control} type="number" min={1} value={draft.daysAhead ?? 30} onChange={(e) => set({ daysAhead: Math.max(1, Number(e.target.value) || 1) })} />}</Field> : null}
           {draft.kind === 'last_minute' ? <Field label="Within this many hours of the start">{(control) => <Input {...control} type="number" min={1} value={draft.hoursWithin ?? 24} onChange={(e) => set({ hoursWithin: Math.max(1, Number(e.target.value) || 1) })} />}</Field> : null}
+          {draft.kind === 'filling_up' ? (
+            <Field label="When at least this much is booked" description="Not used on private activities.">
+              {(control) => <Input {...control} type="number" min={1} max={100} suffix="% of spots" value={draft.soldPercent ?? 80} onChange={(e) => set({ soldPercent: whole(e.target.value, 1, 100) })} />}
+            </Field>
+          ) : null}
+          {draft.kind === 'slow_time' ? (
+            <div className="flex flex-col gap-1.5">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="When under this much is booked">
+                  {(control) => <Input {...control} type="number" min={1} max={100} suffix="% of spots" value={draft.soldPercent ?? 50} onChange={(e) => set({ soldPercent: whole(e.target.value, 1, 100) })} />}
+                </Field>
+                <Field label="Within hours of the start" optional>
+                  {(control) => (
+                    <Input
+                      {...control}
+                      type="number"
+                      min={1}
+                      max={336}
+                      suffix="hours"
+                      placeholder="Any time"
+                      value={draft.hoursWithin && draft.hoursWithin > 0 ? draft.hoursWithin : ''}
+                      onChange={(e) => {
+                        const hours = Math.floor(Number(e.target.value))
+                        set({ hoursWithin: hours > 0 ? Math.min(336, hours) : undefined })
+                      }}
+                    />
+                  )}
+                </Field>
+              </div>
+              <p className="text-xs text-subtle">Not used on private activities.</p>
+            </div>
+          ) : null}
           {draft.kind === 'group' ? <Field label="Guests at least">{(control) => <Input {...control} type="number" min={2} value={draft.minGuests ?? 8} onChange={(e) => set({ minGuests: Math.max(2, Number(e.target.value) || 2) })} />}</Field> : null}
+          {note ? <p className="-mt-2 text-xs text-subtle">{note}</p> : null}
           <Field label="Activities">
-            <ActivityPicker value={draft.activitySlugs} onChange={(activitySlugs) => set({ activitySlugs })} activities={activities} />
+            <ActivityPicker scope={scope} onScopeChange={setScope} value={draft.activitySlugs} onChange={(activitySlugs) => set({ activitySlugs })} activities={activities} />
           </Field>
+          <p className="rounded-lg bg-surface-sunken px-3 py-2 text-sm text-foreground">
+            {ruleSummary(draft)}
+            <span className="text-muted"> · {forWhom}</span>
+          </p>
         </DialogBody>
         <DialogFooter divider>
           {draft.id ? <Button variant="ghost" size="sm" className="mr-auto text-danger" onClick={() => onDelete(draft.id)}>Remove rule</Button> : null}
           <Button variant="ghost" size="sm" leftIcon={<X />} onClick={onClose}>Cancel</Button>
-          <Button size="sm" leftIcon={<Check />} disabled={!draft.name.trim()} onClick={() => onSave(draft)}>Save rule</Button>
+          <Button size="sm" leftIcon={<Check />} disabled={!ruleReady(draft, scope)} onClick={() => onSave(scope === 'all' ? { ...draft, activitySlugs: [] } : draft)}>Save rule</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -444,13 +640,23 @@ function PromosTab({ pricing, activities, currency, todayKey }: { pricing: Prici
   const [error, setError] = React.useState<string | null>(null)
   /** The code being edited, or null for a new one. */
   const [original, setOriginal] = React.useState<string | null>(null)
+  /** All activities, or the ones ticked. */
+  const [scope, setScope] = React.useState<Scope>('all')
+  const open = (promo: PromoCode, code: string | null) => {
+    setDraft({ ...promo })
+    setOriginal(code)
+    setScope(scopeOf(promo.activitySlugs))
+    setError(null)
+  }
 
   const save = () => {
     if (!draft) return
     const code = draft.code.trim().toUpperCase().replace(/\s+/g, '')
     if (code.length < 3) return setError('Codes need at least three characters.')
     if (code !== original && pricing.promos.some((promo) => promo.code === code)) return setError('That code already exists.')
-    pricing.setPromos(original ? pricing.promos.map((promo) => (promo.code === original ? { ...draft, code } : promo)) : [{ ...draft, code }, ...pricing.promos])
+    if (scope === 'chosen' && draft.activitySlugs.length === 0) return
+    const saved = { ...draft, code, activitySlugs: scope === 'all' ? [] : draft.activitySlugs }
+    pricing.setPromos(original ? pricing.promos.map((promo) => (promo.code === original ? saved : promo)) : [saved, ...pricing.promos])
     toast.success(`${code} saved`, { description: 'Guests can use it at checkout now.' })
     setDraft(null)
   }
@@ -462,7 +668,7 @@ function PromosTab({ pricing, activities, currency, todayKey }: { pricing: Prici
           <CardTitle>Promo codes</CardTitle>
           <CardDescription>Guests enter them at checkout; the walk-in screen takes them too.</CardDescription>
         </div>
-        <Button size="sm" leftIcon={<Plus />} onClick={() => { setDraft({ ...BLANK_PROMO }); setOriginal(null); setError(null) }}>New code</Button>
+        <Button size="sm" leftIcon={<Plus />} onClick={() => open(BLANK_PROMO, null)}>New code</Button>
       </CardHeader>
       <CardContent className="p-0">
         <ul className="flex list-none flex-col divide-y divide-line-subtle p-0">
@@ -477,7 +683,7 @@ function PromosTab({ pricing, activities, currency, todayKey }: { pricing: Prici
                 </span>
                 <span className="min-w-0 flex-1 text-sm text-muted">
                   {promo.kind === 'percent' ? `${promo.value}% off` : `${formatCurrency(promo.value, currency)} off`}
-                  {promo.activitySlugs.length > 0 ? ` · ${promo.activitySlugs.map((slug) => activities.find((entry) => entry.slug === slug)?.name ?? slug).join(', ')}` : ' · every activity'}
+                  {promo.activitySlugs.length > 0 ? ` · ${appliesTo(promo.activitySlugs, activities)}` : ' · all activities'}
                   {promo.minSubtotal > 0 ? ` · over ${formatCurrency(promo.minSubtotal, currency)}` : ''}
                   {promo.note ? <span className="block text-xs text-subtle">{promo.note}</span> : null}
                 </span>
@@ -489,7 +695,7 @@ function PromosTab({ pricing, activities, currency, todayKey }: { pricing: Prici
                 </span>
                 {expired ? <Badge variant="neutral" size="sm">Expired</Badge> : null}
                 <Switch checked={promo.active} onCheckedChange={(checked) => pricing.setPromos(pricing.promos.map((entry) => (entry.code === promo.code ? { ...entry, active: checked } : entry)))} aria-label={`${promo.code} on`} />
-                <Button variant="ghost" size="sm" leftIcon={<Pencil />} onClick={() => { setDraft({ ...promo }); setOriginal(promo.code); setError(null) }}>Edit</Button>
+                <Button variant="ghost" size="sm" leftIcon={<Pencil />} onClick={() => open(promo, promo.code)}>Edit</Button>
               </li>
             )
           })}
@@ -528,13 +734,13 @@ function PromosTab({ pricing, activities, currency, todayKey }: { pricing: Prici
                   <Field label="Ends on" optional>{(control) => <Input {...control} type="date" value={draft.endsOn ?? ''} onChange={(e) => setDraft({ ...draft, endsOn: e.target.value || undefined })} />}</Field>
                 </div>
                 <Field label="Activities">
-                  <ActivityPicker value={draft.activitySlugs} onChange={(activitySlugs) => setDraft({ ...draft, activitySlugs })} activities={activities} />
+                  <ActivityPicker scope={scope} onScopeChange={setScope} value={draft.activitySlugs} onChange={(activitySlugs) => setDraft({ ...draft, activitySlugs })} activities={activities} />
                 </Field>
                 <Field label="Note for the team" optional>{(control) => <Input {...control} value={draft.note ?? ''} onChange={(e) => setDraft({ ...draft, note: e.target.value || undefined })} placeholder="Concierge partners" />}</Field>
               </DialogBody>
               <DialogFooter divider>
                 <Button variant="ghost" size="sm" onClick={() => setDraft(null)}>Cancel</Button>
-                <Button size="sm" leftIcon={<Check />} onClick={save}>Save code</Button>
+                <Button size="sm" leftIcon={<Check />} disabled={scope === 'chosen' && draft.activitySlugs.length === 0} onClick={save}>Save code</Button>
               </DialogFooter>
             </>
           ) : null}

@@ -1,20 +1,14 @@
 'use client'
 
 import * as React from 'react'
-import { Anchor, Bike, Car, DoorOpen, GraduationCap, KeyRound, Layers, Lock, Package, Route, Ship, Ticket, UsersRound, Zap, type LucideIcon } from 'lucide-react'
+import { Anchor, GraduationCap, KeyRound, Layers, Lock, Route, Ticket, UsersRound, Zap, type LucideIcon } from 'lucide-react'
 
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { RadioGroup, RadioGroupCard } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import {
-  ACTIVITY_KIND_META,
-  isTimedKind,
-  LESSON_LEVELS,
-  RENTAL_CATEGORIES,
-  rentalCategoryMeta,
-} from '@/lib/activity-kinds'
+import { ACTIVITY_KIND_META, isTimedKind, LESSON_LEVELS } from '@/lib/activity-kinds'
 import { cn } from '@/lib/utils'
 import type { ActivityKind, CharterConfig, DifficultyLevel, LessonConfig, RentalCategory, RentalConfig } from '@/types'
 
@@ -36,14 +30,6 @@ export const KIND_ICONS: Record<ActivityKind, LucideIcon> = {
   lesson: GraduationCap,
   pass: Ticket,
   package: Layers,
-}
-
-const CATEGORY_ICONS: Record<RentalCategory, LucideIcon> = {
-  watercraft: Ship,
-  vehicle: Car,
-  bike: Bike,
-  gear: Package,
-  space: DoorOpen,
 }
 
 export interface DraftKindSettings {
@@ -180,7 +166,7 @@ const PICKER_KINDS: ActivityKind[] = ['trip', 'rental', 'lesson', 'pass', 'packa
 const TIMED_CARD = {
   label: 'Activity or tour',
   hint: 'Guests book a time slot, with others or as a private group.',
-  examples: 'Tours, snorkelling, horse rides, ziplines, fishing charters, private guiding',
+  examples: 'Tours, snorkelling, horse rides, ziplines, fishing trips, private guiding',
 }
 
 export function KindPicker({ value, onChange }: { value: ActivityKind; onChange: (kind: ActivityKind) => void }) {
@@ -530,55 +516,16 @@ export function KindFields({
 
   /* ---------- rental ---------- */
   if (kind === 'rental') {
+    // No "what do you rent?" choice: a new rental keeps the default category, a seeded one its own.
     const rental = settings.rental
-    const pickCategory = (category: RentalCategory) => {
-      const next = rentalCategoryMeta(category)
-      set('rental', {
-        category,
-        seatsPerUnit: next.seatsPerUnit,
-        billing: next.billing,
-        modes: category === 'vehicle' ? ['day'] : ['hour'],
-      })
-    }
     return shell(
-      <>
-        <Section title="What do you rent?">
-          <div role="radiogroup" aria-label="What do you rent" className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            {RENTAL_CATEGORIES.map((entry) => {
-              const Icon = CATEGORY_ICONS[entry.value]
-              const on = entry.value === rental.category
-              return (
-                <button
-                  key={entry.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={on}
-                  onClick={() => pickCategory(entry.value)}
-                  className={cn(
-                    'flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-colors duration-200',
-                    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
-                    on ? 'border-primary bg-primary-soft/30' : 'border-line bg-surface hover:border-line-strong',
-                  )}
-                >
-                  <Icon className={cn('mt-0.5 size-4 shrink-0', on ? 'text-primary' : 'text-faint')} aria-hidden="true" />
-                  <span className="min-w-0">
-                    <span className="block text-sm font-medium text-foreground">{entry.label}</span>
-                    <span className="block text-xs text-subtle">{entry.hint}</span>
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        </Section>
-
-        <Section title="Between rentals" hint="Items, how they are charged and prices are on the Pricing step.">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Gap between rentals" optional description="To clean, check or refuel.">
-              {(control) => <Input {...control} type="number" min={0} step={5} suffix="min" placeholder="None" value={rental.bufferMinutes || ''} onChange={(e) => set('rental', { bufferMinutes: num(e.target.value) })} />}
-            </Field>
-          </div>
-        </Section>
-      </>,
+      <Section title="Between rentals" hint="Items, how they are charged and prices are on the Pricing step.">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Gap between rentals" optional description="To clean, check or get it ready.">
+            {(control) => <Input {...control} type="number" min={0} step={5} suffix="min" placeholder="None" value={rental.bufferMinutes || ''} onChange={(e) => set('rental', { bufferMinutes: num(e.target.value) })} />}
+          </Field>
+        </div>
+      </Section>,
     )
   }
 
@@ -683,7 +630,6 @@ export function RentalRatesEditor({
 }) {
   const settings = normalizeKindSettings(raw)
   const rental = settings.rental
-  const meta = rentalCategoryMeta(rental.category)
   const hourly = rental.modes.includes('hour')
   const daily = rental.modes.includes('day')
   const rateOf = (tier: DraftTier) => rental.rates[tier.id] ?? { hour: tier.price, day: Math.round((tier.price * 4) / 500) * 500 }
@@ -697,13 +643,6 @@ export function RentalRatesEditor({
   const whole = (value: string, least = 0) => Math.max(least, Number.parseInt(value, 10) || 0)
   const stock = tiers.reduce((sum, tier) => sum + draftItemOf(rental, tier.id).stock, 0)
   const people = tiers.reduce((sum, tier) => sum + draftItemOf(rental, tier.id).stock * draftItemOf(rental, tier.id).holds, 0)
-  const examples: Record<string, string> = {
-    gear: 'Single kayak',
-    watercraft: 'Pontoon boat',
-    vehicle: 'Compact car',
-    bike: 'City e-bike',
-    space: 'Meeting room',
-  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -716,7 +655,7 @@ export function RentalRatesEditor({
               <div className="flex items-start gap-3">
                 <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
                   <Field label="Item" labelSize="sm" error={errors[`tiers.${index}.label`]}>
-                    {(control) => <Input {...control} value={tier.label} placeholder={examples[meta.value] ?? 'Item name'} onChange={(e) => setTier(tier.id, { label: e.target.value })} />}
+                    {(control) => <Input {...control} value={tier.label} placeholder="Item name" onChange={(e) => setTier(tier.id, { label: e.target.value })} />}
                   </Field>
                   <Field label="Short description" labelSize="sm" optional>
                     {(control) => <Input {...control} value={tier.description} placeholder="What guests should know about it" onChange={(e) => setTier(tier.id, { description: e.target.value })} />}

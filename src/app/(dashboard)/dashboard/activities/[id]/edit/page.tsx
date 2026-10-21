@@ -26,9 +26,9 @@ export async function generateMetadata({ params }: EditActivityPageProps): Promi
 }
 
 /* ==========================================================================
-   /dashboard/activities/[id]/edit — the same seven steps as a new activity,
+   /dashboard/activities/[id]/edit — the same steps as a new activity,
    filled in from the one that exists, with the live preview beside them.
-   `?step=schedule` opens straight on a step.
+   `?step=schedule` (or photos, pricing, booking…) opens straight on a step.
    ========================================================================== */
 
 export default async function EditActivityPage({ params, searchParams }: EditActivityPageProps) {
