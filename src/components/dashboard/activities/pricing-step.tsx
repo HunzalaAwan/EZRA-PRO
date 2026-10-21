@@ -4,8 +4,9 @@ import * as React from 'react'
 import { CircleAlert, Clock, KeyRound, User, Users, type LucideIcon } from 'lucide-react'
 
 import type { ActivityKind, ChargeBy, CurrencyCode, GroupDiscount, GroupPrice, PaymentTerms, PriceChange, PriceTier, PrivateOption } from '@/types'
-import { defaultChargeBy, fromPrice, type PricedActivity } from '@/lib/price-engine'
+import { defaultChargeBy, fromPrice, groupTierOf, type PricedActivity } from '@/lib/price-engine'
 import { cn, currencySymbol, formatCurrency, pluralize } from '@/lib/utils'
+import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 
 import { AddonEditor, type DraftAddOn } from './addon-editor'
@@ -83,16 +84,39 @@ export function chargeOptions(kind: ActivityKind): ChargeBy[] {
   }
 }
 
-/** Is the draft a shared activity priced per group (one price for the group, guests counted by type)? */
-const isGroupPriced = (draft: Pick<PricingDraft, 'kind' | 'chargeBy' | 'kindSettings'>, dining: boolean) =>
+/**
+ * Is the draft a shared activity priced per group? One price for the group;
+ * guests only say how many are coming. The per-person prices stay in the
+ * draft while it is open, so going back to per person brings them back.
+ */
+export const isGroupPriced = (draft: Pick<PricingDraft, 'kind' | 'chargeBy' | 'kindSettings'>, dining = false) =>
   !dining && (draft.kind ?? 'trip') !== 'charter' && effectiveChargeBy(draft) === 'group'
+
+/** Per group: the price row every guest is booked on, as the storefront picks it (see `groupTierOf`). */
+export function groupTierIdOf(draft: Pick<PricingDraft, 'tiers'>): string | undefined {
+  return groupTierOf({ priceTiers: draft.tiers.map(tierOfDraft) })?.id
+}
+
+/**
+ * The price rows a save keeps. Per group only the row guests are booked on:
+ * the other prices are hidden there, so a save doesn't keep them.
+ */
+export function savedTiersOf(draft: Pick<PricingDraft, 'kind' | 'chargeBy' | 'kindSettings' | 'tiers'>, dining = false): DraftTier[] {
+  if (!isGroupPriced(draft, dining)) return draft.tiers
+  const id = groupTierIdOf(draft)
+  return draft.tiers.filter((tier) => tier.id === id)
+}
+
+/** The longest group price description. */
+const GROUP_NOTE_MAX = 80
 
 /** What the Pricing step must have before moving on. Keys match the fields that show them. */
 export function pricingErrors(draft: PricingDraft, dining = false): Record<string, string> {
   const errors: Record<string, string> = {}
-  if (isGroupPriced(draft, dining) && (draft.groupPrice?.price ?? 0) <= 0) errors['groupPrice.price'] = 'Set a price for the group'
-  // Ages the wrong way round would save as one age ("12–12").
-  if (!dining && (draft.kind ?? 'trip') !== 'charter' && (draft.kind ?? 'trip') !== 'rental') {
+  const grouped = isGroupPriced(draft, dining)
+  if (grouped && (draft.groupPrice?.price ?? 0) <= 0) errors['groupPrice.price'] = 'Set a price for the group'
+  // Ages the wrong way round would save as one age ("12–12"). Per group the prices are hidden, so they are not checked.
+  if (!dining && !grouped && (draft.kind ?? 'trip') !== 'charter' && (draft.kind ?? 'trip') !== 'rental') {
     draft.tiers.forEach((tier, index) => {
       if ((tier.ageMin ?? 0) > 0 && (tier.ageMax ?? 0) > 0 && tier.ageMax! < tier.ageMin!) errors[`tiers.${index}.ageMax`] = 'The oldest age is under the youngest'
     })
@@ -111,14 +135,22 @@ export function effectiveChargeBy(draft: Pick<PricingDraft, 'kind' | 'chargeBy' 
   return draft.chargeBy && options.includes(draft.chargeBy) ? draft.chargeBy : defaultChargeBy(kind)
 }
 
-/** One price for the whole group: it covers every spot, with no extra-guest charge. */
+/** One price for the whole group: it covers every spot, with no extra-guest charge. The description is kept as typed. */
 function cleanGroupPrice(group: GroupPrice | undefined, spots: number): GroupPrice {
   return {
     price: Math.max(0, Math.round(group?.price ?? 0)),
     includedGuests: Math.max(1, Math.floor(spots || group?.includedGuests || 1)),
     extraGuest: 0,
     maxGuests: 0,
+    ...(group?.note ? { note: group.note } : {}),
   }
+}
+
+/** The group price as saved: the description trimmed, and left off when empty. */
+function savedGroupPrice(group: GroupPrice | undefined, spots: number): GroupPrice {
+  const { note, ...rest } = cleanGroupPrice(group, spots)
+  const trimmed = (note ?? '').trim().slice(0, GROUP_NOTE_MAX)
+  return trimmed ? { ...rest, note: trimmed } : rest
 }
 
 /**
@@ -137,7 +169,7 @@ export function pricingFieldsOfDraft(draft: PricingDraft, dining = false): {
   const chargeBy = dining ? 'person' : effectiveChargeBy(draft)
   return {
     chargeBy: dining || chargeBy === defaultChargeBy(kind) ? null : chargeBy,
-    groupPrice: isGroupPriced(draft, dining) ? cleanGroupPrice(draft.groupPrice, draft.maxCapacity) : null,
+    groupPrice: isGroupPriced(draft, dining) ? savedGroupPrice(draft.groupPrice, draft.maxCapacity) : null,
     groupDiscounts: [],
     minimumCharge: 0,
     priceChanges: [],
@@ -347,6 +379,8 @@ export function PricingStep({ draft, patch, errors, currency, dining = false, ac
       {errors.tiers}
     </p>
   ) : null
+  // Per group the price rows are hidden: a check that still fails on one of them.
+  const hiddenTierError = grouped ? (errors.tiers ?? Object.entries(errors).find(([key]) => key.startsWith('tiers.'))?.[1]) : undefined
 
   const pickCharge = (next: ChargeBy) => {
     if (next !== 'group' || (draft.groupPrice?.price ?? 0) > 0) return patch({ chargeBy: next })
@@ -412,14 +446,32 @@ export function PricingStep({ draft, patch, errors, currency, dining = false, ac
           />
         </Block>
       ) : grouped ? (
-        <Block title="Group price" hint="One price for the whole group. Guests still say who is coming.">
-          <label className="flex flex-col gap-1 text-xs text-subtle sm:w-56">
-            Price for the group
-            <MoneyInput value={draft.groupPrice?.price ?? 0} onValueChange={(price) => patch({ groupPrice: { ...cleanGroupPrice(draft.groupPrice, draft.maxCapacity), price } })} currency={currency} size="sm" ariaLabel="Price for the group" />
-            {(draft.groupPrice?.price ?? 0) > 0 ? null : <span className={cn('font-medium', errors['groupPrice.price'] ? 'text-danger' : 'text-warning')}>{errors['groupPrice.price'] ?? 'Set a price'}</span>}
-          </label>
-          <PricingTierEditor tiers={draft.tiers} onChange={setTiers} currency={currency} errors={errors} kind={kind} presets={KIND_TIER_PRESETS[kind]} priceless noun="guest type" />
-          {tierError}
+        <Block title="Group price" hint="One price for the whole group. Guests say how many are coming.">
+          <div className="grid gap-3 sm:grid-cols-[14rem_minmax(0,1fr)] sm:items-start">
+            <label className="flex flex-col gap-1 text-xs text-subtle">
+              Price for the group
+              <MoneyInput value={draft.groupPrice?.price ?? 0} onValueChange={(price) => patch({ groupPrice: { ...cleanGroupPrice(draft.groupPrice, draft.maxCapacity), price } })} currency={currency} size="sm" ariaLabel="Price for the group" />
+              {(draft.groupPrice?.price ?? 0) > 0 ? null : <span className={cn('font-medium', errors['groupPrice.price'] ? 'text-danger' : 'text-warning')}>{errors['groupPrice.price'] ?? 'Set a price'}</span>}
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-subtle">
+              Description (optional)
+              <Input
+                value={draft.groupPrice?.note ?? ''}
+                onChange={(event) => patch({ groupPrice: { ...cleanGroupPrice(draft.groupPrice, draft.maxCapacity), note: event.target.value.slice(0, GROUP_NOTE_MAX) } })}
+                placeholder="Up to 6 guests, gear included"
+                aria-label="Group price description"
+                maxLength={GROUP_NOTE_MAX}
+                size="sm"
+              />
+            </label>
+          </div>
+          {/* The per-person prices are hidden here but still checked on save: say where to fix one. */}
+          {hiddenTierError ? (
+            <p className="flex items-center gap-1.5 text-xs font-medium text-danger">
+              <CircleAlert className="size-3.5" aria-hidden="true" />
+              {hiddenTierError.replace(/\.$/, '')}. Switch to Per person to fix it.
+            </p>
+          ) : null}
         </Block>
       ) : (
         <Block title={pricingCopy.title} hint={pricingCopy.text(settings.lesson.sessions)}>

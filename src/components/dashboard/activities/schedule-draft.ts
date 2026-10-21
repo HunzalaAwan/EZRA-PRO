@@ -24,13 +24,17 @@ import {
    server-safe.
    ========================================================================== */
 
-/** How guests pick a time: set start times, opening hours, or only the dates listed. */
+/** How guests pick a time: "Specific times" (set start times), "All day" (opening hours), or "Specific dates" (only the dates listed). */
 export type PickMode = 'times' | 'hours' | 'dates'
 
 /** The fields the Schedule step edits. The activity editor's draft carries them under the same names. */
 export interface ScheduleDraft {
   scheduleMode: PickMode
-  /** Seasons in priority order (a later one wins where they overlap). Kept while "Specific dates" is on, saved empty. */
+  /**
+   * Seasons in priority order (a later one wins where they overlap). The first
+   * at each location is its regular times, shown without a name; the rest are
+   * the seasons. Kept while "Specific dates" is on, saved empty.
+   */
   schedules: ActivitySchedule[]
   scheduleChanges: ScheduleChange[]
   /** Months guests can book ahead. 0: the business default. */
@@ -216,13 +220,18 @@ export function scheduleSourceOf(
   }
 }
 
-/** A season as saved: times cleaned, nothing half-set. */
-function cleanSeason(season: ActivitySchedule): ActivitySchedule {
+/**
+ * A season as saved: times cleaned, nothing half-set. `regular`: the
+ * location's regular times, whose name the step doesn't show when it has no
+ * dates, so it goes back to "All year".
+ */
+function cleanSeason(season: ActivitySchedule, regular = false): ActivitySchedule {
   const days = emptyWeek()
   for (const key of WEEKDAY_KEYS) days[key] = sortTimes(season.days?.[key] ?? [])
+  const dated = Boolean(season.from || season.to)
   const out: ActivitySchedule = {
     id: season.id,
-    name: season.name.trim() || (season.from || season.to ? 'Season' : 'All year'),
+    name: regular && !dated ? 'All year' : season.name.trim() || (dated ? 'Season' : 'All year'),
     from: season.from || null,
     to: season.to || null,
     mode: season.mode,
@@ -250,7 +259,9 @@ function cleanSeason(season: ActivitySchedule): ActivitySchedule {
  * (`lengthMinutes`: the activity's `closingGapOf`, so they match the engine).
  */
 export function scheduleSaveOf(fields: ScheduleDraft, sites: ActivityLocation[], lengthMinutes = 0) {
-  const schedules = fields.scheduleMode === 'dates' ? [] : fields.schedules.map(cleanSeason)
+  // The step shows each location's seasons when there are several, all of them otherwise.
+  const regular = regularSeasonIds(fields.schedules, sites.length > 1 ? sites.map((site) => site.locationId) : [undefined])
+  const schedules = fields.scheduleMode === 'dates' ? [] : fields.schedules.map((season) => cleanSeason(season, regular.has(season.id)))
   const scheduleChanges = fields.scheduleChanges
     .map((change) => ({ ...change, dates: [...new Set(change.dates)].sort(), ...(change.times ? { times: sortTimes(change.times) } : {}) }))
     // An extra time with no time left, or spots with no number, does nothing.
@@ -267,6 +278,19 @@ export function scheduleSaveOf(fields: ScheduleDraft, sites: ActivityLocation[],
 /** Seasons that apply at a location: its own, or every season when there is only one location. */
 export function seasonsAt(schedules: ActivitySchedule[], locationId: string | undefined): ActivitySchedule[] {
   return locationId === undefined ? schedules : schedules.filter((season) => !season.locationId || season.locationId === locationId)
+}
+
+/**
+ * The seasons that are a location's regular times: first wherever they apply
+ * (`locationIds`: the locations shown, or `[undefined]` for one). A season
+ * shared by every location that comes later somewhere is a season there, so
+ * it isn't one of these.
+ */
+export function regularSeasonIds(schedules: ActivitySchedule[], locationIds: (string | undefined)[] = [undefined]): Set<string> {
+  const first = new Set<string>()
+  const later = new Set<string>()
+  for (const locationId of locationIds) seasonsAt(schedules, locationId).forEach((season, index) => (index === 0 ? first : later).add(season.id))
+  return new Set([...first].filter((id) => !later.has(id)))
 }
 
 const hasTimes = (season: ActivitySchedule) => WEEKDAY_KEYS.some((key) => timesForWeekday(season, key).length > 0)
@@ -387,16 +411,18 @@ export function seasonFromTemplate(template: SeasonTemplate, base: ActivitySched
   return season
 }
 
-/** One short line when seasons overlap or leave days without a season; null when all is well. */
+/**
+ * One short line when seasons overlap or leave days without a season; null
+ * when all is well. `seasons[0]` is the regular times, the rest the seasons.
+ */
 export function seasonsWarning(seasons: ActivitySchedule[], todayKey: string): string | null {
   const dated = seasons.filter((season) => season.from || season.to)
   const base = seasons.some((season) => !season.from && !season.to)
-  // An all-year season wins over every season above it, so those never run.
+  // A season with no dates wins over everything above it, the regular times too, so those never run.
   const lastAllYear = seasons.reduce((found, season, index) => (!season.from && !season.to ? index : found), -1)
-  const hidden = seasons.slice(0, Math.max(0, lastAllYear)).filter((season) => season.from || season.to)
-  if (hidden.length > 0) {
-    const name = seasons[lastAllYear].name || 'All year'
-    return `${hidden[0].name || 'A season'} never runs: ${name}, below it, covers every day. Give ${name} dates or remove it.`
+  if (lastAllYear > 0) {
+    const name = seasons[lastAllYear].name.trim() || 'A season'
+    return `${name} has no dates, so it runs every day instead of the times above it. Give it dates or remove it.`
   }
   for (let a = 0; a < dated.length; a++) {
     for (let b = a + 1; b < dated.length; b++) {

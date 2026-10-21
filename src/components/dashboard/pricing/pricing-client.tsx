@@ -31,7 +31,7 @@ import { applyPricingOverride, applyScheduleOverride } from '@/lib/activity-over
 import { rateFor, rentalModes } from '@/lib/activity-kinds'
 import { clockTime, expandSchedules, scheduleContextOf, shiftDayKey, slotId } from '@/lib/activity-schedule'
 import { getActivityBySlug, tenantBySlug } from '@/lib/demo-core'
-import { effectLabel, priceBooking } from '@/lib/price-engine'
+import { effectLabel, groupPriced, groupTierOf, priceBooking } from '@/lib/price-engine'
 import {
   DEMAND_RULE_KINDS,
   RULE_KIND_LABEL,
@@ -212,6 +212,7 @@ function RulesTab({ pricing, tenantSlug, activities, currency, nowIso, peaks, fi
 
 /**
  * The tickets checked: the lead ticket (a rental's first rated item) for the count, a charter for its party.
+ * Per group: the row guests are booked on, as the storefront books them.
  * A rental is priced for its shortest rental, as the storefront starts it.
  */
 function checkPrice(activity: Activity, count: number, ctx: { startsAt: string; nowIso: string; rules: PricingRule[]; multiplier?: number; capacity?: number; booked?: number }) {
@@ -221,7 +222,9 @@ function checkPrice(activity: Activity, count: number, ctx: { startsAt: string; 
   const paid = activity.priceTiers.filter((tier) => tier.price > 0)
   const lead = mode
     ? (activity.priceTiers.find((tier) => (rateFor(activity, tier.id, mode, lengthId) ?? 0) > 0) ?? activity.priceTiers[0])
-    : (paid.find((tier) => tier.countsTowardCapacity) ?? paid[0] ?? activity.priceTiers[0])
+    : groupPriced(activity)
+      ? groupTierOf(activity)
+      : (paid.find((tier) => tier.countsTowardCapacity) ?? paid[0] ?? activity.priceTiers[0])
   if (!lead) return null
   const result = priceBooking({
     activity,

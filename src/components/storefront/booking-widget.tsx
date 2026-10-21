@@ -50,7 +50,7 @@ import { priceUnit } from '@/lib/activity-kinds'
 import { LESSON_LEVELS, isDayRental, partyLabel, rateFor, rentalCategoryMeta, rentalModes, routeLabel, type RentalMode } from '@/lib/activity-kinds'
 import { bodyLimitLines } from '@/lib/guest-requirements'
 import type { PricingRule } from '@/lib/pricing'
-import { chargeByOf, fromPrice, leadPrice, priceBooking, unitPriceDetail, type AppliedChange, type PriceContext, type RentalPricing } from '@/lib/price-engine'
+import { chargeByOf, fromPrice, groupGuestLimit, groupTierOf, leadPrice, priceBooking, unitPriceDetail, type AppliedChange, type PriceContext, type RentalPricing } from '@/lib/price-engine'
 import { useActivityOverrides, usePricingOverride } from '@/hooks/use-pricing-override'
 import { useLocations } from '@/hooks/use-locations'
 import { applyScheduleOverride } from '@/lib/activity-overrides'
@@ -148,6 +148,8 @@ export interface QuoteLine {
   baseUnitPrice?: number
   /** Tickets: what moved the price, "Summer +15%". */
   applied?: string[]
+  /** The group price line: the owner's description, "Up to 6 guests, gear included". */
+  note?: string
 }
 
 export interface Quote {
@@ -243,6 +245,7 @@ export function buildQuote(
       baseUnitPrice: line.baseUnitPrice,
       // The time slot's dynamic pricing shows as "Peak time", not on the line.
       applied: line.applied.filter((change) => change.source !== 'dynamic').map((change) => change.label),
+      ...(line.id === 'group' && activity.groupPrice?.note?.trim() ? { note: activity.groupPrice.note.trim() } : {}),
     })),
     // The price cap (negative) and the minimum charge (positive).
     ...priced.adjustments.map((entry) => ({ id: entry.id, label: entry.label, kind: 'ticket' as const, quantity: 1, unitPrice: entry.amount, total: entry.amount })),
@@ -641,12 +644,22 @@ function BookingWidgetInner({
 
   const slot = day?.slots.find((s) => s.departureId === departureId)
 
+  /* ---------- per group: one price for the group; guests only say how many are coming, all on one tier ---------- */
+  const groupPrice = chargeByOf(activity) === 'group' && kind !== 'charter' ? activity.groupPrice : undefined
+  const groupTier = groupPrice ? groupTierOf(activity) : undefined
+  /** The most guests a per-group booking takes: its own limit, or what the price covers when it can't grow. */
+  const groupMax = groupPrice ? groupGuestLimit(groupPrice) : Number.POSITIVE_INFINITY
+  /** A per-group count, kept between one guest and what the group tier and price allow. */
+  const groupCount = (wanted: number) => clamp(wanted, 1, Math.max(1, Math.min(groupTier?.maxQuantity ?? Number.POSITIVE_INFINITY, groupMax)))
+
   /* ---------- tier quantities ---------- */
 
   const [tierQty, setTierQty] = React.useState<Record<string, number>>(() => {
     const seed: Record<string, number> = {}
     activity.priceTiers.forEach((tier, index) => {
-      if (index === 0) {
+      if (groupTier) {
+        seed[tier.id] = tier.id === groupTier.id ? groupCount(initialGuests ?? Math.max(2, activity.minParticipants || 1)) : 0
+      } else if (index === 0) {
         const wanted = (activity.kind ?? 'trip') === 'rental' ? 1 : (initialGuests ?? Math.max(tier.minQuantity, 2))
         seed[tier.id] = clamp(wanted, Math.max(tier.minQuantity, 1), tier.maxQuantity)
       } else {
@@ -657,8 +670,18 @@ function BookingWidgetInner({
   })
 
   // Prices saved in the editor arrive after the first render: a new price starts at its minimum, and each count stays within its limits.
-  const tiersKey = activity.priceTiers.map((tier) => `${tier.id}:${tier.minQuantity}:${tier.maxQuantity}`).join('|')
+  // Per group, the guests counted so far move onto the group's tier, and every other tier is left at none.
+  const tiersKey = `${activity.priceTiers.map((tier) => `${tier.id}:${tier.minQuantity}:${tier.maxQuantity}`).join('|')}|group:${groupTier?.id ?? ''}:${groupMax}`
   React.useEffect(() => {
+    if (groupTier) {
+      setTierQty((current) => {
+        const people = activity.priceTiers.reduce((sum, tier) => sum + (current[tier.id] ?? 0) * peopleOf(tier), 0)
+        const count = groupCount(people > 0 ? people : (initialGuests ?? Math.max(2, activity.minParticipants || 1)))
+        const next: Record<string, number> = Object.fromEntries(activity.priceTiers.map((tier) => [tier.id, tier.id === groupTier.id ? count : 0]))
+        return activity.priceTiers.some((tier) => next[tier.id] !== current[tier.id]) ? next : current
+      })
+      return
+    }
     const perPerson = kind !== 'charter' && kind !== 'rental'
     setTierQty((current) => {
       const known = activity.priceTiers.some((tier) => current[tier.id] !== undefined)
@@ -695,10 +718,6 @@ function BookingWidgetInner({
   const privateOpen = Boolean(privateOffer && slot && slot.seatsLeft >= slot.capacity && slot.capacity > 0)
   const [privateOn, setPrivateOn] = React.useState(false)
   const goPrivate = privateOn && privateOpen
-  /* ---------- per group: one price up to so many guests, then each extra guest ---------- */
-  const groupPrice = chargeByOf(activity) === 'group' && kind !== 'charter' ? activity.groupPrice : undefined
-  /** The most guests a per-group booking takes: its own limit, or what the price covers when it can't grow. */
-  const groupMax = groupPrice ? (groupPrice.maxGuests > 0 ? groupPrice.maxGuests : groupPrice.extraGuest > 0 ? Number.POSITIVE_INFINITY : groupPrice.includedGuests) : Number.POSITIVE_INFINITY
   /** Day rentals: a unit is free only if it is free every day of the span. */
   const spanLeft = React.useMemo(() => {
     if (!dayRental || !slot) return slot?.seatsLeft ?? 0
@@ -814,7 +833,8 @@ function BookingWidgetInner({
 
   // Per-person kinds: every tier's minimum per booking has to be met. Charters and rentals pick one option.
   const perPerson = kind !== 'charter' && kind !== 'rental'
-  const shortTiers = perPerson ? activity.priceTiers.filter((tier) => (tierQty[tier.id] ?? 0) < tier.minQuantity) : []
+  // Per group there is one count, so no tier has a minimum of its own.
+  const shortTiers = perPerson && !groupTier ? activity.priceTiers.filter((tier) => (tierQty[tier.id] ?? 0) < tier.minQuantity) : []
   const canReserve =
     shortTiers.length === 0 &&
     Boolean(slot) && !overCapacity && seatsUsed >= (kind === 'charter' || kind === 'rental' ? 1 : Math.max(1, activity.minParticipants)) && (kind !== 'charter' || party >= Math.max(1, activity.minParticipants))
@@ -1490,13 +1510,33 @@ function BookingWidgetInner({
             </label>
           ) : null}
 
-          {groupPrice ? (
-            <p className="mt-3 text-xs text-subtle">
-              <span className="font-medium text-muted tabular">{formatCurrency(priceOn('group').price, currency)}</span> for up to {groupPrice.includedGuests}
-              {groupPrice.extraGuest > 0 ? `, then ${formatCurrency(priceOn('group').extraGuest ?? groupPrice.extraGuest, currency)} each` : ''}
-            </p>
-          ) : null}
-
+          {groupPrice && groupTier ? (
+            (() => {
+              // Per group: one count of guests, on the group's tier. The price is for the whole group.
+              const count = tierQty[groupTier.id] ?? 0
+              const places = placesOf(groupTier)
+              const room = places > 0 ? Math.floor(seatsLeft / places) : groupTier.maxQuantity
+              const most = Math.max(0, Math.min(room, groupTier.maxQuantity, groupMax))
+              const groupDetail = priceOn('group')
+              const note = groupPrice.note?.trim()
+              return (
+                <div className="mt-3 flex items-center gap-3 rounded-xl border border-line px-3.5 py-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground">Guests</p>
+                    <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-subtle">
+                      <span>
+                        <span className="tabular font-medium text-muted">{formatCurrency(groupDetail.price, currency)}</span> for the group
+                        {groupPrice.extraGuest > 0 ? `, then ${formatCurrency(groupDetail.extraGuest ?? groupPrice.extraGuest, currency)} each over ${groupPrice.includedGuests}` : ''}
+                      </span>
+                      {wasTag(wasPrice('group', groupDetail))}
+                      {note ? <span>· {note}</span> : null}
+                    </p>
+                  </div>
+                  {stepper(count, Math.max(1, activity.minParticipants || 1), Math.max(1, most), (next) => setTierQty((prev) => ({ ...prev, [groupTier.id]: groupCount(next) })), 'guests')}
+                </div>
+              )
+            })()
+          ) : (
           <div className="mt-3 divide-y divide-line-subtle rounded-xl border border-line">
             {activity.priceTiers.map((tier) => {
               const qty = tierQty[tier.id] ?? 0
@@ -1505,10 +1545,10 @@ function BookingWidgetInner({
               const unit = tierPrice.price
               const was = wasPrice(tier.id, tierPrice)
               const places = placesOf(tier)
-              // Private: the group can be as big as the time, or as the price allows. Per group: up to its most guests.
+              // Private: the group can be as big as the time, or as the price allows.
               const roomLeft = goPrivate
                 ? Math.min(slot?.capacity ?? seatsLeft, privateOffer && privateOffer.extraGuest === 0 ? privateOffer.includedGuests : Number.POSITIVE_INFINITY) - (seatsUsed - qty * places)
-                : Math.min(seatsLeft, groupMax) - (seatsUsed - qty * places)
+                : seatsLeft - (seatsUsed - qty * places)
               const seatRoom = places > 0 ? Math.floor(roomLeft / places) : tier.maxQuantity
               const max = Math.min(tier.maxQuantity, Math.max(0, seatRoom))
 
@@ -1520,12 +1560,10 @@ function BookingWidgetInner({
                       {tierAges(tier) ? <span className="font-normal text-subtle"> · {tierAges(tier)}</span> : null}
                     </p>
                     <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-subtle">
-                      {groupPrice ? null : (
-                        <span className="tabular font-medium text-muted">
-                          {formatCurrency(unit, currency)}
-                        </span>
-                      )}
-                      {groupPrice ? null : wasTag(was)}
+                      <span className="tabular font-medium text-muted">
+                        {formatCurrency(unit, currency)}
+                      </span>
+                      {wasTag(was)}
                       {tier.description ? <span className="truncate">· {tier.description}</span> : null}
                       {!tier.countsTowardCapacity ? (
                         <span className="text-faint">· does not use a spot</span>
@@ -1579,6 +1617,7 @@ function BookingWidgetInner({
               )
             })}
           </div>
+          )}
 
           <AnimatePresence initial={false}>
             {overCapacity ? (
@@ -1594,7 +1633,7 @@ function BookingWidgetInner({
             ) : null}
           </AnimatePresence>
 
-          {activity.priceTiers.some((tier) => tier.minQuantity > 0) ? (
+          {!groupTier && activity.priceTiers.some((tier) => tier.minQuantity > 0) ? (
             <p className="mt-2 flex items-center gap-2 text-xs text-subtle">
               <Info className="size-3.5 shrink-0" aria-hidden="true" />
               Every booking includes at least {activity.priceTiers.filter((tier) => tier.minQuantity > 0).map((tier) => `${tier.minQuantity} ${tier.label}`).join(' and ')}.

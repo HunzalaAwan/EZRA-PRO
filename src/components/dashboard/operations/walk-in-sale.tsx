@@ -40,7 +40,8 @@ import { cn, formatCurrency, formatTime, pluralize } from '@/lib/utils'
 import { EMPTY_GUEST, WALK_IN_SOURCES, summarize, type WalkInGuest, type WalkInRecord } from '@/lib/walk-ins'
 import type { Activity, ActivityKind, CurrencyCode } from '@/types'
 import { applyActivityOverride, applyPricingOverride, type ActivityOverride } from '@/lib/activity-overrides'
-import { priceBooking, unitPrice, type PriceContext } from '@/lib/price-engine'
+import { groupGuestLimit, groupPriced, groupTierOf, priceBooking, unitPrice, type PriceContext } from '@/lib/price-engine'
+import { placesOf } from '@/lib/places'
 import { useActivityOverrides } from '@/hooks/use-pricing-override'
 import { useBookingDefaults } from '@/hooks/use-booking-defaults'
 import { useBookingLedger } from '@/hooks/use-booking-ledger'
@@ -247,6 +248,8 @@ function WalkInTill({
   const [slug, setSlug] = React.useState(activities[0]?.slug ?? '')
   const [slotId, setSlotId] = React.useState('')
   const [qty, setQty] = React.useState<Record<string, number>>({})
+  /** Per group: how many guests are coming. */
+  const [groupCount, setGroupCount] = React.useState(1)
   const [extras, setExtras] = React.useState<Record<string, boolean>>({})
   const [guest, setGuest] = React.useState<WalkInGuest>(EMPTY_GUEST)
   const [seller, setSeller] = React.useState(staff[0] ?? 'Desk')
@@ -267,6 +270,7 @@ function WalkInTill({
   React.useEffect(() => {
     setSlotId('')
     setQty(activity ? seedQty(activity) : {})
+    setGroupCount(1)
     setExtras({})
   }, [slug]) // eslint-disable-line react-hooks/exhaustive-deps
   // The saved schedule can leave the picked activity with nothing to sell: move to the first that has something.
@@ -293,18 +297,25 @@ function WalkInTill({
   }, [guest.phone, guest.email, guest.name, records])
   const alreadyFilled = match && match.guest.name === guest.name && match.guest.phone === guest.phone
 
-  const guests = activity ? activity.tiers.reduce((sum, tier) => sum + (qty[tier.id] ?? 0), 0) : 0
-  const seatsUsed = activity ? activity.tiers.reduce((sum, tier) => sum + (tier.seat ? (qty[tier.id] ?? 0) : 0), 0) : 0
-  // How full the time slot is, for filling-up and quiet-time rules.
-  const slotBooked = slot ? (slot.booked ?? (slot.capacity !== undefined ? Math.max(0, slot.capacity - slot.seatsLeft) : undefined)) : undefined
-  const rules = activity && slot ? applyRules(pricing.rules, { activitySlug: activity.slug, startsAt: slot.startsAt, nowIso, guests: Math.max(1, guests), capacity: slot.capacity, booked: slotBooked }) : { multiplier: 1, applied: [] }
   // The price engine on the activity with its saved price edits: the same prices as the storefront and checkout.
   const overrides = useActivityOverrides()
   const engineActivity = React.useMemo(() => (activity?.source ? applyPricingOverride(activity.source, overrides[activity.source.id]) : undefined), [activity, overrides])
+  // Per group: one price for the group and one count of guests, booked on the group's tier, as on the storefront.
+  const groupPrice = engineActivity && groupPriced(engineActivity) ? engineActivity.groupPrice : undefined
+  const groupTier = groupPrice && engineActivity ? groupTierOf(engineActivity) : undefined
+  const groupSeats = groupTier ? placesOf(groupTier) : 0
+  const guests = groupTier ? groupCount : activity ? activity.tiers.reduce((sum, tier) => sum + (qty[tier.id] ?? 0), 0) : 0
+  const seatsUsed = groupTier ? groupCount * groupSeats : activity ? activity.tiers.reduce((sum, tier) => sum + (tier.seat ? (qty[tier.id] ?? 0) : 0), 0) : 0
+  // How full the time slot is, for filling-up and quiet-time rules.
+  const slotBooked = slot ? (slot.booked ?? (slot.capacity !== undefined ? Math.max(0, slot.capacity - slot.seatsLeft) : undefined)) : undefined
+  const rules = activity && slot ? applyRules(pricing.rules, { activitySlug: activity.slug, startsAt: slot.startsAt, nowIso, guests: Math.max(1, guests), capacity: slot.capacity, booked: slotBooked }) : { multiplier: 1, applied: [] }
   const priceCtx: PriceContext | undefined = slot
     ? { startsAt: slot.startsAt, nowIso, capacity: slot.capacity, booked: slotBooked, priceMultiplier: slot.priceMultiplier, businessRules: pricing.rules }
     : undefined
-  const priced = activity && engineActivity && priceCtx ? priceBooking({ ...priceCtx, activity: engineActivity, lines: activity.tiers.map((tier) => ({ tierId: tier.id, qty: qty[tier.id] ?? 0 })) }) : undefined
+  const ticketLines = groupTier ? [{ tierId: groupTier.id, qty: groupCount }] : (activity?.tiers ?? []).map((tier) => ({ tierId: tier.id, qty: qty[tier.id] ?? 0 }))
+  const priced = activity && engineActivity && priceCtx ? priceBooking({ ...priceCtx, activity: engineActivity, lines: ticketLines }) : undefined
+  /** Per group: the most guests at this time, by the spots left and what the price covers. */
+  const groupMost = groupPrice && groupTier ? Math.max(1, Math.min(groupTier.maxQuantity, groupGuestLimit(groupPrice), slot && groupSeats > 0 ? Math.floor(slot.seatsLeft / groupSeats) : Number.POSITIVE_INFINITY)) : 1
   /** A ticket's price at this time: the engine's, or the plain price with the business rules. */
   const tierUnit = (tier: WalkInActivity['tiers'][number]) =>
     engineActivity && priceCtx ? unitPrice(engineActivity, tier.id, { ...priceCtx, guests: priced?.guests }) : Math.round(tier.price * rules.multiplier)
@@ -338,12 +349,13 @@ function WalkInTill({
   const change = method === 'cash' && tendered ? Math.round(Number(tendered) * 100) - total : 0
   // Rentals with items: each item has its own count at this time.
   const itemCap = (tierId: string) => slot?.itemsLeft?.[tierId] ?? Number.POSITIVE_INFINITY
-  const overItem = activity ? activity.tiers.find((tier) => (qty[tier.id] ?? 0) > itemCap(tier.id)) : undefined
+  const overItem = activity && !groupTier ? activity.tiers.find((tier) => (qty[tier.id] ?? 0) > itemCap(tier.id)) : undefined
   const overSeats = slot ? seatsUsed > slot.seatsLeft || Boolean(overItem) : false
   const nameMissing = guest.name.trim().length < 2
   const emailBad = guest.email.trim().length > 0 && !/^\S+@\S+\.\S+$/.test(guest.email.trim())
   const perPerson = activity ? activity.kind !== 'charter' && activity.kind !== 'rental' : false
-  const shortTier = perPerson && activity ? activity.tiers.find((tier) => (qty[tier.id] ?? 0) < tier.min) : undefined
+  // Per group there is one count, so no tier has a minimum of its own.
+  const shortTier = perPerson && activity && !groupTier ? activity.tiers.find((tier) => (qty[tier.id] ?? 0) < tier.min) : undefined
   const canPay = Boolean(activity && slot && guests > 0 && !overSeats && !shortTier && !nameMissing && !emailBad && (method === 'card' || total === 0 || change >= 0))
 
   const applyCode = () => {
@@ -412,6 +424,7 @@ function WalkInTill({
     setGiftCode(null)
     setTendered('')
     setQty(activity ? seedQty(activity) : {})
+    setGroupCount(1)
     setExtras({})
   }
 
@@ -475,6 +488,21 @@ function WalkInTill({
 
             <div>
               <p className="text-sm font-semibold">{activity.kind === 'rental' ? 'Units' : 'Guests'}</p>
+              {groupPrice && groupTier && engineActivity ? (
+                <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-2.5">
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">
+                      <span className="tabular-nums">{formatCurrency(priceCtx ? unitPrice(engineActivity, 'group', { ...priceCtx, guests: priced?.guests }) : groupPrice.price, currency)}</span> for the group
+                    </span>
+                    {groupPrice.note?.trim() ? <span className="block text-xs text-subtle">{groupPrice.note.trim()}</span> : null}
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <IconButton aria-label="Fewer guests" size="sm" variant="outline" disabled={groupCount <= 1} onClick={() => setGroupCount((count) => Math.max(1, count - 1))}><Minus aria-hidden="true" /></IconButton>
+                    <span className="w-6 text-center text-base font-semibold tabular-nums">{groupCount}</span>
+                    <IconButton aria-label="More guests" size="sm" variant="outline" disabled={groupCount >= groupMost} onClick={() => setGroupCount((count) => Math.min(groupMost, count + 1))}><Plus aria-hidden="true" /></IconButton>
+                  </span>
+                </div>
+              ) : (
               <ul className="mt-2 flex list-none flex-col divide-y divide-line-subtle rounded-xl border border-line p-0">
                 {activity.tiers.map((tier) => {
                   const value = qty[tier.id] ?? 0
@@ -496,6 +524,7 @@ function WalkInTill({
                   )
                 })}
               </ul>
+              )}
               {overSeats ? <p className="mt-1.5 text-xs font-medium text-danger">{overItem ? `Only ${itemCap(overItem.id)} ${overItem.label} left at this time.` : `Only ${slot?.seatsLeft} left at this time.`}</p> : null}
             </div>
 

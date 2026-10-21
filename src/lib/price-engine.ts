@@ -1,4 +1,4 @@
-import type { Activity, ActivityKind, ChargeBy, CurrencyCode, PriceChange, PriceChangeKind } from '@/types'
+import type { Activity, ActivityKind, ChargeBy, CurrencyCode, GroupPrice, PriceChange, PriceChangeKind, PriceTier } from '@/types'
 import { applyRules, type PricingRule } from '@/lib/pricing'
 import { rateFor, rentalModes, type RentalMode } from '@/lib/activity-kinds'
 import { peopleOf, placesOf } from '@/lib/places'
@@ -144,8 +144,26 @@ export function defaultChargeBy(kind: ActivityKind | undefined): ChargeBy {
 export const chargeByOf = (activity: Pick<Activity, 'kind'> & Partial<Pick<Activity, 'chargeBy'>>): ChargeBy => activity.chargeBy ?? defaultChargeBy(activity.kind)
 
 /** A per-group price on an activity that sells places (a charter's options are its own group prices). */
-const groupPriced = (activity: PricedActivity) =>
+export const groupPriced = (activity: PricedActivity) =>
   chargeByOf(activity) === 'group' && (activity.kind ?? 'trip') !== 'charter' && Boolean(activity.groupPrice)
+
+/**
+ * Per group: guests only say how many are coming, and every one is booked on
+ * this tier. The lead ticket when it is one guest and one spot, else the first
+ * tier that is, so one count is one guest. The other tiers are kept for when
+ * the activity goes back to per person.
+ */
+export function groupTierOf(activity: Pick<PricedActivity, 'priceTiers'>): PriceTier | undefined {
+  const tiers = activity.priceTiers
+  const single = (tier: PriceTier) => tier.countsTowardCapacity && (tier.seats ?? 1) <= 1
+  return tiers.find((tier) => tier.price > 0 && single(tier)) ?? tiers.find(single) ?? tiers.find((tier) => tier.countsTowardCapacity) ?? tiers[0]
+}
+
+/** The most guests one per-group booking takes: its own limit, what the price covers when it can't grow, or no limit. */
+export function groupGuestLimit(group: GroupPrice): number {
+  if (group.maxGuests > 0) return group.maxGuests
+  return group.extraGuest > 0 ? Number.POSITIVE_INFINITY : Math.max(1, group.includedGuests)
+}
 
 const isRated = (activity: PricedActivity, mode?: RentalMode) =>
   (activity.kind ?? 'trip') === 'rental' && Boolean(mode) && (activity.rental?.rates?.length ?? 0) > 0

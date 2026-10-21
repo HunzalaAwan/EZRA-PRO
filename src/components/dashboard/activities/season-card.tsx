@@ -18,6 +18,8 @@ import { DAY_SHORT, MON_FIRST, fromMinutes, tintOf, toMinutes } from './schedule
    SEASON CARD — one season of the schedule: its name, optional start and
    end dates, and the start times (or opening hours) on each weekday.
    "Same times every day" folds the week into one row. Spots come from Basics.
+   The regular times (the first season) use the same card with only the week:
+   no name, no dates (unless it has some) and no remove.
    ========================================================================== */
 
 const LAST = 23 * 60 + 59
@@ -172,9 +174,11 @@ export interface SeasonCardProps {
   sharedNote?: string
   /** Opening hours: how long before closing the last start time is (the activity's `closingGapOf`). */
   closingGap?: number
+  /** The activity's regular times: just the week, with its name and dates only when it has dates. */
+  regular?: boolean
 }
 
-export function SeasonCard({ season, tint, onChange, onRemove, todayKey, rental, errors = {}, stepMinutes, sharedNote, closingGap = 0 }: SeasonCardProps) {
+export function SeasonCard({ season, tint, onChange, onRemove, todayKey, rental, errors = {}, stepMinutes, sharedNote, closingGap = 0, regular = false }: SeasonCardProps) {
   const lists = React.useMemo(() => Object.fromEntries(WEEKDAY_KEYS.map((key) => [key, timesForWeekday(season, key, closingGap)])) as Record<WeekdayKey, string[]>, [season, closingGap])
   const hours = season.mode === 'hours'
   const openKeys = MON_FIRST.filter((key) => (hours ? Boolean(season.hours?.[key]) : lists[key].length > 0))
@@ -188,6 +192,9 @@ export function SeasonCard({ season, tint, onChange, onRemove, todayKey, rental,
   React.useEffect(() => {
     if (!uniform) setSplit(true)
   }, [uniform])
+  // Regular times with dates show them, and keep showing them while they are cleared, so the card doesn't jump mid-edit.
+  const [datedAtStart] = React.useState(Boolean(season.from || season.to))
+  const named = !regular || datedAtStart || Boolean(season.from || season.to)
   const ended = Boolean(season.to && season.to < todayKey)
   const dateError = errors[`season.${season.id}.to`]
   const hoursError = errors[`season.${season.id}.hours`]
@@ -216,49 +223,55 @@ export function SeasonCard({ season, tint, onChange, onRemove, todayKey, rental,
   return (
     <div className={cn('flex flex-col gap-4 rounded-xl border bg-surface p-4', dateError || hoursError ? 'border-danger/50' : 'border-line')}>
       {/* ---- name and dates ---- */}
-      <div className="flex flex-col gap-2.5">
-        <div className="flex flex-wrap items-center gap-2.5">
-          <span className={cn('size-2.5 shrink-0 rounded-full', tintOf(tint).dot)} aria-hidden="true" />
-          <Input
-            size="sm"
-            className="w-44"
-            value={season.name}
-            placeholder={!season.from && !season.to ? 'All year' : 'Season name'}
-            aria-label="Season name"
-            onChange={(event) => onChange({ ...season, name: event.target.value.slice(0, 40) })}
-          />
-          {ended ? <Badge size="sm" variant="neutral">Ended</Badge> : null}
-          {sharedNote ? <span className="text-xs text-subtle">{sharedNote}</span> : null}
-          <div className="ml-auto flex items-center gap-1.5">
-            {onRemove ? (
-              <IconButton type="button" size="xs" variant="ghost" aria-label={`Remove ${season.name || 'this season'}`} className="text-faint hover:bg-danger-soft hover:text-danger" onClick={onRemove}>
-                <Trash2 />
-              </IconButton>
-            ) : null}
+      {named ? (
+        <div className="flex flex-col gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <span className={cn('size-2.5 shrink-0 rounded-full', tintOf(tint).dot)} aria-hidden="true" />
+            <Input
+              size="sm"
+              className="w-44"
+              value={season.name}
+              placeholder={!season.from && !season.to ? 'All year' : 'Season name'}
+              aria-label="Season name"
+              onChange={(event) => onChange({ ...season, name: event.target.value.slice(0, 40) })}
+            />
+            {ended ? <Badge size="sm" variant="neutral">Ended</Badge> : null}
+            {sharedNote ? <span className="text-xs text-subtle">{sharedNote}</span> : null}
+            <div className="ml-auto flex items-center gap-1.5">
+              {onRemove ? (
+                <IconButton type="button" size="xs" variant="ghost" aria-label={`Remove ${season.name || 'this season'}`} className="text-faint hover:bg-danger-soft hover:text-danger" onClick={onRemove}>
+                  <Trash2 />
+                </IconButton>
+              ) : null}
+            </div>
+          </div>
+          {/* Both optional: no start date runs from today, no end date keeps going. */}
+          <div className="flex flex-wrap items-end gap-3 pl-5">
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-muted">
+                Start date <span className="text-faint">Optional</span>
+              </span>
+              <Input type="date" size="sm" className="w-40" value={season.from ?? ''} onChange={(event) => onChange({ ...season, from: event.target.value || null })} />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-muted">
+                End date <span className="text-faint">Optional</span>
+              </span>
+              <Input type="date" size="sm" className="w-40" value={season.to ?? ''} min={season.from ?? undefined} error={Boolean(dateError)} onChange={(event) => onChange({ ...season, to: event.target.value || null })} />
+            </label>
+            {dateError ? <span className="pb-2 text-xs font-medium text-danger">{dateError}</span> : null}
           </div>
         </div>
-        {/* Both optional: no start date runs from today, no end date keeps going. */}
-        <div className="flex flex-wrap items-end gap-3 pl-5">
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-muted">
-              Start date <span className="text-faint">Optional</span>
-            </span>
-            <Input type="date" size="sm" className="w-40" value={season.from ?? ''} onChange={(event) => onChange({ ...season, from: event.target.value || null })} />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-muted">
-              End date <span className="text-faint">Optional</span>
-            </span>
-            <Input type="date" size="sm" className="w-40" value={season.to ?? ''} min={season.from ?? undefined} error={Boolean(dateError)} onChange={(event) => onChange({ ...season, to: event.target.value || null })} />
-          </label>
-          {dateError ? <span className="pb-2 text-xs font-medium text-danger">{dateError}</span> : null}
-        </div>
-      </div>
+      ) : null}
 
       {/* ---- the week ---- */}
-      <div className="flex flex-col gap-2.5 border-t border-line-subtle pt-3.5">
+      <div className={cn('flex flex-col gap-2.5', named && 'border-t border-line-subtle pt-3.5')}>
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-[0.8125rem] font-medium">{hours ? (rental ? 'Rentals start between' : 'Opening hours') : 'Start times'}</p>
+          <p className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[0.8125rem] font-medium">
+            {named ? null : <span className={cn('size-2.5 shrink-0 rounded-full', tintOf(tint).dot)} aria-hidden="true" />}
+            {hours ? (rental ? 'Rentals start between' : 'Open between') : 'Start times'}
+            {!named && sharedNote ? <span className="text-xs font-normal text-subtle">{sharedNote}</span> : null}
+          </p>
           <label className="inline-flex items-center gap-2 text-xs font-medium text-muted">
             {hours ? 'Same hours every day' : 'Same times every day'}
             <Switch

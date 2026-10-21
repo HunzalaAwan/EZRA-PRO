@@ -2,6 +2,7 @@ import { clamp } from '@/lib/utils'
 import { addOnUnits, peopleOf, placesOf } from '@/lib/places'
 import { isGeneratedSlotId } from '@/lib/activity-schedule'
 import { rentalModes, type RentalMode } from '@/lib/activity-kinds'
+import { groupGuestLimit, groupPriced, groupTierOf } from '@/lib/price-engine'
 import type { Activity } from '@/types'
 import type { AvailabilitySlot, QuoteSelection } from '@/components/storefront/booking-widget'
 
@@ -37,6 +38,24 @@ export function resolveSelection(
 ): QuoteSelection {
   const requestedTiers = parsePairs(rawTiers)
   const requestedAddOns = parsePairs(rawAddOns)
+
+  // Per group: one count of guests, all on the group's tier, up to the spots left and what the price covers.
+  const groupTier = groupPriced(activity) && activity.groupPrice ? groupTierOf(activity) : undefined
+  if (groupTier && activity.groupPrice) {
+    const people = activity.priceTiers.reduce((sum, tier) => sum + (requestedTiers.get(tier.id) ?? 0) * peopleOf(tier), 0)
+    const places = placesOf(groupTier)
+    const room = places > 0 ? Math.floor(Math.max(0, seatsLeft) / places) : groupTier.maxQuantity
+    const most = Math.max(1, Math.min(groupTier.maxQuantity, room, groupGuestLimit(activity.groupPrice)))
+    // A bare /checkout link still renders a sensible order: two guests, or one.
+    const qty = clamp(people > 0 ? people : Math.min(2, activity.maxCapacity || 2), 1, most)
+    const tiers = activity.priceTiers.map((tier) => ({ tierId: tier.id, qty: tier.id === groupTier.id ? qty : 0 }))
+    const headcount = party ?? qty * peopleOf(groupTier)
+    const addOns = activity.addOns.map((addOn) => ({
+      addOnId: addOn.id,
+      qty: (requestedAddOns.get(addOn.id) ?? 0) > 0 || addOn.required ? addOnUnits(addOn, headcount) : 0,
+    }))
+    return { tiers, addOns }
+  }
 
   let seatsUsed = 0
   const perPerson = (activity.kind ?? 'trip') !== 'charter' && (activity.kind ?? 'trip') !== 'rental'

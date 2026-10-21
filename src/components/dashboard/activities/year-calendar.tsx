@@ -35,7 +35,7 @@ export type CalendarAction =
 export interface YearCalendarProps {
   /** One entry per day for the location shown, from the first of this month, twelve months on. */
   days: ScheduledDay[]
-  /** The seasons shown, in order, for the tints. */
+  /** The seasons shown, in order, for the tints. The first is the regular times. */
   seasons: ActivitySchedule[]
   mode: PickMode
   todayKey: string
@@ -158,6 +158,12 @@ export function YearCalendar(props: YearCalendarProps) {
         {mode === 'dates' ? (
           <span className="inline-flex items-center gap-1.5">
             <span className="size-3 rounded-sm bg-primary-soft" aria-hidden="true" />
+            Runs
+          </span>
+        ) : seasons.length === 1 ? (
+          // Only the regular times: nothing to tell apart, and they have no name on screen.
+          <span className="inline-flex items-center gap-1.5">
+            <span className={cn('size-3 rounded-sm', tintOf(0).cell)} aria-hidden="true" />
             Runs
           </span>
         ) : (
@@ -321,7 +327,7 @@ function DayPanel({
     <div className="flex flex-col">
       <div className="flex items-center justify-between gap-3 border-b border-line-subtle px-4 py-3">
         <p className="text-sm font-semibold">{dayName.format(fromDateKey(dateKey))}</p>
-        {season ? (
+        {season && seasons.length > 1 ? (
           <span className="inline-flex min-w-0 items-center gap-1.5 text-xs text-subtle">
             <span className={cn('size-2 shrink-0 rounded-full', tintOf(tint ?? 0).dot)} aria-hidden="true" />
             <span className="truncate">{season.name || 'Season'}</span>

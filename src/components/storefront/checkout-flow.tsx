@@ -1459,6 +1459,8 @@ function SummaryLines({
                   {line.quantity} × {formatCurrency(line.unitPrice, tenant.currency)}
                 </span>
               ) : null}
+              {/* The group price's description, as the owner wrote it. */}
+              {line.note ? <span className="block truncate text-xs text-subtle">{line.note}</span> : null}
             </span>
             <span className="shrink-0 tabular font-medium text-foreground">
               {formatCurrency(line.total, tenant.currency)}

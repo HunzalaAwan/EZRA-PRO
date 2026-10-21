@@ -28,14 +28,13 @@ import { cn, formatNumber, fromDateKey } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Segmented } from '@/components/ui/segmented'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { BeforeInput } from './changes-policy-editor'
 import { SeasonCard, WholeNumberField } from './season-card'
 import { YearCalendar, type CalendarAction } from './year-calendar'
 import { ScheduleChangesList } from './schedule-changes-list'
 import {
-  SEASON_TEMPLATES,
   addTimeOn,
+  allYearSeason,
   closeDays,
   dayReason,
   freshId,
@@ -52,15 +51,16 @@ import {
   withMode,
   type PickMode,
   type ScheduleDraft,
-  type SeasonTemplate,
 } from './schedule-draft'
 
 /* ==========================================================================
    SCHEDULE STEP — when an activity runs, for the whole year. Top to bottom:
-   a one-line summary, how guests pick a time, where it runs from, the
-   seasons, the year calendar (day-by-day changes), the list of closed days
-   and changes with public holidays, and the booking window and cut-off.
-   Booked time slots an edit drops are never removed; one line says so.
+   a one-line summary, where it runs from, how guests pick a time, the
+   regular times (the first season, shown without a name), the seasons that
+   change them for part of the year, the year calendar (day-by-day changes),
+   the list of closed days and changes with public holidays, and the booking
+   window and cut-off. Booked time slots an edit drops are never removed;
+   one line says so.
    ========================================================================== */
 
 /** A time slot that already has bookings: kept whatever the schedule says. */
@@ -97,14 +97,14 @@ export interface ScheduleStepProps {
   onBookingStep?: () => void
   /** Day rentals: when they go out and come back. */
   rentalDay?: { pickup: string; ret: string; onChange: (pickup: string, ret: string) => void }
-  /** Southern hemisphere: summer is December. */
+  /** Southern hemisphere: summer is December. Only the season templates read it, and a new season now always starts next month. */
   southern?: boolean
 }
 
 /** Words only (they fit a phone without icons); the line under the control says what the picked one does. */
 const MODE_OPTIONS: { value: PickMode; label: string }[] = [
-  { value: 'times', label: 'Start times' },
-  { value: 'hours', label: 'Opening hours' },
+  { value: 'times', label: 'Specific times' },
+  { value: 'hours', label: 'All day' },
   { value: 'dates', label: 'Specific dates' },
 ]
 const MODE_HINT: Record<PickMode, string> = {
@@ -181,6 +181,7 @@ export function ScheduleStep({
   const basicsSpots = defaultSpots(source)
   const showSpots = kind !== 'charter'
   const closingGap = closingGapOf(base)
+  const stepMinutes = Math.max(30, Math.min(240, base.durationMinutes || 60))
   const firstTime = shownSeasons.map((season) => (['1', '2', '3', '4', '5', '6', '0'] as WeekdayKey[]).map((key) => timesForWeekday(season, key, closingGap)).find((times) => times.length > 0)?.[0]).find(Boolean)
 
   /* ---- calendar edits ---- */
@@ -230,10 +231,17 @@ export function ScheduleStep({
     onChange(next)
   }
 
-  /* ---- seasons ---- */
+  /* ---- regular times and seasons ---- */
+  // The first season here is the regular times; the ones after it are seasons, and a later one wins where they overlap.
+  const regular = shownSeasons[0]
+  const extraSeasons = shownSeasons.slice(1)
   const updateSeason = (id: string, next: ScheduleDraft['schedules'][number]) => onChange({ schedules: value.schedules.map((season) => (season.id === id ? next : season)) })
   const removeSeason = (id: string) => onChange({ schedules: value.schedules.filter((season) => season.id !== id) })
-  const addSeason = (template: SeasonTemplate) => onChange({ schedules: [...value.schedules, seasonFromTemplate(template, shownSeasons[0], todayKey, southern, active)] })
+  // A new season starts next month with the regular times, ready to change.
+  const addSeason = () => onChange({ schedules: [...value.schedules, seasonFromTemplate('blank', regular, todayKey, southern, active)] })
+  // A location with no times of its own yet gets regular times to fill in.
+  const addRegular = () =>
+    onChange({ schedules: [...value.schedules, { ...allYearSeason(value.scheduleMode === 'hours' ? 'hours' : 'times'), id: freshId('season'), ...(active ? { locationId: active } : {}) }] })
 
   /* ---- locations ---- */
   const toggleLocation = (locationId: string) => {
@@ -379,7 +387,7 @@ export function ScheduleStep({
             ) : null}
           </div>
 
-          {/* ---- 3. seasons ---- */}
+          {/* ---- 3. regular times, then the seasons ---- */}
           {value.scheduleMode === 'dates' ? null : (
             <section className="flex flex-col gap-3">
               {multi ? (
@@ -391,51 +399,59 @@ export function ScheduleStep({
                   options={pickedLocationIds.map((id) => ({ value: id, label: locations.find((site) => site.id === id)?.name ?? 'Location' }))}
                 />
               ) : null}
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-sm font-semibold">Seasons</h3>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button type="button" variant="secondary" size="xs" leftIcon={<Plus />}>
-                      Add a season
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
-                    {SEASON_TEMPLATES.map((template) => (
-                      <DropdownMenuItem key={template.value} onSelect={() => addSeason(template.value)}>
-                        <span className="flex-1">{template.label}</span>
-                        <span className="text-xs text-subtle">{template.hint(southern)}</span>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-              {warning ? (
-                <p className="flex items-start gap-1.5 text-xs text-muted">
-                  <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-warning" aria-hidden="true" />
-                  {warning}
-                </p>
-              ) : null}
-              {shownSeasons.map((season, index) => (
+              {regular ? (
                 <SeasonCard
-                  key={season.id}
-                  season={season}
-                  tint={index}
-                  onChange={(next) => updateSeason(season.id, next)}
-                  onRemove={shownSeasons.length > 1 ? () => removeSeason(season.id) : undefined}
+                  key={regular.id}
+                  season={regular}
+                  regular
+                  tint={0}
+                  onChange={(next) => updateSeason(regular.id, next)}
                   todayKey={todayKey}
                   rental={kind === 'rental'}
                   errors={errors}
-                  stepMinutes={Math.max(30, Math.min(240, base.durationMinutes || 60))}
+                  stepMinutes={stepMinutes}
                   closingGap={closingGap}
-                  sharedNote={multi && !season.locationId ? 'Every location' : undefined}
+                  sharedNote={multi && !regular.locationId ? 'Every location' : undefined}
                 />
-              ))}
-              {shownSeasons.length === 0 ? (
-                <button type="button" onClick={() => addSeason('blank')} className="rounded-xl border border-dashed border-line px-4 py-3 text-left text-sm text-muted hover:border-line-strong">
-                  No seasons here yet. Add one.
+              ) : (
+                <button type="button" onClick={addRegular} className="rounded-xl border border-dashed border-line px-4 py-3 text-left text-sm text-muted hover:border-line-strong">
+                  {value.scheduleMode === 'hours' ? 'No hours here yet. Add them.' : 'No start times here yet. Add them.'}
                 </button>
-              ) : null}
+              )}
               {timesError ? <p className="text-xs font-medium text-danger">{timesError}</p> : null}
+
+              <div className="mt-3 flex flex-col gap-3">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-semibold">Seasons</h3>
+                    <p className="mt-0.5 text-xs text-muted">{value.scheduleMode === 'hours' ? 'Different hours' : 'Different times'} for part of the year, like summer.</p>
+                  </div>
+                  <Button type="button" variant="secondary" size="xs" leftIcon={<Plus />} onClick={addSeason}>
+                    Add a season
+                  </Button>
+                </div>
+                {warning ? (
+                  <p className="flex items-start gap-1.5 text-xs text-muted">
+                    <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-warning" aria-hidden="true" />
+                    {warning}
+                  </p>
+                ) : null}
+                {extraSeasons.map((season, index) => (
+                  <SeasonCard
+                    key={season.id}
+                    season={season}
+                    tint={index + 1}
+                    onChange={(next) => updateSeason(season.id, next)}
+                    onRemove={() => removeSeason(season.id)}
+                    todayKey={todayKey}
+                    rental={kind === 'rental'}
+                    errors={errors}
+                    stepMinutes={stepMinutes}
+                    closingGap={closingGap}
+                    sharedNote={multi && !season.locationId ? 'Every location' : undefined}
+                  />
+                ))}
+              </div>
             </section>
           )}
 

@@ -253,7 +253,7 @@ export function EnquiryPanel({
         <div className="flex flex-col gap-1.5 border-t border-line-subtle pt-4">
           <p className="text-center text-xs text-subtle">Prefer to talk it through?</p>
           <Button asChild size="lg" variant="outline" fullWidth leftIcon={<Phone />}>
-            <a href={`tel:${phone.replace(/[^d+]/g, '')}`}>Call {phone}</a>
+            <a href={`tel:${phone.replace(/[^\d+]/g, '')}`}>Call {phone}</a>
           </Button>
           {settings.callHours ? (
             <p className="flex items-center justify-center gap-1.5 text-xs text-subtle">

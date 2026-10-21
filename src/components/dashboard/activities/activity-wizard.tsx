@@ -38,10 +38,11 @@ import { DEFAULT_GUEST_FIELDS, bodyLimitLines, guestDetailsOf, rideAsQuestions, 
 import { DEFAULT_BOOKING, METHOD_LABEL, bookingOf, groupUnit } from '@/lib/booking-method'
 import { EMPTY_PACKAGE, PackagePartsEditor, packageSeats, type PackageOption } from './package-parts-editor'
 import { useBookingDefaults } from '@/hooks/use-booking-defaults'
+import { TEMPLATES_EVENT } from '@/hooks/use-message-templates'
+import type { MessageTemplate } from '@/lib/messaging'
 import type { BookingDefaults } from '@/lib/booking-defaults'
-import { ActivityMessagesEditor } from './activity-messages-editor'
 import type { ChargeBy, GroupDiscount, GroupPrice, PriceChange } from '@/types'
-import { PricingStep, defaultPricingDraft, draftFromPrice, effectiveChargeBy, pricingDraftOf, pricingErrors, pricingFieldsOfDraft, pricingSummary } from './pricing-step'
+import { PricingStep, defaultPricingDraft, draftFromPrice, effectiveChargeBy, groupTierIdOf, isGroupPriced, pricingDraftOf, pricingErrors, pricingFieldsOfDraft, pricingSummary, savedTiersOf } from './pricing-step'
 import { ChangesPolicyEditor, type DraftCancellation } from './changes-policy-editor'
 import { DEFAULT_CHANGES, DEFAULT_PAYMENT, changesOf, changesSummary, depositLabel, paymentOf, policySummary, presetOf } from '@/lib/booking-policy'
 import { BookingExceptionsEditor, BookingSettingsEditor } from './booking-settings-editor'
@@ -242,8 +243,6 @@ export interface ActivityDraft {
   cancellation: DraftCancellation
   /** What guests can change themselves. */
   changes: ChangeRules
-  /** Added to this activity's confirmation and reminder. */
-  guestNote: string
   /** Trips, activities and lessons: a whole time for one group. */
   privateOption: PrivateOption
   /** How the price is counted; null: the kind's own way. */
@@ -326,7 +325,6 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
     payment: { ...DEFAULT_PAYMENT, useDefault: true },
     cancellation: { preset: 'flexible', freeCancellationHours: 24, lateRefundPercent: 0, keepDeposit: false, useDefault: true },
     changes: { ...DEFAULT_CHANGES },
-    guestNote: '',
     privateOption: { enabled: false, price: 0, includedGuests: 6, extraGuest: 0 },
     ...defaultPricingDraft(),
     freeCancellationHours: 24,
@@ -468,6 +466,32 @@ function effectiveDraftPayment(draft: Pick<ActivityDraft, 'payment'>, defaults: 
 function effectiveDraftCancellation(draft: Pick<ActivityDraft, 'cancellation'>, defaults: BookingDefaults): DraftCancellation {
   const own = draft.cancellation ?? { preset: 'flexible' as const, freeCancellationHours: 24, lateRefundPercent: 0, keepDeposit: false }
   return own.useDefault ? { ...defaults.cancellation, preset: 'custom', useDefault: true } : own
+}
+
+/**
+ * Which messages an activity sends is no longer set on the activity: it gets
+ * every message turned on in Marketing. Saving takes it off any message an
+ * older edit switched off for it. One read and one write, so no change is lost.
+ */
+function clearMessageSwitches(tenantId: string, slug: string) {
+  if (!tenantId || !slug) return
+  const key = `ezra:message-templates:${tenantId}`
+  try {
+    const raw = window.localStorage.getItem(key)
+    if (!raw) return
+    const edits = JSON.parse(raw) as Record<string, Partial<MessageTemplate> | null>
+    let changed = false
+    for (const edit of Object.values(edits)) {
+      if (!edit?.excludeSlugs?.includes(slug)) continue
+      edit.excludeSlugs = edit.excludeSlugs.filter((entry) => entry !== slug)
+      changed = true
+    }
+    if (!changed) return
+    window.localStorage.setItem(key, JSON.stringify(edits))
+    window.dispatchEvent(new Event(TEMPLATES_EVENT))
+  } catch {
+    // A blocked or corrupt store: the messages stay as they were.
+  }
 }
 
 /** "In full at checkout", "25% deposit, the rest 2 days before". */
@@ -747,7 +771,6 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
       useDefault: Boolean(activity.cancellationPolicy.useDefault),
     },
     changes: changesOf(activity),
-    guestNote: activity.guestNote ?? '',
     privateOption: activity.privateOption ?? { enabled: false, price: 0, includedGuests: Math.min(6, activity.maxCapacity || 6), extraGuest: 0 },
     ...pricingDraftOf(activity),
     ...RETIRED_PRICING,
@@ -1141,6 +1164,11 @@ function validateStep(step: number, draft: ActivityDraft): FieldErrors {
   }
   // Pricing: a group price that is set, ages the right way round.
   if (id === 'pricing' && !isDining(draft)) Object.assign(errors, pricingErrors(draft))
+  // Per group the price rows are hidden and only the one guests are booked on is saved: the others aren't checked.
+  if (id === 'pricing' && isGroupPriced(draft, isDining(draft))) {
+    const kept = draft.tiers.findIndex((tier) => tier.id === groupTierIdOf(draft))
+    for (const key of Object.keys(errors)) if (/^tiers\.\d+\./.test(key) && !key.startsWith(`tiers.${kept}.`)) delete errors[key]
+  }
   // A rental prices each item per hour and/or per day; every rate that is on needs a price.
   if (id === 'pricing' && !isDining(draft) && (draft.kind ?? 'trip') === 'rental') {
     const r = normalizeKindSettings(draft.kindSettings).rental
@@ -1574,7 +1602,7 @@ export interface ActivityWizardProps {
   pickupZones?: PickupZoneOption[]
   /** The business's other activities, for building a package. */
   packageOptions?: PackageOption[]
-  /** For the messages each activity sends. */
+  /** Saving clears this activity's old message switches in the business's message templates. */
   tenantId?: string
   /** Editing: the activity's upcoming time slots that have bookings, so a schedule edit that drops one says so. */
   bookedSlots?: BookedSlot[]
@@ -1885,7 +1913,8 @@ export function ActivityWizard({
           // Call hours and a reply time are no longer asked for, so guests are not promised any.
           booking: { ...(draft.booking ?? DEFAULT_BOOKING), callHours: '', replyHours: DEFAULT_BOOKING.replyHours },
           tips: Boolean(draft.tips),
-          priceTiers: draft.tiers.map((tier) => ({
+          // Per group only the row guests are booked on: the other prices are hidden there.
+          priceTiers: savedTiersOf(draft, isDining(draft)).map((tier) => ({
             id: tier.id,
             label: tier.label,
             price: tier.price,
@@ -1901,7 +1930,8 @@ export function ActivityWizard({
           privateOption: ['trip', 'activity', 'lesson'].includes(draft.kind ?? 'trip') && effectiveChargeBy(draft) === 'person' && draft.privateOption?.enabled ? draft.privateOption : undefined,
           addOns: draft.addOns.map((addOn) => ({ id: addOn.id, label: addOn.label, price: addOn.price, description: addOn.description, per: addOn.per, required: addOn.required, ...(addOn.icon ? { icon: addOn.icon } : {}) })),
           payment: draft.payment?.useDefault ? { ...pay, useDefault: true } : (draft.payment ?? DEFAULT_PAYMENT),
-          guestNote: (draft.guestNote ?? '').trim(),
+          // The note and the message switches are no longer set on the activity: it gets the messages set up in Marketing.
+          guestNote: '',
           changes: draft.changes ?? DEFAULT_CHANGES,
           cancellationPolicy: (() => {
             const policy = isDining(draft)
@@ -1943,6 +1973,7 @@ export function ActivityWizard({
           // Where it runs from and when: seasons, day-by-day changes, the booking window.
           ...scheduleOverride({ ...draft, scheduleChanges }, activity),
         })
+        if (activity?.slug) clearMessageSwitches(tenantId, activity.slug)
         toast.success('Changes saved', { description: `${draft.name} is updated on the storefront.` })
         router.push(exitHref)
         return
@@ -1985,12 +2016,9 @@ export function ActivityWizard({
   const policyEditor = (
     <ChangesPolicyEditor
       cancellation={cancel}
+      // Shows the business default while the activity follows it; any change gives the activity its own policy.
       onCancellation={(cancellation) => patch({ cancellation: { ...cancellation, useDefault: false }, freeCancellationHours: cancellation.freeCancellationHours })}
-      cancellationDefault={{
-        on: Boolean(draft.cancellation?.useDefault),
-        // Off: start from the default's numbers, then change them.
-        onChange: (on) => patch({ cancellation: { ...cancel, useDefault: on } }),
-      }}
+      followsDefault={Boolean(draft.cancellation?.useDefault)}
       changes={draft.changes ?? DEFAULT_CHANGES}
       onChanges={(changes) => patch({ changes })}
       payment={pay}
@@ -2089,15 +2117,6 @@ export function ActivityWizard({
                         ...((draft.guestDetails?.enabled ?? false) && (draft.guestDetails?.fields ?? []).some((field) => field.key === 'dateOfBirth') ? (['dob'] as const) : []),
                       ]}
                     />
-                    {tenantId ? (
-                      <ActivityMessagesEditor
-                        tenantId={tenantId}
-                        slug={activity?.slug ?? (slugify(draft.name) || 'new-activity')}
-                        note={draft.guestNote ?? ''}
-                        onNote={(guestNote) => patch({ guestNote })}
-                        takesDeposit={pay.collect !== 'full'}
-                      />
-                    ) : null}
                     </div>
                   ) : null}
 
@@ -2381,7 +2400,7 @@ function kindFacts(draft: ActivityDraft): string[] {
   // Activity or tour: shared or private time slots.
   return [
     kind === 'charter' ? 'Private: one group per time slot' : 'Shared: guests join others',
-    draft.durationMinutes > 0 ? formatDuration(draft.durationMinutes) : 'Flexible length',
+    draft.durationMinutes > 0 ? formatDuration(draft.durationMinutes) : 'Flexible duration',
     ...(spots ? [`${draft.minParticipants}–${draft.maxCapacity} guests`] : []),
     draft.difficulty.charAt(0).toUpperCase() + draft.difficulty.slice(1),
     ...age,

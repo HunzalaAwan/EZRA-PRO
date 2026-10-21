@@ -263,8 +263,9 @@ function CountInput({
 
 /* ==========================================================================
    TIER EDITOR — one slim row per price: name, price, ages. "More" holds the
-   rest (a struck-through Was price, how many guests one ticket counts as,
-   the fewest per booking and a short note).
+   rest (a struck-through Was price, the fewest per booking and a short note).
+   How many spots one ticket takes is kept as a preset set it (an infant
+   takes none, a family ticket four); it is not edited here.
    ========================================================================== */
 
 export interface PricingTierEditorProps {
@@ -349,8 +350,7 @@ export function PricingTierEditor({
         {tiers.map((tier, index) => {
           const name = tier.label || `${noun} ${index + 1}`
           const more = Boolean(open[tier.id])
-          const hasMore =
-            Boolean(tier.compareAtPrice) || tier.minQuantity > 0 || tier.description.trim().length > 0 || (!perGroup && (!tier.countsTowardCapacity || (tier.seats ?? 1) > 1))
+          const hasMore = Boolean(tier.compareAtPrice) || tier.minQuantity > 0 || tier.description.trim().length > 0
           const labelError = errors?.[`tiers.${index}.label`]
           const ageError = errors?.[`tiers.${index}.ageMax`]
           return (
@@ -438,27 +438,6 @@ export function PricingTierEditor({
                         placeholder="Shown crossed out"
                         ariaLabel={`Was price for ${name}`}
                       />
-                    </label>
-                  )}
-                  {perGroup ? null : (
-                    <label className="flex flex-col gap-1 text-xs text-subtle">
-                      Counts as
-                      <select
-                        value={tier.countsTowardCapacity ? Math.max(1, tier.seats ?? 1) : 0}
-                        onChange={(event) => {
-                          const places = Number(event.target.value)
-                          update(index, { countsTowardCapacity: places > 0, seats: Math.max(1, places) })
-                        }}
-                        aria-label={`How many guests one ${name} counts as`}
-                        className="h-9 rounded-md border border-line bg-surface px-2 text-[0.8125rem] text-foreground"
-                      >
-                        <option value={0}>No one (free, no spot)</option>
-                        {[1, 2, 3, 4, 5, 6].map((places) => (
-                          <option key={places} value={places}>
-                            {places} {places === 1 ? 'guest' : 'guests'}
-                          </option>
-                        ))}
-                      </select>
                     </label>
                   )}
                   {kind === 'charter' ? null : (

@@ -295,7 +295,10 @@ function pricingFields(activity: Activity, override: ActivityOverride): Pick<Act
   const spots = override.maxCapacity > 0 ? override.maxCapacity : activity.maxCapacity
   return {
     chargeBy: override.chargeBy === undefined ? activity.chargeBy : (override.chargeBy ?? undefined),
-    groupPrice: group && override.groupPrice ? { price: group.price, includedGuests: Math.max(1, spots || group.includedGuests || 1), extraGuest: 0, maxGuests: 0 } : group,
+    groupPrice:
+      group && override.groupPrice
+        ? { price: group.price, includedGuests: Math.max(1, spots || group.includedGuests || 1), extraGuest: 0, maxGuests: 0, ...(group.note ? { note: group.note } : {}) }
+        : group,
     groupDiscounts: activity.groupDiscounts,
     minimumCharge: activity.minimumCharge,
     priceChanges: activity.priceChanges,

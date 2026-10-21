@@ -259,7 +259,7 @@ export function TimedFields({
         })}
       </div>
       <DurationField
-        label="How long it lasts"
+        label="Duration"
         error={errors.durationMinutes}
         minutes={shared.durationMinutes}
         unit={shared.durationUnit}
@@ -555,7 +555,7 @@ export function KindFields({
             </Field>
           </div>
           <DurationField
-            label={lesson.sessions > 1 ? "Each day's lesson lasts" : 'Lesson length'}
+            label={lesson.sessions > 1 ? 'Duration each day' : 'Duration'}
             error={errors.durationMinutes}
             minutes={shared.durationMinutes}
             unit={shared.durationUnit === 'days' ? 'hours' : shared.durationUnit}

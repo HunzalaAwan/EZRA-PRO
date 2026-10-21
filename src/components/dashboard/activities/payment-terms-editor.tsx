@@ -13,13 +13,13 @@ import type { CurrencyCode, PaymentTerms } from '@/types'
 
 /* ==========================================================================
    How guests pay — on the Pricing step, next to the prices it applies to.
-   In full now, a deposit now and the rest charged before the day, or
+   Pay in full, deposits (part now, the rest charged before the day), or
    nothing now and pay on arrival with the card kept on file.
    ========================================================================== */
 
 const OPTIONS: { value: PaymentTerms['collect']; title: string; text: string; icon: typeof CreditCard }[] = [
   { value: 'full', title: 'Pay in full', text: 'The whole price at checkout.', icon: CreditCard },
-  { value: 'deposit', title: 'Deposit now', text: 'Part now, the rest charged before the day.', icon: PiggyBank },
+  { value: 'deposit', title: 'Deposits', text: 'Part now, the rest charged before the day.', icon: PiggyBank },
   { value: 'later', title: 'Pay on the day', text: 'Nothing now. The card is kept to hold the booking.', icon: Wallet },
 ]
 

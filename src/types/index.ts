@@ -216,6 +216,8 @@ export interface GroupPrice {
   extraGuest: number
   /** The most guests one booking can have. 0: the activity's spots. */
   maxGuests: number
+  /** Optional, shown to guests next to the group price: "Up to 6 guests, gear included". */
+  note?: string
 }
 
 /** "From 6 guests, 10% off": the best rung the booking reaches applies to its tickets. */

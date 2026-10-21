@@ -44,7 +44,7 @@ import { useBookingLedger } from '@/hooks/use-booking-ledger'
 import { useScheduledDays } from '@/hooks/use-scheduled-days'
 import { usePricingOverride } from '@/hooks/use-pricing-override'
 import { usePricing } from '@/hooks/use-pricing'
-import { unitPrice } from '@/lib/price-engine'
+import { groupPriced, unitPrice } from '@/lib/price-engine'
 import { changeBooking, withLedger } from '@/lib/booking-ledger'
 import { changesSummary, hoursLabel, refundFor, splitPayment } from '@/lib/booking-policy'
 import type { Activity, ActivityKind, BookingStatus, CancellationPolicy, ChangeRules, CurrencyCode, GuestQuestion, PaymentTerms, WaiverTemplate } from '@/types'
@@ -180,20 +180,24 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
   const currentDepartureId = change?.movedTo?.departureId ?? departure.id
   const startsAt = change?.movedTo?.startsAt ?? departure.startsAt
   // Added guests pay the first ticket's price on the time slot the booking is on: saved prices, price changes and the business's rules.
+  // Per group the group price covers every spot, so they are added at no charge.
   const priced = usePricingOverride(source)
   const { rules: priceRules } = usePricing(tenant.slug)
   const onSlot = days.flatMap((day) => day.slots).find((slot) => slot.departureId === currentDepartureId)
   const leadTier = priced.priceTiers[0]
-  const pricePerGuest = leadTier
-    ? unitPrice(priced, leadTier.id, {
-        startsAt,
-        nowIso,
-        capacity: onSlot?.capacity ?? departure.capacity,
-        booked: onSlot ? bookedOn(onSlot, ledger.delta) : undefined,
-        priceMultiplier: onSlot?.priceMultiplier ?? departure.priceMultiplier ?? 1,
-        businessRules: priceRules,
-      })
-    : given.pricePerGuest
+  const inGroupPrice = groupPriced(priced)
+  const pricePerGuest = inGroupPrice
+    ? 0
+    : leadTier
+      ? unitPrice(priced, leadTier.id, {
+          startsAt,
+          nowIso,
+          capacity: onSlot?.capacity ?? departure.capacity,
+          booked: onSlot ? bookedOn(onSlot, ledger.delta) : undefined,
+          priceMultiplier: onSlot?.priceMultiplier ?? departure.priceMultiplier ?? 1,
+          businessRules: priceRules,
+        })
+      : given.pricePerGuest
   const hoursToGo = (new Date(startsAt).getTime() - now.getTime()) / 3_600_000
   const past = hoursToGo < 0
   const cancelled = Boolean(change?.cancelled) || booking.status === 'cancelled' || booking.status === 'refunded'
@@ -496,17 +500,18 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
                 <IconButton aria-label="Fewer guests" size="sm" variant="outline" disabled={adding <= 1} onClick={() => setAdding((n) => n - 1)}><Minus aria-hidden="true" /></IconButton>
                 <span className="w-6 text-center text-base font-semibold tabular-nums">{adding}</span>
                 <IconButton aria-label="More guests" size="sm" variant="outline" disabled={adding >= seatsLeftNow} onClick={() => setAdding((n) => n + 1)}><Plus aria-hidden="true" /></IconButton>
-                <span className="text-sm text-muted">more at {formatCurrency(pricePerGuest, currency)} each · {seatsLeftNow} {pluralize(seatsLeftNow, 'spot')} left</span>
+                <span className="text-sm text-muted">{inGroupPrice ? 'more, in the group price' : `more at ${formatCurrency(pricePerGuest, currency)} each`} · {seatsLeftNow} {pluralize(seatsLeftNow, 'spot')} left</span>
               </div>
               <Button
                 onClick={() => {
                   changeBooking(tenant.slug, booking.reference, start, { party: partySize + adding }, { by: 'guest', what: `Added ${adding} ${pluralize(adding, 'guest')}` })
-                  update({ balancePaid: true })
+                  // Nothing to pay in the group price: any balance still due stays due.
+                  if (!inGroupPrice) update({ balancePaid: true })
                   setOpen(null)
-                  toast.success(`${adding} ${pluralize(adding, 'guest')} added`, { description: `Paid ${formatCurrency(adding * pricePerGuest, currency)}. Add their details above.` })
+                  toast.success(`${adding} ${pluralize(adding, 'guest')} added`, { description: inGroupPrice ? 'Add their details above.' : `Paid ${formatCurrency(adding * pricePerGuest, currency)}. Add their details above.` })
                 }}
               >
-                Add and pay {formatCurrency(adding * pricePerGuest, currency)}
+                {inGroupPrice ? `Add ${adding} ${pluralize(adding, 'guest')}` : `Add and pay ${formatCurrency(adding * pricePerGuest, currency)}`}
               </Button>
             </div>
           ) : null}
