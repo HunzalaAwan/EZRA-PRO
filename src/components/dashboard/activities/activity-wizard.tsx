@@ -9,7 +9,6 @@ import {
   ArrowRight,
   Ban,
   CalendarClock,
-  CalendarDays,
   Check,
   CircleAlert,
   Compass,
@@ -45,7 +44,7 @@ import type { ChargeBy, GroupDiscount, GroupPrice, PriceChange } from '@/types'
 import { PricingStep, defaultPricingDraft, draftFromPrice, effectiveChargeBy, pricingDraftOf, pricingErrors, pricingFieldsOfDraft, pricingSummary } from './pricing-step'
 import { ChangesPolicyEditor, type DraftCancellation } from './changes-policy-editor'
 import { DEFAULT_CHANGES, DEFAULT_PAYMENT, changesOf, changesSummary, depositLabel, paymentOf, policySummary, presetOf } from '@/lib/booking-policy'
-import { BookingSettingsEditor } from './booking-settings-editor'
+import { BookingExceptionsEditor, BookingSettingsEditor } from './booking-settings-editor'
 import { ACTIVITY_OVERRIDES_EVENT, applyActivityOverride, parseActivityOverrides, readActivityOverridesRaw, saveActivityOverride } from '@/lib/activity-overrides'
 import type { ActivityLocation, ActivitySchedule, ScheduleChange } from '@/types'
 import { closingGapOf, describeSchedules, expandDays, isGeneratedSlotId, parseSlotId, scheduleContextOf, shiftDayKey, bookingWindowMonths, type ScheduleSource } from '@/lib/activity-schedule'
@@ -855,8 +854,8 @@ const TOUR_STEPS = [
   // The media manager takes images only, so the hint does not promise video.
   { id: 'media', label: 'Photos', hint: 'What guests see', icon: Images },
   { id: 'pricing', label: 'Pricing', hint: 'Prices and extras', icon: Tag },
-  { id: 'schedule', label: 'Schedule', hint: 'When it runs', icon: CalendarDays },
-  { id: 'booking', label: 'Booking', hint: 'How guests book', icon: CalendarClock },
+  // How guests book comes first: it decides whether there is a schedule to set at all.
+  { id: 'schedule', label: 'Booking', hint: 'How and when', icon: CalendarClock },
   { id: 'guests', label: 'Guests', hint: 'Arrival and checkout', icon: MapPin },
   { id: 'review', label: 'Review', hint: 'Publish', icon: Rocket },
 ] as const
@@ -870,10 +869,13 @@ const TOUR_STEP_INDEX = Object.fromEntries(TOUR_STEPS.map((entry, index) => [ent
  * The tour steps a session draft saved before Photos was its own step again
  * (it stored only a position). Read so a restored draft opens where it was.
  */
-const PREVIOUS_TOUR_STEP_IDS: readonly TourStepId[] = ['basics', 'description', 'pricing', 'schedule', 'booking', 'guests', 'review']
+const PREVIOUS_TOUR_STEP_IDS: readonly string[] = ['basics', 'description', 'pricing', 'schedule', 'booking', 'guests', 'review']
 
-/** Other names a link can use for a step: `?step=photos`, `?step=details`. */
-const STEP_ALIASES: Record<string, string> = { photos: 'media', details: 'description' }
+/** The "How guests book" box on the Booking step, for the schedule's link back up to it. */
+const HOW_GUESTS_BOOK = 'how-guests-book'
+
+/** Other names a link can use for a step: `?step=photos`, `?step=details`. Booking and the schedule are one step now. */
+const STEP_ALIASES: Record<string, string> = { photos: 'media', details: 'description', booking: 'schedule' }
 
 const DINING_STEPS = [
   { id: 'basics', label: 'Basics', hint: 'Name, format, covers', icon: UtensilsCrossed },
@@ -1735,12 +1737,13 @@ export function ActivityWizard({
         // Reopen on the same step by its id. An older save kept only a position, from the steps before Photos was split out.
         const restoredDining = isDining({ category: parsed.draft?.category ?? initial.category })
         const list = stepsFor(restoredDining)
-        const id =
+        const raw =
           typeof parsed.stepId === 'string'
             ? parsed.stepId
             : restoredDining
               ? list[parsed.step ?? 0]?.id
               : PREVIOUS_TOUR_STEP_IDS[parsed.step ?? 0]
+        const id = raw && !restoredDining ? (STEP_ALIASES[raw] ?? raw) : raw
         const next = list.findIndex((entry) => entry.id === id)
         if (next >= 0) {
           setStep(next)
@@ -1879,7 +1882,8 @@ export function ActivityWizard({
           theme: draft.theme ?? defaultTheme(draft.category),
           // The booking settings carry custom quotes now; the flag stays for older readers.
           customRequests: Boolean((draft.booking ?? DEFAULT_BOOKING).customQuote),
-          booking: draft.booking ?? DEFAULT_BOOKING,
+          // Call hours and a reply time are no longer asked for, so guests are not promised any.
+          booking: { ...(draft.booking ?? DEFAULT_BOOKING), callHours: '', replyHours: DEFAULT_BOOKING.replyHours },
           tips: Boolean(draft.tips),
           priceTiers: draft.tiers.map((tier) => ({
             id: tier.id,
@@ -2134,8 +2138,20 @@ export function ActivityWizard({
                         errors={errors}
                       />
                     ) : (draft.kind ?? 'trip') === 'package' ? (
-                      <PackageBookingNote config={draft.package} options={packageOptions} onEdit={() => goTo(0, -1)} />
+                      <div className="flex flex-col gap-6">
+                        <PackageBookingNote config={draft.package} options={packageOptions} onEdit={() => goTo(0, -1)} />
+                        {policyEditor}
+                      </div>
                     ) : (
+                      <div className="flex flex-col gap-6">
+                        <BookingSettingsEditor
+                          id={HOW_GUESTS_BOOK}
+                          value={draft.booking ?? DEFAULT_BOOKING}
+                          onChange={(booking) => patch({ booking })}
+                          businessPhone={businessPhone}
+                        />
+                        <div className="flex flex-col gap-3">
+                          <h3 className="text-sm font-semibold">When it runs</h3>
                       <ScheduleStep
                         value={draft}
                         onChange={patch}
@@ -2159,7 +2175,7 @@ export function ActivityWizard({
                         bookedSlots={liveBookedSlots}
                         errors={errors}
                         unscheduled={unscheduled}
-                        onBookingStep={() => goTo(TOUR_STEP_INDEX.booking, 1)}
+                        onBookingStep={() => document.getElementById(HOW_GUESTS_BOOK)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
                         rentalDay={
                           rentalHoursFor(draft)?.daily
                             ? {
@@ -2174,26 +2190,21 @@ export function ActivityWizard({
                         }
                         southern={currency === 'AUD' || currency === 'NZD'}
                       />
-                    )
-                  ) : null}
-                  {currentStep.id === 'booking' && !dining ? (
-                    (draft.kind ?? 'trip') === 'package' ? (
-                      policyEditor
-                    ) : (
-                      <div className="flex flex-col gap-6">
-                        <BookingSettingsEditor
-                          value={draft.booking ?? DEFAULT_BOOKING}
-                          onChange={(booking) => patch({ booking })}
-                          businessPhone={businessPhone}
-                          // A rental counts "items", whatever it lends out (no category is picked in setup).
-                          groupWord={groupUnit(draft.kind, undefined, draft.booking?.groupCountBy).many}
-                          rentedWord={(draft.kind ?? 'trip') === 'rental' ? 'items' : undefined}
-                        />
+                        </div>
+                        {(draft.booking ?? DEFAULT_BOOKING).method === 'instant' ? (
+                          <BookingExceptionsEditor
+                            value={draft.booking ?? DEFAULT_BOOKING}
+                            onChange={(booking) => patch({ booking })}
+                            // A rental counts "items", whatever it lends out (no category is picked in setup).
+                            groupWord={groupUnit(draft.kind, undefined, draft.booking?.groupCountBy).many}
+                            rentedWord={(draft.kind ?? 'trip') === 'rental' ? 'items' : undefined}
+                          />
+                        ) : null}
                         {policyEditor}
                       </div>
                     )
                   ) : null}
-                  {(dining ? currentStep.id === 'schedule' : currentStep.id === 'booking') && crew.length > 0 ? (
+                  {currentStep.id === 'schedule' && crew.length > 0 ? (
                     <CrewPicker
                       crew={crew}
                       selected={draft.crewIds}
@@ -2287,8 +2298,7 @@ const STEP_COPY: Record<string, string> = {
   description: 'What guests read before they book.',
   media: 'The photos guests see before they book.',
   pricing: 'What it costs, and the extras you offer once a time slot is picked.',
-  schedule: 'When it runs, all year, and how far ahead guests can book.',
-  booking: 'How guests book, changes and cancellations, and who leads it.',
+  schedule: 'How guests book, when it runs, and changes and cancellations.',
   guests: 'Where guests go, and what checkout asks of them.',
   review: 'One last read-through, then publish.',
 }
@@ -2946,7 +2956,7 @@ function ReviewStep({
 }) {
   const crewNames = crew.filter((member) => draft.crewIds.includes(member.id)).map((member) => member.name)
   // Dining picks the team on Services, everything else on Booking.
-  const crewRow = { label: 'Team', value: crewNames.length > 0 ? crewNames.join(', ') : 'Picked for each time slot', step: isDining(draft) ? DINING_STEP_INDEX.schedule : TOUR_STEP_INDEX.booking }
+  const crewRow = { label: 'Team', value: crewNames.length > 0 ? crewNames.join(', ') : 'Picked for each time slot', step: isDining(draft) ? DINING_STEP_INDEX.schedule : TOUR_STEP_INDEX.schedule }
   const { defaults: bookingDefaults } = useBookingDefaults(tenantSlug)
   const reviewPay = effectiveDraftPayment(draft, bookingDefaults)
   const reviewCancel = effectiveDraftCancellation(draft, bookingDefaults)
@@ -3054,7 +3064,7 @@ function ReviewStep({
             ].filter(Boolean)
             return [METHOD_LABEL[b.method], ...extras].join(' · ')
           })(),
-          step: TOUR_STEP_INDEX.booking,
+          step: TOUR_STEP_INDEX.schedule,
         },
         {
           label: 'How guests pay',
@@ -3064,7 +3074,7 @@ function ReviewStep({
         {
           label: 'Cancellations',
           value: `${policySummary(reviewCancel, reviewPay)}${draft.cancellation?.useDefault ? ' (business default)' : ''} ${changesSummary(draft.changes ?? DEFAULT_CHANGES, (minor) => formatCurrency(minor, currency))}`,
-          step: TOUR_STEP_INDEX.booking,
+          step: TOUR_STEP_INDEX.schedule,
         },
         {
           label: 'Schedule',

@@ -37,26 +37,24 @@ function Row({ title, text, checked, onChange, children }: { title: string; text
   )
 }
 
+/** How guests book: online or by request, on a schedule or not, and the number they can call. */
 export function BookingSettingsEditor({
   value,
   onChange,
   businessPhone,
-  groupWord = 'people',
-  rentedWord,
+  id,
 }: {
   value: BookingSettings
   onChange: (next: BookingSettings) => void
   businessPhone: string
-  /** What the limit is counted in: "people", "bikes". */
-  groupWord?: string
-  /** Rentals: the word for what is rented ("bikes"), so the limit can count those or people. */
-  rentedWord?: string
+  /** So the schedule below can link back up here. */
+  id?: string
 }) {
   const set = (patch: Partial<BookingSettings>) => onChange({ ...value, ...patch })
   const instant = value.method === 'instant'
 
   return (
-    <section className="flex flex-col gap-5 rounded-xl border border-line p-4">
+    <section id={id} className="flex scroll-mt-24 flex-col gap-5 rounded-xl border border-line p-4">
       <div>
         <h3 className="text-sm font-semibold">How guests book</h3>
         <p className="mt-0.5 text-xs text-subtle">Pick what fits how you work. You can change it any time; bookings already made are not affected.</p>
@@ -108,21 +106,43 @@ export function BookingSettingsEditor({
         </div>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="sm:max-w-sm">
         <Field label="Number guests call" optional description={instant ? 'Shown under the booking button.' : 'Shown as a Call button next to the request form.'}>
           {(control) => <Input {...control} type="tel" placeholder={businessPhone} value={value.phone} onChange={(e) => set({ phone: e.target.value })} />}
         </Field>
-        <Field label="When you answer" optional>
-          {(control) => <Input {...control} placeholder="Mon–Sat, 8am–6pm" value={value.callHours} onChange={(e) => set({ callHours: e.target.value })} />}
-        </Field>
-        <Field label="You reply to requests within" description="Guests see this after they send one.">
-          {(control) => <Input {...control} type="number" min={1} suffix="hours" value={value.replyHours || ''} onChange={(e) => set({ replyHours: Math.max(1, Math.floor(Number(e.target.value)) || 24) })} />}
-        </Field>
       </div>
 
-      {instant ? (
-        <div className="flex flex-col divide-y divide-line-subtle border-t border-line-subtle pt-4">
-          <p className="pb-3 text-[0.8125rem] font-medium">Send these to a request instead</p>
+      {!instant ? (
+        <p className="rounded-lg bg-surface-sunken px-3 py-2 text-xs text-muted">
+          Requests arrive in Custom requests with the date, group and what they picked. Send a quote there and the guest pays from the link to confirm.
+        </p>
+      ) : null}
+    </section>
+  )
+}
+
+/** Online bookings that go to a request instead: big groups, other dates, custom quotes. */
+export function BookingExceptionsEditor({
+  value,
+  onChange,
+  groupWord = 'people',
+  rentedWord,
+}: {
+  value: BookingSettings
+  onChange: (next: BookingSettings) => void
+  /** What the limit is counted in: "people", "bikes". */
+  groupWord?: string
+  /** Rentals: the word for what is rented ("bikes"), so the limit can count those or people. */
+  rentedWord?: string
+}) {
+  const set = (patch: Partial<BookingSettings>) => onChange({ ...value, ...patch })
+  return (
+    <section className="flex flex-col rounded-xl border border-line p-4">
+      <div className="flex flex-col divide-y divide-line-subtle">
+          <div className="pb-3">
+            <h3 className="text-sm font-semibold">Send these to a request instead</h3>
+            <p className="mt-0.5 text-xs text-subtle">Online bookings that need you to say yes first.</p>
+          </div>
           <Row
             title="Big groups ask first"
             text={`Above a size, guests send a request instead of paying, so you can plan for them.`}
@@ -169,13 +189,7 @@ export function BookingSettingsEditor({
             checked={value.customQuote}
             onChange={(customQuote) => set({ customQuote })}
           />
-        </div>
-      ) : null}
-      {!instant ? (
-        <p className="rounded-lg bg-surface-sunken px-3 py-2 text-xs text-muted">
-          Requests arrive in Custom requests with the date, group and what they picked. Send a quote there and the guest pays from the link to confirm.
-        </p>
-      ) : null}
+      </div>
     </section>
   )
 }
