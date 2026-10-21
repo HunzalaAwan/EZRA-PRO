@@ -36,11 +36,11 @@ import { usePricing } from '@/hooks/use-pricing'
 import { useWalkIns } from '@/hooks/use-walk-ins'
 import { ACTIVITY_KIND_META } from '@/lib/activity-kinds'
 import { applyRules, findPromo, giftProblem, promoDiscount, promoProblem } from '@/lib/pricing'
-import { cn, formatCurrency, formatTime, pluralize } from '@/lib/utils'
+import { clamp, cn, formatCurrency, formatTime, pluralize } from '@/lib/utils'
 import { EMPTY_GUEST, WALK_IN_SOURCES, summarize, type WalkInGuest, type WalkInRecord } from '@/lib/walk-ins'
 import type { Activity, ActivityKind, CurrencyCode } from '@/types'
 import { applyActivityOverride, applyPricingOverride, type ActivityOverride } from '@/lib/activity-overrides'
-import { groupGuestLimit, groupPriced, groupTierOf, priceBooking, unitPrice, type PriceContext } from '@/lib/price-engine'
+import { groupCoverOf, groupGuestLimit, groupPriced, groupTierOf, priceBooking, privatePerPerson, unitPrice, unitPriceDetail, type PriceContext } from '@/lib/price-engine'
 import { placesOf } from '@/lib/places'
 import { useActivityOverrides } from '@/hooks/use-pricing-override'
 import { useBookingDefaults } from '@/hooks/use-booking-defaults'
@@ -250,6 +250,8 @@ function WalkInTill({
   const [qty, setQty] = React.useState<Record<string, number>>({})
   /** Per group: how many guests are coming. */
   const [groupCount, setGroupCount] = React.useState(1)
+  /** A private group priced per group: how many are coming. */
+  const [party, setParty] = React.useState(2)
   const [extras, setExtras] = React.useState<Record<string, boolean>>({})
   const [guest, setGuest] = React.useState<WalkInGuest>(EMPTY_GUEST)
   const [seller, setSeller] = React.useState(staff[0] ?? 'Desk')
@@ -271,6 +273,7 @@ function WalkInTill({
     setSlotId('')
     setQty(activity ? seedQty(activity) : {})
     setGroupCount(1)
+    setParty(2)
     setExtras({})
   }, [slug]) // eslint-disable-line react-hooks/exhaustive-deps
   // The saved schedule can leave the picked activity with nothing to sell: move to the first that has something.
@@ -304,18 +307,48 @@ function WalkInTill({
   const groupPrice = engineActivity && groupPriced(engineActivity) ? engineActivity.groupPrice : undefined
   const groupTier = groupPrice && engineActivity ? groupTierOf(engineActivity) : undefined
   const groupSeats = groupTier ? placesOf(groupTier) : 0
-  const guests = groupTier ? groupCount : activity ? activity.tiers.reduce((sum, tier) => sum + (qty[tier.id] ?? 0), 0) : 0
-  const seatsUsed = groupTier ? groupCount * groupSeats : activity ? activity.tiers.reduce((sum, tier) => sum + (tier.seat ? (qty[tier.id] ?? 0) : 0), 0) : 0
+  // A private group: per group, one of its options and how many are coming; per person, a ticket each. Either way the time is theirs.
+  const privateTickets = engineActivity ? privatePerPerson(engineActivity) : false
+  const privateOptions = activity?.kind === 'charter' && !privateTickets
+  const privateMost = Math.max(1, engineActivity?.charter?.maxGuests ?? engineActivity?.maxCapacity ?? 1)
+  const privateFewest = Math.max(1, engineActivity?.minParticipants ?? 1)
+  // The rows the storefront sells: a row the saved edit took out is left off. Priced per person, a private group's rows
+  // are tickets, with the names and counts saved in the editor (as on the storefront).
+  const tiers = React.useMemo(() => {
+    if (!activity) return []
+    if (!engineActivity) return activity.tiers
+    const sold = activity.tiers.flatMap((tier) => {
+      const priced = engineActivity.priceTiers.find((entry) => entry.id === tier.id)
+      if (!priced) return []
+      return [privateTickets ? { ...tier, label: priced.label, min: priced.minQuantity, max: priced.maxQuantity } : tier]
+    })
+    return sold.length > 0 ? sold : activity.tiers
+  }, [activity, privateTickets, engineActivity])
+  const headcount = tiers.reduce((sum, tier) => sum + (qty[tier.id] ?? 0), 0)
+  const guests = groupTier ? groupCount : privateOptions ? clamp(party, privateFewest, Math.max(privateFewest, privateMost)) : headcount
+  const seatsUsed = groupTier ? groupCount * groupSeats : privateTickets ? (headcount > 0 ? 1 : 0) : tiers.reduce((sum, tier) => sum + (tier.seat ? (qty[tier.id] ?? 0) : 0), 0)
   // How full the time slot is, for filling-up and quiet-time rules.
   const slotBooked = slot ? (slot.booked ?? (slot.capacity !== undefined ? Math.max(0, slot.capacity - slot.seatsLeft) : undefined)) : undefined
   const rules = activity && slot ? applyRules(pricing.rules, { activitySlug: activity.slug, startsAt: slot.startsAt, nowIso, guests: Math.max(1, guests), capacity: slot.capacity, booked: slotBooked }) : { multiplier: 1, applied: [] }
   const priceCtx: PriceContext | undefined = slot
     ? { startsAt: slot.startsAt, nowIso, capacity: slot.capacity, booked: slotBooked, priceMultiplier: slot.priceMultiplier, businessRules: pricing.rules }
     : undefined
-  const ticketLines = groupTier ? [{ tierId: groupTier.id, qty: groupCount }] : (activity?.tiers ?? []).map((tier) => ({ tierId: tier.id, qty: qty[tier.id] ?? 0 }))
-  const priced = activity && engineActivity && priceCtx ? priceBooking({ ...priceCtx, activity: engineActivity, lines: ticketLines }) : undefined
+  const ticketLines = groupTier ? [{ tierId: groupTier.id, qty: groupCount }] : tiers.map((tier) => ({ tierId: tier.id, qty: qty[tier.id] ?? 0 }))
+  const priced =
+    activity && engineActivity && priceCtx ? priceBooking({ ...priceCtx, activity: engineActivity, lines: ticketLines, party: privateOptions ? guests : undefined }) : undefined
   /** Per group: the most guests at this time, by the spots left and what the price covers. */
   const groupMost = groupPrice && groupTier ? Math.max(1, Math.min(groupTier.maxQuantity, groupGuestLimit(groupPrice), slot && groupSeats > 0 ? Math.floor(slot.seatsLeft / groupSeats) : Number.POSITIVE_INFINITY)) : 1
+  /** Per group: the group price and each extra guest at this time, and the guests it covers when fewer than the spots (0: everyone). */
+  const groupDetail = groupPrice && engineActivity && priceCtx ? unitPriceDetail(engineActivity, 'group', { ...priceCtx, guests: priced?.guests }) : undefined
+  const groupCovers = groupPrice && engineActivity && groupPrice.includedGuests > 0 && groupPrice.includedGuests < engineActivity.maxCapacity ? groupPrice.includedGuests : 0
+  /** A private group: how many it can be, and per group the guests an option covers and each one over at this time. */
+  const privateRange = privateFewest > 1 ? `${privateFewest} to ${privateMost}` : `Up to ${privateMost}`
+  const privateCover = privateOptions && engineActivity ? groupCoverOf(engineActivity) : undefined
+  const chosenOption = privateOptions ? tiers.find((tier) => (qty[tier.id] ?? 0) > 0) : undefined
+  const privateExtra =
+    privateCover && privateCover.extraGuest > 0 && Number.isFinite(privateCover.covers)
+      ? ((chosenOption && engineActivity && priceCtx ? unitPriceDetail(engineActivity, chosenOption.id, { ...priceCtx, guests: priced?.guests }).extraGuest : undefined) ?? privateCover.extraGuest)
+      : 0
   /** A ticket's price at this time: the engine's, or the plain price with the business rules. */
   const tierUnit = (tier: WalkInActivity['tiers'][number]) =>
     engineActivity && priceCtx ? unitPrice(engineActivity, tier.id, { ...priceCtx, guests: priced?.guests }) : Math.round(tier.price * rules.multiplier)
@@ -331,7 +364,7 @@ function WalkInTill({
               ...priced.ticketLines.map((line) => ({ label: `${line.quantity} × ${line.label}`, total: line.total })),
               ...priced.adjustments.map((entry) => ({ label: entry.label, total: entry.amount })),
             ]
-          : activity.tiers.filter((tier) => (qty[tier.id] ?? 0) > 0).map((tier) => ({ label: `${qty[tier.id]} × ${tier.label}`, total: Math.round(tier.price * rules.multiplier) * (qty[tier.id] ?? 0) }))),
+          : tiers.filter((tier) => (qty[tier.id] ?? 0) > 0).map((tier) => ({ label: `${qty[tier.id]} × ${tier.label}`, total: Math.round(tier.price * rules.multiplier) * (qty[tier.id] ?? 0) }))),
         ...activity.addOns
           .filter((addOn) => extras[addOn.id])
           .map((addOn) => {
@@ -349,14 +382,21 @@ function WalkInTill({
   const change = method === 'cash' && tendered ? Math.round(Number(tendered) * 100) - total : 0
   // Rentals with items: each item has its own count at this time.
   const itemCap = (tierId: string) => slot?.itemsLeft?.[tierId] ?? Number.POSITIVE_INFINITY
-  const overItem = activity && !groupTier ? activity.tiers.find((tier) => (qty[tier.id] ?? 0) > itemCap(tier.id)) : undefined
-  const overSeats = slot ? seatsUsed > slot.seatsLeft || Boolean(overItem) : false
+  const overItem = activity && !groupTier ? tiers.find((tier) => (qty[tier.id] ?? 0) > itemCap(tier.id)) : undefined
+  /** A private group priced per person: more guests than it can be. */
+  const overPrivate = privateTickets && headcount > privateMost
+  const overSeats = slot ? seatsUsed > slot.seatsLeft || Boolean(overItem) || overPrivate : false
   const nameMissing = guest.name.trim().length < 2
   const emailBad = guest.email.trim().length > 0 && !/^\S+@\S+\.\S+$/.test(guest.email.trim())
-  const perPerson = activity ? activity.kind !== 'charter' && activity.kind !== 'rental' : false
+  // A private group priced per person counts tickets like any per-person activity; per group it picks one option.
+  const perPerson = activity ? (activity.kind !== 'charter' || privateTickets) && activity.kind !== 'rental' : false
   // Per group there is one count, so no tier has a minimum of its own.
-  const shortTier = perPerson && activity && !groupTier ? activity.tiers.find((tier) => (qty[tier.id] ?? 0) < tier.min) : undefined
-  const canPay = Boolean(activity && slot && guests > 0 && !overSeats && !shortTier && !nameMissing && !emailBad && (method === 'card' || total === 0 || change >= 0))
+  const shortTier = perPerson && activity && !groupTier ? tiers.find((tier) => (qty[tier.id] ?? 0) < tier.min) : undefined
+  /** Something to sell: the group's count, or at least one ticket or option. */
+  const picked = groupTier ? groupCount > 0 : headcount > 0
+  // A private group per person needs its fewest guests (per group, the count can't go under them).
+  const tooFew = privateTickets && headcount < privateFewest
+  const canPay = Boolean(activity && slot && guests > 0 && picked && !tooFew && !overSeats && !shortTier && !nameMissing && !emailBad && (method === 'card' || total === 0 || change >= 0))
 
   const applyCode = () => {
     const value = code.trim().toUpperCase()
@@ -425,6 +465,7 @@ function WalkInTill({
     setTendered('')
     setQty(activity ? seedQty(activity) : {})
     setGroupCount(1)
+    setParty(2)
     setExtras({})
   }
 
@@ -487,12 +528,13 @@ function WalkInTill({
             </div>
 
             <div>
-              <p className="text-sm font-semibold">{activity.kind === 'rental' ? 'Units' : 'Guests'}</p>
+              <p className="text-sm font-semibold">{activity.kind === 'rental' ? 'Units' : privateOptions ? 'Option' : 'Guests'}</p>
               {groupPrice && groupTier && engineActivity ? (
                 <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-2.5">
                   <span className="min-w-0">
                     <span className="block text-sm font-medium">
-                      <span className="tabular-nums">{formatCurrency(priceCtx ? unitPrice(engineActivity, 'group', { ...priceCtx, guests: priced?.guests }) : groupPrice.price, currency)}</span> for the group
+                      <span className="tabular-nums">{formatCurrency(groupDetail?.price ?? groupPrice.price, currency)}</span> {groupCovers > 0 ? `for up to ${groupCovers}` : 'for the group'}
+                      {groupCovers > 0 && groupPrice.extraGuest > 0 ? `, then ${formatCurrency(groupDetail?.extraGuest ?? groupPrice.extraGuest, currency)} each` : ''}
                     </span>
                     {groupPrice.note?.trim() ? <span className="block text-xs text-subtle">{groupPrice.note.trim()}</span> : null}
                   </span>
@@ -504,28 +546,55 @@ function WalkInTill({
                 </div>
               ) : (
               <ul className="mt-2 flex list-none flex-col divide-y divide-line-subtle rounded-xl border border-line p-0">
-                {activity.tiers.map((tier) => {
+                {tiers.map((tier) => {
                   const value = qty[tier.id] ?? 0
+                  // A private group's option: its note, as the owner wrote it.
+                  const note = privateOptions ? engineActivity?.priceTiers.find((entry) => entry.id === tier.id)?.description?.trim() : undefined
+                  // A private group per person: up to its most guests, whatever the spots say (the time is theirs).
+                  const full = privateTickets ? headcount >= privateMost : tier.seat && slot ? seatsUsed >= slot.seatsLeft : false
                   return (
                     <li key={tier.id} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
-                      <span>
+                      <span className="min-w-0">
                         <span className="block text-sm font-medium">{tier.label}</span>
                         <span className="block text-xs text-subtle tabular-nums">
                           {formatCurrency(tierUnit(tier), currency)}
                           {slot?.itemsLeft ? ` · ${slot.itemsLeft[tier.id] ?? 0} left` : ''}
+                          {note ? ` · ${note}` : ''}
                         </span>
                       </span>
                       <span className="flex items-center gap-2">
                         <IconButton aria-label={`Fewer ${tier.label}`} size="sm" variant="outline" disabled={value <= (perPerson ? tier.min : 0)} onClick={() => setQty((q) => ({ ...q, [tier.id]: value - 1 }))}><Minus aria-hidden="true" /></IconButton>
                         <span className="w-6 text-center text-base font-semibold tabular-nums">{value}</span>
-                        <IconButton aria-label={`More ${tier.label}`} size="sm" variant="outline" disabled={value >= tier.max || value >= itemCap(tier.id) || (tier.seat && slot ? seatsUsed >= slot.seatsLeft : false)} onClick={() => setQty((q) => ({ ...q, [tier.id]: value + 1 }))}><Plus aria-hidden="true" /></IconButton>
+                        <IconButton aria-label={`More ${tier.label}`} size="sm" variant="outline" disabled={value >= tier.max || value >= itemCap(tier.id) || full} onClick={() => setQty((q) => ({ ...q, [tier.id]: value + 1 }))}><Plus aria-hidden="true" /></IconButton>
                       </span>
                     </li>
                   )
                 })}
               </ul>
               )}
-              {overSeats ? <p className="mt-1.5 text-xs font-medium text-danger">{overItem ? `Only ${itemCap(overItem.id)} ${overItem.label} left at this time.` : `Only ${slot?.seatsLeft} left at this time.`}</p> : null}
+              {privateOptions ? (
+                <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-2.5">
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">Guests in the group</span>
+                    <span className="block text-xs text-subtle">
+                      {privateRange};{' '}
+                      {privateExtra > 0 && privateCover ? `the price covers ${privateCover.covers}, then ${formatCurrency(privateExtra, currency)} each` : 'the price is for the whole group'}
+                    </span>
+                  </span>
+                  <span className="flex items-center gap-2">
+                    <IconButton aria-label="Fewer guests" size="sm" variant="outline" disabled={guests <= privateFewest} onClick={() => setParty(Math.max(privateFewest, guests - 1))}><Minus aria-hidden="true" /></IconButton>
+                    <span className="w-6 text-center text-base font-semibold tabular-nums">{guests}</span>
+                    <IconButton aria-label="More guests" size="sm" variant="outline" disabled={guests >= privateMost} onClick={() => setParty(Math.min(privateMost, guests + 1))}><Plus aria-hidden="true" /></IconButton>
+                  </span>
+                </div>
+              ) : privateTickets ? (
+                <p className="mt-1.5 text-xs text-subtle">{privateRange} guests. The time is just for this group.</p>
+              ) : null}
+              {overSeats ? (
+                <p className="mt-1.5 text-xs font-medium text-danger">
+                  {overItem ? `Only ${itemCap(overItem.id)} ${overItem.label} left at this time.` : overPrivate ? `Up to ${privateMost} guests.` : `Only ${slot?.seatsLeft} left at this time.`}
+                </p>
+              ) : null}
             </div>
 
             {activity.addOns.length > 0 ? (

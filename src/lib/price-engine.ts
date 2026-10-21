@@ -148,6 +148,36 @@ export const groupPriced = (activity: PricedActivity) =>
   chargeByOf(activity) === 'group' && (activity.kind ?? 'trip') !== 'charter' && Boolean(activity.groupPrice)
 
 /**
+ * A private activity priced per person: each guest has a ticket (Adult,
+ * Child...), and the group still has the time slot to itself. Per group (the
+ * default), its prices are options, each one price for the whole group.
+ */
+export const privatePerPerson = (activity: Pick<Activity, 'kind'> & Partial<Pick<Activity, 'chargeBy'>>) =>
+  (activity.kind ?? 'trip') === 'charter' && chargeByOf(activity) === 'person'
+
+/**
+ * Per group, the guests the price covers and each guest over that, before any
+ * change (minor units): a shared activity's group price, or a private group's
+ * options. `covers` is Infinity when the price is for everyone. Undefined
+ * when the activity is not priced per group.
+ */
+export function groupCoverOf(activity: PricedActivity): { covers: number; extraGuest: number } | undefined {
+  if (groupPriced(activity)) {
+    const group = activity.groupPrice!
+    return { covers: group.includedGuests > 0 ? group.includedGuests : Number.POSITIVE_INFINITY, extraGuest: Math.max(0, group.extraGuest || 0) }
+  }
+  if ((activity.kind ?? 'trip') === 'charter' && chargeByOf(activity) === 'group') {
+    const included = activity.charter?.includedGuests ?? 0
+    return { covers: included > 0 ? included : Number.POSITIVE_INFINITY, extraGuest: Math.max(0, activity.charter?.extraGuestPrice ?? 0) }
+  }
+  return undefined
+}
+
+/** Guests over what a group price covers. */
+export const guestsOver = (cover: { covers: number; extraGuest: number } | undefined, guests: number) =>
+  cover && cover.extraGuest > 0 && Number.isFinite(cover.covers) ? Math.max(0, guests - cover.covers) : 0
+
+/**
  * Per group: guests only say how many are coming, and every one is booked on
  * this tier. The lead ticket when it is one guest and one spot, else the first
  * tier that is, so one count is one guest. The other tiers are kept for when
@@ -159,10 +189,14 @@ export function groupTierOf(activity: Pick<PricedActivity, 'priceTiers'>): Price
   return tiers.find((tier) => tier.price > 0 && single(tier)) ?? tiers.find(single) ?? tiers.find((tier) => tier.countsTowardCapacity) ?? tiers[0]
 }
 
-/** The most guests one per-group booking takes: its own limit, what the price covers when it can't grow, or no limit. */
+/**
+ * The most guests one per-group booking takes: its own limit, what the price
+ * covers when there is no extra-guest price, or no limit (the spots decide)
+ * when the price is for everyone or each extra guest pays.
+ */
 export function groupGuestLimit(group: GroupPrice): number {
   if (group.maxGuests > 0) return group.maxGuests
-  return group.extraGuest > 0 ? Number.POSITIVE_INFINITY : Math.max(1, group.includedGuests)
+  return group.includedGuests <= 0 || group.extraGuest > 0 ? Number.POSITIVE_INFINITY : group.includedGuests
 }
 
 const isRated = (activity: PricedActivity, mode?: RentalMode) =>
@@ -445,7 +479,7 @@ export interface UnitPriceDetail {
   /** Before any change. */
   base: number
   applied: AppliedChange[]
-  /** 'group' and 'private': each guest over what the price covers, after the activity's own changes. */
+  /** 'group', 'private' and a private group's options: each guest over what the price covers, after the activity's own changes. */
   extraGuest?: number
 }
 
@@ -468,6 +502,9 @@ export function unitPriceDetail(activity: PricedActivity, tierId: string, ctx: P
   }
   const base = baseOf(activity, tierId, ctx.rental) ?? 0
   const result = runSteps(activity, { kind: 'tier', tierId, base }, base, ctx, chargeByOf(activity) === 'person')
+  // A private group's option: each guest over what it covers pays the extra-guest price.
+  const cover = (activity.kind ?? 'trip') === 'charter' ? groupCoverOf(activity) : undefined
+  if (cover && cover.extraGuest > 0 && Number.isFinite(cover.covers)) return { price: result.price, base, applied: result.applied, extraGuest: extraPrice(cover.extraGuest, result.factor) }
   return { price: result.price, base, applied: result.applied }
 }
 
@@ -498,8 +535,8 @@ function leadCandidates(activity: PricedActivity, rental?: RentalPricing): { tie
     if (out.length > 0) return out
   }
   const paid = activity.priceTiers.filter((tier) => tier.price > 0)
-  // A charter's options are picked one of, like rental items: the cheapest one leads.
-  if ((activity.kind ?? 'trip') === 'charter') return paid.map((tier) => ({ tierId: tier.id }))
+  // A private group's options are picked one of, like rental items: the cheapest one leads. Per person, the lead ticket does.
+  if ((activity.kind ?? 'trip') === 'charter' && !privatePerPerson(activity)) return paid.map((tier) => ({ tierId: tier.id }))
   // The lead price: the first paid ticket that takes a spot (the "Lead price" row in the editor, usually Adult),
   // as booking sites show it. A child, add-on swing, ride-along or support seat is never the "from" price.
   const lead = paid.find((tier) => tier.countsTowardCapacity) ?? paid[0]
@@ -509,8 +546,8 @@ function leadCandidates(activity: PricedActivity, rental?: RentalPricing): { tie
 /**
  * The price a guest books at, for this context: the lead ticket
  * (the first paid ticket that takes a spot; free and ride-along
- * tickets are left out), a charter's cheapest option, a rental's cheapest
- * item rate, or the group price. 0 when everything is free.
+ * tickets are left out), a private group's cheapest option, a rental's
+ * cheapest item rate, or the group price. 0 when everything is free.
  */
 export function leadPrice(activity: PricedActivity, ctx: PriceContext = {}): number {
   const candidates = leadCandidates(activity, ctx.rental)
@@ -562,7 +599,8 @@ export function priceBooking(input: PriceBookingInput): PriceBookingResult {
     headcount += qty * peopleOf(tier)
     seats += qty * placesOf(tier)
   }
-  const guests = kind === 'charter' ? Math.max(1, input.party ?? headcount) : headcount
+  // A private group priced per group says how many are coming; priced per person, its tickets do.
+  const guests = kind === 'charter' && !privatePerPerson(activity) ? Math.max(1, input.party ?? headcount) : headcount
   const ctx: PriceContext = {
     startsAt: input.startsAt,
     nowIso: input.nowIso,
@@ -597,10 +635,11 @@ export function priceBooking(input: PriceBookingInput): PriceBookingResult {
     lines.push({ id: 'private', label: `Private · up to ${priv.includedGuests}`, quantity: 1, unitPrice: unit.price, total: unit.price, baseUnitPrice: priv.price, applied: unit.applied })
     extraLine('private-extra', 'Extra guests', Math.max(0, headcount - priv.includedGuests), priv.extraGuest, unit.factor, unit.applied)
   } else if (group) {
-    // Per group: one price up to so many guests, then each extra guest.
+    // Per group: one price for so many guests (or everyone), then each extra guest.
     const unit = runSteps(activity, { kind: 'group' }, group.price, ctx, false)
-    lines.push({ id: 'group', label: `Group · up to ${group.includedGuests}`, quantity: 1, unitPrice: unit.price, total: unit.price, baseUnitPrice: group.price, applied: unit.applied })
-    extraLine('group-extra', 'Extra guests', Math.max(0, headcount - group.includedGuests), group.extraGuest, unit.factor, unit.applied)
+    const cover = groupCoverOf(activity)
+    lines.push({ id: 'group', label: group.includedGuests > 0 ? `Group · up to ${group.includedGuests}` : 'Group', quantity: 1, unitPrice: unit.price, total: unit.price, baseUnitPrice: group.price, applied: unit.applied })
+    extraLine('group-extra', 'Extra guests', guestsOver(cover, headcount), group.extraGuest, unit.factor, unit.applied)
   } else {
     for (const tier of activity.priceTiers) {
       const qty = qtyOf(tier.id)
@@ -632,14 +671,11 @@ export function priceBooking(input: PriceBookingInput): PriceBookingResult {
       })
     }
 
-    // Charters: the price covers so many guests; each one over pays a set amount.
-    if (kind === 'charter' && lines.length > 0) {
-      const included = activity.groupPrice?.includedGuests ?? activity.charter?.includedGuests ?? 0
-      const extraPrice = activity.groupPrice?.extraGuest ?? activity.charter?.extraGuestPrice ?? 0
-      if (included > 0 && extraPrice > 0 && guests > included) {
-        extraLine('charter-extra', `Extra guests over ${included}`, guests - included, extraPrice, leadFactor, lines[0].applied)
-      }
-    }
+    // A private group's options: the price covers so many guests; each one over pays a set amount.
+    // Per person, every guest has a ticket of their own.
+    const cover = kind === 'charter' && lines.length > 0 ? groupCoverOf(activity) : undefined
+    const over = guestsOver(cover, guests)
+    if (cover && over > 0) extraLine('charter-extra', `Extra guests over ${cover.covers}`, over, cover.extraGuest, leadFactor, lines[0].applied)
   }
 
   const adjustments: PriceAdjustment[] = []

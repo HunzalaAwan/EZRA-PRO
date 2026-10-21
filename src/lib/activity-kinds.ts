@@ -333,18 +333,17 @@ export const STOREFRONT_GROUPS: Record<ActivityKind, { label: string; blurb: str
   package: { label: 'Packages & combos', blurb: 'More than one activity, one booking, a better price.' },
 }
 
-/** "per person", "per bike", "per vehicle a day", "per group". */
-export function priceUnit(activity: Pick<Activity, 'kind' | 'rental'>): string {
-  switch (activity.kind ?? 'trip') {
-    case 'rental':
-      return `per ${rentalCategoryMeta(activity.rental?.category).unit}${activity.rental?.billing === 'day' ? ' a day' : ''}`
-    case 'charter':
-      return 'per group'
-    case 'pass':
-      return 'per ticket'
-    default:
-      return 'per person'
-  }
+/**
+ * "per person", "per bike", "per vehicle a day", "per group". It follows how
+ * the activity charges: a private one per group (its own way) or per person,
+ * a shared one per person or, with a group price, per group.
+ */
+export function priceUnit(activity: Pick<Activity, 'kind' | 'rental'> & Partial<Pick<Activity, 'chargeBy' | 'groupPrice'>>): string {
+  const kind = activity.kind ?? 'trip'
+  if (kind === 'rental') return `per ${rentalCategoryMeta(activity.rental?.category).unit}${activity.rental?.billing === 'day' ? ' a day' : ''}`
+  if (kind === 'charter') return activity.chargeBy === 'person' ? 'per person' : 'per group'
+  if (activity.chargeBy === 'group' && activity.groupPrice) return 'per group'
+  return kind === 'pass' ? 'per ticket' : 'per person'
 }
 
 /* ==========================================================================

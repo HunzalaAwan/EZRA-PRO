@@ -41,8 +41,8 @@ import { useBookingDefaults } from '@/hooks/use-booking-defaults'
 import { TEMPLATES_EVENT } from '@/hooks/use-message-templates'
 import type { MessageTemplate } from '@/lib/messaging'
 import type { BookingDefaults } from '@/lib/booking-defaults'
-import type { ChargeBy, GroupDiscount, GroupPrice, PriceChange } from '@/types'
-import { PricingStep, defaultPricingDraft, draftFromPrice, effectiveChargeBy, groupTierIdOf, isGroupPriced, pricingDraftOf, pricingErrors, pricingFieldsOfDraft, pricingSummary, savedTiersOf } from './pricing-step'
+import type { CharterConfig, ChargeBy, GroupDiscount, GroupPrice, PriceChange } from '@/types'
+import { PricingStep, charterExtrasOf, defaultPricingDraft, draftFromPrice, effectiveChargeBy, groupTierIdOf, isGroupPriced, pricingDraftOf, pricingErrors, pricingFieldsOfDraft, pricingSummary, repriceDraft, savedTiersOf } from './pricing-step'
 import { ChangesPolicyEditor, type DraftCancellation } from './changes-policy-editor'
 import { DEFAULT_CHANGES, DEFAULT_PAYMENT, changesOf, changesSummary, depositLabel, paymentOf, policySummary, presetOf } from '@/lib/booking-policy'
 import { BookingExceptionsEditor, BookingSettingsEditor } from './booking-settings-editor'
@@ -245,10 +245,16 @@ export interface ActivityDraft {
   changes: ChangeRules
   /** Trips, activities and lessons: a whole time for one group. */
   privateOption: PrivateOption
-  /** How the price is counted; null: the kind's own way. */
+  /** How the price is counted, shared or private: per person or per group. null: the kind's own way (private: per group). */
   chargeBy: ChargeBy | null
-  /** Per group: the price, the guests it covers, each extra guest, the most guests. */
+  /** Shared, per group: the price, the guests it covers (0: everyone), each extra guest, a description. */
   groupPrice: GroupPrice
+  /** Private, per group: the guests every option covers (0: everyone), saved as `charter.includedGuests`. */
+  charterIncluded: number
+  /** Private, per group: each guest over that, minor units; saved as `charter.extraGuestPrice`. */
+  charterExtra: number
+  /** A private activity's tickets or options set aside by a per person ↔ per group switch. Never saved. */
+  otherTiers: DraftTier[] | null
   /** Always empty: group discounts are price rules (Pricing → Price rules) now. Kept for the pricing helpers' shape. */
   groupDiscounts: GroupDiscount[]
   /** Always 0: a minimum charge is not set on the activity any more. */
@@ -384,7 +390,9 @@ function kindOverride(draft: ActivityDraft) {
     }
   }
   if (kind === 'charter') {
-    const { minutes: _minutes, vesselLabel, crewLabel, ...rest } = settings.charter
+    // An opened activity's settings can still carry its saved extra-guest charge: the Pricing step's fields decide it.
+    const { minutes: _minutes, vesselLabel, crewLabel, includedGuests: _included, extraGuestPrice: _extra, ...rest } = settings.charter as DraftKindSettings['charter'] &
+      Pick<CharterConfig, 'includedGuests' | 'extraGuestPrice'>
     return {
       charter: {
         ...rest,
@@ -392,6 +400,8 @@ function kindOverride(draft: ActivityDraft) {
         requestToBook: (draft.booking?.method ?? 'instant') === 'request',
         noticeHours: draft.noticeHours ?? 0,
         ...(rest.vessel === 'other' ? { vesselLabel: vesselLabel.trim() || 'Private group', crewLabel: crewLabel.trim() || 'Crew' } : {}),
+        // Per group: guests every option covers, and each one over. Per person, or not set: none.
+        ...charterExtrasOf(draft),
       },
     }
   }
@@ -813,7 +823,8 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
           : blank.rental,
         charter: charter
           ? (() => {
-              const { durations, ...rest } = charter
+              // The extra-guest charge opens on the Pricing step (charterIncluded / charterExtra, from pricingDraftOf).
+              const { durations, includedGuests: _included, extraGuestPrice: _extra, ...rest } = charter
               const fallback = Object.fromEntries(activity.priceTiers.map((tier) => [tier.id, activity.durationMinutes || 180]))
               return { ...blank.charter, ...rest, minutes: durations ? Object.fromEntries(durations.map((entry) => [entry.tierId, entry.minutes])) : fallback }
             })()
@@ -2410,17 +2421,6 @@ function kindFacts(draft: ActivityDraft): string[] {
   ]
 }
 
-/** A tier nobody has renamed yet follows the kind, so a rental does not start with "Adult". */
-const STARTER_TIER: Record<ActivityKind, string> = {
-  trip: 'Adult',
-  activity: 'Rider',
-  charter: 'Private group',
-  rental: 'Standard',
-  lesson: 'Student',
-  pass: 'Day ticket',
-  package: 'Adult',
-}
-
 const NEW_CATEGORY = '__new'
 
 /** Built-in categories, the business's own, and a way to add one without leaving the form. */
@@ -2552,7 +2552,6 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
   const settings = normalizeKindSettings(draft.kindSettings)
   const pickKind = (next: ActivityKind) => {
     const mode = ACTIVITY_KIND_META[next].defaultFormat === 'open' ? 'hours' : 'times'
-    const starter = draft.tiers.length === 1 && Object.values(STARTER_TIER).includes(draft.tiers[0].label)
     const arrival: ArrivalMode = next === 'pass' || next === 'rental' || next === 'activity' || next === 'package' ? 'venue' : 'meet'
     patch({
       kind: next,
@@ -2560,23 +2559,24 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
       // The Schedule step starts on the kind's usual way to pick a time (it can be changed there).
       ...(next === draft.kind || draft.scheduleMode === 'dates' || draft.scheduleMode === modeForKind(next) ? {} : withMode(draft, modeForKind(next), 30, closingGapOf({ kind: next, durationMinutes: draft.durationMinutes }))),
       ...(draft.meetingPoint.trim() ? {} : { arrivalMode: arrival }),
-      ...(starter ? { tiers: [{ ...draft.tiers[0], label: STARTER_TIER[next] }] } : {}),
+      // A starter price follows the kind; a private group's options give way to prices per guest.
+      ...repriceDraft(draft, { kind: next, chargeBy: draft.chargeBy ?? null }, sharedKind.current),
       ...(next === 'lesson' && draft.maxCapacity < 1 ? { maxCapacity: 8, durationMinutes: draft.durationMinutes || 120 } : {}),
     })
   }
-  // Shared or private: private is a charter (one group per time slot, priced per group).
+  // Shared or private: private is a charter (one group per time slot), per person or per group.
   const sharedKind = React.useRef<ActivityKind>(kind === 'activity' ? 'activity' : 'trip')
   const setPrivate = (on: boolean) => {
     const next: ActivityKind = on ? 'charter' : sharedKind.current
     if (next === kind) return
-    const starter = draft.tiers.length === 1 && Object.values(STARTER_TIER).includes(draft.tiers[0].label)
     const guests = draft.maxCapacity
     patch({
       kind: next,
-      chargeBy: null,
       maxCapacity: guests,
       ...(on ? { kindSettings: { ...settings, charter: { ...settings.charter, maxGuests: guests } } } : {}),
-      ...(starter ? { tiers: [{ ...draft.tiers[0], label: STARTER_TIER[next] }] } : {}),
+      // Per person or per group carries over once it was picked; otherwise the new kind's own way (private: per group).
+      // The prices move with it, so nothing hidden is left to save.
+      ...repriceDraft(draft, { kind: next, chargeBy: draft.chargeBy ?? null }, sharedKind.current),
     })
   }
   const setShared = (changes: Partial<SharedBasics>) =>

@@ -44,7 +44,7 @@ import { useBookingLedger } from '@/hooks/use-booking-ledger'
 import { useScheduledDays } from '@/hooks/use-scheduled-days'
 import { usePricingOverride } from '@/hooks/use-pricing-override'
 import { usePricing } from '@/hooks/use-pricing'
-import { groupPriced, unitPrice } from '@/lib/price-engine'
+import { groupCoverOf, groupGuestLimit, groupPriced, guestsOver, unitPrice, unitPriceDetail } from '@/lib/price-engine'
 import { changeBooking, withLedger } from '@/lib/booking-ledger'
 import { changesSummary, hoursLabel, refundFor, splitPayment } from '@/lib/booking-policy'
 import type { Activity, ActivityKind, BookingStatus, CancellationPolicy, ChangeRules, CurrencyCode, GuestQuestion, PaymentTerms, WaiverTemplate } from '@/types'
@@ -180,24 +180,28 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
   const currentDepartureId = change?.movedTo?.departureId ?? departure.id
   const startsAt = change?.movedTo?.startsAt ?? departure.startsAt
   // Added guests pay the first ticket's price on the time slot the booking is on: saved prices, price changes and the business's rules.
-  // Per group the group price covers every spot, so they are added at no charge.
+  // Per group (shared or private) the group price covers so many guests (or everyone); each one over pays the extra-guest price.
   const priced = usePricingOverride(source)
   const { rules: priceRules } = usePricing(tenant.slug)
   const onSlot = days.flatMap((day) => day.slots).find((slot) => slot.departureId === currentDepartureId)
   const leadTier = priced.priceTiers[0]
-  const inGroupPrice = groupPriced(priced)
-  const pricePerGuest = inGroupPrice
-    ? 0
-    : leadTier
-      ? unitPrice(priced, leadTier.id, {
-          startsAt,
-          nowIso,
-          capacity: onSlot?.capacity ?? departure.capacity,
-          booked: onSlot ? bookedOn(onSlot, ledger.delta) : undefined,
-          priceMultiplier: onSlot?.priceMultiplier ?? departure.priceMultiplier ?? 1,
-          businessRules: priceRules,
-        })
-      : given.pricePerGuest
+  const priceCtx = {
+    startsAt,
+    nowIso,
+    capacity: onSlot?.capacity ?? departure.capacity,
+    booked: onSlot ? bookedOn(onSlot, ledger.delta) : undefined,
+    priceMultiplier: onSlot?.priceMultiplier ?? departure.priceMultiplier ?? 1,
+    businessRules: priceRules,
+  }
+  const cover = groupCoverOf(priced)
+  const inGroupPrice = Boolean(cover)
+  /** Per group: each guest over what the price covers, at this time slot's price. */
+  const extraEach = cover
+    ? ((groupPriced(priced) ? unitPriceDetail(priced, 'group', priceCtx).extraGuest : leadTier ? unitPriceDetail(priced, leadTier.id, priceCtx).extraGuest : undefined) ?? cover.extraGuest)
+    : 0
+  const pricePerGuest = inGroupPrice ? 0 : leadTier ? unitPrice(priced, leadTier.id, priceCtx) : given.pricePerGuest
+  /** What growing the party from one size to another costs: a ticket each, or per group the guests it takes over what the price covers. */
+  const addCost = (from: number, to: number) => (cover ? extraEach * Math.max(0, guestsOver(cover, to) - guestsOver(cover, from)) : Math.max(0, to - from) * pricePerGuest)
   const hoursToGo = (new Date(startsAt).getTime() - now.getTime()) / 3_600_000
   const past = hoursToGo < 0
   const cancelled = Boolean(change?.cancelled) || booking.status === 'cancelled' || booking.status === 'refunded'
@@ -206,9 +210,13 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
   const canMove = rules.reschedule && hoursToGo >= rules.rescheduleHours && (rules.maxReschedules === 0 || moves < rules.maxReschedules)
   const freeWindow = activity.policy.freeCancellationHours > 0 && hoursToGo >= activity.policy.freeCancellationHours
   const partySize = change?.party ?? booking.partySize
-  const added = Math.max(0, partySize - booking.partySize)
-  const extra = added * pricePerGuest
+  const extra = addCost(booking.partySize, partySize)
   const seatsLeftNow = Math.max(0, departure.seatsLeft - (ledger.delta[currentDepartureId] ?? 0))
+  // A private group has the time to itself: it can grow to its most guests. Per group, a price that covers only so many caps the group there.
+  const privateGroup = (priced.kind ?? 'trip') === 'charter'
+  const privateMost = Math.max(1, priced.charter?.maxGuests ?? priced.maxCapacity)
+  const groupLimit = groupPriced(priced) && priced.groupPrice ? groupGuestLimit(priced.groupPrice) : Number.POSITIVE_INFINITY
+  const roomNow = privateGroup ? Math.max(0, privateMost - partySize) : Math.max(0, Math.min(seatsLeftNow, groupLimit - partySize))
   const deposit = activity.payment.collect === 'deposit' ? splitPayment(activity.payment, booking.total, booking.partySize).now : 0
   const balance = state.balancePaid ? 0 : Math.max(0, booking.total + extra - booking.amountPaid)
   const unsigned = state.waiversSigned ? 0 : booking.participants.filter((participant) => !participant.waiverSigned).length
@@ -236,6 +244,8 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
 
   /* add guests */
   const [adding, setAdding] = React.useState(1)
+  /** What the guests being added cost. */
+  const addingCost = addCost(partySize, partySize + adding)
 
   /* messages */
   const threadMeta = React.useMemo(
@@ -420,8 +430,8 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
                 {rules.rescheduleFee > 0 ? `Move for ${money(rules.rescheduleFee)}` : 'Move to another time'}
               </Button>
             ) : null}
-            {rules.addGuests && activity.kind !== 'charter' ? (
-              <Button variant="secondary" leftIcon={<Users />} disabled={seatsLeftNow <= 0} onClick={() => setOpen(open === 'guests' ? null : 'guests')}>Add guests</Button>
+            {rules.addGuests ? (
+              <Button variant="secondary" leftIcon={<Users />} disabled={roomNow <= 0} onClick={() => setOpen(open === 'guests' ? null : 'guests')}>Add guests</Button>
             ) : null}
             {rules.cancelOnline ? (
               <Button variant="ghost" leftIcon={<XCircle />} onClick={() => setOpen(open === 'cancel' ? null : 'cancel')}>Cancel booking</Button>
@@ -499,19 +509,27 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
               <div className="flex items-center gap-3">
                 <IconButton aria-label="Fewer guests" size="sm" variant="outline" disabled={adding <= 1} onClick={() => setAdding((n) => n - 1)}><Minus aria-hidden="true" /></IconButton>
                 <span className="w-6 text-center text-base font-semibold tabular-nums">{adding}</span>
-                <IconButton aria-label="More guests" size="sm" variant="outline" disabled={adding >= seatsLeftNow} onClick={() => setAdding((n) => n + 1)}><Plus aria-hidden="true" /></IconButton>
-                <span className="text-sm text-muted">{inGroupPrice ? 'more, in the group price' : `more at ${formatCurrency(pricePerGuest, currency)} each`} · {seatsLeftNow} {pluralize(seatsLeftNow, 'spot')} left</span>
+                <IconButton aria-label="More guests" size="sm" variant="outline" disabled={adding >= roomNow} onClick={() => setAdding((n) => n + 1)}><Plus aria-hidden="true" /></IconButton>
+                <span className="text-sm text-muted">
+                  {!inGroupPrice
+                    ? `more at ${formatCurrency(pricePerGuest, currency)} each`
+                    : addingCost > 0
+                      ? `more at ${formatCurrency(extraEach, currency)} each over ${cover?.covers}`
+                      : 'more, in the group price'}{' '}
+                  · {privateGroup ? `up to ${privateMost} ${pluralize(privateMost, 'guest')}` : `${roomNow} ${pluralize(roomNow, 'spot')} left`}
+                </span>
               </div>
               <Button
                 onClick={() => {
                   changeBooking(tenant.slug, booking.reference, start, { party: partySize + adding }, { by: 'guest', what: `Added ${adding} ${pluralize(adding, 'guest')}` })
                   // Nothing to pay in the group price: any balance still due stays due.
-                  if (!inGroupPrice) update({ balancePaid: true })
+                  if (addingCost > 0) update({ balancePaid: true })
                   setOpen(null)
-                  toast.success(`${adding} ${pluralize(adding, 'guest')} added`, { description: inGroupPrice ? 'Add their details above.' : `Paid ${formatCurrency(adding * pricePerGuest, currency)}. Add their details above.` })
+                  setAdding(1)
+                  toast.success(`${adding} ${pluralize(adding, 'guest')} added`, { description: addingCost > 0 ? `Paid ${formatCurrency(addingCost, currency)}. Add their details above.` : 'Add their details above.' })
                 }}
               >
-                {inGroupPrice ? `Add ${adding} ${pluralize(adding, 'guest')}` : `Add and pay ${formatCurrency(adding * pricePerGuest, currency)}`}
+                {addingCost > 0 ? `Add and pay ${formatCurrency(addingCost, currency)}` : `Add ${adding} ${pluralize(adding, 'guest')}`}
               </Button>
             </div>
           ) : null}

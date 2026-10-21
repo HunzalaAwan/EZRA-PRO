@@ -2,7 +2,7 @@ import { clamp } from '@/lib/utils'
 import { addOnUnits, peopleOf, placesOf } from '@/lib/places'
 import { isGeneratedSlotId } from '@/lib/activity-schedule'
 import { rentalModes, type RentalMode } from '@/lib/activity-kinds'
-import { groupGuestLimit, groupPriced, groupTierOf } from '@/lib/price-engine'
+import { groupGuestLimit, groupPriced, groupTierOf, privatePerPerson } from '@/lib/price-engine'
 import type { Activity } from '@/types'
 import type { AvailabilitySlot, QuoteSelection } from '@/components/storefront/booking-widget'
 
@@ -33,7 +33,7 @@ export function resolveSelection(
   seatsLeft: number,
   /** Rentals with items: what is left of each. */
   itemsLeft?: Record<string, number>,
-  /** Charters: the group size, which per-guest extras are charged on. */
+  /** A private group priced per group: its size, which per-guest extras are charged on. Per person, its tickets count it. */
   party?: number,
 ): QuoteSelection {
   const requestedTiers = parsePairs(rawTiers)
@@ -53,6 +53,33 @@ export function resolveSelection(
     const addOns = activity.addOns.map((addOn) => ({
       addOnId: addOn.id,
       qty: (requestedAddOns.get(addOn.id) ?? 0) > 0 || addOn.required ? addOnUnits(addOn, headcount) : 0,
+    }))
+    return { tiers, addOns }
+  }
+
+  // A private group priced per person: a ticket each, up to its most guests, counted in people.
+  // The group has the time slot to itself, so the spots left don't count the tickets.
+  if (privatePerPerson(activity)) {
+    const most = Math.max(1, activity.charter?.maxGuests ?? activity.maxCapacity)
+    let people = 0
+    const tiers = activity.priceTiers.map((tier) => {
+      const each = peopleOf(tier)
+      const wanted = Math.max(requestedTiers.get(tier.id) ?? 0, tier.minQuantity)
+      const qty = clamp(wanted, 0, Math.min(tier.maxQuantity, Math.floor(Math.max(0, most - people) / each)))
+      people += qty * each
+      return { tierId: tier.id, qty }
+    })
+    // A bare /checkout link still renders a sensible order: two guests on the lead ticket, or one.
+    if (tiers.length > 0 && people === 0) {
+      const lead = activity.priceTiers.find((tier) => tier.price > 0 && tier.countsTowardCapacity) ?? activity.priceTiers[0]
+      const qty = clamp(Math.max(lead.minQuantity, 2), 1, Math.max(1, Math.min(lead.maxQuantity, Math.floor(most / peopleOf(lead)))))
+      const index = activity.priceTiers.indexOf(lead)
+      tiers[index >= 0 ? index : 0] = { tierId: lead.id, qty }
+      people = qty * peopleOf(lead)
+    }
+    const addOns = activity.addOns.map((addOn) => ({
+      addOnId: addOn.id,
+      qty: (requestedAddOns.get(addOn.id) ?? 0) > 0 || addOn.required ? addOnUnits(addOn, people) : 0,
     }))
     return { tiers, addOns }
   }

@@ -31,7 +31,7 @@ import { applyPricingOverride, applyScheduleOverride } from '@/lib/activity-over
 import { rateFor, rentalModes } from '@/lib/activity-kinds'
 import { clockTime, expandSchedules, scheduleContextOf, shiftDayKey, slotId } from '@/lib/activity-schedule'
 import { getActivityBySlug, tenantBySlug } from '@/lib/demo-core'
-import { effectLabel, groupPriced, groupTierOf, priceBooking } from '@/lib/price-engine'
+import { effectLabel, groupPriced, groupTierOf, priceBooking, privatePerPerson } from '@/lib/price-engine'
 import {
   DEMAND_RULE_KINDS,
   RULE_KIND_LABEL,
@@ -211,12 +211,14 @@ function RulesTab({ pricing, tenantSlug, activities, currency, nowIso, peaks, fi
    -------------------------------------------------------------------------- */
 
 /**
- * The tickets checked: the lead ticket (a rental's first rated item) for the count, a charter for its party.
+ * The tickets checked: the lead ticket (a rental's first rated item) for the count, a private group's first
+ * option for its party (priced per person, the lead ticket for each guest).
  * Per group: the row guests are booked on, as the storefront books them.
  * A rental is priced for its shortest rental, as the storefront starts it.
  */
-function checkPrice(activity: Activity, count: number, ctx: { startsAt: string; nowIso: string; rules: PricingRule[]; multiplier?: number; capacity?: number; booked?: number }) {
-  const kind = activity.kind ?? 'trip'
+export function checkPrice(activity: Activity, count: number, ctx: { startsAt: string; nowIso: string; rules: PricingRule[]; multiplier?: number; capacity?: number; booked?: number }) {
+  // A private group priced per group books one option for the party; per person it books a ticket for each guest.
+  const options = (activity.kind ?? 'trip') === 'charter' && !privatePerPerson(activity)
   const mode = (activity.rental?.rates?.length ?? 0) > 0 ? rentalModes(activity)[0] : undefined
   const lengthId = mode === 'length' ? activity.rental?.lengths?.[0]?.id : undefined
   const paid = activity.priceTiers.filter((tier) => tier.price > 0)
@@ -228,14 +230,14 @@ function checkPrice(activity: Activity, count: number, ctx: { startsAt: string; 
   if (!lead) return null
   const result = priceBooking({
     activity,
-    lines: [{ tierId: lead.id, qty: kind === 'charter' ? 1 : count }],
+    lines: [{ tierId: lead.id, qty: options ? 1 : count }],
     startsAt: ctx.startsAt,
     nowIso: ctx.nowIso,
     businessRules: ctx.rules,
     priceMultiplier: ctx.multiplier,
     capacity: ctx.capacity,
     booked: ctx.booked,
-    party: kind === 'charter' ? count : undefined,
+    party: options ? count : undefined,
     rental: mode ? { mode, hours: Math.max(1, Math.floor(activity.rental?.minHours ?? 1)), days: Math.max(1, Math.floor(activity.rental?.minDays ?? 1)), lengthId } : undefined,
   })
   return { result, before: result.ticketLines.reduce((sum, line) => sum + line.baseUnitPrice * line.quantity, 0) }

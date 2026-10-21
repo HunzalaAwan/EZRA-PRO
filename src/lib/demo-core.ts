@@ -512,6 +512,12 @@ const PRIVATE_BY_SLUG: Record<string, PrivateOption> = {
   'upcountry-horseback-ride': { enabled: true, price: 79900, includedGuests: 6, extraGuest: 0 },
 }
 
+/** Private groups: guests the price covers, and each one over. */
+const CHARTER_EXTRA_BY_SLUG: Record<string, { includedGuests: number; extraGuestPrice: number }> = {
+  'private-catamaran-charter': { includedGuests: 12, extraGuestPrice: 4500 },
+  'private-sportfishing-charter': { includedGuests: 4, extraGuestPrice: 15000 },
+}
+
 /** The policy preset for an activity, and whether a deposit is kept. */
 const KEEP_DEPOSIT = new Set(['private-sportfishing-charter', 'molokai-channel-crossing'])
 
@@ -3711,6 +3717,7 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
           return {
             charter: {
               ...rest,
+              ...(CHARTER_EXTRA_BY_SLUG[spec.slug] ?? {}),
               ...(minutes ? { durations: priceTiers.map((tier, index) => ({ tierId: tier.id, minutes: minutes[index] ?? spec.durationMinutes })) } : {}),
             },
           }

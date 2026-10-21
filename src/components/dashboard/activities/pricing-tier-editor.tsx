@@ -276,7 +276,10 @@ export interface PricingTierEditorProps {
   errors?: Record<string, string>
   /** One-click starting points; defaults to the per-person set. */
   presets?: TierPreset[]
-  /** A private activity (kind 'charter') is one price for the whole group: no ages, places per ticket or "at least". */
+  /**
+   * 'charter': a private activity's options, each one price for the whole group: no ages or "at least",
+   * and the note is the option's description. A private activity priced per person passes its shared kind.
+   */
   kind?: ActivityKind
   /** Menus and other lists where a place is not counted per ticket. */
   hidePlaces?: boolean
@@ -447,12 +450,12 @@ export function PricingTierEditor({
                     </label>
                   )}
                   <label className="flex flex-col gap-1 text-xs text-subtle">
-                    Note
+                    {kind === 'charter' ? 'Description' : 'Note'}
                     <Input
                       value={tier.description}
                       onChange={(event) => update(index, { description: event.target.value })}
-                      placeholder="Shown under the name"
-                      aria-label={`Note for ${name}`}
+                      placeholder={kind === 'charter' ? 'Gear and drinks included' : 'Shown under the name'}
+                      aria-label={`${kind === 'charter' ? 'Description' : 'Note'} for ${name}`}
                       size="sm"
                     />
                   </label>

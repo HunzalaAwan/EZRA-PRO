@@ -9,20 +9,23 @@ import type { ActivityKind, CurrencyCode, PrivateOption } from '@/types'
 import { MoneyInput } from './pricing-tier-editor'
 
 /* ==========================================================================
-   Pricing by kind — the title and one line over each kind's prices, and
-   private booking: shared activities and lessons can be booked by one group
-   for one price. A private activity is one price for the whole group.
+   Pricing by kind — the title and one line over each kind's prices, private
+   booking (shared activities and lessons can be booked by one group for one
+   price), and the extra-guest charge of a price for the whole group.
    ========================================================================== */
 
 export const KIND_PRICING: Record<ActivityKind, { title: string; text: (sessions: number) => string }> = {
   trip: { title: 'Prices', text: () => 'Per person. The first paid price is the “from” price.' },
   activity: { title: 'Prices', text: () => 'Per person. The first paid price is the “from” price.' },
-  charter: { title: 'Prices', text: () => 'One price for the whole group.' },
+  charter: { title: 'Prices', text: () => 'Each one is a price for the whole group.' },
   rental: { title: 'Items and prices', text: () => 'Set on each item.' },
   lesson: { title: 'Prices', text: (sessions) => (sessions > 1 ? `Per person, for the whole ${sessions}-day course.` : 'Per person, per lesson.') },
   pass: { title: 'Prices', text: () => 'Per ticket, for the day.' },
   package: { title: 'Prices', text: () => 'Per person, for every part together.' },
 }
+
+/** A private activity priced per person: a price for each guest, the time slot still the group's own. */
+export const PRIVATE_PER_PERSON_PRICING = { title: 'Prices', text: 'Per person. The group has the time slot to itself.' }
 
 /** Kinds that can be booked privately for one group price. */
 export const canBookPrivately = (kind: ActivityKind) => kind === 'trip' || kind === 'activity' || kind === 'lesson'
@@ -78,5 +81,56 @@ export function PrivateBookingFields({
         </div>
       ) : null}
     </section>
+  )
+}
+
+/**
+ * A price for the whole group: how many guests it covers (empty: everyone) and
+ * what each guest over that pays (empty: nothing). Two labelled fields, for the
+ * caller's own grid.
+ */
+export function ExtraGuestFields({
+  currency,
+  included,
+  extra,
+  onChange,
+  limit,
+  error,
+}: {
+  currency: CurrencyCode
+  /** Guests the price covers. 0: everyone. */
+  included: number
+  /** Minor units for each guest over `included`. */
+  extra: number
+  onChange: (next: { included: number; extra: number }) => void
+  /** The most guests one booking can have, for the placeholder. 0: not set yet. */
+  limit: number
+  error?: string
+}) {
+  // An extra-guest price needs a number to count from.
+  const missing = extra > 0 && included <= 0
+  return (
+    <>
+      <label className={label}>
+        Covers up to
+        <Input
+          type="number"
+          size="sm"
+          min={1}
+          placeholder={limit > 0 ? `All ${limit}` : 'All'}
+          suffix="guests"
+          inputClassName="tabular"
+          aria-label="Guests the price covers"
+          error={missing && error ? error : undefined}
+          value={included > 0 ? included : ''}
+          onChange={(event) => onChange({ included: Math.min(999, whole(event.target.value)), extra })}
+        />
+        {missing ? <span className={error ? 'font-medium text-danger' : 'font-medium text-warning'}>{error ?? 'Set how many'}</span> : null}
+      </label>
+      <label className={label}>
+        Each extra guest
+        <MoneyInput value={extra} onValueChange={(next) => onChange({ included, extra: next })} currency={currency} size="sm" allowEmpty placeholder="Free" ariaLabel="Each extra guest" />
+      </label>
+    </>
   )
 }
