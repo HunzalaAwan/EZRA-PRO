@@ -105,7 +105,7 @@ export function CharterGroupFields({
     <section className="flex flex-col gap-3 rounded-xl border border-line px-3.5 py-3">
       <div>
         <span className="block text-sm font-medium">Bigger groups</span>
-        <span className="block text-xs text-subtle">Up to {maxGuests} guests per charter.</span>
+        <span className="block text-xs text-subtle">Up to {maxGuests} guests per time slot.</span>
       </div>
       <div className="grid grid-cols-2 gap-3 sm:max-w-md">
         <label className={label}>

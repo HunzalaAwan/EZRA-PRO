@@ -2,15 +2,14 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { ArrowUpRight, ChevronDown, CircleAlert, Clock, KeyRound, Plus, Trash2, User, Users, type LucideIcon } from 'lucide-react'
+import { ChevronDown, CircleAlert, Clock, KeyRound, Plus, Trash2, User, Users, type LucideIcon } from 'lucide-react'
 
 import type { ActivityKind, ActivitySchedule, ChargeBy, CurrencyCode, GroupDiscount, GroupPrice, PaymentTerms, PriceChange, PriceChangeKind, PriceTier, PrivateOption, ScheduleChange } from '@/types'
 import { useBookingDefaults } from '@/hooks/use-booking-defaults'
 import { usePricing } from '@/hooks/use-pricing'
-import type { PricingRule } from '@/lib/pricing'
 import { DEFAULT_PAYMENT } from '@/lib/booking-policy'
 import { WEEKDAY_KEYS, addMonthsKey, closingGapOf, expandSchedules, scheduleContextOf, shiftDayKey, sortTimes, timesForWeekday, type ScheduleContext, type ScheduleSource } from '@/lib/activity-schedule'
-import { defaultChargeBy, effectLabel, fromPrice, shortDay, type PricedActivity } from '@/lib/price-engine'
+import { defaultChargeBy, fromPrice, type PricedActivity } from '@/lib/price-engine'
 import { cn, currencySymbol, formatCurrency, pluralize } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
@@ -32,8 +31,8 @@ import type { DraftSchedule } from './schedule-editor'
 /* ==========================================================================
    THE PRICING STEP — top to bottom: how it charges, the prices, group
    discounts, a minimum charge and private booking, the activity's own
-   price changes, the price rules that also apply, a price check on any
-   day (and a year of prices), then the cap, tips, extras and payment.
+   price changes, a price check on any day (and a year of prices, with the
+   business's price rules counted in), then the cap, tips, extras and payment.
    ========================================================================== */
 
 /** The parts of the wizard draft this step reads and writes. */
@@ -512,26 +511,6 @@ function GroupDiscountsEditor({ value, onChange }: { value: GroupDiscount[]; onC
   )
 }
 
-const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-
-/** "Dec 18 – Jan 4", "Sat, Sun", "Booked 30 days ahead". */
-function ruleWhen(rule: PricingRule): string {
-  switch (rule.kind) {
-    case 'season':
-      return rule.from && rule.to ? `${shortDay(rule.from)} – ${shortDay(rule.to)}` : 'Season'
-    case 'weekday':
-      return (rule.weekdays ?? []).map((day) => WEEKDAY[day]).join(', ')
-    case 'early_bird':
-      return `Booked ${rule.daysAhead ?? 30} days ahead`
-    case 'last_minute':
-      return `Within ${rule.hoursWithin ?? 24} hours`
-    case 'group':
-      return `${rule.minGuests ?? 8}+ guests`
-    default:
-      return ''
-  }
-}
-
 function TipsRow({ value, onChange }: { value: boolean; onChange: (next: boolean) => void }) {
   return (
     <label className="flex items-start justify-between gap-3 rounded-xl border border-line px-3.5 py-3">
@@ -761,31 +740,6 @@ export function PricingStep({ draft, patch, errors, currency, dining = false, te
             startTimes={times}
             kinds={changeKinds}
           />
-        </Block>
-      )}
-
-      {/* 7. Price rules (Pricing → Price rules) */}
-      {kind === 'package' || appliesHere.length === 0 ? null : (
-        <Block
-          title="Price rules that also apply"
-          action={
-            <Link href="/dashboard/pricing" className="inline-flex items-center gap-0.5 text-xs font-medium text-primary hover:underline">
-              Edit price rules
-              <ArrowUpRight className="size-3" aria-hidden="true" />
-            </Link>
-          }
-        >
-          <ul className="flex list-none flex-col divide-y divide-line-subtle rounded-xl border border-line p-0">
-            {appliesHere.map((rule) => (
-              <li key={rule.id} className="flex items-center justify-between gap-3 px-3.5 py-2 text-[0.8125rem]">
-                <span className="min-w-0 truncate">
-                  {rule.name}
-                  {ruleWhen(rule) ? <span className="text-subtle"> · {ruleWhen(rule)}</span> : null}
-                </span>
-                <span className={cn('shrink-0 font-medium tabular', rule.percent < 0 ? 'text-success' : 'text-foreground')}>{effectLabel({ type: 'percent', value: rule.percent })}</span>
-              </li>
-            ))}
-          </ul>
         </Block>
       )}
 
