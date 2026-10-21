@@ -4,21 +4,20 @@ import * as React from 'react'
 import { Copy, Plus, Trash2, X } from 'lucide-react'
 
 import type { ActivitySchedule, WeekdayKey } from '@/types'
-import { WEEKDAY_KEYS, addMonthsKey, clockTime, shiftDayKey, sortTimes, timesForWeekday } from '@/lib/activity-schedule'
+import { WEEKDAY_KEYS, clockTime, sortTimes, timesForWeekday } from '@/lib/activity-schedule'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Segmented } from '@/components/ui/segmented'
 import { Switch } from '@/components/ui/switch'
 import { DAY_SHORT, MON_FIRST, fromMinutes, tintOf, toMinutes } from './schedule-draft'
 
 /* ==========================================================================
-   SEASON CARD — one season of the schedule: its name and dates, the start
-   times (or opening hours) on each weekday, and its spots per time slot.
-   "Same times every day" folds the week into one row.
+   SEASON CARD — one season of the schedule: its name, optional start and
+   end dates, and the start times (or opening hours) on each weekday.
+   "Same times every day" folds the week into one row. Spots come from Basics.
    ========================================================================== */
 
 const LAST = 23 * 60 + 59
@@ -156,8 +155,6 @@ function DayToggles({ isOn, onToggle, label }: { isOn: (key: WeekdayKey) => bool
   )
 }
 
-type DatesMode = 'all' | 'range' | 'open'
-const datesModeOf = (season: ActivitySchedule): DatesMode => (!season.from && !season.to ? 'all' : season.to ? 'range' : 'open')
 
 export interface SeasonCardProps {
   season: ActivitySchedule
@@ -166,10 +163,6 @@ export interface SeasonCardProps {
   onChange: (next: ActivitySchedule) => void
   onRemove?: () => void
   todayKey: string
-  /** Spots per time slot when the season doesn't set its own (Basics). */
-  defaultSpots: number
-  /** The spots field, or null to hide it (a charter sells one group per time slot). */
-  spots: { label: string; max?: number } | null
   /** Rentals: opening hours read as when rentals can start. */
   rental?: boolean
   errors?: Record<string, string>
@@ -181,7 +174,7 @@ export interface SeasonCardProps {
   closingGap?: number
 }
 
-export function SeasonCard({ season, tint, onChange, onRemove, todayKey, defaultSpots, spots, rental, errors = {}, stepMinutes, sharedNote, closingGap = 0 }: SeasonCardProps) {
+export function SeasonCard({ season, tint, onChange, onRemove, todayKey, rental, errors = {}, stepMinutes, sharedNote, closingGap = 0 }: SeasonCardProps) {
   const lists = React.useMemo(() => Object.fromEntries(WEEKDAY_KEYS.map((key) => [key, timesForWeekday(season, key, closingGap)])) as Record<WeekdayKey, string[]>, [season, closingGap])
   const hours = season.mode === 'hours'
   const openKeys = MON_FIRST.filter((key) => (hours ? Boolean(season.hours?.[key]) : lists[key].length > 0))
@@ -195,18 +188,10 @@ export function SeasonCard({ season, tint, onChange, onRemove, todayKey, default
   React.useEffect(() => {
     if (!uniform) setSplit(true)
   }, [uniform])
-  const datesMode = datesModeOf(season)
   const ended = Boolean(season.to && season.to < todayKey)
   const dateError = errors[`season.${season.id}.to`]
   const hoursError = errors[`season.${season.id}.hours`]
   const id = React.useId()
-
-  const setDatesMode = (mode: DatesMode) => {
-    if (mode === 'all') return onChange({ ...season, from: null, to: null })
-    const from = season.from ?? todayKey
-    if (mode === 'open') return onChange({ ...season, from, to: null })
-    onChange({ ...season, from, to: season.to ?? shiftDayKey(addMonthsKey(from, 3), -1) })
-  }
 
   /* ---- start times ---- */
   const setDays = (days: Record<WeekdayKey, string[]>) => onChange({ ...season, days })
@@ -238,24 +223,13 @@ export function SeasonCard({ season, tint, onChange, onRemove, todayKey, default
             size="sm"
             className="w-44"
             value={season.name}
-            placeholder={datesMode === 'all' ? 'All year' : 'Season name'}
+            placeholder={!season.from && !season.to ? 'All year' : 'Season name'}
             aria-label="Season name"
             onChange={(event) => onChange({ ...season, name: event.target.value.slice(0, 40) })}
           />
           {ended ? <Badge size="sm" variant="neutral">Ended</Badge> : null}
           {sharedNote ? <span className="text-xs text-subtle">{sharedNote}</span> : null}
           <div className="ml-auto flex items-center gap-1.5">
-            <Segmented
-              size="sm"
-              label="Season dates"
-              value={datesMode}
-              onValueChange={setDatesMode}
-              options={[
-                { value: 'all', label: 'All year' },
-                { value: 'range', label: 'From – to' },
-                { value: 'open', label: 'No end date' },
-              ]}
-            />
             {onRemove ? (
               <IconButton type="button" size="xs" variant="ghost" aria-label={`Remove ${season.name || 'this season'}`} className="text-faint hover:bg-danger-soft hover:text-danger" onClick={onRemove}>
                 <Trash2 />
@@ -263,28 +237,22 @@ export function SeasonCard({ season, tint, onChange, onRemove, todayKey, default
             ) : null}
           </div>
         </div>
-        {datesMode !== 'all' ? (
-          <div className="flex flex-wrap items-center gap-2 pl-5">
-            <Input
-              type="date"
-              size="sm"
-              className="w-40"
-              value={season.from ?? ''}
-              aria-label="Starts on"
-              // Cleared with no end date: it starts today (an empty start would turn it into all year).
-              onChange={(event) => onChange({ ...season, from: event.target.value || (datesMode === 'open' ? todayKey : null) })}
-            />
-            {datesMode === 'range' ? (
-              <>
-                <span className="text-xs text-subtle">to</span>
-                <Input type="date" size="sm" className="w-40" value={season.to ?? ''} error={Boolean(dateError)} aria-label="Ends on" onChange={(event) => onChange({ ...season, to: event.target.value || null })} />
-              </>
-            ) : (
-              <span className="text-xs text-subtle">onwards</span>
-            )}
-            {dateError ? <span className="text-xs font-medium text-danger">{dateError}</span> : null}
-          </div>
-        ) : null}
+        {/* Both optional: no start date runs from today, no end date keeps going. */}
+        <div className="flex flex-wrap items-end gap-3 pl-5">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-muted">
+              Start date <span className="text-faint">Optional</span>
+            </span>
+            <Input type="date" size="sm" className="w-40" value={season.from ?? ''} onChange={(event) => onChange({ ...season, from: event.target.value || null })} />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-muted">
+              End date <span className="text-faint">Optional</span>
+            </span>
+            <Input type="date" size="sm" className="w-40" value={season.to ?? ''} min={season.from ?? undefined} error={Boolean(dateError)} onChange={(event) => onChange({ ...season, to: event.target.value || null })} />
+          </label>
+          {dateError ? <span className="pb-2 text-xs font-medium text-danger">{dateError}</span> : null}
+        </div>
       </div>
 
       {/* ---- the week ---- */}
@@ -405,33 +373,6 @@ export function SeasonCard({ season, tint, onChange, onRemove, todayKey, default
         {hoursError ? <p className="text-xs font-medium text-danger">{hoursError}</p> : null}
       </div>
 
-      {/* ---- spots ---- */}
-      {spots ? (
-        <div className="flex flex-wrap items-center gap-2 border-t border-line-subtle pt-3.5">
-          <label htmlFor={`${id}-spots`} className="text-[0.8125rem] font-medium">
-            {spots.label}
-          </label>
-          <Input
-            id={`${id}-spots`}
-            type="number"
-            size="sm"
-            min={1}
-            max={spots.max}
-            className="w-24"
-            value={season.capacity ?? ''}
-            placeholder={defaultSpots > 0 ? String(defaultSpots) : undefined}
-            onChange={(event) => {
-              const raw = event.target.value
-              const value = Math.floor(Number(raw))
-              const capped = spots.max !== undefined ? Math.min(spots.max, value) : value
-              const { capacity: _capacity, ...rest } = season
-              // At least one spot; empty (or 0) goes back to the number in Basics.
-              onChange(raw === '' || !Number.isFinite(value) || value < 1 ? rest : { ...season, capacity: capped })
-            }}
-          />
-          <span className="text-xs text-subtle">{season.capacity === undefined ? 'Same as Basics' : defaultSpots > 0 ? `Basics: ${defaultSpots}` : null}</span>
-        </div>
-      ) : null}
     </div>
   )
 }

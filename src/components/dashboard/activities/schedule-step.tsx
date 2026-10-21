@@ -180,8 +180,6 @@ export function ScheduleStep({
   const warning = value.scheduleMode === 'dates' ? null : seasonsWarning(shownSeasons, todayKey)
   const basicsSpots = defaultSpots(source)
   const showSpots = kind !== 'charter'
-  // A pass's tickets are a daily limit, shared by the day's time slots.
-  const spotsLabel = kind === 'rental' ? 'Items out at once' : kind === 'pass' ? 'Tickets per day' : 'Spots per time slot'
   const closingGap = closingGapOf(base)
   const firstTime = shownSeasons.map((season) => (['1', '2', '3', '4', '5', '6', '0'] as WeekdayKey[]).map((key) => timesForWeekday(season, key, closingGap)).find((times) => times.length > 0)?.[0]).find(Boolean)
 
@@ -425,8 +423,6 @@ export function ScheduleStep({
                   onChange={(next) => updateSeason(season.id, next)}
                   onRemove={shownSeasons.length > 1 ? () => removeSeason(season.id) : undefined}
                   todayKey={todayKey}
-                  defaultSpots={basicsSpots}
-                  spots={showSpots ? { label: spotsLabel, ...(kind === 'rental' ? { max: basicsSpots } : {}) } : null}
                   rental={kind === 'rental'}
                   errors={errors}
                   stepMinutes={Math.max(30, Math.min(240, base.durationMinutes || 60))}

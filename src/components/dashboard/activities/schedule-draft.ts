@@ -239,8 +239,7 @@ function cleanSeason(season: ActivitySchedule): ActivitySchedule {
     ) as Record<WeekdayKey, { open: string; close: string } | null>
     out.every = Math.max(5, Math.floor(season.every ?? 30))
   }
-  // Every time slot sells at least one spot; anything less goes back to the number in Basics.
-  if (season.capacity !== undefined && Number.isFinite(season.capacity) && season.capacity >= 1) out.capacity = Math.floor(season.capacity)
+  // Seasons don't set their own spots any more: every season uses the number in Basics.
   if (season.locationId) out.locationId = season.locationId
   return out
 }
