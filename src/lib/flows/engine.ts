@@ -532,7 +532,8 @@ function guestFactsAt(world: FlowWorld, guest: IGuest, at: number, tags?: string
 function bookingFactsAt(b: IBooking, at: number): BookingFacts {
   return {
     activity: b.activitySlug,
-    kind: b.kind,
+    // An older "activity" is an activity or tour, the same choice as "trip".
+    kind: b.kind === 'activity' ? 'trip' : b.kind,
     partySize: b.partySize,
     total: b.total,
     channel: b.channel,

@@ -1,19 +1,16 @@
 'use client'
 
 import * as React from 'react'
-import { Anchor, Bike, Car, DoorOpen, GraduationCap, KeyRound, Layers, Package, Route, Ship, Ticket, Zap, type LucideIcon } from 'lucide-react'
+import { Anchor, Bike, Car, DoorOpen, GraduationCap, KeyRound, Layers, Lock, Package, Route, Ship, Ticket, UsersRound, Zap, type LucideIcon } from 'lucide-react'
 
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { RadioGroup, RadioGroupCard } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
-import { useCustomCategories } from '@/hooks/use-custom-categories'
 import {
-  ACTIVITY_KINDS,
   ACTIVITY_KIND_META,
-  CHARTER_VESSELS,
+  isTimedKind,
   LESSON_LEVELS,
   RENTAL_CATEGORIES,
   rentalCategoryMeta,
@@ -177,16 +174,32 @@ export interface SharedBasics {
   difficulty: DifficultyLevel
 }
 
+/** The wizard's choices: group activity, activity and private charter are one card. */
+const PICKER_KINDS: ActivityKind[] = ['trip', 'rental', 'lesson', 'pass', 'package']
+
+const TIMED_CARD = {
+  label: 'Activity or tour',
+  hint: 'Guests book a time slot, with others or as a private group.',
+  examples: 'Tours, snorkelling, horse rides, ziplines, fishing charters, private guiding',
+}
+
 export function KindPicker({ value, onChange }: { value: ActivityKind; onChange: (kind: ActivityKind) => void }) {
+  const picked = isTimedKind(value) ? 'trip' : value
   return (
     <fieldset>
       <legend className="text-[0.8125rem] font-medium">What are you selling?</legend>
       <p className="mt-0.5 mb-2.5 text-xs text-muted">
         This decides the setup below, how the storefront books it and the tools you get on the day.
       </p>
-      <RadioGroup value={value} onValueChange={(next) => onChange(next as ActivityKind)} className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
-        {ACTIVITY_KINDS.map((kind) => {
-          const meta = ACTIVITY_KIND_META[kind]
+      <RadioGroup
+        value={picked}
+        onValueChange={(next) => {
+          if (next !== picked) onChange(next as ActivityKind)
+        }}
+        className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3"
+      >
+        {PICKER_KINDS.map((kind) => {
+          const meta = kind === 'trip' ? TIMED_CARD : ACTIVITY_KIND_META[kind]
           const Icon = KIND_ICONS[kind]
           return (
             <RadioGroupCard
@@ -208,6 +221,91 @@ export function KindPicker({ value, onChange }: { value: ActivityKind; onChange:
   )
 }
 
+/* ---------- activity or tour: the same few settings, shared or private ---------- */
+
+const SLOT_CHOICES = [
+  { value: false, label: 'Shared', hint: 'Guests book spots and join others', icon: UsersRound },
+  { value: true, label: 'Private', hint: 'One group has the time slot to itself', icon: Lock },
+] as const
+
+/** Group activity, activity and private charter: how long, who books it, how many, how hard. */
+export function TimedFields({
+  privateGroup,
+  onPrivate,
+  shared,
+  onShared,
+  errors,
+}: {
+  privateGroup: boolean
+  onPrivate: (value: boolean) => void
+  shared: SharedBasics
+  onShared: (patch: Partial<SharedBasics>) => void
+  errors: Record<string, string>
+}) {
+  return (
+    <div className="flex flex-col gap-5 rounded-xl border border-line bg-surface-sunken/40 p-4">
+      <p className="text-[0.8125rem] font-medium">Activity settings</p>
+      <div role="radiogroup" aria-label="Who books each time slot" className="grid gap-2 sm:grid-cols-2">
+        {SLOT_CHOICES.map((choice) => {
+          const on = choice.value === privateGroup
+          return (
+            <button
+              key={choice.label}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => onPrivate(choice.value)}
+              className={cn(
+                'flex items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors duration-200',
+                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+                on ? 'border-primary bg-primary-soft/30' : 'border-line bg-surface hover:border-line-strong',
+              )}
+            >
+              <span className={cn('grid size-8 shrink-0 place-items-center rounded-lg', on ? 'bg-primary-soft text-primary' : 'bg-surface-sunken text-faint')} aria-hidden="true">
+                <choice.icon className="size-4" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-foreground">{choice.label}</span>
+                <span className="block text-xs text-subtle">{choice.hint}</span>
+              </span>
+            </button>
+          )
+        })}
+      </div>
+      <DurationField
+        label="How long it lasts"
+        error={errors.durationMinutes}
+        minutes={shared.durationMinutes}
+        unit={shared.durationUnit}
+        onChange={(durationMinutes, durationUnit) => onShared({ durationMinutes, durationUnit })}
+        presets={[30, 60, 90, 120, 180, 240, 480, 1440]}
+      />
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Field label={privateGroup ? 'Most guests' : 'Spots per time slot'} required error={errors.maxCapacity}>
+          <Input
+            type="number"
+            min={1}
+            value={shared.maxCapacity > 0 ? shared.maxCapacity : ''}
+            placeholder={privateGroup ? '6' : '16'}
+            suffix="guests"
+            onChange={(event) => onShared({ maxCapacity: num(event.target.value) })}
+          />
+        </Field>
+        <Field label={privateGroup ? 'Fewest guests' : 'Fewest guests to go ahead'} error={errors.minParticipants}>
+          <Input
+            type="number"
+            min={1}
+            value={shared.minParticipants}
+            suffix={shared.minParticipants === 1 ? 'guest' : 'guests'}
+            onChange={(event) => onShared({ minParticipants: num(event.target.value, 1) })}
+          />
+        </Field>
+        <DifficultyField value={shared.difficulty} onChange={(difficulty) => onShared({ difficulty })} />
+      </div>
+    </div>
+  )
+}
+
 const num = (value: string, min = 0) => Math.max(min, Math.round(Number(value) || 0))
 
 
@@ -222,16 +320,6 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
       </div>
       {children}
     </section>
-  )
-}
-
-/** One small on/off with its label beside it. */
-function InlineSwitch({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
-  return (
-    <label className="flex h-10 cursor-pointer items-center gap-2.5 text-sm font-medium text-foreground">
-      <Switch size="sm" checked={checked} onCheckedChange={onChange} aria-label={label} />
-      {label}
-    </label>
   )
 }
 
@@ -413,9 +501,8 @@ export function KindFields({
   errors,
   shared,
   onShared,
-  tenantSlug = '',
 }: {
-  /** For the business's own charter types. */
+  /** Not read here any more; kept so callers need not change. */
   tenantSlug?: string
   kind: ActivityKind
   settings: DraftKindSettings
@@ -429,13 +516,10 @@ export function KindFields({
   onShared: (patch: Partial<SharedBasics>) => void
 }) {
   const settings = normalizeKindSettings(raw)
-  const ownVessels = useCustomCategories(tenantSlug, 'charter-vessels')
-  const [addingVessel, setAddingVessel] = React.useState(false)
-  const [vesselDraft, setVesselDraft] = React.useState({ name: '', crew: '' })
   const set = <K extends keyof DraftKindSettings>(key: K, patch: Partial<DraftKindSettings[K]>) =>
     onChange({ ...settings, [key]: { ...settings[key], ...patch } })
 
-  if (kind === 'trip') return null
+  if (isTimedKind(kind)) return null
 
   const shell = (children: React.ReactNode) => (
     <div className="flex flex-col gap-4 rounded-xl border border-line bg-surface-sunken/40 p-4">
@@ -443,29 +527,6 @@ export function KindFields({
       {children}
     </div>
   )
-
-  /* ---------- activity: a time slot, no departure ---------- */
-  if (kind === 'activity') {
-    return shell(
-      <>
-        <DurationField
-          label="Each time slot lasts"
-          error={errors.durationMinutes}
-          minutes={shared.durationMinutes}
-          unit={shared.durationUnit === 'days' ? 'minutes' : shared.durationUnit}
-          onChange={(durationMinutes, durationUnit) => onShared({ durationMinutes, durationUnit })}
-          presets={[15, 30, 45, 60, 90, 120]}
-          allowFlexible={false}
-        />
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Spots per time slot" required error={errors.maxCapacity}>
-            {(control) => <Input {...control} type="number" min={1} value={shared.maxCapacity || ''} placeholder="8" onChange={(e) => onShared({ maxCapacity: num(e.target.value) })} />}
-          </Field>
-          <DifficultyField value={shared.difficulty} onChange={(difficulty) => onShared({ difficulty })} />
-        </div>
-      </>,
-    )
-  }
 
   /* ---------- rental ---------- */
   if (kind === 'rental') {
@@ -516,114 +577,6 @@ export function KindFields({
               {(control) => <Input {...control} type="number" min={0} step={5} suffix="min" placeholder="None" value={rental.bufferMinutes || ''} onChange={(e) => set('rental', { bufferMinutes: num(e.target.value) })} />}
             </Field>
           </div>
-        </Section>
-      </>,
-    )
-  }
-
-  /* ---------- charter ---------- */
-  if (kind === 'charter') {
-    const charter = settings.charter
-    const vesselValue = charter.vessel === 'other' ? `own:${charter.vesselLabel}` : charter.vessel
-    const vesselTaken = (name: string) =>
-      [...CHARTER_VESSELS.map((entry) => entry.label), ...ownVessels.categories.map((entry) => entry.label)].some((entry) => entry.toLowerCase() === name.trim().toLowerCase())
-    const vesselProblem = vesselDraft.name.trim().length < 2 ? 'Give it a name' : vesselTaken(vesselDraft.name) ? 'That one is already on the list' : null
-    const addVessel = () => {
-      if (vesselProblem) return
-      const label = vesselDraft.name.trim()
-      const crewWord = vesselDraft.crew.trim() || 'Team'
-      ownVessels.add({ label, hint: crewWord })
-      set('charter', { vessel: 'other', vesselLabel: label, crewLabel: crewWord })
-      setAddingVessel(false)
-      setVesselDraft({ name: '', crew: '' })
-    }
-    return shell(
-      <>
-        <Section title="What is chartered">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Chartered">
-              <Select
-                value={vesselValue}
-                onValueChange={(value) => {
-                  if (value === '__new') return setAddingVessel(true)
-                  if (value.startsWith('own:')) {
-                    const label = value.slice(4)
-                    const entry = ownVessels.categories.find((item) => item.label === label)
-                    return set('charter', { vessel: 'other', vesselLabel: label, crewLabel: entry?.hint || charter.crewLabel || 'Team' })
-                  }
-                  set('charter', { vessel: value as DraftKindSettings['charter']['vessel'], vesselLabel: '', crewLabel: '' })
-                }}
-              >
-                <SelectTrigger aria-label="What is chartered">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CHARTER_VESSELS.map((entry) => (
-                    <SelectItem key={entry.value} value={entry.value} description={`${entry.crew} included`}>
-                      {entry.label}
-                    </SelectItem>
-                  ))}
-                  {ownVessels.categories.map((entry) => (
-                    <SelectItem key={entry.label} value={`own:${entry.label}`} description={`Yours · ${entry.hint || 'Team'} included`}>
-                      {entry.label}
-                    </SelectItem>
-                  ))}
-                  {charter.vessel === 'other' && charter.vesselLabel && !ownVessels.categories.some((entry) => entry.label === charter.vesselLabel) ? (
-                    <SelectItem value={`own:${charter.vesselLabel}`}>{charter.vesselLabel}</SelectItem>
-                  ) : null}
-                  <SelectItem value="__new" description="A boat, vehicle or service not listed">
-                    + Add your own
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-            <div className="sm:self-end">
-              <InlineSwitch label="Comes with a captain or driver" checked={charter.crewed} onChange={(crewed) => set('charter', { crewed })} />
-            </div>
-          </div>
-          {addingVessel ? (
-            <div className="flex flex-col gap-3 rounded-xl border border-primary/30 bg-primary-soft/20 p-4">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="What you charter" required error={vesselDraft.name && vesselProblem ? vesselProblem : undefined}>
-                  {(control) => <Input {...control} autoFocus value={vesselDraft.name} placeholder="Glass-bottom boat" onChange={(e) => setVesselDraft((d) => ({ ...d, name: e.target.value.slice(0, 40) }))} />}
-                </Field>
-                <Field label="Who comes with it" optional description="Shown as “… included”.">
-                  {(control) => <Input {...control} value={vesselDraft.crew} placeholder="Driver and guide" onChange={(e) => setVesselDraft((d) => ({ ...d, crew: e.target.value.slice(0, 40) }))} />}
-                </Field>
-              </div>
-              <div className="flex gap-2">
-                <Button type="button" size="sm" disabled={Boolean(vesselProblem)} onClick={addVessel}>
-                  Add
-                </Button>
-                <Button type="button" size="sm" variant="ghost" onClick={() => { setAddingVessel(false); setVesselDraft({ name: '', crew: '' }) }}>
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          ) : null}
-        </Section>
-
-        <Section title="The group" hint="One group per charter.">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Most guests" required error={errors['charter.maxGuests']}>
-              {(control) => <Input {...control} type="number" min={1} value={charter.maxGuests} onChange={(e) => set('charter', { maxGuests: num(e.target.value) })} />}
-            </Field>
-            <Field label="Fewest guests" error={errors.minParticipants}>
-              {(control) => <Input {...control} type="number" min={1} value={shared.minParticipants} onChange={(e) => onShared({ minParticipants: num(e.target.value, 1) })} />}
-            </Field>
-          </div>
-        </Section>
-
-        <Section title="How long it lasts">
-          <DurationField
-            label="Charter length"
-            error={errors.durationMinutes}
-            minutes={shared.durationMinutes}
-            unit={shared.durationUnit === 'minutes' ? 'hours' : shared.durationUnit}
-            onChange={(durationMinutes, durationUnit) => onShared({ durationMinutes, durationUnit })}
-            presets={[120, 180, 240, 360, 480, 1440]}
-            allowFlexible={false}
-          />
         </Section>
       </>,
     )

@@ -26,7 +26,7 @@ function read(slug: string, list: string): CustomCategory[] {
   }
 }
 
-/** A business's own entries for a pick list; "categories" by default, "charter-vessels" for charters. */
+/** A business's own entries for a pick list; "categories" by default. */
 export function useCustomCategories(tenantSlug: string, list = 'categories') {
   const [categories, setCategories] = React.useState<CustomCategory[]>([])
 

@@ -1,4 +1,4 @@
-import type { Activity, ActivityFormat, ActivityKind, ActivityTheme, CharterConfig, RentalCategory, RentalConfig, RouteInfo } from '@/types'
+import type { Activity, ActivityFormat, ActivityKind, ActivityTheme, RentalCategory, RentalConfig, RouteInfo } from '@/types'
 import { formatDuration } from '@/lib/utils'
 
 /* ==========================================================================
@@ -27,10 +27,21 @@ export interface ActivityKindMeta {
 
 export const ACTIVITY_KINDS: ActivityKind[] = ['trip', 'activity', 'charter', 'rental', 'lesson', 'pass', 'package']
 
+/**
+ * Group activity, activity and private charter are set up the same way, so
+ * the wizard offers them as one "Activity or tour", shared or private.
+ * Private saves as a charter (one group per time slot, priced per group).
+ */
+export const TIMED_KINDS: ActivityKind[] = ['trip', 'activity', 'charter']
+export const isTimedKind = (kind: ActivityKind | undefined) => TIMED_KINDS.includes(kind ?? 'trip')
+
+/** The kind as one type: an older "activity" reads as an activity or tour (trip). */
+export const sharedKindOf = (kind: ActivityKind | undefined): ActivityKind => (kind === 'activity' ? 'trip' : (kind ?? 'trip'))
+
 export const ACTIVITY_KIND_META: Record<ActivityKind, ActivityKindMeta> = {
   trip: {
-    label: 'Group activity',
-    short: 'Group',
+    label: 'Activity or tour',
+    short: 'Activity',
     hint: 'Guests join a group at set start times.',
     examples: 'Snorkelling, city walks, ziplines, whale watching',
     icon: 'Route',
@@ -40,7 +51,7 @@ export const ACTIVITY_KIND_META: Record<ActivityKind, ActivityKindMeta> = {
     defaultFormat: 'departures',
   },
   activity: {
-    label: 'Activity',
+    label: 'Activity or tour',
     short: 'Activity',
     hint: 'Guests book a time and turn up, in small groups or one by one.',
     examples: 'Horse rides, ATV rides, ziplines, parasailing, jet ski rides',
@@ -51,8 +62,8 @@ export const ACTIVITY_KIND_META: Record<ActivityKind, ActivityKindMeta> = {
     defaultFormat: 'open',
   },
   charter: {
-    label: 'Private charter',
-    short: 'Charter',
+    label: 'Private activity',
+    short: 'Private',
     hint: 'The whole boat, vehicle, venue or guide for one group.',
     examples: 'Fishing charters, private guiding, yacht hire, private drivers',
     icon: 'Anchor',
@@ -159,14 +170,6 @@ export const FUEL_LABEL: Record<NonNullable<RentalConfig['fuel']>, string> = {
   charged: 'Charged for what you use',
 }
 
-export const CHARTER_VESSELS: { value: Exclude<NonNullable<CharterConfig['vessel']>, 'other'>; label: string; crew: string }[] = [
-  { value: 'boat', label: 'Boat', crew: 'Captain' },
-  { value: 'yacht', label: 'Yacht or catamaran', crew: 'Captain and team' },
-  { value: 'vehicle', label: 'Vehicle', crew: 'Driver' },
-  { value: 'guide', label: 'Private guide', crew: 'Guide' },
-  { value: 'aircraft', label: 'Helicopter or plane', crew: 'Pilot' },
-]
-
 /** Day rentals sell by the day; everything else by the length on each tier. */
 export const isDayRental = (activity: Pick<Activity, 'kind' | 'rental'>) =>
   (activity.kind ?? 'trip') === 'rental' && (activity.rental?.modes ? activity.rental.modes.length === 1 && activity.rental.modes[0] === 'day' : activity.rental?.billing === 'day')
@@ -201,7 +204,7 @@ export function kindChipLabel(activity: Pick<Activity, 'kind' | 'durationMinutes
       return `Rental · from ${formatDuration(shortest)}`
     }
     case 'activity':
-      return `${formatDuration(activity.durationMinutes)} ride`
+      return formatDuration(activity.durationMinutes)
     case 'charter':
       return `Private · up to ${activity.charter?.maxGuests ?? activity.maxCapacity}`
     case 'lesson': {
@@ -234,7 +237,7 @@ export function kindBadge(activity: Pick<Activity, 'kind' | 'difficulty' | 'rent
     case 'activity':
       return DIFFICULTY_WORD[activity.difficulty]
     case 'charter':
-      return 'Private charter'
+      return 'Private'
     case 'lesson':
       return LESSON_LEVELS.find((entry) => entry.value === activity.lesson?.level)?.label ?? 'Lesson'
     case 'pass':
@@ -259,7 +262,7 @@ export function kindCardFacts(activity: Pick<Activity, 'kind' | 'difficulty' | '
       return [how, kinds > 1 ? `${kinds} items to choose from` : `Fits ${activity.rental?.seatsPerUnit ?? 1}`, ...age]
     }
     case 'charter':
-      return [`Up to ${activity.charter?.maxGuests ?? activity.maxCapacity} guests`, activity.charter?.crewed === false ? 'Self-drive' : `${crewName(activity.charter)} included`, ...age]
+      return [`Up to ${activity.charter?.maxGuests ?? activity.maxCapacity} guests`, 'Private group', ...age]
     case 'lesson':
       return [
         activity.lesson?.ratio ? `${activity.lesson.ratio} per instructor` : `Up to ${activity.maxCapacity} per class`,
@@ -292,10 +295,7 @@ export function kindNote(activity: Pick<Activity, 'kind' | 'minAge' | 'maxCapaci
       return { title: 'Before you rent.', body: join([age, returnBy]) }
     }
     case 'charter': {
-      return {
-        title: `Private ${vesselName(activity.charter).toLowerCase()} charter.`,
-        body: join([activity.charter?.crewed === false ? 'Self-drive: you need the right licence.' : `${crewName(activity.charter)} included.`, 'Only your group aboard.', age]),
-      }
+      return { title: 'Private.', body: join(['Only your group on this time slot.', age]) }
     }
     case 'lesson': {
       const level = LESSON_LEVELS.find((entry) => entry.value === activity.lesson?.level)?.label ?? 'All levels'
@@ -324,9 +324,9 @@ export function routeLabel(route: RouteInfo): string {
 
 /** How the storefront groups its catalogue: one shelf per kind, in this order. */
 export const STOREFRONT_GROUPS: Record<ActivityKind, { label: string; blurb: string }> = {
-  trip: { label: 'Group activities', blurb: 'Join a group at a set start time.' },
-  activity: { label: 'Activities', blurb: 'Pick a time slot and turn up.' },
-  charter: { label: 'Private charters', blurb: 'The whole boat or guide, just your group.' },
+  trip: { label: 'Activities & tours', blurb: 'Pick a time and join the group.' },
+  activity: { label: 'Activities & tours', blurb: 'Pick a time and join the group.' },
+  charter: { label: 'Private', blurb: 'The time slot is just for your group.' },
   rental: { label: 'Rentals', blurb: 'Take it out yourself, by the hour or the day.' },
   lesson: { label: 'Lessons & courses', blurb: 'Coached, with a level and a small class.' },
   pass: { label: 'Passes & tickets', blurb: 'Entry for the day. Come and go.' },
@@ -404,17 +404,6 @@ export function themeOf(activity: Pick<Activity, 'theme' | 'slug' | 'kind' | 're
 export const categoryLabel = (activity: Pick<Activity, 'theme' | 'customCategory' | 'slug' | 'kind' | 'rental' | 'category'>) =>
   activity.customCategory?.trim() || themeLabel(themeOf(activity))
 
-/** What is chartered, in words: a standard vessel or the business's own. */
-export function vesselName(charter: Pick<CharterConfig, 'vessel' | 'vesselLabel'> | undefined): string {
-  if (charter?.vessel === 'other') return charter.vesselLabel?.trim() || 'Charter'
-  return CHARTER_VESSELS.find((entry) => entry.value === charter?.vessel)?.label ?? 'Charter'
-}
-
-/** Who comes with it: "Captain", "Driver", or the business's own words. */
-export function crewName(charter: Pick<CharterConfig, 'vessel' | 'crewLabel'> | undefined): string {
-  if (charter?.vessel === 'other') return charter.crewLabel?.trim() || 'Team'
-  return CHARTER_VESSELS.find((entry) => entry.value === charter?.vessel)?.crew ?? 'Team'
-}
 
 export type RentalMode = 'hour' | 'day' | 'length'
 

@@ -20,7 +20,7 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react'
-import { ACTIVITY_KINDS, STOREFRONT_GROUPS, kindCardFacts, kindChipLabel, priceUnit } from '@/lib/activity-kinds'
+import { ACTIVITY_KINDS, STOREFRONT_GROUPS, kindCardFacts, kindChipLabel, priceUnit, sharedKindOf } from '@/lib/activity-kinds'
 
 import { cn, formatCurrency, formatDuration, formatNumber, pluralize } from '@/lib/utils'
 import type { Activity, ActivityKind, CurrencyCode, DifficultyLevel } from '@/types'
@@ -131,7 +131,7 @@ export function ActivityShowcase({
   React.useEffect(() => {
     try {
       const wanted = new URLSearchParams(window.location.search).get('type')
-      if (wanted && (ACTIVITY_KINDS as string[]).includes(wanted)) setGroup(wanted as ActivityKind)
+      if (wanted && (ACTIVITY_KINDS as string[]).includes(wanted)) setGroup(sharedKindOf(wanted as ActivityKind))
     } catch {
       /* no URL to read */
     }
@@ -184,7 +184,7 @@ export function ActivityShowcase({
 
   const groups = React.useMemo(
     () =>
-      ACTIVITY_KINDS.map((kind) => ({ kind, items: filtered.filter((activity) => (activity.kind ?? 'trip') === kind) })).filter(
+      ACTIVITY_KINDS.filter((kind) => kind !== 'activity').map((kind) => ({ kind, items: filtered.filter((activity) => sharedKindOf(activity.kind) === kind) })).filter(
         (entry) => entry.items.length > 0,
       ),
     [filtered],

@@ -675,7 +675,7 @@ export const CONDITION_FIELDS: ConditionFieldMeta[] = [
     ops: LIST_OPS,
     defaultOp: 'any_of',
     options: 'kinds',
-    help: 'Group activity, activity, private charter, rental, lesson, pass or package.',
+    help: 'Activity or tour, private activity, rental, lesson, pass or package.',
   },
   {
     field: 'booking.partySize',
@@ -944,7 +944,7 @@ export const ACTIVITY_KIND_LOWER: Record<string, string> = {
   package: 'a package',
 } satisfies Record<ActivityKind, string>
 
-const KIND_OPTIONS: ConditionOption[] = ACTIVITY_KINDS.map((kind: ActivityKind) => ({ value: kind, label: ACTIVITY_KIND_META[kind].label }))
+const KIND_OPTIONS: ConditionOption[] = ACTIVITY_KINDS.filter((kind) => kind !== 'activity').map((kind: ActivityKind) => ({ value: kind, label: ACTIVITY_KIND_META[kind].label }))
 
 /** The fixed choices; activities, tags, countries, locations and extras come from the business. */
 export const STATIC_OPTIONS: Record<'channels' | 'segments' | 'kinds', ConditionOption[]> = {

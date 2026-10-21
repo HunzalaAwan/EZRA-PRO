@@ -47,7 +47,7 @@ import { EnquiryPanel, RequestForm, type RequestContext } from '@/components/sto
 import type { BookingSettings } from '@/types'
 import { useRentalService } from '@/hooks/use-rental-service'
 import { priceUnit } from '@/lib/activity-kinds'
-import { crewName, LESSON_LEVELS, isDayRental, partyLabel, rateFor, rentalCategoryMeta, rentalModes, routeLabel, type RentalMode } from '@/lib/activity-kinds'
+import { LESSON_LEVELS, isDayRental, partyLabel, rateFor, rentalCategoryMeta, rentalModes, routeLabel, type RentalMode } from '@/lib/activity-kinds'
 import { bodyLimitLines } from '@/lib/guest-requirements'
 import type { PricingRule } from '@/lib/pricing'
 import { chargeByOf, fromPrice, leadPrice, priceBooking, unitPriceDetail, type AppliedChange, type PriceContext, type RentalPricing } from '@/lib/price-engine'
@@ -1214,9 +1214,7 @@ function BookingWidgetInner({
         </div>
         <ul className="mt-2 flex list-none flex-wrap gap-1.5 p-0">
           {[
-            activity.charter?.crewed === false
-              ? 'Self-skippered'
-              : `${crewName(activity.charter)} included`,
+            'Only your group',
             activity.charter?.noticeHours ? `Book ${activity.charter.noticeHours}h ahead` : null,
             (activity.languages ?? []).length > 0 ? (activity.languages ?? []).join(', ') : null,
           ]

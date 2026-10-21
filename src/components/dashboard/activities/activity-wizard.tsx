@@ -91,18 +91,17 @@ import {
   type DraftTier,
 } from './pricing-tier-editor'
 import type { DraftAddOn } from './addon-editor'
-import { DifficultyField, KindFields, KindPicker, defaultKindSettings, emptyRoute, normalizeKindSettings,
+import { KindFields, KindPicker, TimedFields, defaultKindSettings, emptyRoute, normalizeKindSettings,
   draftItemOf, type DraftKindSettings, type DraftRoute, type SharedBasics } from './kind-fields'
-import { DurationField, DURATION_UNITS, unitFor, type DurationUnit } from './duration-field'
+import { DURATION_UNITS, unitFor, type DurationUnit } from './duration-field'
 import { useCustomCategories } from '@/hooks/use-custom-categories'
 import { GuestQuestionsEditor, type WaiverOption } from './guest-questions-editor'
 import { PickupEditor, type DraftPickup, type PickupZoneOption } from './pickup-editor'
 import {
   ACTIVITY_KIND_META,
   ACTIVITY_THEMES,
-  crewName,
-  vesselName,
   LESSON_LEVELS,
+  isTimedKind,
   defaultTheme,
   rentalCategoryMeta,
   routeLabel,
@@ -618,14 +617,11 @@ export function deriveForKind(draft: ActivityDraft): ActivityDraft {
     }
   } else if (kind === 'charter') {
     next.maxCapacity = settings.charter.maxGuests
-    next.difficulty = 'easy'
     if (next.minParticipants > next.maxCapacity) next.minParticipants = next.maxCapacity
   } else if (kind === 'lesson') {
     next.difficulty = LEVEL_DIFFICULTY[settings.lesson.level]
   } else if (kind === 'pass') {
     next.difficulty = 'easy'
-    next.minParticipants = 1
-  } else if (kind === 'activity') {
     next.minParticipants = 1
   }
   next.route = draft.route ?? emptyRoute()
@@ -1152,10 +1148,9 @@ function validateStep(step: number, draft: ActivityDraft): FieldErrors {
   // Every time slot sells at least one spot (there is no "no limit").
   if (kind === 'lesson' && draft.maxCapacity < 1) errors.maxCapacity = 'A class needs at least one spot'
   if ((kind === 'activity' || kind === 'trip') && draft.maxCapacity < 1) errors.maxCapacity = 'Each time slot needs at least one spot'
+  if (kind === 'charter' && settings.charter.maxGuests < 1) errors.maxCapacity = 'Allow at least one guest'
   if (kind === 'pass' && draft.maxCapacity < 1) errors.maxCapacity = 'Sell at least one ticket a day'
-  if (kind === 'activity' && draft.durationMinutes < 5) errors.durationMinutes = 'Say how long it lasts'
   if (kind === 'lesson' && draft.durationMinutes < 15) errors.durationMinutes = 'Give each lesson at least 15 minutes'
-  if (kind === 'charter' && settings.charter.maxGuests < 1) errors['charter.maxGuests'] = 'A charter carries at least one guest'
   if (kind === 'package') {
     delete errors.maxCapacity
     delete errors.durationMinutes
@@ -2347,16 +2342,6 @@ function kindFacts(draft: ActivityDraft): string[] {
       ...(r.lateFee > 0 ? ['Late return fee'] : []),
     ]
   }
-  if (kind === 'charter') {
-    const c = s.charter
-    // How guests book and the notice are on their own Review rows (Booking and Schedule steps).
-    return [
-      `${vesselName(c)} · ${c.crewed ? `${crewName(c)} included` : 'Self-drive'}`,
-      draft.durationMinutes > 0 ? formatDuration(draft.durationMinutes) : 'Length to agree',
-      `${draft.minParticipants}–${c.maxGuests} guests`,
-      ...age,
-    ]
-  }
   if (kind === 'lesson') {
     const l = s.lesson
     return [
@@ -2368,17 +2353,6 @@ function kindFacts(draft: ActivityDraft): string[] {
   }
   const route = draft.route ?? emptyRoute()
   const routeFact = route.enabled && route.distance > 0 ? [`${route.distance} ${route.unit}${route.track.trim() ? ` · ${route.track.trim()}` : ''}`] : []
-  if (kind === 'activity') {
-    return [
-      `${formatDuration(draft.durationMinutes)} each`,
-      ...(spots ? [`${draft.maxCapacity} per time slot`] : []),
-      draft.difficulty.charAt(0).toUpperCase() + draft.difficulty.slice(1),
-      ...age,
-      // Height and weight limits come from the Guests step's questions now.
-      ...bodyLimitLines({ kind, ride: s.activity, guestQuestions: draft.guestQuestions }).map((line) => line.charAt(0).toUpperCase() + line.slice(1)),
-      ...routeFact,
-    ]
-  }
   if (kind === 'pass') {
     return [
       s.pass.validDays > 1 ? `Valid ${s.pass.validDays} days` : 'Valid all day',
@@ -2386,11 +2360,15 @@ function kindFacts(draft: ActivityDraft): string[] {
       ...age,
     ]
   }
+  // Activity or tour: shared or private time slots.
   return [
-    draft.difficulty.charAt(0).toUpperCase() + draft.difficulty.slice(1),
+    kind === 'charter' ? 'Private: one group per time slot' : 'Shared: guests join others',
     draft.durationMinutes > 0 ? formatDuration(draft.durationMinutes) : 'Flexible length',
     ...(spots ? [`${draft.minParticipants}–${draft.maxCapacity} guests`] : []),
+    draft.difficulty.charAt(0).toUpperCase() + draft.difficulty.slice(1),
     ...age,
+    // Height and weight limits come from the Guests step's questions now.
+    ...(kind === 'activity' ? bodyLimitLines({ kind, ride: s.activity, guestQuestions: draft.guestQuestions }).map((line) => line.charAt(0).toUpperCase() + line.slice(1)) : []),
     ...routeFact,
   ]
 }
@@ -2399,7 +2377,7 @@ function kindFacts(draft: ActivityDraft): string[] {
 const STARTER_TIER: Record<ActivityKind, string> = {
   trip: 'Adult',
   activity: 'Rider',
-  charter: 'Half-day charter',
+  charter: 'Private group',
   rental: 'Standard',
   lesson: 'Student',
   pass: 'Day ticket',
@@ -2547,16 +2525,29 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
       ...(draft.meetingPoint.trim() ? {} : { arrivalMode: arrival }),
       ...(starter ? { tiers: [{ ...draft.tiers[0], label: STARTER_TIER[next] }] } : {}),
       ...(next === 'lesson' && draft.maxCapacity < 1 ? { maxCapacity: 8, durationMinutes: draft.durationMinutes || 120 } : {}),
-      ...(next === 'charter' && draft.durationMinutes < 60 ? { durationMinutes: 240, durationUnit: 'hours' as const } : {}),
-      ...(next === 'activity'
-        ? {
-            schedule: { ...draft.schedule, mode: 'hours' as const, entryInterval: draft.schedule.entryInterval || 30 },
-            ...(draft.maxCapacity < 1 ? { maxCapacity: 8 } : {}),
-            ...(draft.durationMinutes < 15 ? { durationMinutes: 30, durationUnit: 'minutes' as const } : {}),
-          }
-        : {}),
     })
   }
+  // Shared or private: private is a charter (one group per time slot, priced per group).
+  const sharedKind = React.useRef<ActivityKind>(kind === 'activity' ? 'activity' : 'trip')
+  const setPrivate = (on: boolean) => {
+    const next: ActivityKind = on ? 'charter' : sharedKind.current
+    if (next === kind) return
+    const starter = draft.tiers.length === 1 && Object.values(STARTER_TIER).includes(draft.tiers[0].label)
+    const guests = draft.maxCapacity
+    patch({
+      kind: next,
+      chargeBy: null,
+      maxCapacity: guests,
+      ...(on ? { kindSettings: { ...settings, charter: { ...settings.charter, maxGuests: guests } } } : {}),
+      ...(starter ? { tiers: [{ ...draft.tiers[0], label: STARTER_TIER[next] }] } : {}),
+    })
+  }
+  const setShared = (changes: Partial<SharedBasics>) =>
+    patch(
+      kind === 'charter' && changes.maxCapacity !== undefined
+        ? { ...changes, kindSettings: { ...settings, charter: { ...settings.charter, maxGuests: changes.maxCapacity } } }
+        : changes,
+    )
   const shared: SharedBasics = {
     maxCapacity: draft.maxCapacity,
     minParticipants: draft.minParticipants,
@@ -2611,8 +2602,8 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
           onDuration={(durationMinutes) => patch({ durationMinutes })}
           onCapacity={(maxCapacity) => patch({ maxCapacity, schedule: { ...draft.schedule, capacity: maxCapacity } })}
         />
-      ) : kind === 'trip' ? (
-        <TourBasicsFields draft={draft} patch={patch} errors={errors} />
+      ) : isTimedKind(kind) ? (
+        <TimedFields privateGroup={kind === 'charter'} onPrivate={setPrivate} shared={shared} onShared={setShared} errors={errors} />
       ) : null}
       {kind === 'package' && !dining ? (
         <PackagePartsEditor
@@ -2628,7 +2619,7 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
           }}
         />
       ) : null}
-      {dining || kind === 'trip' || kind === 'package' ? null : (
+      {dining || isTimedKind(kind) || kind === 'package' ? null : (
         <KindFields
           kind={kind}
           settings={settings}
@@ -2641,47 +2632,6 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
           tenantSlug={tenantSlug}
         />
       )}
-    </div>
-  )
-}
-
-/** A scheduled trip: spots per time slot, a length, a difficulty. Ages, languages and a track go in Requirements and Highlights. */
-function TourBasicsFields({ draft, patch, errors }: StepProps) {
-  return (
-    <div className="flex flex-col gap-5 rounded-xl border border-line bg-surface-sunken/40 p-4">
-      <p className="text-[0.8125rem] font-medium">Group activity settings</p>
-      <DurationField
-        error={errors.durationMinutes}
-        description="Leave it flexible if guests set their own pace."
-        minutes={draft.durationMinutes}
-        unit={draft.durationUnit}
-        onChange={(durationMinutes, durationUnit) => patch({ durationMinutes, durationUnit })}
-      />
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Field label="Spots per time slot" required error={errors.maxCapacity}>
-          <Input
-            type="number"
-            min={1}
-            value={draft.maxCapacity > 0 ? draft.maxCapacity : ''}
-            placeholder="16"
-            suffix="guests"
-            onChange={(event) => patch({ maxCapacity: Number.parseInt(event.target.value, 10) || 0 })}
-          />
-        </Field>
-        <Field label="Fewest guests to go ahead" error={errors.minParticipants}>
-          <Input
-            type="number"
-            min={1}
-            value={draft.minParticipants}
-            suffix={pluralize(draft.minParticipants, 'guest')}
-            onChange={(event) =>
-              patch({ minParticipants: Number.parseInt(event.target.value, 10) || 0 })
-            }
-          />
-        </Field>
-        <DifficultyField value={draft.difficulty} onChange={(difficulty) => patch({ difficulty })} />
-      </div>
     </div>
   )
 }
