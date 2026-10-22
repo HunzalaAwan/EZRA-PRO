@@ -6,7 +6,7 @@ import { NOW, getActivityById, getDepartureById, getStorefront, getStorefrontAva
 import { locationAddress } from '@/lib/locations'
 import { buildDays, rentalItemsLeftFor } from '@/lib/storefront-availability'
 import { isGeneratedSlotId, slotFromDeparture } from '@/lib/activity-schedule'
-import { bookingReference, clamp, seatsRemaining } from '@/lib/utils'
+import { bookingReference, seatsRemaining } from '@/lib/utils'
 import type { Activity, Departure } from '@/types'
 
 /**
@@ -25,7 +25,7 @@ import {
   CheckoutFlow,
   type CheckoutDeparture,
 } from '@/components/storefront/checkout-flow'
-import { resolveRental, resolveSelection, type RentalRequest } from '@/components/storefront/checkout-selection'
+import { checkoutParty, resolveRental, resolveSelection, type RentalRequest } from '@/components/storefront/checkout-selection'
 
 interface TenantParams {
   tenant: string
@@ -132,10 +132,7 @@ export default async function CheckoutPage({
   const rentalMode = rental.mode
   const rentalHours = rental.hours
   const rentalDays = rental.days
-  const party =
-    (activity.kind ?? 'trip') === 'charter'
-      ? clamp(Math.floor(Number(query.g) || 2), Math.max(1, activity.minParticipants), activity.charter?.maxGuests ?? activity.maxCapacity)
-      : undefined
+  const party = checkoutParty(activity, query.g)
 
   const site = departureRow.locationId ? getLocationById(departureRow.locationId) : undefined
   const siteMeeting = activity.locations.find((entry) => entry.locationId === departureRow.locationId)?.meetingPoint

@@ -66,6 +66,7 @@ import {
 } from '@/components/storefront/booking-widget'
 import type { PackagePartView } from '@/lib/packages'
 import { changesOf, changesSummary, depositLabel, hoursLabel, paymentOf } from '@/lib/booking-policy'
+import { guestLimitOf } from '@/lib/price-engine'
 import { StickyRail } from '@/components/storefront/sticky-rail'
 import { StarRow } from '@/components/storefront/storefront-hero'
 import { TrustBar } from '@/components/storefront/trust-bar'
@@ -318,7 +319,7 @@ export function ActivityDetailView({
                 : activity.kind === 'lesson'
                   ? activity.lesson?.ratio ? `${activity.lesson.ratio} students per instructor` : `Up to ${activity.maxCapacity} students`
                   : activity.kind === 'charter'
-                    ? `Whole group, up to ${activity.charter?.maxGuests ?? activity.maxCapacity}`
+                    ? `Whole group, up to ${Math.min(activity.charter?.maxGuests ?? activity.maxCapacity, guestLimitOf(activity))}`
                     : `Up to ${activity.maxCapacity} guests`}
             </Fact>
             {activity.route ? <Fact icon={RouteIcon}>{routeLabel(activity.route)}{activity.route.elevationM ? ` · ${activity.route.elevationM} m climb` : ''}</Fact> : null}

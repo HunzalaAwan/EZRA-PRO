@@ -54,8 +54,9 @@ import {
   chargeByOf,
   fromPrice,
   groupCoverOf,
-  groupGuestLimit,
+  groupCoverWords,
   groupPriced,
+  guestLimitOf,
   groupTierOf,
   leadPrice,
   priceBooking,
@@ -600,8 +601,8 @@ function BookingWidgetInner({
   const privateTickets = privatePerPerson(activity)
   /** A private group priced per group: its prices are options, one picked. */
   const privateOptions = kind === 'charter' && !privateTickets
-  /** The most guests a private group can be. */
-  const privateMost = Math.max(1, activity.charter?.maxGuests ?? activity.maxCapacity)
+  /** The most guests a private group can be: its most guests, and per group what the price covers plus the extra guests allowed. */
+  const privateMost = Math.max(1, Math.min(activity.charter?.maxGuests ?? activity.maxCapacity, guestLimitOf(activity)))
   /** A private group's guests when priced per group (per person, its tickets count them). */
   const [partyCount, setParty] = React.useState(() => Math.max(2, activity.minParticipants || 1))
   /** Which request form is open, if any. */
@@ -676,8 +677,8 @@ function BookingWidgetInner({
   /* ---------- per group: one price for the group; guests only say how many are coming, all on one tier ---------- */
   const groupPrice = chargeByOf(activity) === 'group' && kind !== 'charter' ? activity.groupPrice : undefined
   const groupTier = groupPrice ? groupTierOf(activity) : undefined
-  /** The most guests a per-group booking takes: its own limit, or what the price covers when it can't grow. */
-  const groupMax = groupPrice ? groupGuestLimit(groupPrice) : Number.POSITIVE_INFINITY
+  /** The most guests a per-group booking takes: what the price covers plus the extra guests allowed (else the spots decide). */
+  const groupMax = groupPrice ? guestLimitOf(activity) : Number.POSITIVE_INFINITY
   /** A per-group count, kept between one guest and what the group tier and price allow. */
   const groupCount = (wanted: number) => clamp(wanted, 1, Math.max(1, Math.min(groupTier?.maxQuantity ?? Number.POSITIVE_INFINITY, groupMax)))
 
@@ -760,8 +761,8 @@ function BookingWidgetInner({
       ? 1
       : 0
     : activity.priceTiers.reduce((total, tier) => total + placesOf(tier) * (tierQty[tier.id] ?? 0), 0)
-  /** People on the booking: a private group's count, or its tickets when priced per person. */
-  const party = privateTickets ? Math.max(1, headcount) : partyCount
+  /** People on the booking: a private group's count (never over its most), or its tickets when priced per person. */
+  const party = privateTickets ? Math.max(1, headcount) : privateOptions ? Math.min(partyCount, privateMost) : partyCount
   /* ---------- private: the whole time for one group, while nobody else is on it ---------- */
   const privateOffer = activity.privateOption?.enabled ? activity.privateOption : undefined
   const privateOpen = Boolean(privateOffer && slot && slot.seatsLeft >= slot.capacity && slot.capacity > 0)
@@ -1579,16 +1580,15 @@ function BookingWidgetInner({
               const most = Math.max(0, Math.min(room, groupTier.maxQuantity, groupMax))
               const groupDetail = priceOn('group')
               const note = groupPrice.note?.trim()
-              // "for up to 6, then $40 each", or "for the group" when the price covers everyone (or every spot).
-              const covers = groupPrice.includedGuests > 0 && groupPrice.includedGuests < activity.maxCapacity ? groupPrice.includedGuests : 0
+              // "for up to 3 · up to 2 more at $90 each", "for up to 3", or "for the group" when the price covers everyone (or every spot).
+              const covered = groupCoverWords(groupCoverOf(activity), groupDetail.extraGuest ?? 0, currency, activity.maxCapacity)
               return (
                 <div className="mt-3 flex items-center gap-3 rounded-xl border border-line px-3.5 py-3">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-foreground">Guests</p>
                     <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-subtle">
                       <span>
-                        <span className="tabular font-medium text-muted">{formatCurrency(groupDetail.price, currency)}</span> {covers > 0 ? `for up to ${covers}` : 'for the group'}
-                        {covers > 0 && groupPrice.extraGuest > 0 ? `, then ${formatCurrency(groupDetail.extraGuest ?? groupPrice.extraGuest, currency)} each` : ''}
+                        <span className="tabular font-medium text-muted">{formatCurrency(groupDetail.price, currency)}</span> {covered}
                       </span>
                       {wasTag(wasPrice('group', groupDetail))}
                       {note ? <span>· {note}</span> : null}

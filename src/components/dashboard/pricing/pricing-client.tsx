@@ -31,7 +31,7 @@ import { applyPricingOverride, applyScheduleOverride } from '@/lib/activity-over
 import { rateFor, rentalModes } from '@/lib/activity-kinds'
 import { clockTime, expandSchedules, scheduleContextOf, shiftDayKey, slotId } from '@/lib/activity-schedule'
 import { getActivityBySlug, tenantBySlug } from '@/lib/demo-core'
-import { effectLabel, groupPriced, groupTierOf, priceBooking, privatePerPerson } from '@/lib/price-engine'
+import { effectLabel, groupPriced, groupTierOf, guestLimitOf, priceBooking, privatePerPerson, type PriceBookingResult } from '@/lib/price-engine'
 import {
   DEMAND_RULE_KINDS,
   RULE_KIND_LABEL,
@@ -215,10 +215,18 @@ function RulesTab({ pricing, tenantSlug, activities, currency, nowIso, peaks, fi
  * option for its party (priced per person, the lead ticket for each guest).
  * Per group: the row guests are booked on, as the storefront books them.
  * A rental is priced for its shortest rental, as the storefront starts it.
+ * More guests than one booking can have (per group: what the price covers
+ * plus the extra guests allowed) get no price, only the most there can be.
  */
-export function checkPrice(activity: Activity, count: number, ctx: { startsAt: string; nowIso: string; rules: PricingRule[]; multiplier?: number; capacity?: number; booked?: number }) {
+export function checkPrice(
+  activity: Activity,
+  count: number,
+  ctx: { startsAt: string; nowIso: string; rules: PricingRule[]; multiplier?: number; capacity?: number; booked?: number },
+): { result: PriceBookingResult; before: number } | { result?: undefined; most: number } | null {
   // A private group priced per group books one option for the party; per person it books a ticket for each guest.
   const options = (activity.kind ?? 'trip') === 'charter' && !privatePerPerson(activity)
+  const most = Math.min(guestLimitOf(activity), (activity.kind ?? 'trip') === 'charter' ? Math.max(1, activity.charter?.maxGuests ?? activity.maxCapacity) : Number.POSITIVE_INFINITY)
+  if (activity.kind !== 'rental' && count > most) return { most }
   const mode = (activity.rental?.rates?.length ?? 0) > 0 ? rentalModes(activity)[0] : undefined
   const lengthId = mode === 'length' ? activity.rental?.lengths?.[0]?.id : undefined
   const paid = activity.priceTiers.filter((tier) => tier.price > 0)
@@ -329,7 +337,9 @@ function PriceCheck({ tenantSlug, activities, currency, nowIso, rules, peaks, fi
           </Select>
         </div>
         <Input type="number" min={1} max={99} value={count} suffix={pluralize(count, unit === 'items' ? 'item' : 'guest')} onChange={(e) => setCount(Math.min(99, Math.max(1, Math.floor(Number(e.target.value)) || 1)))} aria-label={unit === 'items' ? 'Items' : 'Guests'} />
-        {check ? (
+        {check && !check.result ? (
+          <p className="rounded-xl bg-surface-sunken px-4 py-3 text-sm font-medium text-danger">Up to {check.most} {pluralize(check.most, 'guest')} per booking</p>
+        ) : check?.result ? (
           <div className="rounded-xl bg-surface-sunken px-4 py-3 text-sm">
             {check.result.ticketLines.map((line) => (
               <div key={line.id} className="flex justify-between gap-3 text-muted">

@@ -84,31 +84,53 @@ export function PrivateBookingFields({
   )
 }
 
+/** A group price's numbers: the guests it covers (0: everyone), extra guests allowed over that (0: none) and each one's price. */
+export interface ExtraGuests {
+  included: number
+  allowed: number
+  extra: number
+}
+
 /**
- * A price for the whole group: how many guests it covers (empty: everyone) and
- * what each guest over that pays (empty: nothing). Two labelled fields, for the
- * caller's own grid.
+ * What is wrong with a group price's extra guests, by field: the covered
+ * guests and extra guests together fit the spots (or most guests), and extra
+ * guests need a price. Nothing to check when the price covers everyone.
+ */
+export function extraGuestProblems({ included, allowed, extra }: ExtraGuests, limit: number): Partial<Record<keyof ExtraGuests, string>> {
+  const problems: Partial<Record<keyof ExtraGuests, string>> = {}
+  if (included <= 0) return problems
+  if (limit > 0 && included > limit) problems.included = `No more than ${limit}`
+  else if (limit > 0 && included + allowed > limit) problems.allowed = limit > included ? `No more than ${limit - included}` : `None: it covers all ${limit}`
+  if (allowed > 0 && extra <= 0) problems.extra = 'Set a price'
+  return problems
+}
+
+/**
+ * A price for the whole group: how many guests it covers (empty: everyone),
+ * how many extra guests can come on top (empty: none, the group stops there)
+ * and what each one pays. Three labelled fields, for the caller's own grid;
+ * the extra-guest ones wait for a number covered.
  */
 export function ExtraGuestFields({
   currency,
-  included,
-  extra,
+  value,
   onChange,
   limit,
-  error,
+  errors = {},
 }: {
   currency: CurrencyCode
-  /** Guests the price covers. 0: everyone. */
-  included: number
-  /** Minor units for each guest over `included`. */
-  extra: number
-  onChange: (next: { included: number; extra: number }) => void
-  /** The most guests one booking can have, for the placeholder. 0: not set yet. */
+  value: ExtraGuests
+  onChange: (next: ExtraGuests) => void
+  /** Spots per time slot, or a private group's most guests. 0: not set yet. */
   limit: number
-  error?: string
+  /** Shown once the step is checked; until then a problem shows as a hint. */
+  errors?: Partial<Record<keyof ExtraGuests, string>>
 }) {
-  // An extra-guest price needs a number to count from.
-  const missing = extra > 0 && included <= 0
+  const { included, allowed, extra } = value
+  const problems = extraGuestProblems(value, limit)
+  const note = (field: keyof ExtraGuests) =>
+    errors[field] || problems[field] ? <span className={errors[field] ? 'font-medium text-danger' : 'font-medium text-warning'}>{errors[field] ?? problems[field]}</span> : null
+  const set = (patch: Partial<ExtraGuests>) => onChange({ ...value, ...patch })
   return (
     <>
       <label className={label}>
@@ -121,15 +143,40 @@ export function ExtraGuestFields({
           suffix="guests"
           inputClassName="tabular"
           aria-label="Guests the price covers"
-          error={missing && error ? error : undefined}
+          error={errors.included}
           value={included > 0 ? included : ''}
-          onChange={(event) => onChange({ included: Math.min(999, whole(event.target.value)), extra })}
+          onChange={(event) => set({ included: Math.min(999, whole(event.target.value)) })}
         />
-        {missing ? <span className={error ? 'font-medium text-danger' : 'font-medium text-warning'}>{error ?? 'Set how many'}</span> : null}
+        {note('included')}
       </label>
       <label className={label}>
-        Each extra guest
-        <MoneyInput value={extra} onValueChange={(next) => onChange({ included, extra: next })} currency={currency} size="sm" allowEmpty placeholder="Free" ariaLabel="Each extra guest" />
+        Extra guests allowed
+        <Input
+          type="number"
+          size="sm"
+          min={0}
+          placeholder="None"
+          inputClassName="tabular"
+          aria-label="Extra guests allowed"
+          disabled={included <= 0}
+          error={errors.allowed}
+          value={included > 0 && allowed > 0 ? allowed : ''}
+          onChange={(event) => set({ allowed: Math.min(999, whole(event.target.value)) })}
+        />
+        {included > 0 ? note('allowed') : null}
+      </label>
+      <label className={label}>
+        Price per extra guest
+        <MoneyInput
+          value={included > 0 && allowed > 0 ? extra : 0}
+          onValueChange={(next) => set({ extra: next })}
+          currency={currency}
+          size="sm"
+          allowEmpty
+          disabled={included <= 0 || allowed <= 0}
+          ariaLabel="Price per extra guest"
+        />
+        {included > 0 && allowed > 0 ? note('extra') : null}
       </label>
     </>
   )

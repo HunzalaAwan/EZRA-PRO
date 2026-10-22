@@ -192,8 +192,24 @@ export function kindOf(activity: { kind?: ActivityKind }): ActivityKind {
   return activity.kind ?? 'trip'
 }
 
+/**
+ * The most guests a private group can be: its most guests and, priced per
+ * group, never over what the price covers plus the extra guests allowed (the
+ * same as the price engine's `guestLimitOf`; saved before extra guests had a
+ * limit, its most guests).
+ */
+function privateMost(activity: Pick<Activity, 'maxCapacity' | 'charter'> & Partial<Pick<Activity, 'chargeBy'>>): number {
+  const charter = activity.charter
+  const most = charter?.maxGuests ?? activity.maxCapacity
+  const covers = Math.floor(charter?.includedGuests ?? 0)
+  if ((activity.chargeBy ?? 'group') !== 'group' || covers <= 0 || charter?.maxExtraGuests === undefined) return most
+  return Math.min(most, covers + Math.max(0, Math.floor(charter.maxExtraGuests)))
+}
+
 /** The chip on a storefront card: what it is at a glance. */
-export function kindChipLabel(activity: Pick<Activity, 'kind' | 'durationMinutes' | 'maxCapacity' | 'rental' | 'charter' | 'lesson' | 'pass' | 'package'>): string {
+export function kindChipLabel(
+  activity: Pick<Activity, 'kind' | 'durationMinutes' | 'maxCapacity' | 'rental' | 'charter' | 'lesson' | 'pass' | 'package'> & Partial<Pick<Activity, 'chargeBy'>>,
+): string {
   switch (activity.kind ?? 'trip') {
     case 'rental': {
       const modes = activity.rental?.modes
@@ -206,7 +222,7 @@ export function kindChipLabel(activity: Pick<Activity, 'kind' | 'durationMinutes
     case 'activity':
       return formatDuration(activity.durationMinutes)
     case 'charter':
-      return `Private · up to ${activity.charter?.maxGuests ?? activity.maxCapacity}`
+      return `Private · up to ${privateMost(activity)}`
     case 'lesson': {
       const sessions = activity.lesson?.sessions ?? 1
       return sessions > 1 ? `${sessions}-day course` : `Lesson · ${formatDuration(activity.durationMinutes)}`
@@ -250,7 +266,9 @@ export function kindBadge(activity: Pick<Activity, 'kind' | 'difficulty' | 'rent
 }
 
 /** Two or three short facts for a listing card, in the kind's own terms. Age only when one is set. */
-export function kindCardFacts(activity: Pick<Activity, 'kind' | 'difficulty' | 'maxCapacity' | 'minAge' | 'rental' | 'charter' | 'lesson' | 'pass' | 'route' | 'package'>): string[] {
+export function kindCardFacts(
+  activity: Pick<Activity, 'kind' | 'difficulty' | 'maxCapacity' | 'minAge' | 'rental' | 'charter' | 'lesson' | 'pass' | 'route' | 'package'> & Partial<Pick<Activity, 'chargeBy'>>,
+): string[] {
   const age = activity.minAge > 0 ? [`Ages ${activity.minAge}+`] : []
   switch (activity.kind ?? 'trip') {
     case 'activity':
@@ -262,7 +280,7 @@ export function kindCardFacts(activity: Pick<Activity, 'kind' | 'difficulty' | '
       return [how, kinds > 1 ? `${kinds} items to choose from` : `Fits ${activity.rental?.seatsPerUnit ?? 1}`, ...age]
     }
     case 'charter':
-      return [`Up to ${activity.charter?.maxGuests ?? activity.maxCapacity} guests`, 'Private group', ...age]
+      return [`Up to ${privateMost(activity)} guests`, 'Private group', ...age]
     case 'lesson':
       return [
         activity.lesson?.ratio ? `${activity.lesson.ratio} per instructor` : `Up to ${activity.maxCapacity} per class`,

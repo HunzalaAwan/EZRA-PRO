@@ -174,6 +174,7 @@ export interface MoneyInputProps {
   size?: 'sm' | 'md'
   className?: string
   allowEmpty?: boolean
+  disabled?: boolean
 }
 
 export function MoneyInput({
@@ -185,6 +186,7 @@ export function MoneyInput({
   size = 'md',
   className,
   allowEmpty = false,
+  disabled = false,
 }: MoneyInputProps) {
   const toText = React.useCallback(
     (minor: number) => (minor === 0 && allowEmpty ? '' : (minor / 100).toString()),
@@ -206,6 +208,7 @@ export function MoneyInput({
       placeholder={placeholder}
       size={size}
       className={className}
+      disabled={disabled}
       inputClassName="tabular"
       leftIcon={<span className="text-xs font-medium text-subtle">{currencySymbol(currency)}</span>}
       onFocus={() => setFocused(true)}

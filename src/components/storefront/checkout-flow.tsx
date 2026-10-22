@@ -48,7 +48,7 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { toast } from '@/components/ui/toaster'
 import { buildQuote, type AvailabilityDay, type QuoteSelection } from '@/components/storefront/booking-widget'
-import { bookedOn, resolveRental, resolveSelection, type RentalRequest } from '@/components/storefront/checkout-selection'
+import { bookedOn, checkoutParty, resolveRental, resolveSelection, type RentalRequest } from '@/components/storefront/checkout-selection'
 import {
   EMPTY_WAIVER,
   GuestDetailsStep,
@@ -73,6 +73,7 @@ import { recordBooking, seatDeltas, withLedger } from '@/lib/booking-ledger'
 import { useBookingLedger } from '@/hooks/use-booking-ledger'
 import { useScheduledDays } from '@/hooks/use-scheduled-days'
 import { depositLabel, hoursLabel, paymentOf, splitPayment } from '@/lib/booking-policy'
+import { groupPriced } from '@/lib/price-engine'
 import type { PaymentTerms } from '@/types'
 
 /* ==========================================================================
@@ -345,7 +346,7 @@ export function CheckoutFlow({
   rentalHours: rentalHoursGiven,
   rentalLength: rentalLengthGiven,
   rentalRequest,
-  party,
+  party: partyGiven,
   privateBooking: privateGiven = false,
   requestedPrivate,
   slotEmpty,
@@ -360,6 +361,8 @@ export function CheckoutFlow({
   // Prices saved in the editor count here exactly as in the widget.
   const pricedActivity = usePricingOverride(given)
   const activity = useActivityWithDefaults(pricedActivity, tenant.slug)
+  // A private group's size, checked again against the saved edit: never over what its price lets come.
+  const party = partyGiven === undefined ? undefined : checkoutParty(activity, partyGiven)
   const { defaults: bookingDefaults } = useBookingDefaults(tenant.slug)
   const fields = bookingDefaults.checkout
 
@@ -428,10 +431,11 @@ export function CheckoutFlow({
       ? bookedOn({ departureId: departure.id, capacity: departure.capacity, seatsLeft: departure.seatsLeft, booked: departure.booked }, delta)
       : undefined
 
-  // The link's tickets checked against the seats the guest saw, with the editor's tiers and extras.
+  // The link's tickets checked against the seats the guest saw, with the editor's tiers and extras. Per group the saved
+  // price decides how many can come, so a link is checked against it on a time slot further out than the strip too.
   const itemsLeft = liveSlot?.itemsLeft
   const selection = React.useMemo(
-    () => (request && liveSlot ? resolveSelection(activity, request.tiers, request.addOns, Math.max(1, seatsLeft), itemsLeft, party) : serverSelection),
+    () => (request && (liveSlot || groupPriced(activity)) ? resolveSelection(activity, request.tiers, request.addOns, Math.max(1, seatsLeft), itemsLeft, party) : serverSelection),
     [request, liveSlot, activity, seatsLeft, itemsLeft, party, serverSelection],
   )
 

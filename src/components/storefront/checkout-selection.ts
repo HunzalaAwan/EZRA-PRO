@@ -2,7 +2,7 @@ import { clamp } from '@/lib/utils'
 import { addOnUnits, peopleOf, placesOf } from '@/lib/places'
 import { isGeneratedSlotId } from '@/lib/activity-schedule'
 import { rentalModes, type RentalMode } from '@/lib/activity-kinds'
-import { groupGuestLimit, groupPriced, groupTierOf, privatePerPerson } from '@/lib/price-engine'
+import { groupPriced, groupTierOf, guestLimitOf, privatePerPerson } from '@/lib/price-engine'
 import type { Activity } from '@/types'
 import type { AvailabilitySlot, QuoteSelection } from '@/components/storefront/booking-widget'
 
@@ -26,6 +26,20 @@ export function parsePairs(raw: string | string[] | undefined): Map<string, numb
   return out
 }
 
+/**
+ * A private group's size from the link's `g`, checked against the activity:
+ * at least its fewest guests, at most its most guests and, priced per group,
+ * what the price covers plus the extra guests allowed. Undefined for anything
+ * that is not a private group. The checkout page runs it on the seeded
+ * activity, CheckoutFlow again on the activity with its saved edit.
+ */
+export function checkoutParty(activity: Activity, wanted: string | string[] | number | undefined): number | undefined {
+  if ((activity.kind ?? 'trip') !== 'charter') return undefined
+  const most = Math.max(1, Math.min(activity.charter?.maxGuests ?? activity.maxCapacity, guestLimitOf(activity)))
+  const asked = Math.floor(Number(Array.isArray(wanted) ? wanted[0] : wanted) || 2)
+  return clamp(asked, Math.min(most, Math.max(1, activity.minParticipants)), most)
+}
+
 export function resolveSelection(
   activity: Activity,
   rawTiers: string | string[] | undefined,
@@ -39,13 +53,13 @@ export function resolveSelection(
   const requestedTiers = parsePairs(rawTiers)
   const requestedAddOns = parsePairs(rawAddOns)
 
-  // Per group: one count of guests, all on the group's tier, up to the spots left and what the price covers.
+  // Per group: one count of guests, all on the group's tier, up to the spots left and what the price covers plus the extra guests allowed.
   const groupTier = groupPriced(activity) && activity.groupPrice ? groupTierOf(activity) : undefined
   if (groupTier && activity.groupPrice) {
     const people = activity.priceTiers.reduce((sum, tier) => sum + (requestedTiers.get(tier.id) ?? 0) * peopleOf(tier), 0)
     const places = placesOf(groupTier)
     const room = places > 0 ? Math.floor(Math.max(0, seatsLeft) / places) : groupTier.maxQuantity
-    const most = Math.max(1, Math.min(groupTier.maxQuantity, room, groupGuestLimit(activity.groupPrice)))
+    const most = Math.max(1, Math.min(groupTier.maxQuantity, room, guestLimitOf(activity)))
     // A bare /checkout link still renders a sensible order: two guests, or one.
     const qty = clamp(people > 0 ? people : Math.min(2, activity.maxCapacity || 2), 1, most)
     const tiers = activity.priceTiers.map((tier) => ({ tierId: tier.id, qty: tier.id === groupTier.id ? qty : 0 }))
@@ -60,7 +74,7 @@ export function resolveSelection(
   // A private group priced per person: a ticket each, up to its most guests, counted in people.
   // The group has the time slot to itself, so the spots left don't count the tickets.
   if (privatePerPerson(activity)) {
-    const most = Math.max(1, activity.charter?.maxGuests ?? activity.maxCapacity)
+    const most = Math.max(1, Math.min(activity.charter?.maxGuests ?? activity.maxCapacity, guestLimitOf(activity)))
     let people = 0
     const tiers = activity.priceTiers.map((tier) => {
       const each = peopleOf(tier)

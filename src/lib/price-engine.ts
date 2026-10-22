@@ -26,7 +26,9 @@ import { formatCurrency } from '@/lib/utils'
    minimum charge. Extras, fees and tax are added by `buildQuote`.
    Extra guests (private, per group, a charter's guests over what it covers)
    move only with the activity's own percentage changes: dynamic pricing and
-   business rules leave them as set, as they always have.
+   business rules leave them as set, as they always have. Per group a booking
+   has at most what the price covers plus the extra guests allowed
+   (`guestLimitOf`): every screen stops there; the engine prices what it gets.
    ========================================================================== */
 
 /** The parts of an activity the engine reads. A full `Activity` fits. */
@@ -155,27 +157,75 @@ export const groupPriced = (activity: PricedActivity) =>
 export const privatePerPerson = (activity: Pick<Activity, 'kind'> & Partial<Pick<Activity, 'chargeBy'>>) =>
   (activity.kind ?? 'trip') === 'charter' && chargeByOf(activity) === 'person'
 
+/** Per group: what the price covers, each guest over that, and the most guests one booking can have. */
+export interface GroupCover {
+  /** Guests the price covers. Infinity: everyone. */
+  covers: number
+  /** Each guest over that, minor units, before any change. */
+  extraGuest: number
+  /** What the price covers plus the extra guests allowed (a private group: never over its most guests). Infinity: the spots decide. */
+  most: number
+}
+
 /**
- * Per group, the guests the price covers and each guest over that, before any
- * change (minor units): a shared activity's group price, or a private group's
- * options. `covers` is Infinity when the price is for everyone. Undefined
- * when the activity is not priced per group.
+ * Per group, the guests the price covers, each guest over that before any
+ * change (minor units), and the most guests one booking can have: a shared
+ * activity's group price, or a private group's options. Undefined when the
+ * activity is not priced per group.
  */
-export function groupCoverOf(activity: PricedActivity): { covers: number; extraGuest: number } | undefined {
+export function groupCoverOf(activity: PricedActivity): GroupCover | undefined {
+  // A group that can't grow past what the price covers has no extra guests to charge.
+  const cover = (covers: number, extraGuest: number, most: number): GroupCover => ({ covers, extraGuest: Number.isFinite(covers) && most <= covers ? 0 : extraGuest, most })
   if (groupPriced(activity)) {
     const group = activity.groupPrice!
-    return { covers: group.includedGuests > 0 ? group.includedGuests : Number.POSITIVE_INFINITY, extraGuest: Math.max(0, group.extraGuest || 0) }
+    return cover(group.includedGuests > 0 ? group.includedGuests : Number.POSITIVE_INFINITY, Math.max(0, group.extraGuest || 0), groupGuestLimit(group))
   }
   if ((activity.kind ?? 'trip') === 'charter' && chargeByOf(activity) === 'group') {
-    const included = activity.charter?.includedGuests ?? 0
-    return { covers: included > 0 ? included : Number.POSITIVE_INFINITY, extraGuest: Math.max(0, activity.charter?.extraGuestPrice ?? 0) }
+    const charter = activity.charter
+    const included = Math.floor(charter?.includedGuests ?? 0)
+    const extraGuest = Math.max(0, charter?.extraGuestPrice ?? 0)
+    const ceiling = charter && charter.maxGuests > 0 ? charter.maxGuests : Number.POSITIVE_INFINITY
+    if (included <= 0) return cover(Number.POSITIVE_INFINITY, extraGuest, ceiling)
+    // Saved before extra guests had a limit: any number up to the most guests, as before (with no price for them, free).
+    const allowed = charter?.maxExtraGuests !== undefined ? Math.max(0, Math.floor(charter.maxExtraGuests)) : Number.POSITIVE_INFINITY
+    return cover(included, extraGuest, Math.min(ceiling, included + allowed))
   }
   return undefined
 }
 
 /** Guests over what a group price covers. */
-export const guestsOver = (cover: { covers: number; extraGuest: number } | undefined, guests: number) =>
+export const guestsOver = (cover: Pick<GroupCover, 'covers' | 'extraGuest'> | undefined, guests: number) =>
   cover && cover.extraGuest > 0 && Number.isFinite(cover.covers) ? Math.max(0, guests - cover.covers) : 0
+
+/**
+ * The most guests one booking can have by how it is priced: per group, what
+ * the price covers and the extra guests allowed; a private group, also its
+ * most guests. Infinity: the spots decide. Every screen that sells or changes
+ * a booking stops here.
+ */
+export function guestLimitOf(activity: PricedActivity): number {
+  const cover = groupCoverOf(activity)
+  const charter = (activity.kind ?? 'trip') === 'charter' && activity.charter && activity.charter.maxGuests > 0 ? activity.charter.maxGuests : Number.POSITIVE_INFINITY
+  return Math.min(cover?.most ?? Number.POSITIVE_INFINITY, charter)
+}
+
+/**
+ * A group price in words, after the price: "for up to 3 · up to 2 more at $90
+ * each", "for up to 3" with no extra guests, or "for the group" when it covers
+ * everyone (or every spot). Saved before extra guests had a limit (the spots
+ * decide): "for up to 3, then $90 each". `extraEach` is the extra-guest price
+ * at the time slot; `spots`, the activity's spots or most guests.
+ */
+export function groupCoverWords(cover: GroupCover | undefined, extraEach: number, currency: CurrencyCode, spots = Number.POSITIVE_INFINITY): string {
+  if (!cover || !Number.isFinite(cover.covers) || cover.covers >= spots) return 'for the group'
+  const most = Math.min(cover.most, spots)
+  const more = most - cover.covers
+  if (more <= 0) return `for up to ${cover.covers}`
+  // Extra guests at no charge (an older save): the price simply covers them all.
+  if (extraEach <= 0) return Number.isFinite(most) ? `for up to ${most}` : 'for the group'
+  const each = formatCurrency(extraEach, currency)
+  return Number.isFinite(cover.most) ? `for up to ${cover.covers} · up to ${more} more at ${each} each` : `for up to ${cover.covers}, then ${each} each`
+}
 
 /**
  * Per group: guests only say how many are coming, and every one is booked on
@@ -190,13 +240,16 @@ export function groupTierOf(activity: Pick<PricedActivity, 'priceTiers'>): Price
 }
 
 /**
- * The most guests one per-group booking takes: its own limit, what the price
- * covers when there is no extra-guest price, or no limit (the spots decide)
- * when the price is for everyone or each extra guest pays.
+ * The most guests one shared per-group booking takes: no limit (the spots
+ * decide) when the price is for everyone; else what the price covers plus the
+ * extra guests allowed (`maxGuests`, never below what it covers). Saved before
+ * extra guests had a limit (`maxGuests` 0): no limit when each one pays, else
+ * what the price covers.
  */
 export function groupGuestLimit(group: GroupPrice): number {
-  if (group.maxGuests > 0) return group.maxGuests
-  return group.includedGuests <= 0 || group.extraGuest > 0 ? Number.POSITIVE_INFINITY : group.includedGuests
+  if (group.includedGuests <= 0) return Number.POSITIVE_INFINITY
+  if (group.maxGuests > 0) return Math.max(group.includedGuests, group.maxGuests)
+  return group.extraGuest > 0 ? Number.POSITIVE_INFINITY : group.includedGuests
 }
 
 const isRated = (activity: PricedActivity, mode?: RentalMode) =>
@@ -498,7 +551,9 @@ export function unitPriceDetail(activity: PricedActivity, tierId: string, ctx: P
   if (tierId === 'group') {
     const base = activity.groupPrice?.price ?? 0
     const result = runSteps(activity, { kind: 'group' }, base, ctx, false)
-    return { price: result.price, base, applied: result.applied, extraGuest: extraPrice(activity.groupPrice?.extraGuest ?? 0, result.factor) }
+    // None when no extra guests are allowed.
+    const extra = groupPriced(activity) ? (groupCoverOf(activity)?.extraGuest ?? 0) : (activity.groupPrice?.extraGuest ?? 0)
+    return { price: result.price, base, applied: result.applied, extraGuest: extraPrice(extra, result.factor) }
   }
   const base = baseOf(activity, tierId, ctx.rental) ?? 0
   const result = runSteps(activity, { kind: 'tier', tierId, base }, base, ctx, chargeByOf(activity) === 'person')

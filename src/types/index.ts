@@ -214,7 +214,11 @@ export interface GroupPrice {
   includedGuests: number
   /** Minor units per guest over `includedGuests`. 0: the group can't grow past it. */
   extraGuest: number
-  /** The most guests one booking can have. 0: the activity's spots. */
+  /**
+   * The most guests one booking can have: `includedGuests` plus the extra
+   * guests allowed. 0: the activity's spots (saved before extra guests had a
+   * limit, or the price covers everyone).
+   */
   maxGuests: number
   /** Optional, shown to guests next to the group price: "Up to 6 guests, gear included". */
   note?: string
@@ -735,6 +739,12 @@ export interface CharterConfig {
   includedGuests?: number
   /** Each guest above that, minor units. */
   extraGuestPrice?: number
+  /**
+   * Guests allowed over `includedGuests`, each at `extraGuestPrice`. 0: none,
+   * the group stops at what the price covers. Absent (saved before it was
+   * asked): any number up to `maxGuests` when each one pays, else none.
+   */
+  maxExtraGuests?: number
   /** Guests send a request and get a quote instead of paying on the spot. */
   requestToBook: boolean
   /** Hours of notice needed before a charter can start. */

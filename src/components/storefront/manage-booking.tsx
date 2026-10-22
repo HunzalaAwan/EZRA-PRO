@@ -44,7 +44,7 @@ import { useBookingLedger } from '@/hooks/use-booking-ledger'
 import { useScheduledDays } from '@/hooks/use-scheduled-days'
 import { usePricingOverride } from '@/hooks/use-pricing-override'
 import { usePricing } from '@/hooks/use-pricing'
-import { groupCoverOf, groupGuestLimit, groupPriced, guestsOver, unitPrice, unitPriceDetail } from '@/lib/price-engine'
+import { groupCoverOf, groupPriced, guestLimitOf, guestsOver, unitPrice, unitPriceDetail } from '@/lib/price-engine'
 import { changeBooking, withLedger } from '@/lib/booking-ledger'
 import { changesSummary, hoursLabel, refundFor, splitPayment } from '@/lib/booking-policy'
 import type { Activity, ActivityKind, BookingStatus, CancellationPolicy, ChangeRules, CurrencyCode, GuestQuestion, PaymentTerms, WaiverTemplate } from '@/types'
@@ -212,11 +212,14 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
   const partySize = change?.party ?? booking.partySize
   const extra = addCost(booking.partySize, partySize)
   const seatsLeftNow = Math.max(0, departure.seatsLeft - (ledger.delta[currentDepartureId] ?? 0))
-  // A private group has the time to itself: it can grow to its most guests. Per group, a price that covers only so many caps the group there.
+  // A private group has the time to itself: it can grow to its most guests. Per group, the group stops at what the price
+  // covers plus the extra guests allowed.
   const privateGroup = (priced.kind ?? 'trip') === 'charter'
-  const privateMost = Math.max(1, priced.charter?.maxGuests ?? priced.maxCapacity)
-  const groupLimit = groupPriced(priced) && priced.groupPrice ? groupGuestLimit(priced.groupPrice) : Number.POSITIVE_INFINITY
+  const groupLimit = guestLimitOf(priced)
+  const privateMost = Math.max(1, Math.min(priced.charter?.maxGuests ?? priced.maxCapacity, groupLimit))
   const roomNow = privateGroup ? Math.max(0, privateMost - partySize) : Math.max(0, Math.min(seatsLeftNow, groupLimit - partySize))
+  /** The price, not the spots left, is what stops the group. */
+  const priceStops = privateGroup || groupLimit - partySize <= seatsLeftNow
   const deposit = activity.payment.collect === 'deposit' ? splitPayment(activity.payment, booking.total, booking.partySize).now : 0
   const balance = state.balancePaid ? 0 : Math.max(0, booking.total + extra - booking.amountPaid)
   const unsigned = state.waiversSigned ? 0 : booking.participants.filter((participant) => !participant.waiverSigned).length
@@ -516,7 +519,7 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
                     : addingCost > 0
                       ? `more at ${formatCurrency(extraEach, currency)} each over ${cover?.covers}`
                       : 'more, in the group price'}{' '}
-                  · {privateGroup ? `up to ${privateMost} ${pluralize(privateMost, 'guest')}` : `${roomNow} ${pluralize(roomNow, 'spot')} left`}
+                  · {privateGroup ? `up to ${privateMost} ${pluralize(privateMost, 'guest')}` : priceStops ? `up to ${groupLimit} ${pluralize(groupLimit, 'guest')}` : `${roomNow} ${pluralize(roomNow, 'spot')} left`}
                 </span>
               </div>
               <Button

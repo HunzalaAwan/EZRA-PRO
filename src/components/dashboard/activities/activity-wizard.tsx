@@ -249,9 +249,13 @@ export interface ActivityDraft {
   chargeBy: ChargeBy | null
   /** Shared, per group: the price, the guests it covers (0: everyone), each extra guest, a description. */
   groupPrice: GroupPrice
+  /** Shared, per group: extra guests allowed over what the price covers (0: none), saved in `groupPrice.maxGuests`. */
+  groupExtraGuests: number
   /** Private, per group: the guests every option covers (0: everyone), saved as `charter.includedGuests`. */
   charterIncluded: number
-  /** Private, per group: each guest over that, minor units; saved as `charter.extraGuestPrice`. */
+  /** Private, per group: extra guests allowed over that (0: none), saved as `charter.maxExtraGuests`. */
+  charterExtraGuests: number
+  /** Private, per group: each extra guest, minor units; saved as `charter.extraGuestPrice`. */
   charterExtra: number
   /** A private activity's tickets or options set aside by a per person ↔ per group switch. Never saved. */
   otherTiers: DraftTier[] | null
@@ -390,9 +394,9 @@ function kindOverride(draft: ActivityDraft) {
     }
   }
   if (kind === 'charter') {
-    // An opened activity's settings can still carry its saved extra-guest charge: the Pricing step's fields decide it.
-    const { minutes: _minutes, vesselLabel, crewLabel, includedGuests: _included, extraGuestPrice: _extra, ...rest } = settings.charter as DraftKindSettings['charter'] &
-      Pick<CharterConfig, 'includedGuests' | 'extraGuestPrice'>
+    // An opened activity's settings can still carry its saved extra guests: the Pricing step's fields decide them.
+    const { minutes: _minutes, vesselLabel, crewLabel, includedGuests: _included, extraGuestPrice: _extra, maxExtraGuests: _allowed, ...rest } = settings.charter as DraftKindSettings['charter'] &
+      Pick<CharterConfig, 'includedGuests' | 'extraGuestPrice' | 'maxExtraGuests'>
     return {
       charter: {
         ...rest,
@@ -400,7 +404,7 @@ function kindOverride(draft: ActivityDraft) {
         requestToBook: (draft.booking?.method ?? 'instant') === 'request',
         noticeHours: draft.noticeHours ?? 0,
         ...(rest.vessel === 'other' ? { vesselLabel: vesselLabel.trim() || 'Private group', crewLabel: crewLabel.trim() || 'Crew' } : {}),
-        // Per group: guests every option covers, and each one over. Per person, or not set: none.
+        // Per group: guests every option covers, extra guests allowed and each one's price. Per person, or not set: none.
         ...charterExtrasOf(draft),
       },
     }
@@ -823,8 +827,8 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
           : blank.rental,
         charter: charter
           ? (() => {
-              // The extra-guest charge opens on the Pricing step (charterIncluded / charterExtra, from pricingDraftOf).
-              const { durations, includedGuests: _included, extraGuestPrice: _extra, ...rest } = charter
+              // Extra guests open on the Pricing step (charterIncluded / charterExtraGuests / charterExtra, from pricingDraftOf).
+              const { durations, includedGuests: _included, extraGuestPrice: _extra, maxExtraGuests: _allowed, ...rest } = charter
               const fallback = Object.fromEntries(activity.priceTiers.map((tier) => [tier.id, activity.durationMinutes || 180]))
               return { ...blank.charter, ...rest, minutes: durations ? Object.fromEntries(durations.map((entry) => [entry.tierId, entry.minutes])) : fallback }
             })()

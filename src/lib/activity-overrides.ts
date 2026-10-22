@@ -286,9 +286,9 @@ export function upsertScheduleChange(activity: Activity, change: NonNullable<Act
 
 /**
  * The pricing fields of a saved edit over the seeded ones. A group price is the
- * price, the guests it covers (0: everyone), each guest over that and the
- * description; the most guests per booking is not set in the activity setup,
- * so the spots decide. Group discounts, a minimum charge and an activity's own
+ * price, the guests it covers (0: everyone), each guest over that, the most
+ * guests one booking can have (what it covers plus the extra guests allowed;
+ * 0: the spots decide) and the description. Group discounts, a minimum charge and an activity's own
  * price changes are price rules now (Pricing → Price rules), so an edit saved
  * before that no longer applies them: nothing the activity setup cannot show
  * moves a price.
@@ -306,14 +306,14 @@ function pricingFields(activity: Activity, override: ActivityOverride): Pick<Act
 
 const wholeMinor = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.round(value) : 0)
 
-/** A saved group price, cleaned: whole amounts, never below nothing, and the description only when there is one. */
+/** A saved group price, cleaned: whole amounts and counts, never below nothing, and the description only when there is one. */
 function savedGroupPrice(group: GroupPrice): GroupPrice {
   const note = typeof group.note === 'string' ? group.note.trim() : ''
   return {
     price: wholeMinor(group.price),
     includedGuests: Math.floor(wholeMinor(group.includedGuests)),
     extraGuest: wholeMinor(group.extraGuest),
-    maxGuests: 0,
+    maxGuests: Math.floor(wholeMinor(group.maxGuests)),
     ...(note ? { note } : {}),
   }
 }
@@ -348,7 +348,7 @@ function overrideBasePrice(activity: Activity, override: ActivityOverride): numb
  * Only the prices of a saved edit, for the storefront, checkout and the desk:
  * tier and extra prices by id (ones the edit removed stop selling), rental
  * rates, caps and charging (see `rentalPricingOf`), the private group's
- * guests covered and extra-guest price, the private and group prices, the
+ * guests covered, extra-guest price and extra guests allowed, the private and group prices, the
  * cap and payment. Tier, extra and length ids stay the seeded ones, so a
  * checkout link the server checks against the seeded activity always
  * resolves; tiers and extras the edit added are not sold.
@@ -384,10 +384,10 @@ export function applyPricingOverride<T extends Activity>(activity: T, override?:
       })
     : activity.addOns
   const rental = activity.rental && override.rental ? rentalPricingOf(activity, activity.rental, override.rental) : activity.rental
-  // A private group: the guests its price covers and each one over, as the edit saved them (none saved: none charged).
+  // A private group: the guests its price covers, each one over and how many more can come, as the edit saved them (none saved: none charged).
   const charter =
     activity.charter && override.charter
-      ? { ...activity.charter, includedGuests: override.charter.includedGuests, extraGuestPrice: override.charter.extraGuestPrice }
+      ? { ...activity.charter, includedGuests: override.charter.includedGuests, extraGuestPrice: override.charter.extraGuestPrice, maxExtraGuests: override.charter.maxExtraGuests }
       : activity.charter
   const merged: T = {
     ...activity,
