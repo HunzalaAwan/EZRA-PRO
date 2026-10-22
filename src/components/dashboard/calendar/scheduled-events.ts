@@ -8,6 +8,7 @@ import { applyActivityOverride, type ActivityOverride } from '@/lib/activity-ove
 import {
   defaultSpots,
   departureFromSlotId,
+  plusExtraSpots,
   expandDays,
   expandSchedules,
   isCancelledSlot,
@@ -20,6 +21,7 @@ import {
   type ScheduledSlot,
 } from '@/lib/activity-schedule'
 import { useActivityOverrides } from '@/hooks/use-pricing-override'
+import { slotExtraSpotsOf } from '@/lib/extra-spots'
 import { useBookingDefaults } from '@/hooks/use-booking-defaults'
 import type { CalendarEvent } from '@/lib/demo'
 import type { Activity, DepartureStatus } from '@/types'
@@ -51,18 +53,26 @@ const eventKey = (event: CalendarEvent, primary?: string) =>
   matchKey(event.departure.startsAt.slice(0, 10), event.departure.startsAt.slice(11, 16), event.departure.locationId ?? primary)
 const dayOf = (event: CalendarEvent) => event.departure.startsAt.slice(0, 10)
 
-/** A time slot that only exists on the saved schedule, with the gen_ id checkout and the time slot sheet understand. */
+/** A time slot that only exists on the saved schedule, with the gen_ id checkout and the time slot sheet understand. Its extra spots are on sale too. */
 function generatedEvent(base: Activity, edited: Activity, slot: ScheduledSlot, status: DepartureStatus): CalendarEvent | null {
   const built = departureFromSlotId(edited, slotId(edited.id, slot.dateKey, slot.time, slot.locationId))
   if (!built) return null
-  return { departure: { ...built, capacity: slot.capacity, status }, activity: base, seatsLeft: slot.capacity, fillRate: 0, revenue: 0, paid: 0 }
+  const capacity = plusExtraSpots(slot.capacity, slotExtraSpotsOf(edited))
+  return { departure: { ...built, capacity, status }, activity: base, seatsLeft: capacity, fillRate: 0, revenue: 0, paid: 0 }
 }
 
-/** A seeded time slot with the spots the schedule now gives it; what is sold stays sold. */
-function withSpots(event: CalendarEvent, slot: ScheduledSlot, spotsChanged: boolean): CalendarEvent {
+/**
+ * A seeded time slot with the spots the schedule now gives it (its own usual
+ * spots unless the edit set them) and the edit's extra spots on top; what is
+ * sold stays sold.
+ */
+function withSpots(event: CalendarEvent, slot: ScheduledSlot, spotsChanged: boolean, extraWas: number, extraNow: number): CalendarEvent {
   const { departure } = event
-  if (departure.capacity === slot.capacity || !(slot.capacitySet || spotsChanged) || departure.status === 'cancelled' || departure.status === 'completed') return event
-  const capacity = Math.max(slot.capacity, departure.booked)
+  if (departure.status === 'cancelled' || departure.status === 'completed') return event
+  const was = Math.max(0, departure.capacity - extraWas)
+  const spots = plusExtraSpots(was === slot.capacity || !(slot.capacitySet || spotsChanged) ? was : slot.capacity, extraNow)
+  if (spots === departure.capacity) return event
+  const capacity = Math.max(spots, departure.booked)
   const status: DepartureStatus =
     departure.status === 'sold_out' && capacity > departure.booked ? 'scheduled' : departure.status === 'scheduled' && departure.booked >= capacity ? 'sold_out' : departure.status
   return {
@@ -109,6 +119,8 @@ function rebuildActivity(
     if (!had || (had.departure.status === 'cancelled' && event.departure.status !== 'cancelled')) byKey.set(key, event)
   }
   const spotsChanged = defaultSpots(edited) !== defaultSpots(base)
+  const extraWas = slotExtraSpotsOf(base)
+  const extraNow = slotExtraSpotsOf(edited)
   const ahead = (slot: ScheduledSlot) => `${slot.dateKey}T${slot.time}:00` >= LOCAL_NOW
 
   const out: ScheduledCalendarEvent[] = []
@@ -118,7 +130,7 @@ function rebuildActivity(
     const match = byKey.get(key)
     if (match) {
       used.add(match.departure.id)
-      out.push(withSpots(match, slot, spotsChanged))
+      out.push(withSpots(match, slot, spotsChanged, extraWas, extraNow))
       continue
     }
     if (legacy.has(key) || !ahead(slot)) continue

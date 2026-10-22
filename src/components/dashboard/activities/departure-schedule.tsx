@@ -23,8 +23,10 @@ import { ACTIVITY_FORMAT_META } from '@/lib/activity-format'
 import { cn, formatDateLong, formatDuration, formatNumber, formatRelative, formatTime, pluralize, titleCase } from '@/lib/utils'
 import type { Activity, ActivityFormat, DepartureStatus, WeatherSnapshot } from '@/types'
 import { useScheduledRows } from '@/hooks/use-scheduled-days'
-import { upsertScheduleChange } from '@/lib/activity-overrides'
+import { useActivityOverrides } from '@/hooks/use-pricing-override'
+import { applyActivityOverride, upsertScheduleChange } from '@/lib/activity-overrides'
 import { slotId, type ScheduledRow } from '@/lib/activity-schedule'
+import { slotExtraSpotsOf } from '@/lib/extra-spots'
 
 import type { DepartureRowLite } from './activity-data'
 
@@ -85,6 +87,16 @@ export function DepartureSchedule({ rows: initial, crew, format, activityName, m
   const scheduleActivity = activity && (activity.kind ?? 'trip') !== 'package' ? activity : undefined
   // The seeded rows laid under the saved schedule; edits made here sit on top, by id.
   const scheduled = useScheduledRows(scheduleActivity, initial, { tenantSlug: tenantSlug ?? '', todayKey, days: 30, nowIso })
+  // Extra spots, as saved: each time slot's spots include them, sold once its usual spots are full.
+  const overrides = useActivityOverrides()
+  const extraSpots = scheduleActivity ? slotExtraSpotsOf(applyActivityOverride(scheduleActivity, overrides[scheduleActivity.id])) : 0
+  /** The extra spots inside a row's spots: the saved ones on a time slot the schedule has; the server's on one it keeps as it was; none on one added here. */
+  const extraIn = (row: DepartureRowLite) => {
+    const own = scheduled.find((entry) => entry.id === row.id)
+    if (!own) return 0
+    const asServed = own.outsideSchedule || own.status === 'cancelled' || own.status === 'completed'
+    return asServed ? (scheduleActivity ? slotExtraSpotsOf(scheduleActivity) : 0) : extraSpots
+  }
   const [edits, setEdits] = React.useState<Record<string, ScheduledRow>>({})
   const [added, setAdded] = React.useState<ScheduledRow[]>([])
   const rows = React.useMemo(() => {
@@ -154,11 +166,12 @@ export function DepartureSchedule({ rows: initial, crew, format, activityName, m
     const next = Math.max(row.booked, row.capacity + delta)
     if (next === row.capacity) return
     patch(row.id, (r) => ({ ...r, capacity: next, status: r.status === 'sold_out' && next > r.booked ? 'scheduled' : r.booked >= next && r.status === 'scheduled' ? 'sold_out' : r.status }))
-    // Saved as a spots change for this time slot, so the storefront sells the same number.
+    // Saved as a spots change for this time slot, so the storefront sells the same number. A change counts the usual
+    // spots: the extra spots go on top of them.
     if (scheduleActivity && scheduleActivity.kind !== 'charter') {
       const dateKey = dateKeyOf(row.startsAt)
       const time = row.startsAt.slice(11, 16)
-      upsertScheduleChange(scheduleActivity, { id: `spots_${dateKey}_${time}_${row.locationId ?? ''}`, dates: [dateKey], action: 'spots', times: [time], spots: next, ...(row.locationId ? { locationId: row.locationId } : {}) })
+      upsertScheduleChange(scheduleActivity, { id: `spots_${dateKey}_${time}_${row.locationId ?? ''}`, dates: [dateKey], action: 'spots', times: [time], spots: Math.max(0, next - extraIn(row)), ...(row.locationId ? { locationId: row.locationId } : {}) })
     }
   }
 
@@ -321,7 +334,7 @@ export function DepartureSchedule({ rows: initial, crew, format, activityName, m
         })
       )}
 
-      <RunSheet row={selected} crew={crew} open={open} noun={noun} minParticipants={minParticipants} now={now} todayKey={todayKey} onClose={() => setSelectedId(null)} onStatus={setStatus} onSeats={changeSeats} onCrew={toggleCrew} />
+      <RunSheet row={selected} crew={crew} open={open} noun={noun} minParticipants={minParticipants} extraSpots={selected ? extraIn(selected) : 0} now={now} todayKey={todayKey} onClose={() => setSelectedId(null)} onStatus={setStatus} onSeats={changeSeats} onCrew={toggleCrew} />
       <AddRunDialog open={adding} onOpenChange={setAdding} noun={noun} isOpenEntry={open} activityName={activityName} maxCapacity={maxCapacity} durationMinutes={durationMinutes} usualTimes={usualTimes} crew={crew} locations={locations} todayKey={todayKey} onAdd={add} />
     </div>
   )
@@ -339,7 +352,7 @@ function WeatherPill({ weather }: { weather: WeatherSnapshot }) {
   )
 }
 
-function RunSheet({ row: r, crew, open, noun, minParticipants, now, todayKey, onClose, onStatus, onSeats, onCrew }: { row: DepartureRowLite | null; crew: CrewOption[]; open: boolean; noun: string; minParticipants: number; now: Date; todayKey: string; onClose: () => void; onStatus: (row: DepartureRowLite, status: DepartureStatus) => void; onSeats: (row: DepartureRowLite, delta: number) => void; onCrew: (row: DepartureRowLite, member: CrewOption) => void }) {
+function RunSheet({ row: r, crew, open, noun, minParticipants, extraSpots = 0, now, todayKey, onClose, onStatus, onSeats, onCrew }: { row: DepartureRowLite | null; crew: CrewOption[]; open: boolean; noun: string; minParticipants: number; /** Extra spots in each time slot's spots. */ extraSpots?: number; now: Date; todayKey: string; onClose: () => void; onStatus: (row: DepartureRowLite, status: DepartureStatus) => void; onSeats: (row: DepartureRowLite, delta: number) => void; onCrew: (row: DepartureRowLite, member: CrewOption) => void }) {
   const upcoming = r ? new Date(r.startsAt) > now : false
   const live = r ? r.status !== 'cancelled' && r.status !== 'completed' : false
   const fill = r ? fillOf(r) : 0
@@ -366,7 +379,8 @@ function RunSheet({ row: r, crew, open, noun, minParticipants, now, todayKey, on
                     <p className="text-xs text-muted">Spots</p>
                     <p className="mt-0.5 font-display text-2xl leading-none font-semibold text-foreground tabular-nums">
                       {r.booked}
-                      <span className="text-base text-subtle"> / {r.capacity}</span>
+                      {/* "10 + 3": the usual spots and the extra ones. */}
+                      <span className="text-base text-subtle"> / {extraSpots > 0 && r.capacity > extraSpots ? `${r.capacity - extraSpots} + ${extraSpots}` : r.capacity}</span>
                     </p>
                     <p className="mt-1 text-xs text-subtle">
                       {r.held ? `${r.held} held in carts · ` : ''}

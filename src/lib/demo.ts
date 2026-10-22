@@ -20,6 +20,7 @@
 
 import { rentalItemsOf, rentalSpan } from '@/lib/rental-items'
 import { departureFromSlotId, isGeneratedSlotId, parseSlotId } from '@/lib/activity-schedule'
+import { slotExtraSpotsOf } from '@/lib/extra-spots'
 import type {
   Activity,
   ActivityFeedItem,
@@ -608,6 +609,8 @@ for (const [tenantId, specs] of SPEC_BY_TENANT) {
           // With items, each has its own shelf; what can go out is everything not out of service.
           const rentalItems = activity.kind === 'rental' && activity.rental?.items?.length ? rentalItemsOf(activity) : null
           if (activity.kind === 'rental') capacity = rentalItems ? rentalItems.reduce((sum, item) => sum + item.rentable, 0) : (activity.rental?.units ?? activity.maxCapacity)
+          // A shared time slot sells its extra spots on top of its spots.
+          capacity += slotExtraSpotsOf(activity)
 
           const demand =
             spec.popularity *

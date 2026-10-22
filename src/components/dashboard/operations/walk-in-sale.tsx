@@ -40,7 +40,8 @@ import { clamp, cn, formatCurrency, formatTime, pluralize } from '@/lib/utils'
 import { EMPTY_GUEST, WALK_IN_SOURCES, summarize, type WalkInGuest, type WalkInRecord } from '@/lib/walk-ins'
 import type { Activity, ActivityKind, CurrencyCode } from '@/types'
 import { applyActivityOverride, applyPricingOverride, type ActivityOverride } from '@/lib/activity-overrides'
-import { groupCoverOf, groupCoverWords, groupPriced, groupTierOf, guestLimitOf, priceBooking, privatePerPerson, unitPrice, unitPriceDetail, type PriceContext } from '@/lib/price-engine'
+import { extraSpotPrice, groupPriced, groupTierOf, guestLimitOf, priceBooking, privatePerPerson, unitPrice, unitPriceDetail, usualSpotsLeft, type PriceContext } from '@/lib/price-engine'
+import { usualSpotsOf } from '@/lib/extra-spots'
 import { placesOf } from '@/lib/places'
 import { useActivityOverrides } from '@/hooks/use-pricing-override'
 import { useBookingDefaults } from '@/hooks/use-booking-defaults'
@@ -310,8 +311,8 @@ function WalkInTill({
   // A private group: per group, one of its options and how many are coming; per person, a ticket each. Either way the time is theirs.
   const privateTickets = engineActivity ? privatePerPerson(engineActivity) : false
   const privateOptions = activity?.kind === 'charter' && !privateTickets
-  // Per group, never over what the price covers plus the extra guests allowed.
-  const privateMost = Math.max(1, Math.min(engineActivity?.charter?.maxGuests ?? engineActivity?.maxCapacity ?? 1, engineActivity ? guestLimitOf(engineActivity) : Number.POSITIVE_INFINITY))
+  // A private group: its most guests plus its extra spots.
+  const privateMost = engineActivity?.kind === 'charter' ? Math.max(1, guestLimitOf(engineActivity)) : Math.max(1, engineActivity?.maxCapacity ?? 1)
   const privateFewest = Math.max(1, engineActivity?.minParticipants ?? 1)
   // The rows the storefront sells: a row the saved edit took out is left off. Priced per person, a private group's rows
   // are tickets, with the names and counts saved in the editor (as on the storefront).
@@ -337,20 +338,20 @@ function WalkInTill({
   const ticketLines = groupTier ? [{ tierId: groupTier.id, qty: groupCount }] : tiers.map((tier) => ({ tierId: tier.id, qty: qty[tier.id] ?? 0 }))
   const priced =
     activity && engineActivity && priceCtx ? priceBooking({ ...priceCtx, activity: engineActivity, lines: ticketLines, party: privateOptions ? guests : undefined }) : undefined
-  /** Per group: the most guests at this time, by the spots left and what the price covers plus the extra guests allowed. */
+  /** Per group: the most guests at this time, by the spots left (extra spots included). */
   const groupMost = groupPrice && groupTier && engineActivity ? Math.max(1, Math.min(groupTier.maxQuantity, guestLimitOf(engineActivity), slot && groupSeats > 0 ? Math.floor(slot.seatsLeft / groupSeats) : Number.POSITIVE_INFINITY)) : 1
-  /** Per group: the group price and each extra guest at this time, and what it covers in words ("for up to 3 · up to 2 more at $90 each"). */
-  const groupDetail = groupPrice && engineActivity && priceCtx ? unitPriceDetail(engineActivity, 'group', { ...priceCtx, guests: priced?.guests }) : undefined
-  const groupCover = groupPrice && engineActivity ? groupCoverOf(engineActivity) : undefined
-  const groupCovered = engineActivity ? groupCoverWords(groupCover, groupDetail?.extraGuest ?? groupCover?.extraGuest ?? 0, currency, engineActivity.maxCapacity) : 'for the group'
-  /** A private group: how many it can be, and per group the guests an option covers and each one over at this time. */
+  /** A private group: how many it can be. */
   const privateRange = privateFewest > 1 ? `${privateFewest} to ${privateMost}` : `Up to ${privateMost}`
-  const privateCover = privateOptions && engineActivity ? groupCoverOf(engineActivity) : undefined
   const chosenOption = privateOptions ? tiers.find((tier) => (qty[tier.id] ?? 0) > 0) : undefined
-  const privateExtra =
-    privateCover && privateCover.extraGuest > 0 && Number.isFinite(privateCover.covers)
-      ? ((chosenOption && engineActivity && priceCtx ? unitPriceDetail(engineActivity, chosenOption.id, { ...priceCtx, guests: priced?.guests }).extraGuest : undefined) ?? privateCover.extraGuest)
-      : 0
+  /** Each extra spot at this time (0: none sold), and the usual spots (a private group's most guests). */
+  const extraEach = engineActivity && priceCtx ? extraSpotPrice(engineActivity, { ...priceCtx, guests: priced?.guests }, chosenOption?.id) : 0
+  const usualSpots = engineActivity ? usualSpotsOf(engineActivity) : 0
+  /** Per group: the group price at this time, and what it covers in words. */
+  const groupDetail = groupPrice && engineActivity && priceCtx ? unitPriceDetail(engineActivity, 'group', { ...priceCtx, guests: priced?.guests }) : undefined
+  const groupCovered = extraEach > 0 ? `for the group · extra spots ${formatCurrency(extraEach, currency)} each` : 'for the group'
+  /** A shared time slot whose usual spots are full: only extra spots are left. */
+  const extraOnly = (entry: WalkInActivity['slots'][number]) =>
+    extraEach > 0 && activity?.kind !== 'charter' && Boolean(engineActivity) && usualSpotsLeft(engineActivity!, { capacity: entry.capacity, booked: entry.booked }) <= 0
   /** A ticket's price at this time: the engine's, or the plain price with the business rules. */
   const tierUnit = (tier: WalkInActivity['tiers'][number]) =>
     engineActivity && priceCtx ? unitPrice(engineActivity, tier.id, { ...priceCtx, guests: priced?.guests }) : Math.round(tier.price * rules.multiplier)
@@ -523,7 +524,10 @@ function WalkInTill({
                     className={cn('rounded-xl border px-3 py-2 text-left', slot?.id === entry.id ? 'border-primary bg-primary-soft/30' : 'border-line hover:border-line-strong')}
                   >
                     <span className="block text-sm font-semibold tabular-nums">{formatTime(entry.startsAt)}</span>
-                    <span className="block text-xs text-subtle">{entry.startsAt.slice(0, 10) === todayKey ? 'Today' : 'Tomorrow'} · {entry.seatsLeft} left</span>
+                    <span className="block text-xs text-subtle">
+                      {entry.startsAt.slice(0, 10) === todayKey ? 'Today' : 'Tomorrow'} · {entry.seatsLeft} left
+                      {extraOnly(entry) ? ` · extra spots ${formatCurrency(extraEach, currency)} each` : ''}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -579,7 +583,7 @@ function WalkInTill({
                     <span className="block text-sm font-medium">Guests in the group</span>
                     <span className="block text-xs text-subtle">
                       {privateRange};{' '}
-                      {privateExtra > 0 && privateCover ? `the price covers ${privateCover.covers}, then ${formatCurrency(privateExtra, currency)} each` : 'the price is for the whole group'}
+                      {extraEach > 0 ? `the price is for ${usualSpots}, then ${formatCurrency(extraEach, currency)} each` : 'the price is for the whole group'}
                     </span>
                   </span>
                   <span className="flex items-center gap-2">
@@ -589,7 +593,9 @@ function WalkInTill({
                   </span>
                 </div>
               ) : privateTickets ? (
-                <p className="mt-1.5 text-xs text-subtle">{privateRange} guests. The time is just for this group.</p>
+                <p className="mt-1.5 text-xs text-subtle">
+                  {privateRange} guests.{extraEach > 0 ? ` Over ${usualSpots}, ${formatCurrency(extraEach, currency)} each.` : ''} The time is just for this group.
+                </p>
               ) : null}
               {overSeats ? (
                 <p className="mt-1.5 text-xs font-medium text-danger">

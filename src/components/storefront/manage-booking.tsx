@@ -44,7 +44,7 @@ import { useBookingLedger } from '@/hooks/use-booking-ledger'
 import { useScheduledDays } from '@/hooks/use-scheduled-days'
 import { usePricingOverride } from '@/hooks/use-pricing-override'
 import { usePricing } from '@/hooks/use-pricing'
-import { groupCoverOf, groupPriced, guestLimitOf, guestsOver, unitPrice, unitPriceDetail } from '@/lib/price-engine'
+import { extraSpotPrice, groupPriced, guestLimitOf, privatePerPerson, unitPrice, usualSpotsLeft, type PriceContext } from '@/lib/price-engine'
 import { changeBooking, withLedger } from '@/lib/booking-ledger'
 import { changesSummary, hoursLabel, refundFor, splitPayment } from '@/lib/booking-policy'
 import type { Activity, ActivityKind, BookingStatus, CancellationPolicy, ChangeRules, CurrencyCode, GuestQuestion, PaymentTerms, WaiverTemplate } from '@/types'
@@ -156,6 +156,39 @@ export function ManageBooking(
 
 type InnerProps = Exclude<Parameters<typeof ManageBooking>[0], { notFoundReference: string }>
 
+/**
+ * Adding guests to a booking, as the manage page counts it: what growing the
+ * party costs (each new guest a ticket, nothing per group, or the extra-spot
+ * price once in an extra spot) and how many more can come (a private group up
+ * to its most guests plus its extra spots; shared, the spots left, extra spots
+ * included). `ctx` is the booking's time slot: its spots (extra spots
+ * included) and what is booked on it, this booking's guests too.
+ */
+export function addGuestsPlan(priced: Activity, ctx: PriceContext, { partySize, seatsLeft, pricePerGuest: fallback }: { partySize: number; seatsLeft: number; pricePerGuest: number }) {
+  const leadTier = priced.priceTiers[0]
+  const privateGroup = (priced.kind ?? 'trip') === 'charter'
+  /** Per group (shared, or a private group's options): the price is for the whole group, so a guest in a usual spot adds nothing. */
+  const perGroup = groupPriced(priced) || (privateGroup && !privatePerPerson(priced))
+  /** Each extra spot at this time slot's price (0: none sold). */
+  const extraEach = extraSpotPrice(priced, ctx, privateGroup ? leadTier?.id : undefined)
+  const pricePerGuest = perGroup ? 0 : leadTier ? unitPrice(priced, leadTier.id, ctx) : fallback
+  /** The usual spots this booking's guests can be in: a private group's most guests; shared, the time slot's usual spots less everyone else's. */
+  const usual = privateGroup ? usualSpotsLeft(priced) : usualSpotsLeft(priced, { capacity: ctx.capacity, booked: Math.max(0, (ctx.booked ?? partySize) - partySize) })
+  /** What growing the party from one size to another costs. */
+  const cost = (from: number, to: number) => {
+    let total = 0
+    for (let guest = from + 1; guest <= to; guest++) total += extraEach > 0 && guest > usual ? extraEach : pricePerGuest
+    return total
+  }
+  // A private group has the time to itself: it can grow to its most guests plus its extra spots. Shared, the spots left decide.
+  const limit = guestLimitOf(priced)
+  const privateMost = Math.max(1, limit)
+  const room = privateGroup ? Math.max(0, privateMost - partySize) : Math.max(0, Math.min(seatsLeft, limit - partySize))
+  /** The price, not the spots left, is what stops the group. */
+  const priceStops = privateGroup || limit - partySize <= seatsLeft
+  return { privateGroup, perGroup, extraEach, pricePerGuest, usual, cost, limit, privateMost, room, priceStops }
+}
+
 function ManageBookingInner({ tenant, booking, guest, activity: given, departure, source, waiver, days: rawDays, thread, nowIso }: InnerProps) {
   // Its own cancellation and payment terms, or the business defaults it follows.
   const { defaults: bookingDefaults } = useBookingDefaults(tenant.slug)
@@ -180,7 +213,7 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
   const currentDepartureId = change?.movedTo?.departureId ?? departure.id
   const startsAt = change?.movedTo?.startsAt ?? departure.startsAt
   // Added guests pay the first ticket's price on the time slot the booking is on: saved prices, price changes and the business's rules.
-  // Per group (shared or private) the group price covers so many guests (or everyone); each one over pays the extra-guest price.
+  // Per group (shared or private) the group price covers the guests in the usual spots. Guests in extra spots pay the extra-spot price.
   const priced = usePricingOverride(source)
   const { rules: priceRules } = usePricing(tenant.slug)
   const onSlot = days.flatMap((day) => day.slots).find((slot) => slot.departureId === currentDepartureId)
@@ -193,15 +226,11 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
     priceMultiplier: onSlot?.priceMultiplier ?? departure.priceMultiplier ?? 1,
     businessRules: priceRules,
   }
-  const cover = groupCoverOf(priced)
-  const inGroupPrice = Boolean(cover)
-  /** Per group: each guest over what the price covers, at this time slot's price. */
-  const extraEach = cover
-    ? ((groupPriced(priced) ? unitPriceDetail(priced, 'group', priceCtx).extraGuest : leadTier ? unitPriceDetail(priced, leadTier.id, priceCtx).extraGuest : undefined) ?? cover.extraGuest)
-    : 0
-  const pricePerGuest = inGroupPrice ? 0 : leadTier ? unitPrice(priced, leadTier.id, priceCtx) : given.pricePerGuest
-  /** What growing the party from one size to another costs: a ticket each, or per group the guests it takes over what the price covers. */
-  const addCost = (from: number, to: number) => (cover ? extraEach * Math.max(0, guestsOver(cover, to) - guestsOver(cover, from)) : Math.max(0, to - from) * pricePerGuest)
+  const partySize = change?.party ?? booking.partySize
+  // The spots left as the strip has them (the saved schedule, extra spots included); a time slot off the schedule, as the server has it.
+  const seatsLeftNow = onSlot && !onSlot.outsideSchedule ? onSlot.seatsLeft : Math.max(0, departure.seatsLeft - (ledger.delta[currentDepartureId] ?? 0))
+  const plan = addGuestsPlan(priced, priceCtx, { partySize, seatsLeft: seatsLeftNow, pricePerGuest: given.pricePerGuest })
+  const { privateGroup, perGroup, extraEach, pricePerGuest, usual: usualForBooking, cost: addCost, limit: groupLimit, privateMost, room: roomNow, priceStops } = plan
   const hoursToGo = (new Date(startsAt).getTime() - now.getTime()) / 3_600_000
   const past = hoursToGo < 0
   const cancelled = Boolean(change?.cancelled) || booking.status === 'cancelled' || booking.status === 'refunded'
@@ -209,17 +238,7 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
   const moves = change?.moves ?? 0
   const canMove = rules.reschedule && hoursToGo >= rules.rescheduleHours && (rules.maxReschedules === 0 || moves < rules.maxReschedules)
   const freeWindow = activity.policy.freeCancellationHours > 0 && hoursToGo >= activity.policy.freeCancellationHours
-  const partySize = change?.party ?? booking.partySize
   const extra = addCost(booking.partySize, partySize)
-  const seatsLeftNow = Math.max(0, departure.seatsLeft - (ledger.delta[currentDepartureId] ?? 0))
-  // A private group has the time to itself: it can grow to its most guests. Per group, the group stops at what the price
-  // covers plus the extra guests allowed.
-  const privateGroup = (priced.kind ?? 'trip') === 'charter'
-  const groupLimit = guestLimitOf(priced)
-  const privateMost = Math.max(1, Math.min(priced.charter?.maxGuests ?? priced.maxCapacity, groupLimit))
-  const roomNow = privateGroup ? Math.max(0, privateMost - partySize) : Math.max(0, Math.min(seatsLeftNow, groupLimit - partySize))
-  /** The price, not the spots left, is what stops the group. */
-  const priceStops = privateGroup || groupLimit - partySize <= seatsLeftNow
   const deposit = activity.payment.collect === 'deposit' ? splitPayment(activity.payment, booking.total, booking.partySize).now : 0
   const balance = state.balancePaid ? 0 : Math.max(0, booking.total + extra - booking.amountPaid)
   const unsigned = state.waiversSigned ? 0 : booking.participants.filter((participant) => !participant.waiverSigned).length
@@ -514,11 +533,14 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
                 <span className="w-6 text-center text-base font-semibold tabular-nums">{adding}</span>
                 <IconButton aria-label="More guests" size="sm" variant="outline" disabled={adding >= roomNow} onClick={() => setAdding((n) => n + 1)}><Plus aria-hidden="true" /></IconButton>
                 <span className="text-sm text-muted">
-                  {!inGroupPrice
-                    ? `more at ${formatCurrency(pricePerGuest, currency)} each`
-                    : addingCost > 0
-                      ? `more at ${formatCurrency(extraEach, currency)} each over ${cover?.covers}`
-                      : 'more, in the group price'}{' '}
+                  {(() => {
+                    // Guests past the usual spots are in extra spots, at their own price.
+                    const inExtra = extraEach > 0 ? Math.max(0, partySize + adding - Math.max(partySize, usualForBooking)) : 0
+                    const extraWords = `in extra spots at ${formatCurrency(extraEach, currency)} each`
+                    if (inExtra === adding) return `more ${extraWords}`
+                    const usual = perGroup ? 'more, in the group price' : `more at ${formatCurrency(pricePerGuest, currency)} each`
+                    return inExtra > 0 ? `${usual} · ${inExtra} ${extraWords}` : usual
+                  })()}{' '}
                   · {privateGroup ? `up to ${privateMost} ${pluralize(privateMost, 'guest')}` : priceStops ? `up to ${groupLimit} ${pluralize(groupLimit, 'guest')}` : `${roomNow} ${pluralize(roomNow, 'spot')} left`}
                 </span>
               </div>

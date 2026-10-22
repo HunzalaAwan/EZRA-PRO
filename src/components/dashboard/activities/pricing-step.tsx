@@ -3,8 +3,8 @@
 import * as React from 'react'
 import { CircleAlert, Clock, KeyRound, User, Users, type LucideIcon } from 'lucide-react'
 
-import type { ActivityKind, CharterConfig, ChargeBy, CurrencyCode, GroupDiscount, GroupPrice, PaymentTerms, PriceChange, PriceTier, PrivateOption } from '@/types'
-import { defaultChargeBy, fromPrice, groupCoverOf, groupCoverWords, groupTierOf, type PricedActivity } from '@/lib/price-engine'
+import type { ActivityKind, ChargeBy, CurrencyCode, ExtraSpots, GroupDiscount, GroupPrice, PaymentTerms, PriceChange, PriceTier, PrivateOption } from '@/types'
+import { defaultChargeBy, fromPrice, groupTierOf, type PricedActivity } from '@/lib/price-engine'
 import { cn, currencySymbol, formatCurrency, pluralize } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
@@ -12,7 +12,7 @@ import { Switch } from '@/components/ui/switch'
 import { AddonEditor, type DraftAddOn } from './addon-editor'
 import { DINING_ADDON_PRESETS, DINING_TIER_PRESETS, DiningBookingFields, type DiningDraft } from './dining-fields'
 import { RentalChargingFields, RentalRatesEditor, draftItemOf, normalizeKindSettings, type DraftKindSettings } from './kind-fields'
-import { ExtraGuestFields, KIND_PRICING, PRIVATE_PER_PERSON_PRICING, PrivateBookingFields, canBookPrivately, extraGuestProblems, type ExtraGuests } from './kind-pricing-extras'
+import { KIND_PRICING, PRIVATE_PER_PERSON_PRICING, PrivateBookingFields, canBookPrivately } from './kind-pricing-extras'
 import { PaymentTermsEditor } from './payment-terms-editor'
 import { GuestPricePreview, KIND_TIER_PRESETS, MoneyInput, PricingTierEditor, TIER_PRESETS, blankTier, leadTierId, tierOfDraft, type DraftTier } from './pricing-tier-editor'
 
@@ -21,14 +21,13 @@ import { GuestPricePreview, KIND_TIER_PRESETS, MoneyInput, PricingTierEditor, TI
    private booking, a price cap and tips, extras, and how guests pay.
    Shared and private activities both charge per person or per group:
      - shared, per person: a price for each guest
-     - shared, per group: one price for the group, what it covers, how many
-       extra guests can come and what each pays (`groupPrice`; the most guests
-       is what it covers plus the extra guests)
+     - shared, per group: one price for the group (`groupPrice`)
      - private, per person: a price for each guest; the group still has the
        time slot to itself
-     - private, per group: options, each one price for the whole group, with
-       what they cover, how many extra guests can come and what each pays
-       (`charter.includedGuests` / `maxExtraGuests` / `extraGuestPrice`)
+     - private, per group: options, each one price for the whole group
+   The usual spots and the extra spots (each at its own price) are set in
+   Basics (`extraSpots`): per group, the price covers the guests in the usual
+   spots; each guest in an extra spot adds the extra-spot price.
    Seasons, busy days, early bookings and bigger groups are price rules,
    set once on Pricing → Price rules and given to the activities they fit.
    ========================================================================== */
@@ -41,6 +40,8 @@ export interface PricingDraft {
   kindSettings: DraftKindSettings
   /** Spots per time slot; for a private activity, the most guests. */
   maxCapacity: number
+  /** Extra spots, set in Basics: sold once the usual spots are full, each at its own price. Count 0: none. */
+  extraSpots?: ExtraSpots
   privateOption: PrivateOption
   priceCap: number
   tips: boolean
@@ -48,16 +49,8 @@ export interface PricingDraft {
   dining: DiningDraft
   /** null or absent: the kind's own way (a private activity: per group). */
   chargeBy?: ChargeBy | null
-  /** Shared, per group: the price, the guests it covers (0: everyone) and each extra guest. Its `maxGuests` is not read: a save writes it. */
+  /** Shared, per group: the price and a description. */
   groupPrice?: GroupPrice
-  /** Shared, per group: extra guests allowed over what the price covers. 0: none. Saved in `groupPrice.maxGuests`. */
-  groupExtraGuests?: number
-  /** Private, per group: the guests every option covers. 0: everyone. */
-  charterIncluded?: number
-  /** Private, per group: extra guests allowed over that. 0: none. */
-  charterExtraGuests?: number
-  /** Private, per group: each extra guest, minor units. */
-  charterExtra?: number
   /**
    * A private activity's rows for its other way of charging (the tickets while
    * it is per group, the options while it is per person), set aside by a
@@ -79,25 +72,17 @@ export interface PricingDraft {
 interface PricingDraftFields {
   chargeBy: ChargeBy | null
   groupPrice: GroupPrice
-  groupExtraGuests: number
-  charterIncluded: number
-  charterExtraGuests: number
-  charterExtra: number
   otherTiers: DraftTier[] | null
   groupDiscounts: GroupDiscount[]
   minimumCharge: number
   priceChanges: PriceChange[]
 }
 
-/** A new draft's pricing: the kind's own way of charging, and a group price that covers everyone. */
+/** A new draft's pricing: the kind's own way of charging, and no group price yet. */
 export function defaultPricingDraft(): PricingDraftFields {
   return {
     chargeBy: null,
-    groupPrice: { price: 0, includedGuests: 0, extraGuest: 0, maxGuests: 0 },
-    groupExtraGuests: 0,
-    charterIncluded: 0,
-    charterExtraGuests: 0,
-    charterExtra: 0,
+    groupPrice: { price: 0 },
     otherTiers: null,
     groupDiscounts: [],
     minimumCharge: 0,
@@ -106,43 +91,24 @@ export function defaultPricingDraft(): PricingDraftFields {
 }
 
 /**
- * The pricing fields of an activity, as the draft holds them. Extra guests
- * saved before they had a limit open as what guests could book then: as many
- * as the spots (or most guests) leave when each one pays; with no price for
- * them, a shared group stops at what it covers and a private one's price
- * covers everyone. Extra guests allowed with no price for them (an older
- * save) come free, so they open as guests the price covers.
+ * The pricing fields of an activity, as the draft holds them. A save from
+ * before extra spots is opened with its old per-group fields read as spots
+ * (`withExtraSpots`, in `draftFromActivity`), so only the price and the
+ * description are read here.
  */
 export function pricingDraftOf(activity: {
   chargeBy?: ChargeBy
   groupPrice?: GroupPrice
-  charter?: Pick<CharterConfig, 'includedGuests' | 'extraGuestPrice' | 'maxExtraGuests' | 'maxGuests'>
-  maxCapacity?: number
   groupDiscounts?: GroupDiscount[]
   minimumCharge?: number
   priceChanges?: PriceChange[]
 }): PricingDraftFields {
   const blank = defaultPricingDraft()
-  const spots = Math.max(0, activity.maxCapacity ?? 0)
-  const free = (extras: ExtraGuests, most: number): ExtraGuests =>
-    extras.allowed > 0 && extras.extra <= 0 ? { included: Math.min(extras.included + extras.allowed, most > 0 ? most : Number.POSITIVE_INFINITY), allowed: 0, extra: 0 } : extras
   const saved = activity.groupPrice
-  const group = saved
-    ? free(extraGuestsOf({ included: saved.includedGuests, allowed: saved.maxGuests > 0 ? saved.maxGuests - saved.includedGuests : undefined, extra: saved.extraGuest }, spots), spots)
-    : { included: 0, allowed: 0, extra: 0 }
   const note = saved?.note?.trim()
-  const charter = activity.charter
-  // A private group's extra guests used to come free up to its most guests when they had no price: the price covered everyone.
-  const freeBefore = charter?.maxExtraGuests === undefined && !((charter?.extraGuestPrice ?? 0) > 0)
-  const most = charter?.maxGuests || spots
-  const extras = free(extraGuestsOf({ included: freeBefore ? 0 : (charter?.includedGuests ?? 0), allowed: charter?.maxExtraGuests, extra: charter?.extraGuestPrice ?? 0 }, most), most)
   return {
     chargeBy: activity.chargeBy ?? null,
-    groupPrice: saved ? { price: Math.max(0, Math.round(saved.price || 0)), includedGuests: group.included, extraGuest: group.extra, maxGuests: 0, ...(note ? { note } : {}) } : blank.groupPrice,
-    groupExtraGuests: group.allowed,
-    charterIncluded: extras.included,
-    charterExtraGuests: extras.allowed,
-    charterExtra: extras.extra,
+    groupPrice: saved ? { price: Math.max(0, Math.round(saved.price || 0)), ...(note ? { note } : {}) } : blank.groupPrice,
     otherTiers: null,
     groupDiscounts: (activity.groupDiscounts ?? []).map((rung) => ({ ...rung })),
     minimumCharge: activity.minimumCharge ?? 0,
@@ -209,78 +175,17 @@ export function savedTiersOf(draft: Pick<PricingDraft, 'kind' | 'chargeBy' | 'ki
 /** The longest group price description. */
 const GROUP_NOTE_MAX = 80
 
-/**
- * "Covers up to", "Extra guests allowed" and "Price per extra guest" as one:
- * whole numbers; no number covered (everyone) has no extra guests, and no
- * extra guests have no price. `allowed` undefined: saved before extra guests
- * had a limit, so as many as `spots` leave when each one pays, else none.
- */
-function extraGuestsOf({ included, allowed, extra }: { included: number; allowed: number | undefined; extra: number }, spots: number): ExtraGuests {
-  const covers = Math.max(0, Math.floor(included || 0))
-  if (covers <= 0) return { included: 0, allowed: 0, extra: 0 }
-  const each = Math.max(0, Math.round(extra || 0))
-  const more = allowed === undefined ? (each > 0 ? Math.max(0, Math.floor(spots || 0) - covers) : 0) : Math.max(0, Math.floor(allowed || 0))
-  return { included: covers, allowed: more, extra: more > 0 ? each : 0 }
-}
-
-/** A draft's extra guests, as the fields edit them: shared from the group price, private from the charter fields. */
-function draftExtrasOf(draft: Pick<PricingDraft, 'groupPrice' | 'groupExtraGuests' | 'charterIncluded' | 'charterExtraGuests' | 'charterExtra'>, which: 'group' | 'charter'): ExtraGuests {
-  return which === 'group'
-    ? { included: draft.groupPrice?.includedGuests ?? 0, allowed: draft.groupExtraGuests ?? 0, extra: draft.groupPrice?.extraGuest ?? 0 }
-    : { included: draft.charterIncluded ?? 0, allowed: draft.charterExtraGuests ?? 0, extra: draft.charterExtra ?? 0 }
-}
-
-/** The most guests a draft's group can be: a private group's most guests, else the spots. */
-const draftGuestLimit = (draft: Pick<PricingDraft, 'kind' | 'kindSettings' | 'maxCapacity'>) =>
-  (draft.kind ?? 'trip') === 'charter' ? normalizeKindSettings(draft.kindSettings).charter.maxGuests : draft.maxCapacity
-
-/**
- * Private, per group: what a save writes on `charter`: the guests every
- * option covers, the extra guests allowed and each one's price. Nothing when
- * the price covers everyone, or the activity is per person.
- */
-export function charterExtrasOf(
-  draft: Pick<PricingDraft, 'kind' | 'chargeBy' | 'kindSettings' | 'charterIncluded' | 'charterExtraGuests' | 'charterExtra'>,
-): Pick<CharterConfig, 'includedGuests' | 'extraGuestPrice' | 'maxExtraGuests'> {
-  if (!isPrivateGroupPriced(draft)) return {}
-  const { included, allowed, extra } = extraGuestsOf({ included: draft.charterIncluded ?? 0, allowed: draft.charterExtraGuests ?? 0, extra: draft.charterExtra ?? 0 }, 0)
-  if (included <= 0) return {}
-  return { includedGuests: included, maxExtraGuests: allowed, ...(allowed > 0 ? { extraGuestPrice: extra } : {}) }
-}
-
-/** The group price as it is edited: whole numbers, the description kept as typed. The most guests is written on save. */
+/** The group price as it is edited: a whole amount, the description kept as typed. */
 function cleanGroupPrice(group: GroupPrice | undefined): GroupPrice {
-  return {
-    price: Math.max(0, Math.round(group?.price ?? 0)),
-    includedGuests: Math.max(0, Math.floor(group?.includedGuests ?? 0)),
-    extraGuest: Math.max(0, Math.round(group?.extraGuest ?? 0)),
-    maxGuests: 0,
-    ...(group?.note ? { note: group.note } : {}),
-  }
+  return { price: Math.max(0, Math.round(group?.price ?? 0)), ...(group?.note ? { note: group.note } : {}) }
 }
 
-/**
- * The group price as saved: the guests it covers, the most guests one booking
- * can have (what it covers plus `extraGuests`; 0 when it covers everyone) and
- * an extra-guest price only when extra guests can come; the description
- * trimmed and left off when empty.
- */
-function savedGroupPrice(group: GroupPrice | undefined, extraGuests: number): GroupPrice {
+/** The group price as saved: the price, and the description trimmed and left off when empty. */
+function savedGroupPrice(group: GroupPrice | undefined): GroupPrice {
   const { note, ...rest } = cleanGroupPrice(group)
-  const { included, allowed, extra } = extraGuestsOf({ included: rest.includedGuests, allowed: extraGuests, extra: rest.extraGuest }, 0)
   const trimmed = (note ?? '').trim().slice(0, GROUP_NOTE_MAX)
-  return { ...rest, includedGuests: included, extraGuest: extra, maxGuests: included > 0 ? included + allowed : 0, ...(trimmed ? { note: trimmed } : {}) }
+  return { ...rest, ...(trimmed ? { note: trimmed } : {}) }
 }
-
-/** The error keys of the extra-guest fields, shared and private. */
-const EXTRA_KEYS: Record<'group' | 'charter', Record<keyof ExtraGuests, string>> = {
-  group: { included: 'groupPrice.includedGuests', allowed: 'groupPrice.maxGuests', extra: 'groupPrice.extraGuest' },
-  charter: { included: 'charterIncluded', allowed: 'charterExtraGuests', extra: 'charterExtra' },
-}
-
-/** The step's errors for one set of extra-guest fields, by field. */
-const extraErrorsOf = (errors: Record<string, string>, which: 'group' | 'charter'): Partial<Record<keyof ExtraGuests, string>> =>
-  Object.fromEntries(Object.entries(EXTRA_KEYS[which]).flatMap(([field, key]) => (errors[key] ? [[field, errors[key]]] : [])))
 
 /** What the Pricing step must have before moving on. Keys match the fields that show them. */
 export function pricingErrors(draft: PricingDraft, dining = false): Record<string, string> {
@@ -290,12 +195,6 @@ export function pricingErrors(draft: PricingDraft, dining = false): Record<strin
   const grouped = isGroupPriced(draft)
   const options = isPrivateGroupPriced(draft)
   if (grouped && (draft.groupPrice?.price ?? 0) <= 0) errors['groupPrice.price'] = 'Set a price for the group'
-  // What the price covers and the extra guests fit the spots (a private group: its most guests); extra guests have a price.
-  if (grouped || options) {
-    const which = grouped ? 'group' : 'charter'
-    const problems = extraGuestProblems(draftExtrasOf(draft, which), draftGuestLimit(draft))
-    for (const field of Object.keys(problems) as (keyof ExtraGuests)[]) errors[EXTRA_KEYS[which][field]] = problems[field]!
-  }
   // Ages the wrong way round would save as one age ("12–12"). Only prices per guest have ages; per group they are hidden, so not checked.
   if (!grouped && !options && kind !== 'rental') {
     draft.tiers.forEach((tier, index) => {
@@ -308,8 +207,8 @@ export function pricingErrors(draft: PricingDraft, dining = false): Record<strin
 /**
  * What a save writes for pricing. Group discounts, a minimum charge and the
  * activity's own price changes are no longer set here (price rules do that
- * job), so they are saved cleared and nothing unseen moves a price. A private
- * activity's extra-guest charge is saved on `charter` (see `charterExtrasOf`).
+ * job), so they are saved cleared and nothing unseen moves a price. Extra
+ * spots are saved with Basics (`extraSpots`).
  */
 export function pricingFieldsOfDraft(draft: PricingDraft, dining = false): {
   chargeBy: ChargeBy | null
@@ -322,7 +221,7 @@ export function pricingFieldsOfDraft(draft: PricingDraft, dining = false): {
   const chargeBy = dining ? 'person' : effectiveChargeBy(draft)
   return {
     chargeBy: dining || chargeBy === defaultChargeBy(kind) ? null : chargeBy,
-    groupPrice: isGroupPriced(draft, dining) ? savedGroupPrice(draft.groupPrice, draft.groupExtraGuests ?? 0) : null,
+    groupPrice: isGroupPriced(draft, dining) ? savedGroupPrice(draft.groupPrice) : null,
     groupDiscounts: [],
     minimumCharge: 0,
     priceChanges: [],
@@ -354,8 +253,8 @@ const wholeUnits = (minor: number) => Math.max(0, Math.round(minor / 100) * 100)
 /**
  * The pricing a draft moves to when it switches between shared and private,
  * or per person and per group. Tickets stay tickets. A shared group price
- * becomes a private activity's one option, with its extra-guest charge, and
- * back. Between a private activity's tickets and options, the rows it leaves
+ * becomes a private activity's one option, and back (the extra spots stay as
+ * set in Basics). Between a private activity's tickets and options, the rows it leaves
  * are set aside (`otherTiers`) so switching back brings them back; with none
  * set aside, a first row is priced from the other way. A starter row follows
  * the new way's name. `chargeBy` is passed through as given: null keeps the
@@ -385,14 +284,10 @@ export function repriceDraft(
 
   if (!wasOptions && toOptions) {
     if (isGroupPriced(draft)) {
-      // The shared group price is the one option, and its extra guests carry over.
-      const extras = draftExtrasOf(draft, 'group')
-      const group = savedGroupPrice(draft.groupPrice, extras.allowed)
+      // The shared group price is the one option.
+      const group = savedGroupPrice(draft.groupPrice)
       const unchanged = setAside && cheapest(setAside)?.price === group.price
       changes.tiers = unchanged ? setAside : [{ ...blankTier(STARTER_LABEL.charter, group.price, taken), description: group.note ?? '' }]
-      changes.charterIncluded = group.includedGuests
-      changes.charterExtraGuests = group.includedGuests > 0 ? group.maxGuests - group.includedGuests : 0
-      changes.charterExtra = group.extraGuest
     } else {
       const lead = draft.tiers.find((tier) => tier.id === leadTierId(draft.tiers, 'trip'))
       changes.tiers = setAside ?? [inPlace(blankTier(STARTER_LABEL.charter, wholeUnits((lead?.price ?? 0) * guests), taken))]
@@ -406,11 +301,9 @@ export function repriceDraft(
     changes.tiers = named(setAside ?? [inPlace({ ...blankTier(STARTER_LABEL[ticketsAs], wholeUnits((lead?.price ?? 0) / guests), taken), minQuantity: to.kind === 'rental' ? 0 : 1 })], ticketsAs)
     changes.otherTiers = draft.tiers
     if (to.kind !== 'charter' && method === 'group') {
-      // A shared group price: the lowest option, with the same extra guests.
+      // A shared group price: the lowest option.
       const note = lead?.description.trim()
-      const extras = extraGuestsOf(draftExtrasOf(draft, 'charter'), 0)
-      changes.groupPrice = cleanGroupPrice({ price: lead?.price ?? 0, includedGuests: extras.included, extraGuest: extras.extra, maxGuests: 0, ...(note ? { note } : {}) })
-      changes.groupExtraGuests = extras.allowed
+      changes.groupPrice = cleanGroupPrice({ price: lead?.price ?? 0, ...(note ? { note } : {}) })
     }
     return changes
   }
@@ -441,6 +334,8 @@ export function pricedFromDraft(draft: PricingDraft, options: { currency: Curren
     currency: options.currency,
     priceTiers,
     chargeBy,
+    maxCapacity: draft.maxCapacity,
+    ...(dining || !draft.extraSpots ? {} : { extraSpots: { ...draft.extraSpots } }),
     groupPrice: saved.groupPrice ?? undefined,
     groupDiscounts: [],
     priceChanges: [],
@@ -448,8 +343,8 @@ export function pricedFromDraft(draft: PricingDraft, options: { currency: Curren
     privateOption: canBookPrivately(kind) && chargeBy === 'person' && draft.privateOption?.enabled ? draft.privateOption : undefined,
   }
   if (kind === 'charter') {
-    // The time slot is the group's, per person or per group; per group the options can charge for extra guests.
-    activity.charter = { maxGuests: normalizeKindSettings(draft.kindSettings).charter.maxGuests, requestToBook: false, noticeHours: 0, ...charterExtrasOf(draft) }
+    // The time slot is the group's, per person or per group, up to its most guests and its extra spots.
+    activity.charter = { maxGuests: normalizeKindSettings(draft.kindSettings).charter.maxGuests, requestToBook: false, noticeHours: 0 }
   }
   if (kind === 'rental') {
     const r = normalizeKindSettings(draft.kindSettings).rental
@@ -486,27 +381,21 @@ export function draftFromPrice(draft: PricingDraft, currency: CurrencyCode, dini
 
 /**
  * One line for the Review step: "3 prices from $89 · 1 extra",
- * "Per group, $600 for up to 3 · up to 2 more at $90 each · 2 extras",
- * "2 group prices from $1,200 for up to 4 · 1 extra".
+ * "Per group, $600 · 2 extras", "2 group prices from $1,200 · 1 extra".
+ * Extra spots have their own line (Basics).
  */
 export function pricingSummary(draft: PricingDraft, currency: CurrencyCode, dining = false): string {
   const kind = draft.kind ?? 'trip'
   const money = (value: number) => formatCurrency(value, currency)
   const named = draft.tiers.filter((tier) => tier.label.trim().length > 0).length
   const from = money(draftFromPrice(draft, currency, dining))
-  // What the price covers, in the words guests see, from the numbers a save writes.
-  const covered = () => {
-    const cover = groupCoverOf(pricedFromDraft(draft, { currency, slug: '', dining }))
-    const words = groupCoverWords(cover, cover?.extraGuest ?? 0, currency, draftGuestLimit(draft) || Number.POSITIVE_INFINITY)
-    return words === 'for the group' ? '' : words
-  }
-  const group = savedGroupPrice(draft.groupPrice, draft.groupExtraGuests ?? 0)
+  const group = savedGroupPrice(draft.groupPrice)
   const head = isGroupPriced(draft, dining)
-    ? [`Per group, ${money(group.price)} ${covered()}`.trim()]
+    ? [`Per group, ${money(group.price)}`]
     : kind === 'rental'
       ? [`${named} ${pluralize(named, 'item')} from ${from}`]
       : isPrivateGroupPriced(draft, dining)
-        ? [`${named} group ${pluralize(named, 'price')} from ${from} ${covered()}`.trim()]
+        ? [`${named} group ${pluralize(named, 'price')} from ${from}`]
         : kind === 'charter' && !dining
           ? [`Per person, ${named} ${pluralize(named, 'price')} from ${from}`]
           : [`${named} ${pluralize(named, 'price')} from ${from}`]
@@ -637,7 +526,7 @@ export function PricingStep({ draft, patch, errors, currency, dining = false, ac
     () => fromPrice(pricedFromDraft(draft, { currency, slug: activitySlug, dining })),
     // The fields the engine reads; the rest of the draft does not move a price.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [draft.tiers, draft.kind, draft.chargeBy, draft.groupPrice, draft.groupExtraGuests, draft.charterIncluded, draft.charterExtraGuests, draft.charterExtra, draft.maxCapacity, draft.priceCap, draft.privateOption, draft.kindSettings, currency, activitySlug, dining],
+    [draft.tiers, draft.kind, draft.chargeBy, draft.groupPrice, draft.extraSpots, draft.maxCapacity, draft.priceCap, draft.privateOption, draft.kindSettings, currency, activitySlug, dining],
   )
   const leadPrice = draft.tiers.find((tier) => tier.id === leadTierId(draft.tiers, rowsKind))?.price ?? 0
   const tierError = errors.tiers ? (
@@ -714,35 +603,25 @@ export function PricingStep({ draft, patch, errors, currency, dining = false, ac
           />
         </Block>
       ) : grouped ? (
-        <Block title="Group price" hint="One price for the whole group. Guests say how many are coming.">
-          {/* Four across only when the block itself has the room (it sits in narrow form columns too). */}
-          <div className="@container">
-            <div className="grid grid-cols-2 gap-3 @2xl:grid-cols-4">
-              <label className="flex flex-col gap-1 text-xs text-subtle">
-                Price for the group
-                <MoneyInput value={group.price} onValueChange={(price) => setGroup({ price })} currency={currency} size="sm" ariaLabel="Price for the group" />
-                {group.price > 0 ? null : <span className={cn('font-medium', errors['groupPrice.price'] ? 'text-danger' : 'text-warning')}>{errors['groupPrice.price'] ?? 'Set a price'}</span>}
-              </label>
-              <ExtraGuestFields
-                currency={currency}
-                value={draftExtrasOf(draft, 'group')}
-                onChange={({ included, allowed, extra }) => patch({ groupPrice: { ...cleanGroupPrice(group), includedGuests: included, extraGuest: extra }, groupExtraGuests: allowed })}
-                limit={draft.maxCapacity}
-                errors={extraErrorsOf(errors, 'group')}
+        <Block title="Group price" hint="One price for the whole group in the usual spots. Guests say how many are coming.">
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+            <label className="flex flex-col gap-1 text-xs text-subtle">
+              Price for the group
+              <MoneyInput value={group.price} onValueChange={(price) => setGroup({ price })} currency={currency} size="sm" ariaLabel="Price for the group" />
+              {group.price > 0 ? null : <span className={cn('font-medium', errors['groupPrice.price'] ? 'text-danger' : 'text-warning')}>{errors['groupPrice.price'] ?? 'Set a price'}</span>}
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-subtle">
+              Description (optional)
+              <Input
+                value={group.note ?? ''}
+                onChange={(event) => setGroup({ note: event.target.value.slice(0, GROUP_NOTE_MAX) })}
+                placeholder="Gear and drinks included"
+                aria-label="Group price description"
+                maxLength={GROUP_NOTE_MAX}
+                size="sm"
               />
-            </div>
+            </label>
           </div>
-          <label className="flex flex-col gap-1 text-xs text-subtle">
-            Description (optional)
-            <Input
-              value={group.note ?? ''}
-              onChange={(event) => setGroup({ note: event.target.value.slice(0, GROUP_NOTE_MAX) })}
-              placeholder="Gear and drinks included"
-              aria-label="Group price description"
-              maxLength={GROUP_NOTE_MAX}
-              size="sm"
-            />
-          </label>
           {/* The per-person prices are hidden here but still checked on save: say where to fix one. */}
           {hiddenTierError ? (
             <p className="flex items-center gap-1.5 text-xs font-medium text-danger">
@@ -763,20 +642,6 @@ export function PricingStep({ draft, patch, errors, currency, dining = false, ac
             noun="price"
           />
           {tierError}
-          {/* Private, per group: what every option covers, how many extra guests can come, and what each pays. */}
-          {options ? (
-            <div className="@container">
-              <div className="grid grid-cols-2 gap-3 @lg:max-w-2xl @lg:grid-cols-3">
-                <ExtraGuestFields
-                  currency={currency}
-                  value={draftExtrasOf(draft, 'charter')}
-                  onChange={({ included, allowed, extra }) => patch({ charterIncluded: included, charterExtraGuests: allowed, charterExtra: extra })}
-                  limit={settings.charter.maxGuests}
-                  errors={extraErrorsOf(errors, 'charter')}
-                />
-              </div>
-            </div>
-          ) : null}
         </Block>
       )}
 

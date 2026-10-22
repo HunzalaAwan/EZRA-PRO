@@ -1,5 +1,6 @@
 import type { Activity, ActivityFormat, ActivityKind, ActivityTheme, RentalCategory, RentalConfig, RouteInfo } from '@/types'
 import { formatDuration } from '@/lib/utils'
+import { privateMostOf, type SpotsSource } from '@/lib/extra-spots'
 
 /* ==========================================================================
    Activity kinds — what an operator is selling. One niche (Tours &
@@ -192,23 +193,12 @@ export function kindOf(activity: { kind?: ActivityKind }): ActivityKind {
   return activity.kind ?? 'trip'
 }
 
-/**
- * The most guests a private group can be: its most guests and, priced per
- * group, never over what the price covers plus the extra guests allowed (the
- * same as the price engine's `guestLimitOf`; saved before extra guests had a
- * limit, its most guests).
- */
-function privateMost(activity: Pick<Activity, 'maxCapacity' | 'charter'> & Partial<Pick<Activity, 'chargeBy'>>): number {
-  const charter = activity.charter
-  const most = charter?.maxGuests ?? activity.maxCapacity
-  const covers = Math.floor(charter?.includedGuests ?? 0)
-  if ((activity.chargeBy ?? 'group') !== 'group' || covers <= 0 || charter?.maxExtraGuests === undefined) return most
-  return Math.min(most, covers + Math.max(0, Math.floor(charter.maxExtraGuests)))
-}
+/** The most guests a private group can be: its most guests and its extra spots (the price engine's `guestLimitOf`). */
+const privateMost = (activity: SpotsSource) => privateMostOf(activity)
 
 /** The chip on a storefront card: what it is at a glance. */
 export function kindChipLabel(
-  activity: Pick<Activity, 'kind' | 'durationMinutes' | 'maxCapacity' | 'rental' | 'charter' | 'lesson' | 'pass' | 'package'> & Partial<Pick<Activity, 'chargeBy'>>,
+  activity: Pick<Activity, 'kind' | 'durationMinutes' | 'maxCapacity' | 'rental' | 'charter' | 'lesson' | 'pass' | 'package'> & Partial<Pick<Activity, 'chargeBy' | 'groupPrice' | 'extraSpots'>>,
 ): string {
   switch (activity.kind ?? 'trip') {
     case 'rental': {
@@ -267,7 +257,7 @@ export function kindBadge(activity: Pick<Activity, 'kind' | 'difficulty' | 'rent
 
 /** Two or three short facts for a listing card, in the kind's own terms. Age only when one is set. */
 export function kindCardFacts(
-  activity: Pick<Activity, 'kind' | 'difficulty' | 'maxCapacity' | 'minAge' | 'rental' | 'charter' | 'lesson' | 'pass' | 'route' | 'package'> & Partial<Pick<Activity, 'chargeBy'>>,
+  activity: Pick<Activity, 'kind' | 'difficulty' | 'maxCapacity' | 'minAge' | 'rental' | 'charter' | 'lesson' | 'pass' | 'route' | 'package'> & Partial<Pick<Activity, 'chargeBy' | 'groupPrice' | 'extraSpots'>>,
 ): string[] {
   const age = activity.minAge > 0 ? [`Ages ${activity.minAge}+`] : []
   switch (activity.kind ?? 'trip') {

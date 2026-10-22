@@ -9,6 +9,7 @@ import {
 } from '@/lib/demo'
 import { addDays, hashSeed, toDateKey } from '@/lib/utils'
 import { rentalCategoryMeta } from '@/lib/activity-kinds'
+import { privateMostOf } from '@/lib/extra-spots'
 import { hasItems, itemsInBooking, itemsSentence, rentalItemsOf, rentalSpan } from '@/lib/rental-items'
 import type { CharterRequest, WeatherSnapshot } from '@/types'
 
@@ -260,7 +261,7 @@ export function getSeedCharterRequests(tenantId: string): CharterRequest[] {
       activitySlug: target.slug,
       startsAt: isoLocal(start),
       tierId: tier?.id,
-      party: Math.min(seed.party, target.charter?.maxGuests ?? seed.party),
+      party: Math.min(seed.party, target.charter ? privateMostOf(target) : seed.party),
       name: seed.name,
       email: seed.email,
       message: seed.message,

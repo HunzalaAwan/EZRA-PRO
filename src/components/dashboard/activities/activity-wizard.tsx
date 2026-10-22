@@ -41,14 +41,15 @@ import { useBookingDefaults } from '@/hooks/use-booking-defaults'
 import { TEMPLATES_EVENT } from '@/hooks/use-message-templates'
 import type { MessageTemplate } from '@/lib/messaging'
 import type { BookingDefaults } from '@/lib/booking-defaults'
-import type { CharterConfig, ChargeBy, GroupDiscount, GroupPrice, PriceChange } from '@/types'
-import { PricingStep, charterExtrasOf, defaultPricingDraft, draftFromPrice, effectiveChargeBy, groupTierIdOf, isGroupPriced, pricingDraftOf, pricingErrors, pricingFieldsOfDraft, pricingSummary, repriceDraft, savedTiersOf } from './pricing-step'
+import type { CharterConfig, ChargeBy, ExtraSpots, GroupDiscount, GroupPrice, PriceChange } from '@/types'
+import { extraSpotsOf, sellsExtraSpots, usualSpotsOf, withExtraSpots } from '@/lib/extra-spots'
+import { PricingStep, defaultPricingDraft, draftFromPrice, effectiveChargeBy, groupTierIdOf, isGroupPriced, pricingDraftOf, pricingErrors, pricingFieldsOfDraft, pricingSummary, repriceDraft, savedTiersOf } from './pricing-step'
 import { ChangesPolicyEditor, type DraftCancellation } from './changes-policy-editor'
 import { DEFAULT_CHANGES, DEFAULT_PAYMENT, changesOf, changesSummary, depositLabel, paymentOf, policySummary, presetOf } from '@/lib/booking-policy'
 import { BookingExceptionsEditor, BookingSettingsEditor } from './booking-settings-editor'
 import { ACTIVITY_OVERRIDES_EVENT, applyActivityOverride, parseActivityOverrides, readActivityOverridesRaw, saveActivityOverride } from '@/lib/activity-overrides'
 import type { ActivityLocation, ActivitySchedule, ScheduleChange } from '@/types'
-import { closingGapOf, describeSchedules, expandDays, isGeneratedSlotId, parseSlotId, scheduleContextOf, shiftDayKey, bookingWindowMonths, type ScheduleSource } from '@/lib/activity-schedule'
+import { closingGapOf, describeSchedules, expandDays, isGeneratedSlotId, parseSlotId, plusExtraSpots, scheduleContextOf, shiftDayKey, bookingWindowMonths, type ScheduleSource } from '@/lib/activity-schedule'
 import { useBookingLedger } from '@/hooks/use-booking-ledger'
 import { ScheduleStep, type BookedSlot, type ScheduleBase } from './schedule-step'
 import { TODAY_KEY } from '@/lib/data/constants'
@@ -171,6 +172,8 @@ export interface ActivityDraft {
   minAge: number
   /** Spots per time slot (a pass: tickets per day). At least 1 to continue; 0 only while not filled in. */
   maxCapacity: number
+  /** Activities, tours and lessons: extra spots sold once the usual spots are full (private: guests over the most guests), each at its own price. Count 0: none. */
+  extraSpots: ExtraSpots
   minParticipants: number
   description: string
   highlights: string[]
@@ -247,16 +250,8 @@ export interface ActivityDraft {
   privateOption: PrivateOption
   /** How the price is counted, shared or private: per person or per group. null: the kind's own way (private: per group). */
   chargeBy: ChargeBy | null
-  /** Shared, per group: the price, the guests it covers (0: everyone), each extra guest, a description. */
+  /** Shared, per group: the price and a description. */
   groupPrice: GroupPrice
-  /** Shared, per group: extra guests allowed over what the price covers (0: none), saved in `groupPrice.maxGuests`. */
-  groupExtraGuests: number
-  /** Private, per group: the guests every option covers (0: everyone), saved as `charter.includedGuests`. */
-  charterIncluded: number
-  /** Private, per group: extra guests allowed over that (0: none), saved as `charter.maxExtraGuests`. */
-  charterExtraGuests: number
-  /** Private, per group: each extra guest, minor units; saved as `charter.extraGuestPrice`. */
-  charterExtra: number
   /** A private activity's tickets or options set aside by a per person ↔ per group switch. Never saved. */
   otherTiers: DraftTier[] | null
   /** Always empty: group discounts are price rules (Pricing → Price rules) now. Kept for the pricing helpers' shape. */
@@ -267,7 +262,7 @@ export interface ActivityDraft {
   priceChanges: PriceChange[]
 }
 
-const STORAGE_KEY = 'ezra:activity-wizard:v14'
+const STORAGE_KEY = 'ezra:activity-wizard:v15'
 
 /**
  * Pricing the activity setup no longer shows: group discounts, the activity's
@@ -296,6 +291,7 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
     durationUnit: restaurant ? 'minutes' : 'hours',
     minAge: restaurant ? DINING_BASICS.minAge : TOUR_BASICS.minAge,
     maxCapacity: restaurant ? DINING_BASICS.maxCapacity : TOUR_BASICS.maxCapacity,
+    extraSpots: { count: 0, price: 0 },
     minParticipants: 1,
     description: '',
     highlights: [''],
@@ -394,7 +390,7 @@ function kindOverride(draft: ActivityDraft) {
     }
   }
   if (kind === 'charter') {
-    // An opened activity's settings can still carry its saved extra guests: the Pricing step's fields decide them.
+    // Extra guests are extra spots now (saved as `extraSpots`): fields from before them are never saved again.
     const { minutes: _minutes, vesselLabel, crewLabel, includedGuests: _included, extraGuestPrice: _extra, maxExtraGuests: _allowed, ...rest } = settings.charter as DraftKindSettings['charter'] &
       Pick<CharterConfig, 'includedGuests' | 'extraGuestPrice' | 'maxExtraGuests'>
     return {
@@ -404,8 +400,6 @@ function kindOverride(draft: ActivityDraft) {
         requestToBook: (draft.booking?.method ?? 'instant') === 'request',
         noticeHours: draft.noticeHours ?? 0,
         ...(rest.vessel === 'other' ? { vesselLabel: vesselLabel.trim() || 'Private group', crewLabel: crewLabel.trim() || 'Crew' } : {}),
-        // Per group: guests every option covers, extra guests allowed and each one's price. Per person, or not set: none.
-        ...charterExtrasOf(draft),
       },
     }
   }
@@ -515,20 +509,30 @@ function paymentLine(pay: PaymentTerms, currency: CurrencyCode): string {
   return `${depositLabel(pay, (minor) => formatCurrency(minor, currency))} deposit, the rest ${pay.balanceDueDays === 0 ? 'on the day' : `${pay.balanceDueDays} ${pluralize(pay.balanceDueDays, 'day')} before`}.`
 }
 
+/** The extra spots a save writes: a number and a price for kinds that sell them, else none. */
+export function savedExtraSpots(draft: Pick<ActivityDraft, 'kind' | 'extraSpots' | 'category'>): ExtraSpots {
+  const count = Math.max(0, Math.floor(draft.extraSpots?.count ?? 0))
+  const price = Math.max(0, Math.round(draft.extraSpots?.price ?? 0))
+  return !isDining(draft) && sellsExtraSpots(draft.kind) && count > 0 && price > 0 ? { count, price } : { count: 0, price: 0 }
+}
+
 export function seatsFor(draft: ActivityDraft): ScheduleSeats {
   const kind = draft.kind ?? 'trip'
   const settings = normalizeKindSettings(draft.kindSettings)
   const n = draft.maxCapacity
+  // Extra spots, on top of the usual ones: the Schedule step counts the usual spots.
+  const extra = savedExtraSpots(draft).count
+  const plus = extra > 0 ? ` + ${extra} extra` : ''
   if (kind === 'rental') {
     const units = draft.tiers.reduce((sum, tier) => sum + draftItemOf(settings.rental, tier.id).stock, 0)
     return { capacity: units, one: 'item', many: 'items', summary: `${units} ${units === 1 ? 'item' : 'items'} in stock, across ${draft.tiers.length} ${draft.tiers.length === 1 ? 'kind' : 'kinds'}` }
   }
   if (kind === 'charter') {
-    return { capacity: 1, one: 'group', many: 'groups', summary: `One group each, up to ${settings.charter.maxGuests} guests` }
+    return { capacity: 1, one: 'group', many: 'groups', summary: `One group each, up to ${settings.charter.maxGuests + extra} guests` }
   }
-  if (kind === 'lesson') return { capacity: n, one: 'spot', many: 'spots', summary: `${n} ${pluralize(n, 'student')} per class`, varies: true }
+  if (kind === 'lesson') return { capacity: n, one: 'spot', many: 'spots', summary: `${n} ${pluralize(n, 'student')} per class${plus}`, varies: true }
   if (kind === 'pass') return { capacity: n, one: 'ticket', many: 'tickets', summary: `${n} ${pluralize(n, 'ticket')} per day`, varies: true }
-  return { capacity: n, one: 'guest', many: 'guests', summary: `${n} ${pluralize(n, 'spot')} per time slot`, varies: true }
+  return { capacity: n, one: 'guest', many: 'guests', summary: `${n} ${pluralize(n, 'spot')} per time slot${plus}`, varies: true }
 }
 
 /* ---------- the Schedule step's engine view of a draft ---------- */
@@ -567,11 +571,13 @@ function upcomingDays(
   const ctx = { ...(defaults ? scheduleContextOf(defaults) : {}), bookable: { nowIso, maxAdvanceDays: 3650 } }
   // A pass's tickets are a daily limit (the season's or Basics' number), shared by the day's time slots at each location.
   const daily = (draft.kind ?? 'trip') === 'pass'
+  const extra = (draft.kind ?? 'trip') === 'charter' ? 0 : savedExtraSpots(draft).count
   for (const day of expandDays(draftScheduleSource(draft), todayKey, shiftDayKey(todayKey, days - 1), ctx)) {
     if (day.slots.length === 0) continue
     const entry = byDay.get(day.dateKey) ?? { dateKey: day.dateKey, times: [], seats: 0 }
     entry.times = [...new Set([...entry.times, ...day.slots.map((slot) => slot.time)])].sort()
-    entry.seats += daily ? Math.max(...day.slots.map((slot) => slot.capacity)) : day.slots.reduce((sum, slot) => sum + slot.capacity, 0)
+    // Each shared time slot also sells its extra spots.
+    entry.seats += daily ? Math.max(...day.slots.map((slot) => slot.capacity)) : day.slots.reduce((sum, slot) => sum + plusExtraSpots(slot.capacity, extra), 0)
     byDay.set(day.dateKey, entry)
   }
   return [...byDay.values()]
@@ -704,7 +710,9 @@ function scheduleFromActivity(activity: Activity, base: DraftSchedule, homeTimes
   return { ...shared, locations: sites }
 }
 
-export function draftFromActivity(activity: Activity, nowIso: string): ActivityDraft {
+export function draftFromActivity(source: Activity, nowIso: string): ActivityDraft {
+  // A save from before extra spots opens with its per-group "covers / extra guests" read as spots.
+  const activity = withExtraSpots(source)
   const base = createDefaultDraft(activity.category, nowIso)
   const restaurant = activity.category === 'restaurants'
   const homeTimes = activity.locations[0]?.times ?? []
@@ -717,7 +725,9 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
     durationMinutes: activity.durationMinutes,
     durationUnit: unitFor(activity.durationMinutes),
     minAge: activity.minAge,
-    maxCapacity: activity.maxCapacity,
+    // A private group's most guests, before its extra spots (a seeded one's spots count them too).
+    maxCapacity: (activity.kind ?? 'trip') === 'charter' ? usualSpotsOf(activity) || activity.maxCapacity : activity.maxCapacity,
+    extraSpots: extraSpotsOf(activity) ?? { count: 0, price: 0 },
     minParticipants: activity.minParticipants || 1,
     description: activity.description,
     highlights: activity.highlights.length > 0 ? [...activity.highlights] : [''],
@@ -827,7 +837,7 @@ export function draftFromActivity(activity: Activity, nowIso: string): ActivityD
           : blank.rental,
         charter: charter
           ? (() => {
-              // Extra guests open on the Pricing step (charterIncluded / charterExtraGuests / charterExtra, from pricingDraftOf).
+              // Fields from before extra spots are read as them (withExtraSpots above), never kept.
               const { durations, includedGuests: _included, extraGuestPrice: _extra, maxExtraGuests: _allowed, ...rest } = charter
               const fallback = Object.fromEntries(activity.priceTiers.map((tier) => [tier.id, activity.durationMinutes || 180]))
               return { ...blank.charter, ...rest, minutes: durations ? Object.fromEntries(durations.map((entry) => [entry.tierId, entry.minutes])) : fallback }
@@ -1208,6 +1218,8 @@ function validateStep(step: number, draft: ActivityDraft): FieldErrors {
   if ((kind === 'activity' || kind === 'trip') && draft.maxCapacity < 1) errors.maxCapacity = 'Each time slot needs at least one spot'
   if (kind === 'charter' && settings.charter.maxGuests < 1) errors.maxCapacity = 'Allow at least one guest'
   if (kind === 'pass' && draft.maxCapacity < 1) errors.maxCapacity = 'Sell at least one ticket a day'
+  // Extra spots are sold only with a price for them.
+  if (sellsExtraSpots(kind) && (draft.extraSpots?.count ?? 0) > 0 && (draft.extraSpots?.price ?? 0) <= 0) errors['extraSpots.price'] = 'Set a price'
   if (kind === 'lesson' && draft.durationMinutes < 15) errors.durationMinutes = 'Give each lesson at least 15 minutes'
   if (kind === 'package') {
     delete errors.maxCapacity
@@ -1704,7 +1716,7 @@ export function ActivityWizard({
   const router = useRouter()
   const reduceMotion = useReducedMotionSafe()
   const editing = mode === 'edit' && Boolean(activityId)
-  const storageKey = editing ? `ezra:activity-wizard:edit:v4:${activityId}` : STORAGE_KEY
+  const storageKey = editing ? `ezra:activity-wizard:edit:v5:${activityId}` : STORAGE_KEY
   const exitHref = editing ? `/dashboard/activities/${activityId}` : '/dashboard/activities'
   // Editing opens the activity as last saved, not as seeded: the saved edit is laid over it in the browser.
   const activity = useSavedActivity(editing ? seededActivity : undefined) ?? seededActivity
@@ -1918,6 +1930,8 @@ export function ActivityWizard({
           difficulty: draft.difficulty,
           durationMinutes: draft.durationMinutes,
           maxCapacity: draft.maxCapacity,
+          // Sold once the usual spots are full, each at its own price; none for kinds that don't sell them.
+          extraSpots: savedExtraSpots(draft),
           minAge: text.minAge,
           minParticipants: draft.minParticipants,
           featured: draft.featured,
@@ -2595,6 +2609,7 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
     durationMinutes: draft.durationMinutes,
     durationUnit: draft.durationUnit,
     difficulty: draft.difficulty,
+    extraSpots: draft.extraSpots ?? { count: 0, price: 0 },
   }
   return (
     <div className="flex flex-col gap-5">
@@ -2644,7 +2659,7 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
           onCapacity={(maxCapacity) => patch({ maxCapacity, schedule: { ...draft.schedule, capacity: maxCapacity } })}
         />
       ) : isTimedKind(kind) ? (
-        <TimedFields privateGroup={kind === 'charter'} onPrivate={setPrivate} shared={shared} onShared={setShared} errors={errors} />
+        <TimedFields privateGroup={kind === 'charter'} onPrivate={setPrivate} shared={shared} onShared={setShared} errors={errors} currencySymbol={currencySymbol(currency ?? 'USD')} />
       ) : null}
       {kind === 'package' && !dining ? (
         <PackagePartsEditor
@@ -3059,6 +3074,18 @@ function ReviewStep({
         { label: 'Category', value: draft.customCategory || themeLabel(draft.theme ?? defaultTheme(draft.category)), step: 0 },
         // A rental's charging, items, stock, deposits and late fee are all set on Pricing.
         { label: 'Setup', value: kindFacts(draft).join(' · '), step: (draft.kind ?? 'trip') === 'rental' ? TOUR_STEP_INDEX.pricing : TOUR_STEP_INDEX.basics },
+        ...(sellsExtraSpots(draft.kind)
+          ? [
+              {
+                label: 'Extra spots',
+                value: (() => {
+                  const extra = savedExtraSpots(draft)
+                  return extra.count > 0 ? `${extra.count} at ${formatCurrency(extra.price, currency)} each` : 'None'
+                })(),
+                step: TOUR_STEP_INDEX.basics,
+              },
+            ]
+          : []),
         { label: 'Highlights', value: `${draft.highlights.filter(Boolean).length} bullets`, step: TOUR_STEP_INDEX.description },
         {
           label: draft.arrivalMode === 'meet' ? 'Meeting point' : draft.arrivalMode === 'venue' ? 'Venue' : 'Arrival',

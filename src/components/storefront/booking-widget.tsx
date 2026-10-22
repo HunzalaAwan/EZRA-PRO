@@ -52,9 +52,9 @@ import { bodyLimitLines } from '@/lib/guest-requirements'
 import type { PricingRule } from '@/lib/pricing'
 import {
   chargeByOf,
+  extraSpotPrice,
+  extraSpotWords,
   fromPrice,
-  groupCoverOf,
-  groupCoverWords,
   groupPriced,
   guestLimitOf,
   groupTierOf,
@@ -62,10 +62,12 @@ import {
   priceBooking,
   privatePerPerson,
   unitPriceDetail,
+  usualSpotsLeft,
   type AppliedChange,
   type PriceContext,
   type RentalPricing,
 } from '@/lib/price-engine'
+import { slotExtraSpotsOf, usualSpotsOf } from '@/lib/extra-spots'
 import { useActivityOverrides, usePricingOverride } from '@/hooks/use-pricing-override'
 import { useLocations } from '@/hooks/use-locations'
 import { applyScheduleOverride } from '@/lib/activity-overrides'
@@ -458,6 +460,7 @@ export function useActivitySites(activity: Activity, locations: Location[] = NO_
    ========================================================================== */
 
 export interface BookingWidgetProps {
+  /** As the server sent it: the saved edit's prices and schedule are laid over it here, once. */
   activity: Activity
   tenantSlug: string
   currency: CurrencyCode
@@ -601,8 +604,8 @@ function BookingWidgetInner({
   const privateTickets = privatePerPerson(activity)
   /** A private group priced per group: its prices are options, one picked. */
   const privateOptions = kind === 'charter' && !privateTickets
-  /** The most guests a private group can be: its most guests, and per group what the price covers plus the extra guests allowed. */
-  const privateMost = Math.max(1, Math.min(activity.charter?.maxGuests ?? activity.maxCapacity, guestLimitOf(activity)))
+  /** The most guests a private group can be: its most guests and its extra spots. */
+  const privateMost = Math.max(1, guestLimitOf(activity))
   /** A private group's guests when priced per group (per person, its tickets count them). */
   const [partyCount, setParty] = React.useState(() => Math.max(2, activity.minParticipants || 1))
   /** Which request form is open, if any. */
@@ -677,10 +680,8 @@ function BookingWidgetInner({
   /* ---------- per group: one price for the group; guests only say how many are coming, all on one tier ---------- */
   const groupPrice = chargeByOf(activity) === 'group' && kind !== 'charter' ? activity.groupPrice : undefined
   const groupTier = groupPrice ? groupTierOf(activity) : undefined
-  /** The most guests a per-group booking takes: what the price covers plus the extra guests allowed (else the spots decide). */
-  const groupMax = groupPrice ? guestLimitOf(activity) : Number.POSITIVE_INFINITY
-  /** A per-group count, kept between one guest and what the group tier and price allow. */
-  const groupCount = (wanted: number) => clamp(wanted, 1, Math.max(1, Math.min(groupTier?.maxQuantity ?? Number.POSITIVE_INFINITY, groupMax)))
+  /** A per-group count, kept between one guest and what the group tier allows (the spots left decide the rest). */
+  const groupCount = (wanted: number) => clamp(wanted, 1, Math.max(1, groupTier?.maxQuantity ?? Number.POSITIVE_INFINITY))
 
   /* ---------- tier quantities ---------- */
 
@@ -704,7 +705,7 @@ function BookingWidgetInner({
 
   // Prices saved in the editor arrive after the first render: a new price starts at its minimum, and each count stays within its limits.
   // Per group, the guests counted so far move onto the group's tier, and every other tier is left at none.
-  const tiersKey = `${activity.priceTiers.map((tier) => `${tier.id}:${tier.minQuantity}:${tier.maxQuantity}`).join('|')}|group:${groupTier?.id ?? ''}:${groupMax}|tickets:${privateTickets}`
+  const tiersKey = `${activity.priceTiers.map((tier) => `${tier.id}:${tier.minQuantity}:${tier.maxQuantity}`).join('|')}|group:${groupTier?.id ?? ''}|tickets:${privateTickets}`
   React.useEffect(() => {
     if (groupTier) {
       setTierQty((current) => {
@@ -946,6 +947,11 @@ function BookingWidgetInner({
     ) : null
   const chosenTier = activity.priceTiers.find((tier) => (tierQty[tier.id] ?? 0) > 0) ?? activity.priceTiers[0]
   const chosenQty = chosenTier ? (tierQty[chosenTier.id] ?? 0) : 0
+  /** Each extra spot on this time slot (0: none sold), and the usual spots: a private group's most guests. */
+  const extraEach = extraSpotPrice(activity, priceCtx, privateOptions ? chosenTier?.id : undefined)
+  const usualSpots = usualSpotsOf(activity)
+  /** A shared time slot whose usual spots are full: only extra spots are left. */
+  const extraOnly = Boolean(slot) && kind !== 'charter' && extraEach > 0 && seatsLeft > 0 && usualSpotsLeft(activity, { capacity: slot?.capacity, booked: slotBooked }) <= 0
   const pickTier = (tierId: string, qty: number) =>
     setTierQty(Object.fromEntries(activity.priceTiers.map((tier) => [tier.id, tier.id === tierId ? qty : 0])))
   const shortDate = (key: string, offset: number) => {
@@ -1264,9 +1270,6 @@ function BookingWidgetInner({
     )
   } else if (privateOptions) {
     const maxGuests = privateMost
-    // The guests the option's price covers and each one over, at this time slot's price.
-    const cover = groupCoverOf(activity)
-    const extraEach = cover && cover.extraGuest > 0 && Number.isFinite(cover.covers) ? (chosenTier ? priceOn(chosenTier.id).extraGuest : undefined) ?? cover.extraGuest : 0
     kindBlock = (
       <div>
         <div className="flex items-baseline justify-between gap-3">
@@ -1285,7 +1288,7 @@ function BookingWidgetInner({
             <span className="block text-sm font-medium text-foreground">Guests in your group</span>
             <span className="block text-xs text-subtle">
               {activity.minParticipants > 1 ? `${activity.minParticipants} to ${maxGuests}` : `Up to ${maxGuests}`};{' '}
-              {cover && extraEach > 0 ? `the price covers ${cover.covers}, then ${formatCurrency(extraEach, currency)} each` : 'the price is for the whole group'}
+              {extraEach > 0 ? `the price is for ${usualSpots}, then ${formatCurrency(extraEach, currency)} each` : 'the price is for the whole group'}
             </span>
           </span>
           {stepper(party, Math.max(1, activity.minParticipants), maxGuests, setParty, 'guests')}
@@ -1519,6 +1522,8 @@ function BookingWidgetInner({
                   slot={entry}
                   wholeGroup={kind === 'charter'}
                   noun={kind === 'rental' ? rentalMeta.units : 'spots'}
+                  // The usual spots are full: only extra spots are left, at their own price.
+                  extraLabel={extraEach > 0 && kind !== 'charter' && usualSpotsLeft(activity, { capacity: entry.capacity, booked: bookedOn(entry, delta) }) <= 0 ? extraSpotWords(extraEach, currency) : undefined}
                   selected={entry.departureId === departureId}
                   onSelect={() => setDepartureId(entry.departureId)}
                 />
@@ -1547,10 +1552,11 @@ function BookingWidgetInner({
               <span
                 className={cn(
                   'text-xs font-medium tabular',
-                  seatsLeft <= 4 ? 'text-warning' : 'text-subtle',
+                  seatsLeft <= 4 || extraOnly ? 'text-warning' : 'text-subtle',
                 )}
               >
-                {seatsLeft} {pluralize(seatsLeft, 'spot')} left
+                {/* The usual spots are full: what is left is extra spots, at their own price. */}
+                {extraOnly ? `${seatsLeft} extra ${pluralize(seatsLeft, 'spot')} · ${formatCurrency(extraEach, currency)} each` : `${seatsLeft} ${pluralize(seatsLeft, 'spot')} left`}
               </span>
             ) : null}
           </div>
@@ -1577,11 +1583,11 @@ function BookingWidgetInner({
               const count = tierQty[groupTier.id] ?? 0
               const places = placesOf(groupTier)
               const room = places > 0 ? Math.floor(seatsLeft / places) : groupTier.maxQuantity
-              const most = Math.max(0, Math.min(room, groupTier.maxQuantity, groupMax))
+              const most = Math.max(0, Math.min(room, groupTier.maxQuantity))
               const groupDetail = priceOn('group')
               const note = groupPrice.note?.trim()
-              // "for up to 3 · up to 2 more at $90 each", "for up to 3", or "for the group" when the price covers everyone (or every spot).
-              const covered = groupCoverWords(groupCoverOf(activity), groupDetail.extraGuest ?? 0, currency, activity.maxCapacity)
+              // The price is for the group in the usual spots; each guest in an extra spot adds the extra-spot price.
+              const covered = extraEach > 0 ? `for the group · extra spots ${formatCurrency(extraEach, currency)} each` : 'for the group'
               return (
                 <div className="mt-3 flex items-center gap-3 rounded-xl border border-line px-3.5 py-3">
                   <div className="min-w-0 flex-1">
@@ -1612,7 +1618,7 @@ function BookingWidgetInner({
               const roomLeft = privateTickets
                 ? privateMost - (headcount - qty * peopleOf(tier))
                 : goPrivate
-                  ? Math.min(slot?.capacity ?? seatsLeft, privateOffer && privateOffer.extraGuest === 0 ? privateOffer.includedGuests : Number.POSITIVE_INFINITY) - (seatsUsed - qty * places)
+                  ? Math.min(slot ? slot.capacity - slotExtraSpotsOf(activity) : seatsLeft, privateOffer && privateOffer.extraGuest === 0 ? privateOffer.includedGuests : Number.POSITIVE_INFINITY) - (seatsUsed - qty * places)
                   : seatsLeft - (seatsUsed - qty * places)
               const seatRoom = privateTickets ? (slot && seatsLeft > 0 ? Math.floor(roomLeft / peopleOf(tier)) : 0) : places > 0 ? Math.floor(roomLeft / places) : tier.maxQuantity
               const max = Math.min(tier.maxQuantity, Math.max(0, seatRoom))
@@ -1711,7 +1717,8 @@ function BookingWidgetInner({
           {privateTickets ? (
             <p className="mt-2 flex items-center gap-2 text-xs text-subtle">
               <Users className="size-3.5 shrink-0" aria-hidden="true" />
-              {activity.minParticipants > 1 ? `${activity.minParticipants} to ${privateMost}` : `Up to ${privateMost}`} guests. The time is just for your group.
+              {activity.minParticipants > 1 ? `${activity.minParticipants} to ${privateMost}` : `Up to ${privateMost}`} guests.
+              {extraEach > 0 ? ` Over ${usualSpots}, ${formatCurrency(extraEach, currency)} each.` : ''} The time is just for your group.
             </p>
           ) : activity.minParticipants > 1 ? (
             <p className="mt-2 flex items-center gap-2 text-xs text-subtle">
@@ -2021,11 +2028,14 @@ export function TimeChip({
   slot,
   noun = 'spots',
   wholeGroup = false,
+  extraLabel,
   selected,
   onSelect,
 }: {
   /** A private charter sells once: say Available, not a seat count. */
   wholeGroup?: boolean
+  /** The usual spots are full: "Extra spots · $40 each" in place of the count. */
+  extraLabel?: string
   /** What the count is of: seats, bikes, places. */
   noun?: string
   slot: AvailabilitySlot
@@ -2033,7 +2043,7 @@ export function TimeChip({
   onSelect: () => void
 }) {
   const urgent = !wholeGroup && !slot.soldOut && slot.seatsLeft <= 3
-  const filling = !slot.soldOut && !urgent && slot.seatsLeft <= 6
+  const filling = !slot.soldOut && !urgent && (slot.seatsLeft <= 6 || Boolean(extraLabel))
 
   return (
     <button
@@ -2075,9 +2085,11 @@ export function TimeChip({
       >
         {slot.soldOut
           ? 'Sold out'
-          : urgent
-            ? wholeGroup ? 'Available' : `Only ${slot.seatsLeft} left`
-            : wholeGroup ? 'Available' : `${slot.seatsLeft} ${noun}`}
+          : extraLabel && !wholeGroup
+            ? extraLabel
+            : urgent
+              ? wholeGroup ? 'Available' : `Only ${slot.seatsLeft} left`
+              : wholeGroup ? 'Available' : `${slot.seatsLeft} ${noun}`}
       </span>
     </button>
   )

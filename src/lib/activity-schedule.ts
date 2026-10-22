@@ -4,6 +4,7 @@ import type { DepartureRowLite } from '@/components/dashboard/activities/activit
 import { TODAY_KEY } from '@/lib/data/constants'
 import { holidaysBetween } from '@/lib/holidays'
 import { hasItems, rentalItemsOf, shortestRentalMs } from '@/lib/rental-items'
+import { slotExtraSpotsOf } from '@/lib/extra-spots'
 
 /* ==========================================================================
    Activity schedule — seasons, changes and closed days turned into time
@@ -22,7 +23,19 @@ export type ScheduleSource = Pick<Activity, 'id' | 'locations' | 'maxCapacity'> 
   Partial<
     Pick<
       Activity,
-      'kind' | 'rental' | 'priceTiers' | 'schedules' | 'scheduleChanges' | 'runsOnClosures' | 'bookingWindow' | 'noticeHours' | 'charter' | 'durationMinutes'
+      | 'kind'
+      | 'rental'
+      | 'priceTiers'
+      | 'schedules'
+      | 'scheduleChanges'
+      | 'runsOnClosures'
+      | 'bookingWindow'
+      | 'noticeHours'
+      | 'charter'
+      | 'durationMinutes'
+      | 'extraSpots'
+      | 'chargeBy'
+      | 'groupPrice'
     >
   >
 
@@ -201,7 +214,12 @@ export function syncLegacyLocations(locations: ActivityLocation[], schedules: Ac
   })
 }
 
-/** Spots in a time slot when nothing says otherwise: a charter sells once, a rental its stock, everything else the activity's spots. */
+/**
+ * Spots in a time slot when nothing says otherwise: a charter sells once, a
+ * rental its stock, everything else the activity's spots. Extra spots are not
+ * in it: seasons, changes and the Schedule step count the usual spots, and a
+ * time slot on sale adds the extra ones (`sellableSpots`).
+ */
 export function defaultSpots(activity: ScheduleSource): number {
   const kind = activity.kind ?? 'trip'
   if (kind === 'charter') return 1
@@ -212,6 +230,24 @@ export function defaultSpots(activity: ScheduleSource): number {
     return activity.rental?.units ?? activity.maxCapacity
   }
   return activity.maxCapacity
+}
+
+/** A time slot's spots on sale: its usual spots and, when it has any, the activity's extra spots. */
+export const plusExtraSpots = (usual: number, extra: number) => (usual > 0 ? usual + Math.max(0, extra) : usual)
+
+/** Spots a time slot sells when nothing says otherwise: the usual spots (`defaultSpots`) plus the extra spots. */
+export const sellableSpots = (activity: ScheduleSource) => plusExtraSpots(defaultSpots(activity), slotExtraSpotsOf(activity))
+
+/**
+ * A seeded time slot's spots on sale after an edit: its own usual spots (the
+ * server's, less the extra spots it was seeded with), or the edited
+ * schedule's when the edit set them (a season, a change, new spots in Basics),
+ * plus the edit's extra spots.
+ */
+export function spotsAfterEdit(serverCapacity: number, entry: Pick<ScheduledSlot, 'capacity' | 'capacitySet'>, spotsChanged: boolean, extraWas: number, extraNow: number): number {
+  const was = Math.max(0, serverCapacity - extraWas)
+  const usual = was === entry.capacity || !(entry.capacitySet || spotsChanged) ? was : entry.capacity
+  return plusExtraSpots(usual, extraNow)
 }
 
 function spotsFor(activity: ScheduleSource, base: number, explicit: number | undefined): number {
@@ -489,7 +525,8 @@ export function parseSlotId(id: string): { activityId: string; dateKey: string; 
  * manage page): the activity's default spots, nothing booked yet.
  */
 export function departureFromSlotId(
-  activity: Pick<Activity, 'id' | 'tenantId' | 'durationMinutes' | 'requiredResourceIds' | 'locations' | 'maxCapacity'> & Partial<Pick<Activity, 'kind' | 'rental' | 'priceTiers'>>,
+  activity: Pick<Activity, 'id' | 'tenantId' | 'durationMinutes' | 'requiredResourceIds' | 'locations' | 'maxCapacity'> &
+    Partial<Pick<Activity, 'kind' | 'rental' | 'priceTiers' | 'extraSpots' | 'chargeBy' | 'groupPrice' | 'charter'>>,
   id: string,
 ): Departure | undefined {
   const parsed = parseSlotId(id)
@@ -502,7 +539,7 @@ export function departureFromSlotId(
     locationId: parsed.locationId ?? activity.locations[0]?.locationId,
     startsAt,
     endsAt: plusMinutes(startsAt, Math.max(0, activity.durationMinutes || 0)),
-    capacity: defaultSpots(activity),
+    capacity: sellableSpots(activity),
     booked: 0,
     held: 0,
     status: 'scheduled',
@@ -749,8 +786,10 @@ export function rebuildAvailabilityDays(seeded: Activity, editedActivity: Activi
 
   const notice = edited.noticeHours ?? edited.charter?.noticeHours ?? 0
   const minStart = notice > 0 ? plusMinutes(now, notice * 60) : ''
-  // Spots changed in Basics: seeded time slots take the new number too.
+  // Spots changed in Basics: seeded time slots take the new number too. Extra spots go on top of each one's spots.
   const spotsChanged = defaultSpots(edited) !== defaultSpots(seeded)
+  const extraWas = slotExtraSpotsOf(seeded)
+  const extraNow = slotExtraSpotsOf(edited)
   const extraDays: AvailabilityDay[] = []
   for (let dateKey = shiftDayKey(stripEnd, 1); dateKey <= lastExtra; dateKey = shiftDayKey(dateKey, 1)) extraDays.push({ dateKey, slots: [], fromPrice: 0, seatsLeft: 0, soldOut: false })
   // Rentals with items: a day after the strip lends out no more than the seeded time slots it overlaps have left.
@@ -770,14 +809,15 @@ export function rebuildAvailabilityDays(seeded: Activity, editedActivity: Activi
       const match = byKey.get(key)
       if (match) {
         used.add(match.departureId)
-        if (match.capacity === entry.capacity || !(entry.capacitySet || spotsChanged)) {
+        const capacity = spotsAfterEdit(match.capacity, entry, spotsChanged, extraWas, extraNow)
+        if (capacity === match.capacity) {
           slots.push(match)
         } else {
           // Different spots: what is sold stays sold.
           const sold = Math.max(0, match.capacity - match.seatsLeft)
-          const seatsLeft = Math.max(0, entry.capacity - sold)
+          const seatsLeft = Math.max(0, capacity - sold)
           const status = match.status === 'sold_out' && seatsLeft > 0 ? 'scheduled' : match.status
-          slots.push({ ...match, capacity: Math.max(entry.capacity, sold), seatsLeft, status, soldOut: seatsLeft <= 0 || status === 'sold_out' })
+          slots.push({ ...match, capacity: Math.max(capacity, sold), seatsLeft, status, soldOut: seatsLeft <= 0 || status === 'sold_out' })
         }
         continue
       }
@@ -787,7 +827,7 @@ export function rebuildAvailabilityDays(seeded: Activity, editedActivity: Activi
         id: slotId(edited.id, entry.dateKey, entry.time, entry.locationId),
         startsAt,
         endsAt: plusMinutes(startsAt, Math.max(0, edited.durationMinutes || 0)),
-        capacity: entry.capacity,
+        capacity: plusExtraSpots(entry.capacity, extraNow),
         booked: 0,
         held: 0,
         status: 'scheduled',
@@ -821,7 +861,7 @@ export function rebuildAvailabilityDays(seeded: Activity, editedActivity: Activi
         id: entry.id,
         startsAt,
         endsAt: plusMinutes(startsAt, Math.max(0, edited.durationMinutes || 0)),
-        capacity: Math.max(defaultSpots(edited), entry.booked),
+        capacity: Math.max(sellableSpots(edited), entry.booked),
         booked: 0,
         held: 0,
         status: 'scheduled',
@@ -989,15 +1029,18 @@ export function rebuildScheduleRows(
   const used = new Set<string>()
   const out: ScheduledRow[] = []
   const spotsChanged = defaultSpots(edited) !== defaultSpots(seeded)
+  const extraWas = slotExtraSpotsOf(seeded)
+  const extraNow = slotExtraSpotsOf(edited)
   for (const entry of plan) {
     const key = matchKey(entry.dateKey, entry.time, entry.locationId ?? primary)
     const match = byKey.get(key)
     if (match) {
       used.add(match.id)
-      if (match.capacity === entry.capacity || !(entry.capacitySet || spotsChanged) || match.status === 'cancelled' || match.status === 'completed') {
+      const spots = spotsAfterEdit(match.capacity, entry, spotsChanged, extraWas, extraNow)
+      if (spots === match.capacity || match.status === 'cancelled' || match.status === 'completed') {
         out.push(match)
       } else {
-        const capacity = Math.max(entry.capacity, match.booked)
+        const capacity = Math.max(spots, match.booked)
         const status = match.status === 'sold_out' && capacity > match.booked ? 'scheduled' : match.status === 'scheduled' && match.booked >= capacity ? 'sold_out' : match.status
         out.push({ ...match, capacity, status })
       }
@@ -1008,7 +1051,7 @@ export function rebuildScheduleRows(
     const id = slotId(edited.id, entry.dateKey, entry.time, entry.locationId)
     const booked = Math.max(0, delta[id] ?? 0)
     if (ctx.nowIso && startsAt < ctx.nowIso.slice(0, 19) && booked <= 0) continue
-    out.push(generatedRow(edited, id, startsAt, entry.capacity, booked, entry.locationId ?? primary))
+    out.push(generatedRow(edited, id, startsAt, plusExtraSpots(entry.capacity, extraNow), booked, entry.locationId ?? primary))
   }
   for (const row of rows) {
     if (used.has(row.id)) continue
@@ -1031,7 +1074,7 @@ export function rebuildScheduleRows(
     const locationId = entry.locationId ?? primary
     if (shown.has(entry.id) || byKey.has(matchKey(entry.dateKey, entry.time, locationId))) continue
     const startsAt = `${entry.dateKey}T${entry.time}:00`
-    const row = generatedRow(edited, entry.id, startsAt, Math.max(defaultSpots(edited), entry.booked), entry.booked, locationId)
+    const row = generatedRow(edited, entry.id, startsAt, Math.max(sellableSpots(edited), entry.booked), entry.booked, locationId)
     out.push(isCancelledSlot(edited, startsAt, locationId) ? { ...row, status: 'cancelled' } : { ...row, outsideSchedule: true })
     shown.add(entry.id)
   }

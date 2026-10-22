@@ -1,6 +1,7 @@
 import { clamp } from '@/lib/utils'
 import { addOnUnits, peopleOf, placesOf } from '@/lib/places'
-import { isGeneratedSlotId } from '@/lib/activity-schedule'
+import { defaultSpots, isGeneratedSlotId, spotsAfterEdit } from '@/lib/activity-schedule'
+import { slotExtraSpotsOf } from '@/lib/extra-spots'
 import { rentalModes, type RentalMode } from '@/lib/activity-kinds'
 import { groupPriced, groupTierOf, guestLimitOf, privatePerPerson } from '@/lib/price-engine'
 import type { Activity } from '@/types'
@@ -28,14 +29,14 @@ export function parsePairs(raw: string | string[] | undefined): Map<string, numb
 
 /**
  * A private group's size from the link's `g`, checked against the activity:
- * at least its fewest guests, at most its most guests and, priced per group,
- * what the price covers plus the extra guests allowed. Undefined for anything
- * that is not a private group. The checkout page runs it on the seeded
- * activity, CheckoutFlow again on the activity with its saved edit.
+ * at least its fewest guests, at most its most guests plus its extra spots.
+ * Undefined for anything that is not a private group. The checkout page runs
+ * it on the seeded activity, CheckoutFlow again on the activity with its
+ * saved edit.
  */
 export function checkoutParty(activity: Activity, wanted: string | string[] | number | undefined): number | undefined {
   if ((activity.kind ?? 'trip') !== 'charter') return undefined
-  const most = Math.max(1, Math.min(activity.charter?.maxGuests ?? activity.maxCapacity, guestLimitOf(activity)))
+  const most = Math.max(1, guestLimitOf(activity))
   const asked = Math.floor(Number(Array.isArray(wanted) ? wanted[0] : wanted) || 2)
   return clamp(asked, Math.min(most, Math.max(1, activity.minParticipants)), most)
 }
@@ -53,7 +54,7 @@ export function resolveSelection(
   const requestedTiers = parsePairs(rawTiers)
   const requestedAddOns = parsePairs(rawAddOns)
 
-  // Per group: one count of guests, all on the group's tier, up to the spots left and what the price covers plus the extra guests allowed.
+  // Per group: one count of guests, all on the group's tier, up to the spots left (extra spots included).
   const groupTier = groupPriced(activity) && activity.groupPrice ? groupTierOf(activity) : undefined
   if (groupTier && activity.groupPrice) {
     const people = activity.priceTiers.reduce((sum, tier) => sum + (requestedTiers.get(tier.id) ?? 0) * peopleOf(tier), 0)
@@ -71,10 +72,10 @@ export function resolveSelection(
     return { tiers, addOns }
   }
 
-  // A private group priced per person: a ticket each, up to its most guests, counted in people.
+  // A private group priced per person: a ticket each, up to its most guests plus its extra spots, counted in people.
   // The group has the time slot to itself, so the spots left don't count the tickets.
   if (privatePerPerson(activity)) {
-    const most = Math.max(1, Math.min(activity.charter?.maxGuests ?? activity.maxCapacity, guestLimitOf(activity)))
+    const most = Math.max(1, guestLimitOf(activity))
     let people = 0
     const tiers = activity.priceTiers.map((tier) => {
       const each = peopleOf(tier)
@@ -143,6 +144,23 @@ export function resolveSelection(
 export function bookedOn(slot: Pick<AvailabilitySlot, 'departureId' | 'capacity' | 'seatsLeft' | 'booked'>, delta: Record<string, number> = {}): number {
   const server = slot.booked ?? (isGeneratedSlotId(slot.departureId) ? 0 : Math.max(0, slot.capacity - slot.seatsLeft))
   return Math.max(0, server + (delta[slot.departureId] ?? 0))
+}
+
+/**
+ * A time slot further out than the rebuilt strip, as the server has it, with
+ * a saved edit's spots and extra spots laid over it the way the strip lays
+ * them (what is sold stays sold). Undefined when the edit changes nothing.
+ * `seeded` is the activity as the server has it, `edited` with its saved edit.
+ */
+export function spotsBeyondStrip(
+  seeded: Activity,
+  edited: Activity,
+  slot: { capacity: number; seatsLeft: number },
+): { capacity: number; seatsLeft: number } | undefined {
+  const capacity = spotsAfterEdit(slot.capacity, { capacity: defaultSpots(edited) }, defaultSpots(edited) !== defaultSpots(seeded), slotExtraSpotsOf(seeded), slotExtraSpotsOf(edited))
+  if (capacity === slot.capacity) return undefined
+  const sold = Math.max(0, slot.capacity - slot.seatsLeft)
+  return { capacity: Math.max(capacity, sold), seatsLeft: Math.max(0, capacity - sold) }
 }
 
 /** The link's rental values (`m`, `h`, `n`, `l`), not yet checked. */

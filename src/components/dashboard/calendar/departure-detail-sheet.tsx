@@ -14,8 +14,9 @@ import { MessageComposer, sendToGuests, type MessageRecipient } from '@/componen
 import { useMessageTemplates } from '@/hooks/use-message-templates'
 import { useActivityOverrides } from '@/hooks/use-pricing-override'
 import { useBookingDefaults } from '@/hooks/use-booking-defaults'
-import { applyScheduleOverride, parseActivityOverrides, readActivityOverridesRaw, saveScheduleOverride } from '@/lib/activity-overrides'
-import { cancelChangeId as cancelChangeIdFor, expandSchedules, scheduleContextOf } from '@/lib/activity-schedule'
+import { applyActivityOverride, applyScheduleOverride, parseActivityOverrides, readActivityOverridesRaw, saveScheduleOverride } from '@/lib/activity-overrides'
+import { cancelChangeId as cancelChangeIdFor, defaultSpots, expandSchedules, scheduleContextOf, spotsAfterEdit } from '@/lib/activity-schedule'
+import { slotExtraSpotsOf } from '@/lib/extra-spots'
 import { NewDepartureDialog } from '@/components/dashboard/calendar/new-departure-dialog'
 import { CURRENT_TENANT, tenantById } from '@/lib/demo-core'
 import Image from 'next/image'
@@ -216,11 +217,29 @@ export function DepartureDetailSheet({
 
   const detail = React.useMemo(() => {
     if (!cachedId || !loaded || loaded.departure.id !== cachedId) return null
-    const { departure: served, activity, guests, crew, resources, gross, paid } = loaded
+    const { departure: given, activity, guests, crew, resources, gross, paid } = loaded
     const media = activity.media.find((item) => item.isPrimary) ?? activity.media[0]
+    // The spots as the calendar shows them after a saved edit: the edit's spots for this time, its extra spots on top.
+    const override = overrides[activity.id]
+    const edited = override ? applyActivityOverride(activity, override) : activity
+    // The extra spots in the shown spots: the edit's once laid over, else the ones the server's spots were sold with.
+    const [served, extraSpots] = ((): [typeof given, number] => {
+      const asServed: [typeof given, number] = [given, slotExtraSpotsOf(activity)]
+      if (!override || given.status === 'cancelled' || given.status === 'completed' || (activity.kind ?? 'trip') === 'charter') return asServed
+      const day = given.startsAt.slice(0, 10)
+      const primary = edited.locations[0]?.locationId
+      const entry = expandSchedules(edited, day, day, scheduleContextOf(bookingDefaults)).find(
+        (slot) => slot.time === given.startsAt.slice(11, 16) && (slot.locationId ?? primary) === (given.locationId ?? primary),
+      )
+      if (!entry) return asServed
+      const extraNow = slotExtraSpotsOf(edited)
+      const spots = spotsAfterEdit(given.capacity, entry, defaultSpots(edited) !== defaultSpots(activity), slotExtraSpotsOf(activity), extraNow)
+      return [spots === given.capacity ? given : { ...given, capacity: Math.max(spots, given.booked) }, extraNow]
+    })()
     const change = ledger.delta[served.id] ?? 0
     const departure = change ? { ...served, booked: Math.max(0, Math.min(served.capacity, served.booked + change)) } : served
     return {
+      extraSpots,
       extra: entriesOn(ledger, served.id),
       departure,
       activity,
@@ -233,7 +252,7 @@ export function DepartureDetailSheet({
       media,
       fill: fillRate(departure.booked, departure.capacity),
     }
-  }, [cachedId, loaded, ledger])
+  }, [cachedId, loaded, ledger, overrides, bookingDefaults])
 
   const open = Boolean(departureId)
 
@@ -243,7 +262,7 @@ export function DepartureDetailSheet({
 
   if (!detail) return null
 
-  const { departure, activity, guests: seededGuests, crew, resources, gross, paid, outstanding, media } = detail
+  const { departure, activity, guests: seededGuests, crew, resources, gross, paid, outstanding, media, extraSpots } = detail
   const tenant = tenantById.get(departure.tenantId) ?? CURRENT_TENANT
   const slotDay = departure.startsAt.slice(0, 10)
   const slotTime = departure.startsAt.slice(11, 16)
@@ -416,6 +435,11 @@ export function DepartureDetailSheet({
                   size="md"
                   unit="spot"
                 />
+                {extraSpots > 0 && departure.capacity > extraSpots ? (
+                  <p className="mt-2 text-xs text-subtle tabular">
+                    {departure.capacity - extraSpots} + {extraSpots} extra spots, sold once the {departure.capacity - extraSpots} are full.
+                  </p>
+                ) : null}
                 {departure.held > 0 ? (
                   <p className="mt-2 text-xs text-subtle">
                     {departure.held} {departure.held === 1 ? 'spot is' : 'spots are'} held by guests

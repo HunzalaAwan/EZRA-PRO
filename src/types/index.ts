@@ -207,21 +207,30 @@ export interface PriceTier {
 /** How the price is counted. Absent: worked out from the kind (per person, a charter per group, a rental per item). */
 export type ChargeBy = 'person' | 'group' | 'item' | 'duration'
 
-/** Per group: one price for the group up to a number of guests, then a price per extra guest. */
+/** Per group: one price for the group. Guests in extra spots each add the extra-spot price (`Activity.extraSpots`). */
 export interface GroupPrice {
-  /** Minor units, for up to `includedGuests`. */
+  /** Minor units: the whole group, in the usual spots. */
   price: number
-  includedGuests: number
-  /** Minor units per guest over `includedGuests`. 0: the group can't grow past it. */
-  extraGuest: number
-  /**
-   * The most guests one booking can have: `includedGuests` plus the extra
-   * guests allowed. 0: the activity's spots (saved before extra guests had a
-   * limit, or the price covers everyone).
-   */
-  maxGuests: number
+  /** Saves from before extra spots only: the guests the price covered. Read as the spots (see `@/lib/extra-spots`). */
+  includedGuests?: number
+  /** Saves from before extra spots only: each guest over that, minor units. Read as the extra-spot price. */
+  extraGuest?: number
+  /** Saves from before extra spots only: what it covered plus the extra guests allowed. */
+  maxGuests?: number
   /** Optional, shown to guests next to the group price: "Up to 6 guests, gear included". */
   note?: string
+}
+
+/**
+ * Extra spots: sold once a time slot's usual spots are full (a private group:
+ * guests over its most guests), each at its own price. Both set, or none are
+ * sold and nothing extra is charged.
+ */
+export interface ExtraSpots {
+  /** How many. 0: none. */
+  count: number
+  /** Each one, minor units. */
+  price: number
 }
 
 /** "From 6 guests, 10% off": the best rung the booking reaches applies to its tickets. */
@@ -733,17 +742,13 @@ export interface CharterConfig {
   crewed?: boolean
   /** Each price tier is a charter option; this is how long each one runs. */
   durations?: { tierId: string; minutes: number }[]
-  /** Most guests one charter carries. */
+  /** Most guests one charter carries, before any extra spots (`Activity.extraSpots`). */
   maxGuests: number
-  /** Guests the charter price covers. Absent: all of them. */
+  /** Saves from before extra spots only: the guests the price covered. Read as the most guests (see `@/lib/extra-spots`). */
   includedGuests?: number
-  /** Each guest above that, minor units. */
+  /** Saves from before extra spots only: each guest above that, minor units. Read as the extra-spot price. */
   extraGuestPrice?: number
-  /**
-   * Guests allowed over `includedGuests`, each at `extraGuestPrice`. 0: none,
-   * the group stops at what the price covers. Absent (saved before it was
-   * asked): any number up to `maxGuests` when each one pays, else none.
-   */
+  /** Saves from before extra spots only: guests allowed over `includedGuests`. Absent: up to `maxGuests`. */
   maxExtraGuests?: number
   /** Guests send a request and get a quote instead of paying on the spot. */
   requestToBook: boolean
@@ -857,7 +862,10 @@ export interface Activity {
   /** Minutes. */
   durationMinutes: number
   minAge: number
+  /** Spots per time slot (a private group: its most guests), before any extra spots. */
   maxCapacity: number
+  /** Extra spots, sold once the usual spots are full, each at its own price. Absent: none. */
+  extraSpots?: ExtraSpots
   minParticipants: number
   pricingModel: PricingModel
   basePrice: number

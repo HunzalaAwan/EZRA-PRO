@@ -76,6 +76,7 @@ import type {
   ChangeRules,
   PaymentTerms,
   PrivateOption,
+  ExtraSpots,
 } from '@/types'
 import { DEFAULT_PAYMENT, policySummary, presetOf } from '@/lib/booking-policy'
 import { fromPrice } from '@/lib/price-engine'
@@ -512,10 +513,10 @@ const PRIVATE_BY_SLUG: Record<string, PrivateOption> = {
   'upcountry-horseback-ride': { enabled: true, price: 79900, includedGuests: 6, extraGuest: 0 },
 }
 
-/** Private groups: guests the price covers, and each one over. */
-const CHARTER_EXTRA_BY_SLUG: Record<string, { includedGuests: number; extraGuestPrice: number }> = {
-  'private-catamaran-charter': { includedGuests: 12, extraGuestPrice: 4500 },
-  'private-sportfishing-charter': { includedGuests: 4, extraGuestPrice: 15000 },
+/** Extra spots: private groups take this many guests over their most guests, each at this price. */
+const EXTRA_SPOTS_BY_SLUG: Record<string, ExtraSpots> = {
+  'private-catamaran-charter': { count: 12, price: 4500 },
+  'private-sportfishing-charter': { count: 2, price: 15000 },
 }
 
 /** The policy preset for an activity, and whether a deposit is kept. */
@@ -1913,7 +1914,8 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
   {
     slug: 'private-catamaran-charter',
     kind: 'charter',
-    charter: { maxGuests: 24, requestToBook: true, noticeHours: 72, vessel: 'yacht', crewed: true, minutes: [180, 150] },
+    // 12 guests for the charter price, then up to 12 more in extra spots (EXTRA_SPOTS_BY_SLUG): 24 in all.
+    charter: { maxGuests: 12, requestToBook: true, noticeHours: 72, vessel: 'yacht', crewed: true, minutes: [180, 150] },
     languages: ['English', 'Japanese'],
     name: 'Private Catamaran Charter',
     tagline: 'The whole catamaran for your group: proposals, birthdays, company days.',
@@ -2159,7 +2161,8 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
   {
     slug: 'private-sportfishing-charter',
     kind: 'charter',
-    charter: { maxGuests: 6, requestToBook: false, noticeHours: 24, vessel: 'boat', crewed: true, minutes: [480, 300] },
+    // 4 anglers for the charter price, then up to 2 more in extra spots (EXTRA_SPOTS_BY_SLUG): 6 in all.
+    charter: { maxGuests: 4, requestToBook: false, noticeHours: 24, vessel: 'boat', crewed: true, minutes: [480, 300] },
     languages: ['English'],
     name: 'Private Sportfishing Charter',
     tagline: 'The whole boat, the whole crew, the whole day. Blue marlin country.',
@@ -3717,12 +3720,12 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
           return {
             charter: {
               ...rest,
-              ...(CHARTER_EXTRA_BY_SLUG[spec.slug] ?? {}),
               ...(minutes ? { durations: priceTiers.map((tier, index) => ({ tierId: tier.id, minutes: minutes[index] ?? spec.durationMinutes })) } : {}),
             },
           }
         })()
       : {}),
+    ...(EXTRA_SPOTS_BY_SLUG[spec.slug] ? { extraSpots: { ...EXTRA_SPOTS_BY_SLUG[spec.slug] } } : {}),
     ...(spec.languages ? { languages: spec.languages } : {}),
     ...(spec.customRequests || CUSTOM_REQUEST_SLUGS.has(spec.slug) ? { customRequests: true } : {}),
     ...(spec.priceCap ? { priceCap: spec.priceCap } : {}),

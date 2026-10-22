@@ -4,6 +4,7 @@ import { requireWorkspaceRoute } from '@/lib/workspace'
 import { NOW_ISO } from '@/components/dashboard/activities/activity-data'
 import { getActivitiesByTenant } from '@/lib/demo'
 import { getSeedCharterRequests } from '@/lib/operations'
+import { privateMostOf, slotExtraSpotsOf } from '@/lib/extra-spots'
 import { PageHeader } from '@/components/dashboard/page-header'
 import { RequestsInbox } from '@/components/dashboard/operations/requests-inbox'
 
@@ -23,7 +24,8 @@ export default async function RequestsPage() {
       name: activity.name,
       kind: activity.kind ?? 'trip',
       perGroup: activity.kind === 'charter',
-      maxGuests: activity.charter?.maxGuests ?? activity.maxCapacity,
+      // A private group's most guests plus its extra spots; a shared time slot's spots plus its extra ones.
+      maxGuests: activity.kind === 'charter' ? privateMostOf(activity) : activity.maxCapacity + slotExtraSpotsOf(activity),
       tiers: activity.priceTiers.map((tier) => ({ id: tier.id, label: tier.label, price: tier.price })),
     }))
   return (

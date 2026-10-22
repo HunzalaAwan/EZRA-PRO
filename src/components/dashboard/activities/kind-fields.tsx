@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button'
 import { ACTIVITY_KIND_META, isTimedKind, LESSON_LEVELS } from '@/lib/activity-kinds'
 import { cn } from '@/lib/utils'
-import type { ActivityKind, CharterConfig, DifficultyLevel, LessonConfig, RentalCategory, RentalConfig } from '@/types'
+import type { ActivityKind, CharterConfig, DifficultyLevel, ExtraSpots, LessonConfig, RentalCategory, RentalConfig } from '@/types'
 
 import { DurationField, type DurationUnit } from './duration-field'
 import type { DraftTier } from './pricing-tier-editor'
@@ -19,7 +19,8 @@ import type { DraftTier } from './pricing-tier-editor'
    What are you selling? The kind picker, and the one card of settings each
    kind needs. Every number a kind cares about lives in its card, once:
    seats for a trip, units for a rental, the group for a charter, the class
-   for a lesson, tickets for a pass. The schedule step only reads them.
+   for a lesson, tickets for a pass, and the extra spots sold once the usual
+   ones are full. The schedule step only reads them.
    ========================================================================== */
 
 export const KIND_ICONS: Record<ActivityKind, LucideIcon> = {
@@ -158,6 +159,8 @@ export interface SharedBasics {
   durationMinutes: number
   durationUnit: DurationUnit
   difficulty: DifficultyLevel
+  /** Sold once the usual spots are full (a private group: guests over its most guests), each at its own price. Count 0: none. */
+  extraSpots: ExtraSpots
 }
 
 /** The wizard's choices: group activity, activity and private charter are one card. */
@@ -214,19 +217,21 @@ const SLOT_CHOICES = [
   { value: true, label: 'Private', hint: 'One group has the time slot to itself', icon: Lock },
 ] as const
 
-/** Group activity, activity and private charter: how long, who books it, how many, how hard. */
+/** Group activity, activity and private charter: how long, who books it, how many, how hard, and any extra spots. */
 export function TimedFields({
   privateGroup,
   onPrivate,
   shared,
   onShared,
   errors,
+  currencySymbol,
 }: {
   privateGroup: boolean
   onPrivate: (value: boolean) => void
   shared: SharedBasics
   onShared: (patch: Partial<SharedBasics>) => void
   errors: Record<string, string>
+  currencySymbol: string
 }) {
   return (
     <div className="flex flex-col gap-5 rounded-xl border border-line bg-surface-sunken/40 p-4">
@@ -288,11 +293,79 @@ export function TimedFields({
         </Field>
         <DifficultyField value={shared.difficulty} onChange={(difficulty) => onShared({ difficulty })} />
       </div>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <ExtraSpotsFields
+          value={shared.extraSpots}
+          onChange={(extraSpots) => onShared({ extraSpots })}
+          usual={shared.maxCapacity}
+          privateGroup={privateGroup}
+          currencySymbol={currencySymbol}
+          errors={errors}
+        />
+      </div>
     </div>
   )
 }
 
 const num = (value: string, min = 0) => Math.max(min, Math.round(Number(value) || 0))
+const cents = (value: string) => Math.max(0, Math.round(Number(value) * 100) || 0)
+
+/**
+ * Extra spots: how many, and what each one costs. Shared, they are sold once
+ * the usual spots are full; private, they are guests over the most guests.
+ * Empty: none, and nothing extra is charged. Two fields for the caller's grid.
+ */
+export function ExtraSpotsFields({
+  value,
+  onChange,
+  usual,
+  privateGroup = false,
+  currencySymbol,
+  errors,
+}: {
+  value: ExtraSpots
+  onChange: (next: ExtraSpots) => void
+  /** Spots per time slot, or a private group's most guests. 0: not filled in yet. */
+  usual: number
+  privateGroup?: boolean
+  currencySymbol: string
+  errors: Record<string, string>
+}) {
+  const count = value.count > 0 ? value.count : 0
+  const hint = privateGroup ? `Guests above ${usual > 0 ? usual : 'the most guests'}, each` : `Sold once the ${usual > 0 ? `${usual} ` : ''}spots are full`
+  return (
+    <>
+      <Field label="Extra spots" optional description={hint} error={errors['extraSpots.count']}>
+        {(control) => (
+          <Input
+            {...control}
+            type="number"
+            min={0}
+            max={500}
+            placeholder="None"
+            suffix={count === 1 ? 'spot' : 'spots'}
+            value={count > 0 ? count : ''}
+            onChange={(event) => onChange({ ...value, count: Math.min(500, num(event.target.value)) })}
+          />
+        )}
+      </Field>
+      <Field label="Price per extra spot" required={count > 0} disabled={count <= 0} error={errors['extraSpots.price']}>
+        {(control) => (
+          <Input
+            {...control}
+            type="number"
+            min={0}
+            disabled={count <= 0}
+            placeholder={count > 0 ? '0' : 'No extra spots'}
+            leftIcon={<span className="text-sm font-medium">{currencySymbol}</span>}
+            value={count > 0 && value.price > 0 ? value.price / 100 : ''}
+            onChange={(event) => onChange({ ...value, price: cents(event.target.value) })}
+          />
+        )}
+      </Field>
+    </>
+  )
+}
 
 
 /* ---------- small pieces ---------- */
@@ -487,6 +560,7 @@ export function KindFields({
   errors,
   shared,
   onShared,
+  currencySymbol = '$',
 }: {
   /** Not read here any more; kept so callers need not change. */
   tenantSlug?: string
@@ -495,7 +569,7 @@ export function KindFields({
   onChange: (settings: DraftKindSettings) => void
   /** Not read here any more; kept so callers need not change. */
   tiers?: DraftTier[]
-  /** Not read here any more: the late return fee moved to RentalChargingFields. */
+  /** For a lesson's extra-spot price. */
   currencySymbol?: string
   errors: Record<string, string>
   shared: SharedBasics
@@ -573,6 +647,7 @@ export function KindFields({
             <Field label="Fewest to go ahead" error={errors.minParticipants}>
               {(control) => <Input {...control} type="number" min={1} value={shared.minParticipants} onChange={(e) => onShared({ minParticipants: num(e.target.value, 1) })} />}
             </Field>
+            <ExtraSpotsFields value={shared.extraSpots} onChange={(extraSpots) => onShared({ extraSpots })} usual={shared.maxCapacity} currencySymbol={currencySymbol} errors={errors} />
           </div>
         </Section>
       </>,

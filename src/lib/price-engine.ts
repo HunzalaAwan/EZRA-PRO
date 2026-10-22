@@ -1,6 +1,7 @@
-import type { Activity, ActivityKind, ChargeBy, CurrencyCode, GroupPrice, PriceChange, PriceChangeKind, PriceTier } from '@/types'
+import type { Activity, ActivityKind, ChargeBy, CurrencyCode, PriceChange, PriceChangeKind, PriceTier } from '@/types'
 import { applyRules, type PricingRule } from '@/lib/pricing'
 import { rateFor, rentalModes, type RentalMode } from '@/lib/activity-kinds'
+import { extraSpotsOf, privateMostOf, slotExtraSpotsOf, spotsPlanOf } from '@/lib/extra-spots'
 import { peopleOf, placesOf } from '@/lib/places'
 import { formatCurrency } from '@/lib/utils'
 
@@ -22,13 +23,17 @@ import { formatCurrency } from '@/lib/utils'
         (Pricing → Price rules, `applyRules`: the start time and how full the
         time slot is count too; never below half price)
      7. rounded to whole minor units
-   Then on the booking: rental item caps, the booking's price cap and the
-   minimum charge. Extras, fees and tax are added by `buildQuote`.
-   Extra guests (private, per group, a charter's guests over what it covers)
-   move only with the activity's own percentage changes: dynamic pricing and
-   business rules leave them as set, as they always have. Per group a booking
-   has at most what the price covers plus the extra guests allowed
-   (`guestLimitOf`): every screen stops there; the engine prices what it gets.
+   Then on the booking: extra spots, rental item caps, the booking's price cap
+   and the minimum charge. Extras, fees and tax are added by `buildQuote`.
+   Extra spots (`@/lib/extra-spots`): once a shared time slot's usual spots
+   are full, or a private group is over its most guests, each guest in an
+   extra spot pays the extra-spot price (per person: instead of their ticket;
+   per group: on top of the group price). Extra-spot and private extra-guest
+   prices move only with the activity's own percentage changes: dynamic
+   pricing and business rules leave them as set. A shared time slot sells its
+   spots plus its extra spots; a private group is at most its most guests plus
+   its extra spots (`guestLimitOf`). Every screen stops there; the engine
+   prices what it gets.
    ========================================================================== */
 
 /** The parts of an activity the engine reads. A full `Activity` fits. */
@@ -36,7 +41,18 @@ export type PricedActivity = Pick<Activity, 'slug' | 'kind' | 'currency' | 'pric
   Partial<
     Pick<
       Activity,
-      'basePrice' | 'chargeBy' | 'groupPrice' | 'groupDiscounts' | 'minimumCharge' | 'priceChanges' | 'priceCap' | 'privateOption' | 'charter' | 'rental'
+      | 'basePrice'
+      | 'chargeBy'
+      | 'groupPrice'
+      | 'groupDiscounts'
+      | 'minimumCharge'
+      | 'priceChanges'
+      | 'priceCap'
+      | 'privateOption'
+      | 'charter'
+      | 'rental'
+      | 'maxCapacity'
+      | 'extraSpots'
     >
   >
 
@@ -56,7 +72,12 @@ export interface PriceContext {
   startsAt?: string
   /** When the booking is made (the demo clock). Without it, book early / last minute are skipped. */
   nowIso?: string
-  /** Spots at the time slot, and how many are already taken before this booking. */
+  /**
+   * Spots at the time slot, its extra spots included, and how many are
+   * already taken before this booking. With extra spots, the usual spots are
+   * `capacity` less the extra ones: filling-up and quiet-time prices count
+   * against them, and guests past them pay the extra-spot price.
+   */
   capacity?: number
   booked?: number
   /** The time slot's seeded dynamic pricing; 1 when none. */
@@ -121,6 +142,8 @@ export interface PriceBookingResult {
   guests: number
   /** Tickets that take a spot. */
   seats: number
+  /** Guests in extra spots, each charged the extra-spot price. */
+  extraSpots: number
   /** Every ticket, in people. */
   headcount: number
   /** What item caps and the price cap took off. */
@@ -157,75 +180,34 @@ export const groupPriced = (activity: PricedActivity) =>
 export const privatePerPerson = (activity: Pick<Activity, 'kind'> & Partial<Pick<Activity, 'chargeBy'>>) =>
   (activity.kind ?? 'trip') === 'charter' && chargeByOf(activity) === 'person'
 
-/** Per group: what the price covers, each guest over that, and the most guests one booking can have. */
-export interface GroupCover {
-  /** Guests the price covers. Infinity: everyone. */
-  covers: number
-  /** Each guest over that, minor units, before any change. */
-  extraGuest: number
-  /** What the price covers plus the extra guests allowed (a private group: never over its most guests). Infinity: the spots decide. */
-  most: number
-}
-
 /**
- * Per group, the guests the price covers, each guest over that before any
- * change (minor units), and the most guests one booking can have: a shared
- * activity's group price, or a private group's options. Undefined when the
- * activity is not priced per group.
- */
-export function groupCoverOf(activity: PricedActivity): GroupCover | undefined {
-  // A group that can't grow past what the price covers has no extra guests to charge.
-  const cover = (covers: number, extraGuest: number, most: number): GroupCover => ({ covers, extraGuest: Number.isFinite(covers) && most <= covers ? 0 : extraGuest, most })
-  if (groupPriced(activity)) {
-    const group = activity.groupPrice!
-    return cover(group.includedGuests > 0 ? group.includedGuests : Number.POSITIVE_INFINITY, Math.max(0, group.extraGuest || 0), groupGuestLimit(group))
-  }
-  if ((activity.kind ?? 'trip') === 'charter' && chargeByOf(activity) === 'group') {
-    const charter = activity.charter
-    const included = Math.floor(charter?.includedGuests ?? 0)
-    const extraGuest = Math.max(0, charter?.extraGuestPrice ?? 0)
-    const ceiling = charter && charter.maxGuests > 0 ? charter.maxGuests : Number.POSITIVE_INFINITY
-    if (included <= 0) return cover(Number.POSITIVE_INFINITY, extraGuest, ceiling)
-    // Saved before extra guests had a limit: any number up to the most guests, as before (with no price for them, free).
-    const allowed = charter?.maxExtraGuests !== undefined ? Math.max(0, Math.floor(charter.maxExtraGuests)) : Number.POSITIVE_INFINITY
-    return cover(included, extraGuest, Math.min(ceiling, included + allowed))
-  }
-  return undefined
-}
-
-/** Guests over what a group price covers. */
-export const guestsOver = (cover: Pick<GroupCover, 'covers' | 'extraGuest'> | undefined, guests: number) =>
-  cover && cover.extraGuest > 0 && Number.isFinite(cover.covers) ? Math.max(0, guests - cover.covers) : 0
-
-/**
- * The most guests one booking can have by how it is priced: per group, what
- * the price covers and the extra guests allowed; a private group, also its
- * most guests. Infinity: the spots decide. Every screen that sells or changes
- * a booking stops here.
+ * The most guests one booking can have by how it is priced: a private group,
+ * its most guests plus its extra spots. Infinity: the spots left decide (a
+ * shared time slot sells its spots plus its extra spots). Every screen that
+ * sells or changes a booking stops here.
  */
 export function guestLimitOf(activity: PricedActivity): number {
-  const cover = groupCoverOf(activity)
-  const charter = (activity.kind ?? 'trip') === 'charter' && activity.charter && activity.charter.maxGuests > 0 ? activity.charter.maxGuests : Number.POSITIVE_INFINITY
-  return Math.min(cover?.most ?? Number.POSITIVE_INFINITY, charter)
+  if ((activity.kind ?? 'trip') !== 'charter') return Number.POSITIVE_INFINITY
+  return privateMostOf(activity)
 }
 
 /**
- * A group price in words, after the price: "for up to 3 · up to 2 more at $90
- * each", "for up to 3" with no extra guests, or "for the group" when it covers
- * everyone (or every spot). Saved before extra guests had a limit (the spots
- * decide): "for up to 3, then $90 each". `extraEach` is the extra-guest price
- * at the time slot; `spots`, the activity's spots or most guests.
+ * The usual spots still free before a booking: a private group's most guests
+ * (the time slot is its own); a shared time slot's spots, less its extra
+ * spots, less what is already booked (`booked`, the same count filling-up
+ * prices use). Without the time slot, the activity's spots. Infinity: the
+ * activity sells no extra spots, so every guest pays the usual price.
  */
-export function groupCoverWords(cover: GroupCover | undefined, extraEach: number, currency: CurrencyCode, spots = Number.POSITIVE_INFINITY): string {
-  if (!cover || !Number.isFinite(cover.covers) || cover.covers >= spots) return 'for the group'
-  const most = Math.min(cover.most, spots)
-  const more = most - cover.covers
-  if (more <= 0) return `for up to ${cover.covers}`
-  // Extra guests at no charge (an older save): the price simply covers them all.
-  if (extraEach <= 0) return Number.isFinite(most) ? `for up to ${most}` : 'for the group'
-  const each = formatCurrency(extraEach, currency)
-  return Number.isFinite(cover.most) ? `for up to ${cover.covers} · up to ${more} more at ${each} each` : `for up to ${cover.covers}, then ${each} each`
+export function usualSpotsLeft(activity: PricedActivity, slot: { capacity?: number; booked?: number } = {}): number {
+  if (!extraSpotsOf(activity)) return Number.POSITIVE_INFINITY
+  const plan = spotsPlanOf(activity)
+  if ((activity.kind ?? 'trip') === 'charter') return plan.usual > 0 ? plan.usual : Number.POSITIVE_INFINITY
+  const usual = slot.capacity !== undefined ? Math.max(0, slot.capacity - plan.extra) : plan.usual > 0 ? plan.usual : Number.POSITIVE_INFINITY
+  return Math.max(0, usual - Math.max(0, slot.booked ?? 0))
 }
+
+/** "Extra spots · $40 each": what guests read once the usual spots are full. */
+export const extraSpotWords = (each: number, currency: CurrencyCode) => `Extra spots · ${formatCurrency(each, currency)} each`
 
 /**
  * Per group: guests only say how many are coming, and every one is booked on
@@ -239,17 +221,10 @@ export function groupTierOf(activity: Pick<PricedActivity, 'priceTiers'>): Price
   return tiers.find((tier) => tier.price > 0 && single(tier)) ?? tiers.find(single) ?? tiers.find((tier) => tier.countsTowardCapacity) ?? tiers[0]
 }
 
-/**
- * The most guests one shared per-group booking takes: no limit (the spots
- * decide) when the price is for everyone; else what the price covers plus the
- * extra guests allowed (`maxGuests`, never below what it covers). Saved before
- * extra guests had a limit (`maxGuests` 0): no limit when each one pays, else
- * what the price covers.
- */
-export function groupGuestLimit(group: GroupPrice): number {
-  if (group.includedGuests <= 0) return Number.POSITIVE_INFINITY
-  if (group.maxGuests > 0) return Math.max(group.includedGuests, group.maxGuests)
-  return group.extraGuest > 0 ? Number.POSITIVE_INFINITY : group.includedGuests
+/** The lead ticket: the first paid one that takes a spot (the "Lead price" row), else the first paid one, else the first. */
+const leadTierOf = (activity: Pick<PricedActivity, 'priceTiers'>): PriceTier | undefined => {
+  const paid = activity.priceTiers.filter((tier) => tier.price > 0)
+  return paid.find((tier) => tier.countsTowardCapacity) ?? paid[0] ?? activity.priceTiers[0]
 }
 
 const isRated = (activity: PricedActivity, mode?: RentalMode) =>
@@ -287,12 +262,16 @@ interface Moment {
   soldPercent?: number
 }
 
-function momentOf(ctx: PriceContext): Moment {
+/** The spots filling-up and quiet-time prices count against: a time slot's usual spots, without its extra ones. */
+const fillCapacity = (activity: PricedActivity, ctx: PriceContext) =>
+  ctx.capacity === undefined ? undefined : Math.max(0, ctx.capacity - slotExtraSpotsOf(activity))
+
+function momentOf(ctx: PriceContext, capacity = ctx.capacity): Moment {
   if (!ctx.startsAt) return {}
   const key = ctx.startsAt.slice(0, 10)
   const time = ctx.startsAt.length >= 16 ? ctx.startsAt.slice(11, 16) : undefined
   const hoursAhead = ctx.nowIso ? (new Date(ctx.startsAt).getTime() - new Date(ctx.nowIso).getTime()) / 3_600_000 : undefined
-  const soldPercent = ctx.capacity && ctx.capacity > 0 && ctx.booked !== undefined ? (Math.max(0, ctx.booked) / ctx.capacity) * 100 : undefined
+  const soldPercent = capacity && capacity > 0 && ctx.booked !== undefined ? (Math.max(0, ctx.booked) / capacity) * 100 : undefined
   return { key, time, weekday: weekdayOf(key), hoursAhead, soldPercent }
 }
 
@@ -432,7 +411,8 @@ function applyEffect(price: number, effect: PriceChange['effect']): number {
 
 function runSteps(activity: PricedActivity, scope: Scope, base: number, ctx: PriceContext, ladder: boolean): UnitResult {
   const currency = activity.currency ?? 'USD'
-  const moment = momentOf(ctx)
+  const capacity = fillCapacity(activity, ctx)
+  const moment = momentOf(ctx, capacity)
   const changes = (activity.priceChanges ?? []).filter((change) => change.active && targets(change, scope))
   const applied: AppliedChange[] = []
   let price = base
@@ -498,7 +478,7 @@ function runSteps(activity: PricedActivity, scope: Scope, base: number, ctx: Pri
   if (rules.length > 0 && ctx.startsAt) {
     // How full the time slot is, for filling-up and quiet-time rules. A private activity's time slot
     // is one group's, booked or not, so those rules leave it out.
-    const fill = (activity.kind ?? 'trip') === 'charter' ? {} : { capacity: ctx.capacity, booked: ctx.booked }
+    const fill = (activity.kind ?? 'trip') === 'charter' ? {} : { capacity, booked: ctx.booked }
     const result = applyRules(rules, { activitySlug: activity.slug, startsAt: ctx.startsAt, nowIso: ctx.nowIso ?? ctx.startsAt, guests: Math.max(1, guests), ...fill })
     if (result.applied.length > 0) {
       scale *= result.multiplier
@@ -523,7 +503,7 @@ function baseOf(activity: PricedActivity, tierId: string, rental?: RentalPricing
   return tier.price
 }
 
-/** An extra guest's price: the set price moved by the activity's own percentage changes only. */
+/** An extra guest's or extra spot's price: the set price moved by the activity's own percentage changes only. */
 const extraPrice = (price: number, factor: number) => Math.max(0, Math.round(price * factor))
 
 export interface UnitPriceDetail {
@@ -532,8 +512,10 @@ export interface UnitPriceDetail {
   /** Before any change. */
   base: number
   applied: AppliedChange[]
-  /** 'group', 'private' and a private group's options: each guest over what the price covers, after the activity's own changes. */
+  /** 'private': each guest over what the private price covers, after the activity's own changes. */
   extraGuest?: number
+  /** Each extra spot alongside this price, after the activity's own changes. Absent: no extra spots. */
+  extraSpot?: number
 }
 
 /**
@@ -548,19 +530,28 @@ export function unitPriceDetail(activity: PricedActivity, tierId: string, ctx: P
     const result = runSteps(activity, { kind: 'private' }, base, ctx, false)
     return { price: result.price, base, applied: result.applied, extraGuest: extraPrice(priv?.extraGuest ?? 0, result.factor) }
   }
+  const spots = extraSpotsOf(activity)
   if (tierId === 'group') {
     const base = activity.groupPrice?.price ?? 0
     const result = runSteps(activity, { kind: 'group' }, base, ctx, false)
-    // None when no extra guests are allowed.
-    const extra = groupPriced(activity) ? (groupCoverOf(activity)?.extraGuest ?? 0) : (activity.groupPrice?.extraGuest ?? 0)
-    return { price: result.price, base, applied: result.applied, extraGuest: extraPrice(extra, result.factor) }
+    return { price: result.price, base, applied: result.applied, ...(spots ? { extraSpot: extraPrice(spots.price, result.factor) } : {}) }
   }
   const base = baseOf(activity, tierId, ctx.rental) ?? 0
   const result = runSteps(activity, { kind: 'tier', tierId, base }, base, ctx, chargeByOf(activity) === 'person')
-  // A private group's option: each guest over what it covers pays the extra-guest price.
-  const cover = (activity.kind ?? 'trip') === 'charter' ? groupCoverOf(activity) : undefined
-  if (cover && cover.extraGuest > 0 && Number.isFinite(cover.covers)) return { price: result.price, base, applied: result.applied, extraGuest: extraPrice(cover.extraGuest, result.factor) }
-  return { price: result.price, base, applied: result.applied }
+  return { price: result.price, base, applied: result.applied, ...(spots ? { extraSpot: extraPrice(spots.price, result.factor) } : {}) }
+}
+
+/**
+ * Each extra spot's price on this time slot, as a booking's lines charge it:
+ * the set price, moved only by the activity's own percentage changes (those
+ * of the group price, of a private group's option `tierId`, or of the lead
+ * ticket). 0: the activity sells no extra spots.
+ */
+export function extraSpotPrice(activity: PricedActivity, ctx: PriceContext = {}, tierId?: string): number {
+  const spots = extraSpotsOf(activity)
+  if (!spots) return 0
+  const id = groupPriced(activity) ? 'group' : (tierId ?? leadTierOf(activity)?.id)
+  return id ? (unitPriceDetail(activity, id, ctx).extraSpot ?? spots.price) : spots.price
 }
 
 /** A price tier's price on a date, minor units. See `unitPriceDetail`. */
@@ -674,15 +665,23 @@ export function priceBooking(input: PriceBookingInput): PriceBookingResult {
 
   const lines: PricedLine[] = []
   let capped = 0
-  /** The first ticket's percentage factor: extra guests on a charter follow it. */
+  /** The first ticket's percentage factor and changes: extra spots on tickets follow it. */
   let leadFactor = 1
+  let leadApplied: AppliedChange[] = []
+  let leadSet = false
 
-  // Extra guests follow the activity's own percentage changes only, never dynamic pricing or business rules.
+  // Extra guests and extra spots follow the activity's own percentage changes only, never dynamic pricing or business rules.
   const extraLine = (id: string, label: string, count: number, price: number, factor: number, applied: AppliedChange[]) => {
     if (count <= 0 || price <= 0) return
     const unit = extraPrice(price, factor)
     lines.push({ id, label, quantity: count, unitPrice: unit, total: unit * count, baseUnitPrice: price, applied: factor === 1 ? [] : applied.filter((change) => change.source === 'activity') })
   }
+
+  // Extra spots: the usual spots this booking can still take; each guest past them pays the extra-spot price.
+  // The private option has its own price for the whole time slot, so it has none.
+  const spots = goPrivate ? undefined : extraSpotsOf(activity)
+  const usualLeft = spots ? usualSpotsLeft(activity, { capacity: input.capacity, booked: input.booked }) : Number.POSITIVE_INFINITY
+  let extraSpots = 0
 
   if (goPrivate && priv) {
     // Private: one price for the group in place of the tickets, plus anyone over what it covers.
@@ -690,24 +689,53 @@ export function priceBooking(input: PriceBookingInput): PriceBookingResult {
     lines.push({ id: 'private', label: `Private · up to ${priv.includedGuests}`, quantity: 1, unitPrice: unit.price, total: unit.price, baseUnitPrice: priv.price, applied: unit.applied })
     extraLine('private-extra', 'Extra guests', Math.max(0, headcount - priv.includedGuests), priv.extraGuest, unit.factor, unit.applied)
   } else if (group) {
-    // Per group: one price for so many guests (or everyone), then each extra guest.
+    // Per group: one price for the group in the usual spots, then each guest in an extra spot.
     const unit = runSteps(activity, { kind: 'group' }, group.price, ctx, false)
-    const cover = groupCoverOf(activity)
-    lines.push({ id: 'group', label: group.includedGuests > 0 ? `Group · up to ${group.includedGuests}` : 'Group', quantity: 1, unitPrice: unit.price, total: unit.price, baseUnitPrice: group.price, applied: unit.applied })
-    extraLine('group-extra', 'Extra guests', guestsOver(cover, headcount), group.extraGuest, unit.factor, unit.applied)
+    lines.push({ id: 'group', label: 'Group', quantity: 1, unitPrice: unit.price, total: unit.price, baseUnitPrice: group.price, applied: unit.applied })
+    if (spots) {
+      extraSpots = Math.max(0, seats - usualLeft)
+      extraLine('extra-spots', 'Extra spots', extraSpots, spots.price, unit.factor, unit.applied)
+    }
   } else {
+    // Per person: the usual spots go to the tickets in order, the lead ticket first; a ticket that doesn't fit is
+    // in extra spots, each of its spots at the extra-spot price instead of the ticket (a ticket for two that only
+    // half fits, both), and the spots it leaves go to the tickets after it. Tickets that take no spot pay their own price.
+    const inExtra: Record<string, number> = {}
+    const options = kind === 'charter' && !privatePerPerson(activity)
+    if (spots && !options) {
+      let free = usualLeft
+      const lead = leadTierOf(activity)
+      const order = lead ? [lead, ...activity.priceTiers.filter((tier) => tier.id !== lead.id)] : activity.priceTiers
+      for (const tier of order) {
+        const places = placesOf(tier)
+        const qty = qtyOf(tier.id)
+        if (places <= 0 || qty <= 0) continue
+        const fit = Math.min(qty, Math.floor(free / places))
+        free -= fit * places
+        if (fit < qty) {
+          inExtra[tier.id] = qty - fit
+          extraSpots += (qty - fit) * places
+        }
+      }
+    }
     for (const tier of activity.priceTiers) {
       const qty = qtyOf(tier.id)
       if (qty <= 0) continue
       const base = baseOf(activity, tier.id, rental) ?? tier.price
       const span = byLength ? 1 : rated && rental.mode === 'hour' ? hours : days
       const unit = runSteps(activity, { kind: 'tier', tierId: tier.id, base }, base, ctx, ladder)
-      if (lines.length === 0) leadFactor = unit.factor
+      if (!leadSet) {
+        leadFactor = unit.factor
+        leadApplied = unit.applied
+        leadSet = true
+      }
+      const usualQty = qty - (inExtra[tier.id] ?? 0)
+      if (usualQty <= 0) continue
       const full = unit.price * span
       // A rental item's cap: an hourly or daily price stops at the most one item costs for the whole rental.
       const itemCap = kind === 'rental' && !byLength ? activity.rental?.items?.find((item) => item.tierId === tier.id)?.cap : undefined
       const unitPrice = itemCap && itemCap > 0 ? Math.min(full, itemCap) : full
-      if (unitPrice < full) capped += (full - unitPrice) * qty
+      if (unitPrice < full) capped += (full - unitPrice) * usualQty
       lines.push({
         id: tier.id,
         tierId: tier.id,
@@ -718,19 +746,17 @@ export function priceBooking(input: PriceBookingInput): PriceBookingResult {
             : days > 1
               ? `${tier.label} · ${days} days${unitPrice < full ? ' · capped' : ''}`
               : tier.label,
-        quantity: qty,
+        quantity: usualQty,
         unitPrice,
-        total: unitPrice * qty,
+        total: unitPrice * usualQty,
         baseUnitPrice: base * span,
         applied: unit.applied,
       })
     }
 
-    // A private group's options: the price covers so many guests; each one over pays a set amount.
-    // Per person, every guest has a ticket of their own.
-    const cover = kind === 'charter' && lines.length > 0 ? groupCoverOf(activity) : undefined
-    const over = guestsOver(cover, guests)
-    if (cover && over > 0) extraLine('charter-extra', `Extra guests over ${cover.covers}`, over, cover.extraGuest, leadFactor, lines[0].applied)
+    // A private group's options: the option is for its most guests; each guest over that is in an extra spot.
+    if (spots && options && lines.length > 0) extraSpots = Math.max(0, guests - usualLeft)
+    if (spots && leadSet) extraLine('extra-spots', 'Extra spots', extraSpots, spots.price, leadFactor, leadApplied)
   }
 
   const adjustments: PriceAdjustment[] = []
@@ -751,7 +777,7 @@ export function priceBooking(input: PriceBookingInput): PriceBookingResult {
   const appliedChanges: AppliedChange[] = []
   for (const line of lines) for (const change of line.applied) if (!appliedChanges.some((entry) => entry.id === change.id)) appliedChanges.push(change)
 
-  return { ticketLines: lines, adjustments, subtotalTickets: ticketTotal, appliedChanges, guests, seats, headcount, capped }
+  return { ticketLines: lines, adjustments, subtotalTickets: ticketTotal, appliedChanges, guests, seats, extraSpots, headcount, capped }
 }
 
 /* --------------------------------------------------------------------------

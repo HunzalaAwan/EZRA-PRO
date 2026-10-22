@@ -217,7 +217,7 @@ export default async function CheckoutPage({
       slotEmpty={Boolean(slotRow && slotRow.capacity > 0 && slotRow.seatsLeft >= slotRow.capacity)}
       seededDays={stripDays}
       slotId={packageLegs ? undefined : valid ? requestedId : departureRow.id}
-      request={{ tiers: typeof query.t === 'string' ? query.t : undefined, addOns: typeof query.a === 'string' ? query.a : undefined }}
+      request={{ tiers: typeof query.t === 'string' ? query.t : undefined, addOns: typeof query.a === 'string' ? query.a : undefined, party: typeof query.g === 'string' ? query.g : undefined }}
       basePath={`/book/${tenant.slug}`}
       reference={reference}
       nowIso={`${NOW.getFullYear()}-${String(NOW.getMonth() + 1).padStart(2, '0')}-${String(NOW.getDate()).padStart(2, '0')}T${String(NOW.getHours()).padStart(2, '0')}:${String(NOW.getMinutes()).padStart(2, '0')}:00`}

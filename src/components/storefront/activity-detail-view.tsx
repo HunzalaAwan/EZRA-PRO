@@ -187,7 +187,8 @@ export function ActivityDetailView({
   const sections = React.useMemo(() => SECTIONS.filter((section) => section.id !== 'requirements' || hasRequirements), [hasRequirements])
 
   // The strip as the widget shows it: the saved schedule, this browser's bookings, every time slot priced by the engine.
-  const liveDays = useStorefrontDays(activity, days, { tenantSlug: tenant.slug, nowIso })
+  // Rebuilt from the activity as the server sent it, so the spots an edit changes (extra spots too) are counted once.
+  const liveDays = useStorefrontDays(given, days, { tenantSlug: tenant.slug, nowIso })
   const { rules } = usePricing(tenant.slug)
   const { delta } = useBookingLedger(tenant.slug)
   const stripRental = React.useMemo(() => stripRentalOf(activity), [activity])
@@ -319,7 +320,7 @@ export function ActivityDetailView({
                 : activity.kind === 'lesson'
                   ? activity.lesson?.ratio ? `${activity.lesson.ratio} students per instructor` : `Up to ${activity.maxCapacity} students`
                   : activity.kind === 'charter'
-                    ? `Whole group, up to ${Math.min(activity.charter?.maxGuests ?? activity.maxCapacity, guestLimitOf(activity))}`
+                    ? `Whole group, up to ${guestLimitOf(activity)}`
                     : `Up to ${activity.maxCapacity} guests`}
             </Fact>
             {activity.route ? <Fact icon={RouteIcon}>{routeLabel(activity.route)}{activity.route.elevationM ? ` · ${activity.route.elevationM} m climb` : ''}</Fact> : null}
@@ -693,7 +694,7 @@ export function ActivityDetailView({
           <aside id="book" className="scroll-mt-28 hidden lg:block">
             <StickyRail offset={96}>
               <BookingWidget
-                activity={activity}
+                activity={given}
                 tenantSlug={tenant.slug}
                 currency={tenant.currency}
                 days={days}
@@ -794,7 +795,7 @@ export function ActivityDetailView({
           </SheetHeader>
           <SheetBody className="px-0 pb-6">
             <BookingWidget
-              activity={activity}
+              activity={given}
               tenantSlug={tenant.slug}
               currency={tenant.currency}
               days={days}

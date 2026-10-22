@@ -27,9 +27,10 @@ import { usePricing } from '@/hooks/use-pricing'
 import { useBookingDefaults } from '@/hooks/use-booking-defaults'
 import { useBookingLedger } from '@/hooks/use-booking-ledger'
 import { useActivityOverrides } from '@/hooks/use-pricing-override'
-import { applyPricingOverride, applyScheduleOverride } from '@/lib/activity-overrides'
+import { applyActivityOverride, applyPricingOverride } from '@/lib/activity-overrides'
 import { rateFor, rentalModes } from '@/lib/activity-kinds'
-import { clockTime, expandSchedules, scheduleContextOf, shiftDayKey, slotId } from '@/lib/activity-schedule'
+import { clockTime, defaultSpots, expandSchedules, plusExtraSpots, scheduleContextOf, shiftDayKey, slotId, spotsAfterEdit } from '@/lib/activity-schedule'
+import { sellsExtraSpots, slotExtraSpotsOf } from '@/lib/extra-spots'
 import { getActivityBySlug, tenantBySlug } from '@/lib/demo-core'
 import { effectLabel, groupPriced, groupTierOf, guestLimitOf, priceBooking, privatePerPerson, type PriceBookingResult } from '@/lib/price-engine'
 import {
@@ -215,18 +216,22 @@ function RulesTab({ pricing, tenantSlug, activities, currency, nowIso, peaks, fi
  * option for its party (priced per person, the lead ticket for each guest).
  * Per group: the row guests are booked on, as the storefront books them.
  * A rental is priced for its shortest rental, as the storefront starts it.
- * More guests than one booking can have (per group: what the price covers
- * plus the extra guests allowed) get no price, only the most there can be.
+ * More guests than one booking can have get no price, only the most there
+ * can be: a private group's most guests plus its extra spots, or what a
+ * shared time slot has left (`capacity` less `booked`, extra spots included).
  */
 export function checkPrice(
   activity: Activity,
   count: number,
   ctx: { startsAt: string; nowIso: string; rules: PricingRule[]; multiplier?: number; capacity?: number; booked?: number },
-): { result: PriceBookingResult; before: number } | { result?: undefined; most: number } | null {
+): { result: PriceBookingResult; before: number } | { result?: undefined; most: number; spotsLeft?: boolean } | null {
   // A private group priced per group books one option for the party; per person it books a ticket for each guest.
   const options = (activity.kind ?? 'trip') === 'charter' && !privatePerPerson(activity)
-  const most = Math.min(guestLimitOf(activity), (activity.kind ?? 'trip') === 'charter' ? Math.max(1, activity.charter?.maxGuests ?? activity.maxCapacity) : Number.POSITIVE_INFINITY)
-  if (activity.kind !== 'rental' && count > most) return { most }
+  const kind = activity.kind ?? 'trip'
+  // A shared time slot: what it has left, its extra spots included.
+  const left = kind !== 'charter' && sellsExtraSpots(kind) && ctx.capacity !== undefined ? Math.max(0, ctx.capacity - Math.max(0, ctx.booked ?? 0)) : Number.POSITIVE_INFINITY
+  const most = Math.min(guestLimitOf(activity), left)
+  if (kind !== 'rental' && count > most) return { most, ...(Number.isFinite(left) && left <= guestLimitOf(activity) ? { spotsLeft: true } : {}) }
   const mode = (activity.rental?.rates?.length ?? 0) > 0 ? rentalModes(activity)[0] : undefined
   const lengthId = mode === 'length' ? activity.rental?.lengths?.[0]?.id : undefined
   const paid = activity.priceTiers.filter((tier) => tier.price > 0)
@@ -269,30 +274,35 @@ function PriceCheck({ tenantSlug, activities, currency, nowIso, rules, peaks, fi
   const override = seeded ? overrides[seeded.id] : undefined
   const validDay = /^\d{4}-\d{2}-\d{2}$/.test(dateKey)
 
-  // That day's time slots from the saved schedule and the business's closed days.
+  // That day's time slots from the saved edit (its schedule and spots) and the business's closed days.
+  const edited = React.useMemo(() => (seeded ? applyActivityOverride(seeded, override) : undefined), [seeded, override])
   const slots = React.useMemo(() => {
-    if (!seeded || !validDay) return []
+    if (!edited || !validDay) return []
     try {
-      const scheduled = applyScheduleOverride(seeded, override)
-      return expandSchedules(scheduled, dateKey, dateKey, scheduleContextOf(defaults))
+      return expandSchedules(edited, dateKey, dateKey, scheduleContextOf(defaults))
     } catch {
       return []
     }
-  }, [seeded, override, dateKey, validDay, defaults])
+  }, [edited, dateKey, validDay, defaults])
   const times = React.useMemo(() => [...new Set(slots.map((slot) => slot.time))].sort(), [slots])
   const time = times.includes(picked) ? picked : (times[0] ?? '')
 
-  // How full the time slot is, for filling-up and quiet-time changes: the seeded spots and bookings,
-  // or a new time slot's own spots; then the bookings and changes made since.
+  // How full the time slot is, for filling-up and quiet-time changes and the extra spots: the seeded spots and
+  // bookings, or a new time slot's own spots (as the storefront sells them after the edit, extra spots on top);
+  // then the bookings and changes made since.
   const fill = React.useMemo(() => {
-    if (!fills || !seeded || !time) return undefined
+    if (!fills || !seeded || !edited || !time) return undefined
     const slot = slots.find((entry) => entry.time === time)
     const seededFill = fills[`${slug}|${dateKey}T${time}`]
-    const capacity = seededFill?.capacity ?? slot?.capacity ?? 0
+    const extraNow = slotExtraSpotsOf(edited)
+    const capacity =
+      seededFill && slot
+        ? spotsAfterEdit(seededFill.capacity, slot, defaultSpots(edited) !== defaultSpots(seeded), slotExtraSpotsOf(seeded), extraNow)
+        : (seededFill?.capacity ?? plusExtraSpots(slot?.capacity ?? 0, extraNow))
     if (capacity <= 0) return undefined
     const departureId = seededFill?.departureId ?? slotId(seeded.id, dateKey, time, slot?.locationId)
     return { capacity, booked: Math.max(0, (seededFill?.booked ?? 0) + (ledger.delta[departureId] ?? 0)) }
-  }, [fills, seeded, slots, slug, dateKey, time, ledger.delta])
+  }, [fills, seeded, edited, slots, slug, dateKey, time, ledger.delta])
 
   const check = React.useMemo(() => {
     if (!seeded || !validDay) return null
@@ -338,7 +348,13 @@ function PriceCheck({ tenantSlug, activities, currency, nowIso, rules, peaks, fi
         </div>
         <Input type="number" min={1} max={99} value={count} suffix={pluralize(count, unit === 'items' ? 'item' : 'guest')} onChange={(e) => setCount(Math.min(99, Math.max(1, Math.floor(Number(e.target.value)) || 1)))} aria-label={unit === 'items' ? 'Items' : 'Guests'} />
         {check && !check.result ? (
-          <p className="rounded-xl bg-surface-sunken px-4 py-3 text-sm font-medium text-danger">Up to {check.most} {pluralize(check.most, 'guest')} per booking</p>
+          <p className="rounded-xl bg-surface-sunken px-4 py-3 text-sm font-medium text-danger">
+            {check.spotsLeft
+              ? check.most > 0
+                ? `Only ${check.most} ${pluralize(check.most, 'spot')} left at this time`
+                : 'No spots left at this time'
+              : `Up to ${check.most} ${pluralize(check.most, 'guest')} per booking`}
+          </p>
         ) : check?.result ? (
           <div className="rounded-xl bg-surface-sunken px-4 py-3 text-sm">
             {check.result.ticketLines.map((line) => (

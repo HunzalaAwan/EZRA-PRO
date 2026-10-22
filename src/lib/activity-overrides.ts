@@ -7,6 +7,7 @@ import type {
   ActivityLocation,
   CharterConfig,
   DifficultyLevel,
+  ExtraSpots,
   GroupPrice,
   GuestDetailsConfig,
   GuestQuestion,
@@ -19,6 +20,7 @@ import type {
 import { fromPrice, privatePerPerson } from '@/lib/price-engine'
 import { rentalModes, type RentalMode } from '@/lib/activity-kinds'
 import { normalizeTime } from '@/lib/activity-schedule'
+import { sellsExtraSpots, withExtraSpots } from '@/lib/extra-spots'
 
 /* ==========================================================================
    Activity overrides — edits made in the activity editor, kept in the
@@ -38,6 +40,12 @@ export interface ActivityOverride {
   difficulty: DifficultyLevel
   durationMinutes: number
   maxCapacity: number
+  /**
+   * Extra spots, sold once the usual spots are full (count 0: none). Absent on
+   * edits saved before extra spots: their per-group "covers / extra guests"
+   * fields are read as spots instead (see `@/lib/extra-spots`).
+   */
+  extraSpots?: ExtraSpots
   minAge: number
   minParticipants: number
   featured: boolean
@@ -157,11 +165,22 @@ export function clearActivityOverride(activityId: string) {
   window.dispatchEvent(new Event(ACTIVITY_OVERRIDES_EVENT))
 }
 
+/**
+ * The extra spots after an edit: the ones it saved; none on an editor save from
+ * before extra spots (its old per-group fields are read instead); the seeded
+ * ones on an edit that carries no prices (a closed day from the calendar).
+ */
+function extraSpotsAfter(activity: Activity, override: ActivityOverride): ExtraSpots | undefined {
+  if (override.extraSpots !== undefined) return override.extraSpots
+  return (override.priceTiers?.length ?? 0) > 0 ? undefined : activity.extraSpots
+}
+
 /** The seeded activity with the saved edit laid over it. Lists replace, scalars replace, everything else stays. */
 export function applyActivityOverride<T extends Activity>(activity: T, override?: ActivityOverride): T {
   if (!override) return activity
   const clean = (items: string[]) => items.map((item) => item.trim()).filter(Boolean)
-  return {
+  // A save from before extra spots: its per-group fields become the spots and the extra spots.
+  return withExtraSpots({
     ...activity,
     name: override.name || activity.name,
     tagline: override.tagline || activity.tagline,
@@ -210,10 +229,11 @@ export function applyActivityOverride<T extends Activity>(activity: T, override?
     bring: override.bring ?? activity.bring,
     ride: override.ride ?? activity.ride,
     route: override.route === undefined ? activity.route : (override.route ?? undefined),
+    extraSpots: extraSpotsAfter(activity, override),
     ...pricingFields(activity, override),
     ...scheduleFields(activity, override),
     updatedAt: override.updatedAt,
-  }
+  })
 }
 
 /* ---------- schedule (schedule engine) ---------- */
@@ -286,12 +306,11 @@ export function upsertScheduleChange(activity: Activity, change: NonNullable<Act
 
 /**
  * The pricing fields of a saved edit over the seeded ones. A group price is the
- * price, the guests it covers (0: everyone), each guest over that, the most
- * guests one booking can have (what it covers plus the extra guests allowed;
- * 0: the spots decide) and the description. Group discounts, a minimum charge and an activity's own
- * price changes are price rules now (Pricing → Price rules), so an edit saved
- * before that no longer applies them: nothing the activity setup cannot show
- * moves a price.
+ * price and the description (a save from before extra spots also has what it
+ * covered and its extra guests, read as spots). Group discounts, a minimum
+ * charge and an activity's own price changes are price rules now (Pricing →
+ * Price rules), so an edit saved before that no longer applies them: nothing
+ * the activity setup cannot show moves a price.
  */
 function pricingFields(activity: Activity, override: ActivityOverride): Pick<Activity, 'chargeBy' | 'groupPrice' | 'groupDiscounts' | 'minimumCharge' | 'priceChanges'> {
   const group = override.groupPrice === undefined ? activity.groupPrice : (override.groupPrice ?? undefined)
@@ -306,14 +325,17 @@ function pricingFields(activity: Activity, override: ActivityOverride): Pick<Act
 
 const wholeMinor = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.round(value) : 0)
 
-/** A saved group price, cleaned: whole amounts and counts, never below nothing, and the description only when there is one. */
+/**
+ * A saved group price, cleaned: a whole amount, never below nothing, and the
+ * description only when there is one. A save from before extra spots keeps
+ * what it covered and its extra guests, for `withExtraSpots` to read.
+ */
 function savedGroupPrice(group: GroupPrice): GroupPrice {
   const note = typeof group.note === 'string' ? group.note.trim() : ''
+  const covers = Math.floor(wholeMinor(group.includedGuests))
   return {
     price: wholeMinor(group.price),
-    includedGuests: Math.floor(wholeMinor(group.includedGuests)),
-    extraGuest: wholeMinor(group.extraGuest),
-    maxGuests: Math.floor(wholeMinor(group.maxGuests)),
+    ...(covers > 0 ? { includedGuests: covers, extraGuest: wholeMinor(group.extraGuest), maxGuests: Math.floor(wholeMinor(group.maxGuests)) } : {}),
     ...(note ? { note } : {}),
   }
 }
@@ -347,11 +369,12 @@ function overrideBasePrice(activity: Activity, override: ActivityOverride): numb
 /**
  * Only the prices of a saved edit, for the storefront, checkout and the desk:
  * tier and extra prices by id (ones the edit removed stop selling), rental
- * rates, caps and charging (see `rentalPricingOf`), the private group's
- * guests covered, extra-guest price and extra guests allowed, the private and group prices, the
- * cap and payment. Tier, extra and length ids stay the seeded ones, so a
- * checkout link the server checks against the seeded activity always
- * resolves; tiers and extras the edit added are not sold.
+ * rates, caps and charging (see `rentalPricingOf`), the spots and extra spots
+ * (a private group's most guests), the private and group prices, the cap and
+ * payment. Tier, extra and length ids stay the seeded ones, so a checkout link
+ * the server checks against the seeded activity always resolves; tiers and
+ * extras the edit added are not sold. A save from before extra spots reads
+ * its per-group fields as spots (`withExtraSpots`).
  */
 export function applyPricingOverride<T extends Activity>(activity: T, override?: ActivityOverride): T {
   if (!override) return activity
@@ -384,13 +407,27 @@ export function applyPricingOverride<T extends Activity>(activity: T, override?:
       })
     : activity.addOns
   const rental = activity.rental && override.rental ? rentalPricingOf(activity, activity.rental, override.rental) : activity.rental
-  // A private group: the guests its price covers, each one over and how many more can come, as the edit saved them (none saved: none charged).
+  // A private group: its most guests as the edit saved them, and (a save from before extra spots) what its price
+  // covered and its extra guests, as saved (none saved: none charged).
   const charter =
     activity.charter && override.charter
-      ? { ...activity.charter, includedGuests: override.charter.includedGuests, extraGuestPrice: override.charter.extraGuestPrice, maxExtraGuests: override.charter.maxExtraGuests }
+      ? (() => {
+          const { includedGuests: _covers, extraGuestPrice: _each, maxExtraGuests: _allowed, ...seeded } = activity.charter
+          const { includedGuests, extraGuestPrice, maxExtraGuests } = override.charter
+          return {
+            ...seeded,
+            maxGuests: override.charter.maxGuests > 0 ? override.charter.maxGuests : seeded.maxGuests,
+            ...(includedGuests !== undefined ? { includedGuests } : {}),
+            ...(extraGuestPrice !== undefined ? { extraGuestPrice } : {}),
+            ...(maxExtraGuests !== undefined ? { maxExtraGuests } : {}),
+          }
+        })()
       : activity.charter
   const merged: T = {
     ...activity,
+    // The spots and extra spots decide who pays the extra-spot price, so they follow the edit too.
+    maxCapacity: sellsExtraSpots(activity.kind) && override.maxCapacity > 0 ? override.maxCapacity : activity.maxCapacity,
+    extraSpots: extraSpotsAfter(activity, override),
     priceTiers,
     addOns,
     rental,
@@ -401,7 +438,8 @@ export function applyPricingOverride<T extends Activity>(activity: T, override?:
     payment: override.payment ?? activity.payment,
     ...fields,
   }
-  return { ...merged, basePrice: fromPrice(merged) || activity.basePrice }
+  const spotted = withExtraSpots(merged)
+  return { ...spotted, basePrice: fromPrice(spotted) || activity.basePrice }
 }
 
 const positiveWhole = (value: number | undefined) => (typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : undefined)
