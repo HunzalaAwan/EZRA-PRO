@@ -272,15 +272,6 @@ export function TimedFields({
         presets={[30, 60, 90, 120, 180, 240, 480, 1440]}
       />
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label={privateGroup ? 'Fewest guests' : 'Fewest guests to go ahead'} error={errors.minParticipants}>
-          <Input
-            type="number"
-            min={1}
-            value={shared.minParticipants}
-            suffix={shared.minParticipants === 1 ? 'guest' : 'guests'}
-            onChange={(event) => onShared({ minParticipants: num(event.target.value, 1) })}
-          />
-        </Field>
         <DifficultyField value={shared.difficulty} onChange={(difficulty) => onShared({ difficulty })} />
       </div>
     </div>
@@ -546,9 +537,6 @@ export function KindFields({
             </Field>
             <Field label="Days in the course" required error={errors['lesson.sessions']} description="1 for a single lesson.">
               {(control) => <Input {...control} type="number" min={1} max={14} value={lesson.sessions} onChange={(e) => set('lesson', { sessions: num(e.target.value) })} />}
-            </Field>
-            <Field label="Fewest to go ahead" error={errors.minParticipants}>
-              {(control) => <Input {...control} type="number" min={1} value={shared.minParticipants} onChange={(e) => onShared({ minParticipants: num(e.target.value, 1) })} />}
             </Field>
           </div>
           <DurationField

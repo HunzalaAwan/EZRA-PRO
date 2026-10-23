@@ -79,6 +79,7 @@ export function CapacityBox({
   weekly = true,
   extraElsewhere = false,
   sharedNote,
+  fewest,
 }: {
   kind: ActivityKind
   value: CapacityValue
@@ -93,6 +94,8 @@ export function CapacityBox({
   extraElsewhere?: boolean
   /** "Every location": with several locations, the numbers here are the same at each (a date is changed per location). */
   sharedNote?: string
+  /** The fewest guests a time slot needs to go ahead, beside the spots (not for rentals, passes or packages). */
+  fewest?: { label: string; value: number; onChange: (next: number) => void }
 }) {
   const headingId = React.useId()
   const words = capacityWords(kind)
@@ -129,7 +132,7 @@ export function CapacityBox({
         Capacity
         {sharedNote ? <span className="text-xs font-normal text-subtle">{sharedNote}</span> : null}
       </h3>
-      <div className={cn('grid gap-4', extraSold ? 'sm:grid-cols-3' : 'sm:grid-cols-2')}>
+      <div className={cn('grid gap-4 sm:grid-cols-2', (extraSold ? 3 : 1) + (fewest ? 1 : 0) > 2 && 'xl:grid-cols-4')}>
         <Field label={words.label} required error={errors.maxCapacity} description={rental ? `Up to the ${stock} in stock.` : undefined}>
           {(control) => (
             <Input
@@ -151,6 +154,20 @@ export function CapacityBox({
             />
           )}
         </Field>
+        {fewest ? (
+          <Field label={fewest.label} error={errors.minParticipants}>
+            {(control) => (
+              <Input
+                {...control}
+                type="number"
+                min={1}
+                value={fewest.value}
+                suffix={fewest.value === 1 ? 'guest' : 'guests'}
+                onChange={(event) => fewest.onChange(Math.max(1, num(event.target.value)))}
+              />
+            )}
+          </Field>
+        ) : null}
         {extraSold ? (
           <>
             <Field

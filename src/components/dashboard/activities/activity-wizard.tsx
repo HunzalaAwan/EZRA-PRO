@@ -1292,7 +1292,7 @@ export function capacityErrors(draft: ActivityDraft): FieldErrors {
   if (kind === 'pass' && draft.maxCapacity < 1) errors.maxCapacity = 'Sell at least one ticket a day'
   if (kind !== 'rental' && kind !== 'package' && draft.maxCapacity > 500) errors.maxCapacity = 'Keep it under 500'
   if (!errors.maxCapacity && kind !== 'rental' && kind !== 'package' && kind !== 'pass' && draft.maxCapacity >= 1 && draft.minParticipants > draft.maxCapacity) {
-    errors.maxCapacity = `At least the fewest guests (${draft.minParticipants})`
+    errors.minParticipants = `No more than the ${capacityWords(kind).label.toLowerCase()} (${draft.maxCapacity})`
   }
   // Extra spots are sold only with a price for them.
   const extraSomewhere = (draft.extraSpots?.count ?? 0) > 0 || extraOnSomeDays(draft)
@@ -1343,10 +1343,8 @@ function validateStep(step: number, draft: ActivityDraft): FieldErrors {
   const kind = draft.kind ?? 'trip'
   const settings = normalizeKindSettings(draft.kindSettings)
   if (kind === 'lesson' && draft.durationMinutes < 15) errors.durationMinutes = 'Give each lesson at least 15 minutes'
-  // The spots are on the Booking step: the fewest guests say which number they can't be more than, and where it is.
-  if (!errors.minParticipants && kind !== 'rental' && kind !== 'package' && kind !== 'pass' && draft.maxCapacity >= 1 && draft.minParticipants > draft.maxCapacity) {
-    errors.minParticipants = `Can't be more than the ${capacityWords(kind).label.toLowerCase()} (${draft.maxCapacity}), set on the Booking step`
-  }
+  // The fewest guests sit with the spots on the Booking step and are checked there.
+  delete errors.minParticipants
   if (kind === 'package') {
     delete errors.maxCapacity
     delete errors.durationMinutes
@@ -2211,6 +2209,15 @@ export function ActivityWizard({
           weekly={!unscheduled}
           extraElsewhere={(draft.scheduleChanges ?? []).some((change) => change.action === 'spots' && (change.extraSpots ?? 0) > 0)}
           sharedNote={draft.schedule.locations.length > 1 ? 'Every location' : undefined}
+          fewest={
+            kind === 'rental' || kind === 'pass'
+              ? undefined
+              : {
+                  label: kind === 'charter' ? 'Fewest guests' : kind === 'lesson' ? 'Fewest to go ahead' : 'Fewest guests to go ahead',
+                  value: draft.minParticipants,
+                  onChange: (minParticipants) => patch({ minParticipants }),
+                }
+          }
         />
       ),
       label: capacityWords(kind).column,
