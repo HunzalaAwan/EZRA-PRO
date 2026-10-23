@@ -26,7 +26,7 @@ import { GuestPricePreview, KIND_TIER_PRESETS, MoneyInput, PricingTierEditor, TI
        time slot to itself
      - private, per group: options, each one price for the whole group
    The usual spots and the extra spots (each at its own price) are set in
-   Basics (`extraSpots`): per group, the price covers the guests in the usual
+   the Booking step (`extraSpots`): per group, the price covers the guests in the usual
    spots; each guest in an extra spot adds the extra-spot price.
    Seasons, busy days, early bookings and bigger groups are price rules,
    set once on Pricing → Price rules and given to the activities they fit.
@@ -40,7 +40,7 @@ export interface PricingDraft {
   kindSettings: DraftKindSettings
   /** Spots per time slot; for a private activity, the most guests. */
   maxCapacity: number
-  /** Extra spots, set in Basics: sold once the usual spots are full, each at its own price. Count 0: none. */
+  /** Extra spots, set on the Booking step: sold once the usual spots are full, each at its own price. Count 0: none. */
   extraSpots?: ExtraSpots
   privateOption: PrivateOption
   priceCap: number
@@ -208,7 +208,7 @@ export function pricingErrors(draft: PricingDraft, dining = false): Record<strin
  * What a save writes for pricing. Group discounts, a minimum charge and the
  * activity's own price changes are no longer set here (price rules do that
  * job), so they are saved cleared and nothing unseen moves a price. Extra
- * spots are saved with Basics (`extraSpots`).
+ * spots are saved with the Booking step's capacity (`extraSpots`).
  */
 export function pricingFieldsOfDraft(draft: PricingDraft, dining = false): {
   chargeBy: ChargeBy | null
@@ -382,7 +382,7 @@ export function draftFromPrice(draft: PricingDraft, currency: CurrencyCode, dini
 /**
  * One line for the Review step: "3 prices from $89 · 1 extra",
  * "Per group, $600 · 2 extras", "2 group prices from $1,200 · 1 extra".
- * Extra spots have their own line (Basics).
+ * Extra spots have their own line (the Booking step).
  */
 export function pricingSummary(draft: PricingDraft, currency: CurrencyCode, dining = false): string {
   const kind = draft.kind ?? 'trip'

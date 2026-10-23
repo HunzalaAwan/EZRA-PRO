@@ -7,6 +7,7 @@ import { CURRENT_TENANT, getActivitiesByTenant } from '@/lib/demo-core'
 import { applyActivityOverride, type ActivityOverride } from '@/lib/activity-overrides'
 import {
   defaultSpots,
+  hasDayCapacity,
   departureFromSlotId,
   plusExtraSpots,
   expandDays,
@@ -16,6 +17,7 @@ import {
   parseSlotId,
   scheduleContextOf,
   shiftDayKey,
+  slotExtraOf,
   slotId,
   type ScheduleContext,
   type ScheduledSlot,
@@ -57,7 +59,7 @@ const dayOf = (event: CalendarEvent) => event.departure.startsAt.slice(0, 10)
 function generatedEvent(base: Activity, edited: Activity, slot: ScheduledSlot, status: DepartureStatus): CalendarEvent | null {
   const built = departureFromSlotId(edited, slotId(edited.id, slot.dateKey, slot.time, slot.locationId))
   if (!built) return null
-  const capacity = plusExtraSpots(slot.capacity, slotExtraSpotsOf(edited))
+  const capacity = plusExtraSpots(slot.capacity, slotExtraOf(edited, slot))
   return { departure: { ...built, capacity, status }, activity: base, seatsLeft: capacity, fillRate: 0, revenue: 0, paid: 0 }
 }
 
@@ -120,7 +122,6 @@ function rebuildActivity(
   }
   const spotsChanged = defaultSpots(edited) !== defaultSpots(base)
   const extraWas = slotExtraSpotsOf(base)
-  const extraNow = slotExtraSpotsOf(edited)
   const ahead = (slot: ScheduledSlot) => `${slot.dateKey}T${slot.time}:00` >= LOCAL_NOW
 
   const out: ScheduledCalendarEvent[] = []
@@ -130,7 +131,8 @@ function rebuildActivity(
     const match = byKey.get(key)
     if (match) {
       used.add(match.departure.id)
-      out.push(withSpots(match, slot, spotsChanged, extraWas, extraNow))
+      // Each time slot's own extra spots (its weekday's or its date's), else the edit's.
+      out.push(withSpots(match, slot, spotsChanged, extraWas, slotExtraOf(edited, slot)))
       continue
     }
     if (legacy.has(key) || !ahead(slot)) continue
@@ -243,7 +245,7 @@ export function scheduleCalendarEvents(
     const override = opts.overrides[id]
     const own = byActivity.get(id) ?? []
     // Business closed days only change activities with time slots in view.
-    const custom = Boolean(override || base.schedules || base.scheduleChanges || base.spotsByWeekday || (closuresOn && own.length > 0) || bookedGenerated.has(id))
+    const custom = Boolean(override || base.schedules || base.scheduleChanges || hasDayCapacity(base) || (closuresOn && own.length > 0) || bookedGenerated.has(id))
     // The rest only past the seeded days, where the server has nothing.
     const from = custom ? fromKey : pastSeeded === undefined ? undefined : pastSeeded > fromKey ? pastSeeded : fromKey
     if (from === undefined) continue

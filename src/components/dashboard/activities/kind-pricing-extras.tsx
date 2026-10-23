@@ -11,7 +11,7 @@ import { MoneyInput } from './pricing-tier-editor'
 /* ==========================================================================
    Pricing by kind — the title and one line over each kind's prices, and
    private booking (shared activities and lessons can be booked by one group
-   for one price). Extra spots are set in Basics (kind-fields.tsx).
+   for one price). Extra spots are set on the Booking step (capacity-box.tsx).
    ========================================================================== */
 
 export const KIND_PRICING: Record<ActivityKind, { title: string; text: (sessions: number) => string }> = {

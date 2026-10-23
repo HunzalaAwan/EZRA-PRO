@@ -14,7 +14,7 @@ import { useActivityOverrides } from '@/hooks/use-pricing-override'
 import { usePricing } from '@/hooks/use-pricing'
 import { withLedger } from '@/lib/booking-ledger'
 import { applyActivityOverride, type ActivityOverride } from '@/lib/activity-overrides'
-import { closedDaysBetween, isCancelledSlot, normalizeTime, rebuildAvailabilityDays, scheduleContextOf, type RebuildContext } from '@/lib/activity-schedule'
+import { closedDaysBetween, hasDayCapacity, isCancelledSlot, normalizeTime, rebuildAvailabilityDays, scheduleContextOf, type RebuildContext } from '@/lib/activity-schedule'
 import { NOW } from '@/lib/data/constants'
 import { addOnUnits, peopleOf } from '@/lib/places'
 import { apart, clock, firstCombo, openSlots, timeOf, type PackagePartView } from '@/lib/packages'
@@ -57,7 +57,7 @@ function scheduledPart(part: PackagePart, saved: ActivityOverride | undefined, c
   const source = part.source
   if (source) {
     const closures = !source.runsOnClosures && ((ctx.closures?.length ?? 0) > 0 || Boolean(ctx.holidays?.enabled))
-    if (!saved && !source.schedules && !source.scheduleChanges && !source.spotsByWeekday && !closures) return part.days
+    if (!saved && !source.schedules && !source.scheduleChanges && !hasDayCapacity(source) && !closures) return part.days
     try {
       const keep = new Set(part.days.map((day) => day.dateKey))
       const primary = source.locations[0]?.locationId

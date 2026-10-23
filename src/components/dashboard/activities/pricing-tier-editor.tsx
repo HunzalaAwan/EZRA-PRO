@@ -56,7 +56,7 @@ export function blankTier(label = '', price = 0, taken: readonly { id: string }[
     label,
     price,
     compareAtPrice: null,
-    // How many can book is the seats set in Basics; tiers carry no limits of their own.
+    // How many can book is the spots set on the Booking step; tiers carry no limits of their own.
     minQuantity: 0,
     maxQuantity: 99,
     description: '',

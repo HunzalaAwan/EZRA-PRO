@@ -42,6 +42,7 @@ import { answerProblem } from '@/lib/guest-requirements'
 import { cn, formatCurrency, formatDateLong, formatRelative, formatTime, pluralize } from '@/lib/utils'
 import { useBookingLedger } from '@/hooks/use-booking-ledger'
 import { useScheduledDays } from '@/hooks/use-scheduled-days'
+import { forSlot } from '@/lib/extra-spots'
 import { usePricingOverride } from '@/hooks/use-pricing-override'
 import { usePricing } from '@/hooks/use-pricing'
 import { extraSpotPrice, groupPriced, guestLimitOf, privatePerPerson, unitPrice, usualSpotsLeft, type PriceContext } from '@/lib/price-engine'
@@ -229,7 +230,8 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
   const partySize = change?.party ?? booking.partySize
   // The spots left as the strip has them (the saved schedule, extra spots included); a time slot off the schedule, as the server has it.
   const seatsLeftNow = onSlot && !onSlot.outsideSchedule ? onSlot.seatsLeft : Math.max(0, departure.seatsLeft - (ledger.delta[currentDepartureId] ?? 0))
-  const plan = addGuestsPlan(priced, priceCtx, { partySize, seatsLeft: seatsLeftNow, pricePerGuest: given.pricePerGuest })
+  // The time slot's own day: its extra spots and a private group's size (a weekday's or a date's).
+  const plan = addGuestsPlan(forSlot(priced, onSlot), priceCtx, { partySize, seatsLeft: seatsLeftNow, pricePerGuest: given.pricePerGuest })
   const { privateGroup, perGroup, extraEach, pricePerGuest, usual: usualForBooking, cost: addCost, limit: groupLimit, privateMost, room: roomNow, priceStops } = plan
   const hoursToGo = (new Date(startsAt).getTime() - now.getTime()) / 3_600_000
   const past = hoursToGo < 0

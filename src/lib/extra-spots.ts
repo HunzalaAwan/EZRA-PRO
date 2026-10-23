@@ -127,3 +127,47 @@ export function withExtraSpots<T extends SpotsSource>(activity: T): T {
   const { price, note } = activity.groupPrice!
   return { ...activity, extraSpots, maxCapacity: legacy.usual, groupPrice: { price, ...(note ? { note } : {}) } }
 }
+
+/**
+ * Each extra spot's price (minor units), whatever the usual number of extra
+ * spots: weekdays and dates can have extra spots of their own at this price.
+ * 0: none is sold anywhere.
+ */
+export function extraSpotPriceOf(activity: SpotsSource): number {
+  if (!sellsExtraSpots(activity.kind)) return 0
+  if (activity.extraSpots) return minor(activity.extraSpots.price)
+  return legacyPlan(activity)?.price ?? 0
+}
+
+/** A time slot's own numbers, when its day has them (a weekday's or a date's): its extra spots, and a private group's size. */
+export interface SlotSpots {
+  /** Spots on sale, extra spots included. */
+  capacity?: number
+  /** Extra spots that time slot (a private group: guests over its size). Absent: the activity's own. */
+  extraSpots?: number
+  /** A private group's size that time slot. Absent: the activity's own. */
+  groupSize?: number
+}
+
+/**
+ * The activity as one time slot sells it: its day's extra spots (and a
+ * private group's size) in place of the usual ones, so the price engine and
+ * every limit count that day's numbers. The activity itself when the time
+ * slot has none of its own.
+ */
+export function forSlot<T extends SpotsSource>(activity: T, slot?: SlotSpots | null): T {
+  if (!slot || (slot.extraSpots === undefined && slot.groupSize === undefined)) return activity
+  const kind = activity.kind ?? 'trip'
+  if (!sellsExtraSpots(kind)) return activity
+  const base = withExtraSpots(activity)
+  const plan = spotsPlanOf(base)
+  const price = extraSpotPriceOf(base)
+  const extra = price > 0 ? whole(slot.extraSpots ?? plan.extra) : 0
+  const extraSpots: ExtraSpots = { count: extra, price }
+  if (kind === 'charter') {
+    const size = slot.groupSize !== undefined ? Math.max(1, whole(slot.groupSize)) : plan.usual
+    return { ...base, maxCapacity: size, ...(base.charter ? { charter: { ...base.charter, maxGuests: size } } : {}), extraSpots }
+  }
+  const usual = slot.capacity !== undefined ? Math.max(0, Math.floor(slot.capacity) - extra) : base.maxCapacity
+  return { ...base, ...(usual !== undefined ? { maxCapacity: usual } : {}), extraSpots }
+}

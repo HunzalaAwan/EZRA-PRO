@@ -41,13 +41,13 @@ import { EMPTY_GUEST, WALK_IN_SOURCES, summarize, type WalkInGuest, type WalkInR
 import type { Activity, ActivityKind, CurrencyCode } from '@/types'
 import { applyActivityOverride, applyPricingOverride, type ActivityOverride } from '@/lib/activity-overrides'
 import { extraSpotPrice, groupPriced, groupTierOf, guestLimitOf, priceBooking, privatePerPerson, unitPrice, unitPriceDetail, usualSpotsLeft, type PriceContext } from '@/lib/price-engine'
-import { usualSpotsOf } from '@/lib/extra-spots'
+import { forSlot, usualSpotsOf } from '@/lib/extra-spots'
 import { placesOf } from '@/lib/places'
 import { useActivityOverrides } from '@/hooks/use-pricing-override'
 import { useBookingDefaults } from '@/hooks/use-booking-defaults'
 import { useBookingLedger } from '@/hooks/use-booking-ledger'
 import { withLedger } from '@/lib/booking-ledger'
-import { rebuildAvailabilityDays, scheduleContextOf, type RebuildContext } from '@/lib/activity-schedule'
+import { hasDayCapacity, rebuildAvailabilityDays, scheduleContextOf, type RebuildContext } from '@/lib/activity-schedule'
 import type { AvailabilityDay } from '@/components/storefront/booking-widget'
 import { bookedOn } from '@/components/storefront/checkout-selection'
 
@@ -69,7 +69,7 @@ export interface WalkInActivity {
   tiers: { id: string; label: string; price: number; min: number; max: number; seat: boolean }[]
   addOns: { id: string; label: string; price: number; per: 'guest' | 'booking' }[]
   /** `booked`: real bookings (the server's and this browser's), for filling-up and quiet-time prices. */
-  slots: { id: string; startsAt: string; seatsLeft: number; itemsLeft?: Record<string, number>; capacity?: number; booked?: number; priceMultiplier?: number }[]
+  slots: { id: string; startsAt: string; seatsLeft: number; itemsLeft?: Record<string, number>; capacity?: number; booked?: number; priceMultiplier?: number; extraSpots?: number; groupSize?: number }[]
   /** The full activity, so the desk prices with the same engine as the storefront and checkout. */
   source?: Activity
   /** Today and tomorrow as seeded, so the desk can lay the saved schedule over them. */
@@ -81,14 +81,25 @@ function deskSlots(days: AvailabilityDay[], nowIso: string, delta: Record<string
   return days.flatMap((day) =>
     day.slots
       .filter((slot) => slot.startsAt >= nowIso.slice(0, 13) && !slot.soldOut)
-      .map((slot) => ({ id: slot.departureId, startsAt: slot.startsAt, seatsLeft: slot.seatsLeft, capacity: slot.capacity, booked: bookedOn(slot, delta), priceMultiplier: slot.priceMultiplier, ...(slot.itemsLeft ? { itemsLeft: slot.itemsLeft } : {}) })),
+      .map((slot) => ({
+        id: slot.departureId,
+        startsAt: slot.startsAt,
+        seatsLeft: slot.seatsLeft,
+        capacity: slot.capacity,
+        booked: bookedOn(slot, delta),
+        priceMultiplier: slot.priceMultiplier,
+        ...(slot.itemsLeft ? { itemsLeft: slot.itemsLeft } : {}),
+        // Its day's own extra spots and a private group's size, so the desk sells what the storefront does.
+        ...(slot.extraSpots !== undefined ? { extraSpots: slot.extraSpots } : {}),
+        ...(slot.groupSize !== undefined ? { groupSize: slot.groupSize } : {}),
+      })),
   )
 }
 
 /** The seeded days with the saved schedule laid over them, like the storefront's strip. Nothing saved: as they are. */
 function scheduledDesk(source: Activity, days: AvailabilityDay[], saved: ActivityOverride | undefined, ctx: RebuildContext): AvailabilityDay[] {
   const closures = !source.runsOnClosures && ((ctx.closures?.length ?? 0) > 0 || Boolean(ctx.holidays?.enabled))
-  if (!saved && !source.schedules && !source.scheduleChanges && !source.spotsByWeekday && !closures) return days
+  if (!saved && !source.schedules && !source.scheduleChanges && !hasDayCapacity(source) && !closures) return days
   try {
     const keep = new Set(days.map((day) => day.dateKey))
     // Only the days the desk sells: the rebuilt strip can run further ahead.
@@ -303,7 +314,9 @@ function WalkInTill({
 
   // The price engine on the activity with its saved price edits: the same prices as the storefront and checkout.
   const overrides = useActivityOverrides()
-  const engineActivity = React.useMemo(() => (activity?.source ? applyPricingOverride(activity.source, overrides[activity.source.id]) : undefined), [activity, overrides])
+  const pricedSource = React.useMemo(() => (activity?.source ? applyPricingOverride(activity.source, overrides[activity.source.id]) : undefined), [activity, overrides])
+  // As the picked time slot sells it: its day's extra spots and a private group's size.
+  const engineActivity = React.useMemo(() => (pricedSource ? forSlot(pricedSource, slot) : undefined), [pricedSource, slot])
   // Per group: one price for the group and one count of guests, booked on the group's tier, as on the storefront.
   const groupPrice = engineActivity && groupPriced(engineActivity) ? engineActivity.groupPrice : undefined
   const groupTier = groupPrice && engineActivity ? groupTierOf(engineActivity) : undefined
@@ -351,7 +364,7 @@ function WalkInTill({
   const groupCovered = extraEach > 0 ? `for the group · extra spots ${formatCurrency(extraEach, currency)} each` : 'for the group'
   /** A shared time slot whose usual spots are full: only extra spots are left. */
   const extraOnly = (entry: WalkInActivity['slots'][number]) =>
-    extraEach > 0 && activity?.kind !== 'charter' && Boolean(engineActivity) && usualSpotsLeft(engineActivity!, { capacity: entry.capacity, booked: entry.booked }) <= 0
+    extraEach > 0 && activity?.kind !== 'charter' && Boolean(pricedSource) && usualSpotsLeft(forSlot(pricedSource!, entry), { capacity: entry.capacity, booked: entry.booked }) <= 0
   /** A ticket's price at this time: the engine's, or the plain price with the business rules. */
   const tierUnit = (tier: WalkInActivity['tiers'][number]) =>
     engineActivity && priceCtx ? unitPrice(engineActivity, tier.id, { ...priceCtx, guests: priced?.guests }) : Math.round(tier.price * rules.multiplier)

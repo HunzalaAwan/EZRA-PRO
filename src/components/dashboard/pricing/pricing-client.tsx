@@ -29,8 +29,8 @@ import { useBookingLedger } from '@/hooks/use-booking-ledger'
 import { useActivityOverrides } from '@/hooks/use-pricing-override'
 import { applyActivityOverride, applyPricingOverride } from '@/lib/activity-overrides'
 import { rateFor, rentalModes } from '@/lib/activity-kinds'
-import { clockTime, defaultSpots, expandSchedules, plusExtraSpots, scheduleContextOf, shiftDayKey, slotId, spotsAfterEdit } from '@/lib/activity-schedule'
-import { sellsExtraSpots, slotExtraSpotsOf } from '@/lib/extra-spots'
+import { clockTime, defaultSpots, expandSchedules, plusExtraSpots, scheduleContextOf, shiftDayKey, slotExtraOf, slotId, slotNumbersOf, spotsAfterEdit } from '@/lib/activity-schedule'
+import { forSlot, sellsExtraSpots, slotExtraSpotsOf } from '@/lib/extra-spots'
 import { getActivityBySlug, tenantBySlug } from '@/lib/demo-core'
 import { effectLabel, groupPriced, groupTierOf, guestLimitOf, priceBooking, privatePerPerson, type PriceBookingResult } from '@/lib/price-engine'
 import {
@@ -294,7 +294,8 @@ function PriceCheck({ tenantSlug, activities, currency, nowIso, rules, peaks, fi
     if (!fills || !seeded || !edited || !time) return undefined
     const slot = slots.find((entry) => entry.time === time)
     const seededFill = fills[`${slug}|${dateKey}T${time}`]
-    const extraNow = slotExtraSpotsOf(edited)
+    // That time slot's own extra spots (its weekday's or its date's), else the edit's.
+    const extraNow = slotExtraOf(edited, slot)
     const capacity =
       seededFill && slot
         ? spotsAfterEdit(seededFill.capacity, slot, defaultSpots(edited) !== defaultSpots(seeded), slotExtraSpotsOf(seeded), extraNow)
@@ -311,11 +312,14 @@ function PriceCheck({ tenantSlug, activities, currency, nowIso, rules, peaks, fi
       const multiplier = time ? peaks[`${slug}|${dateKey}T${time}`] : undefined
       // With no start time picked, a time-of-day rule has nothing to match.
       const checked = time ? rules : rules.filter((rule) => rule.kind !== 'time_of_day')
-      return checkPrice(applyPricingOverride(seeded, override), count, { startsAt: `${dateKey}T${time || '12:00'}:00`, nowIso, rules: checked, multiplier, capacity: fill?.capacity, booked: fill?.booked })
+      // That day's own extra spots and a private group's size, as the storefront sells them.
+      const daySlot = slots.find((entry) => entry.time === time)
+      const priced = applyPricingOverride(seeded, override)
+      return checkPrice(daySlot ? forSlot(priced, { capacity: fill?.capacity, ...slotNumbersOf(daySlot) }) : priced, count, { startsAt: `${dateKey}T${time || '12:00'}:00`, nowIso, rules: checked, multiplier, capacity: fill?.capacity, booked: fill?.booked })
     } catch {
       return null
     }
-  }, [seeded, override, validDay, dateKey, time, count, nowIso, rules, peaks, slug, fill])
+  }, [seeded, override, validDay, dateKey, time, count, nowIso, rules, peaks, slug, fill, slots])
 
   const unit = seeded?.kind === 'rental' ? 'items' : 'guests'
   const money = (value: number) => formatCurrency(value, currency)

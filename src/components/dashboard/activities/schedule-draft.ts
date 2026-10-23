@@ -264,8 +264,13 @@ export function scheduleSaveOf(fields: ScheduleDraft, sites: ActivityLocation[],
   const schedules = fields.scheduleMode === 'dates' ? [] : fields.schedules.map((season) => cleanSeason(season, regular.has(season.id)))
   const scheduleChanges = fields.scheduleChanges
     .map((change) => ({ ...change, dates: [...new Set(change.dates)].sort(), ...(change.times ? { times: sortTimes(change.times) } : {}) }))
-    // An extra time with no time left, or spots with no number, does nothing.
-    .filter((change) => change.dates.length > 0 && !(change.action === 'add' && (change.times?.length ?? 0) === 0) && !(change.action === 'spots' && change.spots === undefined))
+    // An extra time with no time left, or spots with no number (nor extra spots), does nothing.
+    .filter(
+      (change) =>
+        change.dates.length > 0 &&
+        !(change.action === 'add' && (change.times?.length ?? 0) === 0) &&
+        !(change.action === 'spots' && change.spots === undefined && change.extraSpots === undefined && change.groupSize === undefined),
+    )
   return {
     schedules,
     scheduleChanges,
@@ -595,11 +600,17 @@ export function runAnyway(changes: ScheduleChange[], dateKey: string, times: str
   return [...changes, { id: freshId('chg'), dates: [dateKey], action: 'add', times: sortTimes(times), reason: 'Runs on this closed day', ...scoped(locationId) }]
 }
 
+/** A day's capacity: its spots (a private group's size, a rental's items out) and its extra spots. */
+export interface DayCapacity {
+  spots?: number
+  extra?: number
+}
+
 /**
  * Spots for every time slot on some days, as one change; undefined goes back
  * to each day's usual number (`usualOn`: its weekday's or the activity's).
  * Days already given spots this way lose them first, and days whose usual
- * number is already that many get no change.
+ * number is already that many get no change. Their extra spots stay as set.
  */
 export function setSpotsOn(
   changes: ScheduleChange[],
@@ -608,35 +619,100 @@ export function setSpotsOn(
   usualOn: (dateKey: string) => number,
   locationId?: string,
 ): ScheduleChange[] {
-  const days = new Set(dateKeys)
-  if (days.size === 0) return changes
+  return setCapacityOn(
+    changes,
+    dateKeys,
+    (_dateKey, current) => ({ ...(spots === undefined ? {} : { spots }), ...(current.extra !== undefined ? { extra: current.extra } : {}) }),
+    (dateKey) => ({ spots: usualOn(dateKey) }),
+    locationId,
+  )
+}
+
+/**
+ * Spots and extra spots for every time slot on some days. `next` gives each
+ * day its numbers from what its own change has now (absent: the usual one);
+ * `usualOn` is the day's usual numbers (its weekday's or the activity's). A
+ * change keeps only what differs from the usual numbers, each on its own, so
+ * a day can have only extra spots, other spots, or both; one with nothing
+ * left goes. Days with the same numbers share one change; a single day keeps
+ * its own change (and its reason).
+ */
+export function setCapacityOn(
+  changes: ScheduleChange[],
+  dateKeys: string[],
+  next: (dateKey: string, current: DayCapacity) => DayCapacity,
+  usualOn: (dateKey: string) => { spots: number; extra?: number },
+  locationId?: string,
+  /** Where the spots go: 'spots', or a private activity's 'groupSize'. */
+  spotsKey: 'spots' | 'groupSize' = 'spots',
+): ScheduleChange[] {
+  const days = [...new Set(dateKeys)].sort()
+  if (days.length === 0) return changes
   const daySpots = (change: ScheduleChange) => owned(change, locationId) && change.action === 'spots' && !(change.times?.length)
-  // One day that already has its own spots: that change is updated (or removed), keeping its id.
-  const only = days.size === 1 ? [...days][0] : undefined
-  const own = only ? changes.find((change) => daySpots(change) && onlyOn(change, only)) : undefined
-  if (only && own) {
-    const value = spots === undefined ? undefined : Math.max(1, Math.floor(spots))
-    const keep = value !== undefined && usualOn(only) !== value
+  /** What a day's own change sets now: the last one that covers it wins, as in the engine. */
+  const currentOf = (dateKey: string): DayCapacity => {
+    const out: DayCapacity = {}
+    for (const change of changes) {
+      if (!daySpots(change) || !change.dates.includes(dateKey)) continue
+      if (change[spotsKey] !== undefined) out.spots = change[spotsKey]
+      if (change.extraSpots !== undefined) out.extra = change.extraSpots
+    }
+    return out
+  }
+  type Own = Pick<ScheduleChange, 'spots' | 'groupSize' | 'extraSpots'>
+  /** Only what differs from the usual numbers, as a change saves it. */
+  const wanted = new Map<string, Own>()
+  for (const dateKey of days) {
+    const value = next(dateKey, currentOf(dateKey))
+    const usual = usualOn(dateKey)
+    const spots = value.spots === undefined || !Number.isFinite(value.spots) ? undefined : Math.min(500, Math.max(1, Math.floor(value.spots)))
+    const extra = value.extra === undefined || !Number.isFinite(value.extra) ? undefined : Math.min(500, Math.max(0, Math.floor(value.extra)))
+    const own: Own = {
+      ...(spots !== undefined && spots !== usual.spots ? { [spotsKey]: spots } : {}),
+      ...(extra !== undefined && extra !== usual.extra ? { extraSpots: extra } : {}),
+    }
+    wanted.set(dateKey, own)
+  }
+  const empty = (own: Own | undefined) => !own || (own.spots === undefined && own.groupSize === undefined && own.extraSpots === undefined)
+  const withNumbers = (change: ScheduleChange, own: Own): ScheduleChange => {
+    const { spots: _spots, groupSize: _size, extraSpots: _extra, ...rest } = change
+    return { ...rest, ...own }
+  }
+
+  // One day that already has its own change: that change is updated (or removed), keeping its id and reason.
+  const only = days.length === 1 ? days[0] : undefined
+  const ownChange = only ? changes.find((change) => daySpots(change) && onlyOn(change, only)) : undefined
+  if (only && ownChange) {
+    const own = wanted.get(only)!
     return changes.flatMap((change) => {
-      if (change === own) return keep ? [{ ...own, spots: value }] : []
+      if (change === ownChange) return empty(own) ? [] : [withNumbers(ownChange, own)]
       if (!daySpots(change) || !change.dates.includes(only)) return [change]
       const dates = change.dates.filter((key) => key !== only)
       return dates.length > 0 ? [{ ...change, dates }] : []
     })
   }
+
+  // The days leave the changes they were in, then the days with the same numbers share a new one.
+  const picked = new Set(days)
   let touched = false
-  const next = changes.flatMap((change) => {
+  const rest = changes.flatMap((change) => {
     if (!daySpots(change)) return [change]
-    const dates = change.dates.filter((key) => !days.has(key))
+    const dates = change.dates.filter((key) => !picked.has(key))
     if (dates.length === change.dates.length) return [change]
     touched = true
     return dates.length > 0 ? [{ ...change, dates }] : []
   })
-  if (spots === undefined) return touched ? next : changes
-  const value = Math.max(1, Math.floor(spots))
-  const differ = [...days].filter((key) => usualOn(key) !== value).sort()
-  if (differ.length === 0) return touched ? next : changes
-  return [...next, { id: freshId('chg'), dates: differ, action: 'spots', spots: value, ...scoped(locationId) }]
+  const groups = new Map<string, { own: Own; dates: string[] }>()
+  for (const dateKey of days) {
+    const own = wanted.get(dateKey)!
+    if (empty(own)) continue
+    const key = `${own.spots ?? ''}|${own.groupSize ?? ''}|${own.extraSpots ?? ''}`
+    const group = groups.get(key) ?? { own, dates: [] }
+    group.dates.push(dateKey)
+    groups.set(key, group)
+  }
+  if (groups.size === 0) return touched ? rest : changes
+  return [...rest, ...[...groups.values()].map((group) => ({ id: freshId('chg'), dates: group.dates, action: 'spots' as const, ...group.own, ...scoped(locationId) }))]
 }
 
 /** The reason on this day's own changes. */
@@ -678,11 +754,15 @@ export function describeDates(dates: string[]): string {
   return `${sorted.length} days from ${shortDay(sorted[0])}`
 }
 
-/** What a change does, in a few words: "Closed", "13:30 off", "Only 9:00, 15:00", "Extra time 17:30", "12 spots". */
+/** What a change does, in a few words: "Closed", "13:30 off", "Only 9:00, 15:00", "Extra time 17:30", "12 spots", "12 spots + 3 extra", "No extra spots". */
 export function describeChange(change: ScheduleChange, mode: PickMode, spotWord = 'spots'): string {
   const times = change.times ?? []
   if (change.action === 'closed') return times.length === 0 ? 'Closed' : `${listTimes(times)} off`
   if (change.action === 'times') return times.length === 0 ? 'Closed' : `Only ${listTimes(times)}`
   if (change.action === 'add') return mode === 'dates' ? `At ${listTimes(times)}` : `Extra ${times.length === 1 ? 'time' : 'times'} ${listTimes(times)}`
-  return `${change.spots ?? 0} ${spotWord}${times.length > 0 ? ` at ${listTimes(times)}` : ''}`
+  const at = times.length > 0 ? ` at ${listTimes(times)}` : ''
+  const extra = change.extraSpots
+  const main = change.groupSize !== undefined ? `Groups up to ${change.groupSize}` : change.spots !== undefined ? `${change.spots} ${spotWord}` : undefined
+  if (main === undefined) return `${extra ? `${extra} extra ${extra === 1 ? 'spot' : 'spots'}` : 'No extra spots'}${at}`
+  return `${main}${extra !== undefined ? (extra > 0 ? ` + ${extra} extra` : ', no extra') : ''}${at}`
 }

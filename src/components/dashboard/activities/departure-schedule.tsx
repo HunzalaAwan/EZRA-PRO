@@ -26,7 +26,7 @@ import { useScheduledRows } from '@/hooks/use-scheduled-days'
 import { useActivityOverrides } from '@/hooks/use-pricing-override'
 import { applyActivityOverride, upsertScheduleChange } from '@/lib/activity-overrides'
 import { slotId, type ScheduledRow } from '@/lib/activity-schedule'
-import { slotExtraSpotsOf } from '@/lib/extra-spots'
+import { extraSpotPriceOf, slotExtraSpotsOf } from '@/lib/extra-spots'
 
 import type { DepartureRowLite } from './activity-data'
 
@@ -89,13 +89,26 @@ export function DepartureSchedule({ rows: initial, crew, format, activityName, m
   const scheduled = useScheduledRows(scheduleActivity, initial, { tenantSlug: tenantSlug ?? '', todayKey, days: 30, nowIso })
   // Extra spots, as saved: each time slot's spots include them, sold once its usual spots are full.
   const overrides = useActivityOverrides()
-  const extraSpots = scheduleActivity ? slotExtraSpotsOf(applyActivityOverride(scheduleActivity, overrides[scheduleActivity.id])) : 0
-  /** The extra spots inside a row's spots: the saved ones on a time slot the schedule has; the server's on one it keeps as it was; none on one added here. */
+  const editedActivity = scheduleActivity ? applyActivityOverride(scheduleActivity, overrides[scheduleActivity.id]) : undefined
+  const extraSpots = editedActivity ? slotExtraSpotsOf(editedActivity) : 0
+  // Extra spots can be changed for one time slot when they are sold (a price is set); a private time slot has none.
+  const sellsExtra = Boolean(editedActivity && (editedActivity.kind ?? 'trip') !== 'charter' && extraSpotPriceOf(editedActivity) > 0)
+  /**
+   * The extra spots inside a row's spots: on a time slot the schedule has, its
+   * own (its weekday's or its date's) or the saved ones; the server's on one it
+   * keeps as it was; none on one added here.
+   */
   const extraIn = (row: DepartureRowLite) => {
     const own = scheduled.find((entry) => entry.id === row.id)
     if (!own) return 0
     const asServed = own.outsideSchedule || own.status === 'cancelled' || own.status === 'completed'
-    return asServed ? (scheduleActivity ? slotExtraSpotsOf(scheduleActivity) : 0) : extraSpots
+    if (asServed) return scheduleActivity ? slotExtraSpotsOf(scheduleActivity) : 0
+    return scheduleActivity?.kind === 'charter' ? 0 : (own.extraSpots ?? extraSpots)
+  }
+  /** This time slot's own spots change, if it has one (made here), so spots and extra spots are each kept when the other changes. */
+  const ownChange = (row: DepartureRowLite) => {
+    const id = `spots_${dateKeyOf(row.startsAt)}_${row.startsAt.slice(11, 16)}_${row.locationId ?? ''}`
+    return { id, saved: editedActivity?.scheduleChanges?.find((change) => change.id === id) }
   }
   const [edits, setEdits] = React.useState<Record<string, ScheduledRow>>({})
   const [added, setAdded] = React.useState<ScheduledRow[]>([])
@@ -171,8 +184,38 @@ export function DepartureSchedule({ rows: initial, crew, format, activityName, m
     if (scheduleActivity && scheduleActivity.kind !== 'charter') {
       const dateKey = dateKeyOf(row.startsAt)
       const time = row.startsAt.slice(11, 16)
-      upsertScheduleChange(scheduleActivity, { id: `spots_${dateKey}_${time}_${row.locationId ?? ''}`, dates: [dateKey], action: 'spots', times: [time], spots: Math.max(0, next - extraIn(row)), ...(row.locationId ? { locationId: row.locationId } : {}) })
+      const { id, saved } = ownChange(row)
+      upsertScheduleChange(scheduleActivity, {
+        id,
+        dates: [dateKey],
+        action: 'spots',
+        times: [time],
+        spots: Math.max(0, next - extraIn(row)),
+        ...(saved?.extraSpots !== undefined ? { extraSpots: saved.extraSpots } : {}),
+        ...(row.locationId ? { locationId: row.locationId } : {}),
+      })
     }
+  }
+
+  /** More or fewer extra spots on one time slot: its usual spots stay, and never fewer in all than are booked. */
+  const changeExtra = (row: DepartureRowLite, delta: number) => {
+    if (!scheduleActivity || !sellsExtra) return
+    const extra = extraIn(row)
+    const nextExtra = Math.max(0, extra + delta)
+    const usual = Math.max(0, row.capacity - extra)
+    const next = Math.max(row.booked, usual + nextExtra)
+    if (nextExtra === extra || next === row.capacity) return
+    patch(row.id, (r) => ({ ...r, capacity: next, status: r.status === 'sold_out' && next > r.booked ? 'scheduled' : r.booked >= next && r.status === 'scheduled' ? 'sold_out' : r.status }))
+    const { id, saved } = ownChange(row)
+    upsertScheduleChange(scheduleActivity, {
+      id,
+      dates: [dateKeyOf(row.startsAt)],
+      action: 'spots',
+      times: [row.startsAt.slice(11, 16)],
+      ...(saved?.spots !== undefined ? { spots: saved.spots } : {}),
+      extraSpots: nextExtra,
+      ...(row.locationId ? { locationId: row.locationId } : {}),
+    })
   }
 
   const toggleCrew = (row: DepartureRowLite, member: CrewOption) =>
@@ -334,7 +377,7 @@ export function DepartureSchedule({ rows: initial, crew, format, activityName, m
         })
       )}
 
-      <RunSheet row={selected} crew={crew} open={open} noun={noun} minParticipants={minParticipants} extraSpots={selected ? extraIn(selected) : 0} now={now} todayKey={todayKey} onClose={() => setSelectedId(null)} onStatus={setStatus} onSeats={changeSeats} onCrew={toggleCrew} />
+      <RunSheet row={selected} crew={crew} open={open} noun={noun} minParticipants={minParticipants} extraSpots={selected ? extraIn(selected) : 0} onExtra={sellsExtra ? changeExtra : undefined} now={now} todayKey={todayKey} onClose={() => setSelectedId(null)} onStatus={setStatus} onSeats={changeSeats} onCrew={toggleCrew} />
       <AddRunDialog open={adding} onOpenChange={setAdding} noun={noun} isOpenEntry={open} activityName={activityName} maxCapacity={maxCapacity} durationMinutes={durationMinutes} usualTimes={usualTimes} crew={crew} locations={locations} todayKey={todayKey} onAdd={add} />
     </div>
   )
@@ -352,7 +395,22 @@ function WeatherPill({ weather }: { weather: WeatherSnapshot }) {
   )
 }
 
-function RunSheet({ row: r, crew, open, noun, minParticipants, extraSpots = 0, now, todayKey, onClose, onStatus, onSeats, onCrew }: { row: DepartureRowLite | null; crew: CrewOption[]; open: boolean; noun: string; minParticipants: number; /** Extra spots in each time slot's spots. */ extraSpots?: number; now: Date; todayKey: string; onClose: () => void; onStatus: (row: DepartureRowLite, status: DepartureStatus) => void; onSeats: (row: DepartureRowLite, delta: number) => void; onCrew: (row: DepartureRowLite, member: CrewOption) => void }) {
+/** − n +: one more or one fewer, never below what is booked. */
+function SpotStepper({ label, value, canLower, onStep }: { label: string; value: number; canLower: boolean; onStep: (delta: number) => void }) {
+  return (
+    <span className="inline-flex items-center rounded-full border border-line">
+      <button type="button" aria-label={`Remove a ${label}`} className="grid size-8 place-items-center text-muted disabled:opacity-40" disabled={!canLower} onClick={() => onStep(-1)}>
+        <Minus className="size-3.5" />
+      </button>
+      <span className="min-w-[2rem] text-center text-sm text-foreground tabular-nums">{value}</span>
+      <button type="button" aria-label={`Add a ${label}`} className="grid size-8 place-items-center text-muted" onClick={() => onStep(1)}>
+        <Plus className="size-3.5" />
+      </button>
+    </span>
+  )
+}
+
+function RunSheet({ row: r, crew, open, noun, minParticipants, extraSpots = 0, onExtra, now, todayKey, onClose, onStatus, onSeats, onCrew }: { row: DepartureRowLite | null; crew: CrewOption[]; open: boolean; noun: string; minParticipants: number; /** Extra spots in this time slot's spots. */ extraSpots?: number; /** More or fewer extra spots on this time slot; absent when none are sold. */ onExtra?: (row: DepartureRowLite, delta: number) => void; now: Date; todayKey: string; onClose: () => void; onStatus: (row: DepartureRowLite, status: DepartureStatus) => void; onSeats: (row: DepartureRowLite, delta: number) => void; onCrew: (row: DepartureRowLite, member: CrewOption) => void }) {
   const upcoming = r ? new Date(r.startsAt) > now : false
   const live = r ? r.status !== 'cancelled' && r.status !== 'completed' : false
   const fill = r ? fillOf(r) : 0
@@ -387,18 +445,21 @@ function RunSheet({ row: r, crew, open, noun, minParticipants, extraSpots = 0, n
                       {r.booked < minParticipants ? `${minParticipants - r.booked} more to reach the minimum` : `${Math.max(0, r.capacity - r.booked)} left`}
                     </p>
                   </div>
-                  {live ? (
-                    <span className="inline-flex items-center rounded-full border border-line">
-                      <button type="button" aria-label="Remove a spot" className="grid size-8 place-items-center text-muted disabled:opacity-40" disabled={r.capacity <= r.booked} onClick={() => onSeats(r, -1)}>
-                        <Minus className="size-3.5" />
-                      </button>
-                      <span className="min-w-[2rem] text-center text-sm tabular-nums">{r.capacity}</span>
-                      <button type="button" aria-label="Add a spot" className="grid size-8 place-items-center text-muted" onClick={() => onSeats(r, 1)}>
-                        <Plus className="size-3.5" />
-                      </button>
-                    </span>
-                  ) : null}
+                  {live && !onExtra ? <SpotStepper label="spot" value={r.capacity} canLower={r.capacity > r.booked} onStep={(delta) => onSeats(r, delta)} /> : null}
                 </div>
+                {/* Spots and extra spots for this time slot only, each on its own. */}
+                {live && onExtra ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2">
+                    <span className="inline-flex items-center gap-2 text-xs text-muted">
+                      Spots
+                      <SpotStepper label="spot" value={Math.max(0, r.capacity - extraSpots)} canLower={r.capacity > r.booked && r.capacity - extraSpots > 1} onStep={(delta) => onSeats(r, delta)} />
+                    </span>
+                    <span className="inline-flex items-center gap-2 text-xs text-muted">
+                      Extra spots
+                      <SpotStepper label="extra spot" value={extraSpots} canLower={extraSpots > 0 && r.capacity > r.booked} onStep={(delta) => onExtra(r, delta)} />
+                    </span>
+                  </div>
+                ) : null}
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface-sunken">
                   <div className={cn('h-full rounded-full', fill >= 100 ? 'bg-primary' : fill >= 85 ? 'bg-warning' : 'bg-success')} style={{ width: `${Math.min(100, fill)}%` }} />
                 </div>

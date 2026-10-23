@@ -19,7 +19,7 @@ import type {
 } from '@/types'
 import { fromPrice, privatePerPerson } from '@/lib/price-engine'
 import { rentalModes, type RentalMode } from '@/lib/activity-kinds'
-import { cleanSpotsByWeekday, normalizeTime } from '@/lib/activity-schedule'
+import { cleanExtraByWeekday, cleanSpotsByWeekday, normalizeTime } from '@/lib/activity-schedule'
 import { sellsExtraSpots, withExtraSpots } from '@/lib/extra-spots'
 
 /* ==========================================================================
@@ -48,6 +48,10 @@ export interface ActivityOverride {
   extraSpots?: ExtraSpots
   /** Spots on some weekdays instead of the usual number. null clears them; undefined keeps the seeded ones. */
   spotsByWeekday?: Activity['spotsByWeekday'] | null
+  /** Extra spots on some weekdays instead of the usual number. null clears them; undefined keeps the seeded ones. */
+  extraSpotsByWeekday?: Activity['extraSpotsByWeekday'] | null
+  /** Rentals: the most items out at once. null: all of the stock; undefined keeps the seeded number. */
+  rentalMaxOut?: number | null
   minAge: number
   minParticipants: number
   featured: boolean
@@ -184,6 +188,26 @@ function spotsByWeekdayAfter(activity: Activity, override: ActivityOverride): Pi
   return saved ? { spotsByWeekday: saved } : activity.spotsByWeekday ? { spotsByWeekday: undefined } : {}
 }
 
+/**
+ * A day's capacity after an edit, beyond its spots by weekday: its extra
+ * spots by weekday and a rental's most items out at once, as saved (null:
+ * none), else the seeded ones. No key when there are none either way.
+ */
+function dayCapacityAfter(activity: Activity, override: ActivityOverride): Pick<Activity, 'spotsByWeekday' | 'extraSpotsByWeekday' | 'rentalMaxOut'> {
+  const out: Pick<Activity, 'spotsByWeekday' | 'extraSpotsByWeekday' | 'rentalMaxOut'> = spotsByWeekdayAfter(activity, override)
+  if (override.extraSpotsByWeekday !== undefined) {
+    const saved = cleanExtraByWeekday(override.extraSpotsByWeekday)
+    if (saved) out.extraSpotsByWeekday = saved
+    else if (activity.extraSpotsByWeekday) out.extraSpotsByWeekday = undefined
+  }
+  if (override.rentalMaxOut !== undefined) {
+    const cap = typeof override.rentalMaxOut === 'number' && Number.isFinite(override.rentalMaxOut) && override.rentalMaxOut >= 1 ? Math.floor(override.rentalMaxOut) : undefined
+    if (cap !== undefined) out.rentalMaxOut = cap
+    else if (activity.rentalMaxOut !== undefined) out.rentalMaxOut = undefined
+  }
+  return out
+}
+
 /** The seeded activity with the saved edit laid over it. Lists replace, scalars replace, everything else stays. */
 export function applyActivityOverride<T extends Activity>(activity: T, override?: ActivityOverride): T {
   if (!override) return activity
@@ -239,7 +263,7 @@ export function applyActivityOverride<T extends Activity>(activity: T, override?
     ride: override.ride ?? activity.ride,
     route: override.route === undefined ? activity.route : (override.route ?? undefined),
     extraSpots: extraSpotsAfter(activity, override),
-    ...spotsByWeekdayAfter(activity, override),
+    ...dayCapacityAfter(activity, override),
     ...pricingFields(activity, override),
     ...scheduleFields(activity, override),
     updatedAt: override.updatedAt,
@@ -438,8 +462,8 @@ export function applyPricingOverride<T extends Activity>(activity: T, override?:
     // The spots and extra spots decide who pays the extra-spot price, so they follow the edit too.
     maxCapacity: sellsExtraSpots(activity.kind) && override.maxCapacity > 0 ? override.maxCapacity : activity.maxCapacity,
     extraSpots: extraSpotsAfter(activity, override),
-    // A day's spots decide when its extra spots start, so they follow the edit too.
-    ...spotsByWeekdayAfter(activity, override),
+    // A day's spots and extra spots decide when its extra spots start and what a group can be, so they follow the edit too.
+    ...dayCapacityAfter(activity, override),
     priceTiers,
     addOns,
     rental,

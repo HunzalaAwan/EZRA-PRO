@@ -67,7 +67,7 @@ import {
   type PriceContext,
   type RentalPricing,
 } from '@/lib/price-engine'
-import { slotExtraSpotsOf, usualSpotsOf } from '@/lib/extra-spots'
+import { forSlot, slotExtraSpotsOf, usualSpotsOf } from '@/lib/extra-spots'
 import { useActivityOverrides, usePricingOverride } from '@/hooks/use-pricing-override'
 import { useLocations } from '@/hooks/use-locations'
 import { applyScheduleOverride } from '@/lib/activity-overrides'
@@ -108,6 +108,10 @@ export interface AvailabilitySlot {
   priceMultiplier: number
   /** Lead-tier price after the multiplier, minor units. */
   leadPrice: number
+  /** Its day's own extra spots (a weekday's or a date's; a private group: guests over its size). Absent: the activity's. */
+  extraSpots?: number
+  /** A private group's size that day, when its weekday or date has its own. Absent: the activity's. */
+  groupSize?: number
   /** The location this run leaves from; absent on single-site businesses. */
   locationId?: string
   soldOut: boolean
@@ -391,7 +395,8 @@ export function priceStripDays(
   return days.map((day) => {
     const slots = (ctx.locationId !== undefined ? day.slots.filter((slot) => !slot.locationId || slot.locationId === ctx.locationId) : day.slots).map((slot) => ({
       ...slot,
-      leadPrice: leadPrice(activity, {
+      // Its day's own extra spots decide when filling-up prices start, as on the time slot itself.
+      leadPrice: leadPrice(forSlot(activity, slot), {
         startsAt: slot.startsAt,
         nowIso: ctx.nowIso,
         capacity: slot.capacity,
@@ -604,8 +609,6 @@ function BookingWidgetInner({
   const privateTickets = privatePerPerson(activity)
   /** A private group priced per group: its prices are options, one picked. */
   const privateOptions = kind === 'charter' && !privateTickets
-  /** The most guests a private group can be: its most guests and its extra spots. */
-  const privateMost = Math.max(1, guestLimitOf(activity))
   /** A private group's guests when priced per group (per person, its tickets count them). */
   const [partyCount, setParty] = React.useState(() => Math.max(2, activity.minParticipants || 1))
   /** Which request form is open, if any. */
@@ -676,6 +679,10 @@ function BookingWidgetInner({
   }, [openSlots, departureId])
 
   const slot = day?.slots.find((s) => s.departureId === departureId)
+  /** The activity as the picked time slot sells it: its day's extra spots and a private group's size (a weekday's or a date's). */
+  const slotActivity = React.useMemo(() => forSlot(activity, slot), [activity, slot])
+  /** The most guests a private group can be that day: its size and its extra spots. */
+  const privateMost = Math.max(1, guestLimitOf(slotActivity))
 
   /* ---------- per group: one price for the group; guests only say how many are coming, all on one tier ---------- */
   const groupPrice = chargeByOf(activity) === 'group' && kind !== 'charter' ? activity.groupPrice : undefined
@@ -870,7 +877,7 @@ function BookingWidgetInner({
 
   const quote = React.useMemo(
     () =>
-      buildQuote(activity, tenantSlug, selection, slot?.priceMultiplier ?? 1, {
+      buildQuote(slotActivity, tenantSlug, selection, slot?.priceMultiplier ?? 1, {
         days: dayRental ? rentDays : 1,
         party,
         private: goPrivate,
@@ -881,7 +888,7 @@ function BookingWidgetInner({
         booked: slotBooked,
         businessRules: rules,
       }),
-    [activity, tenantSlug, selection, slot, slotBooked, nowIso, rules, dayRental, rentDays, party, rated, rentalMode, rentHours, byLength, length, goPrivate],
+    [slotActivity, tenantSlug, selection, slot, slotBooked, nowIso, rules, dayRental, rentDays, party, rated, rentalMode, rentHours, byLength, length, goPrivate],
   )
   /** What moved the price, as chips under the total; dynamic pricing shows as "Peak time" instead. */
   const priceChips = quote.appliedChanges.filter((change) => change.source !== 'dynamic')
@@ -931,7 +938,7 @@ function BookingWidgetInner({
   /* ---------- per-kind blocks ---------- */
 
   /** A price on this time slot: a tier's ticket, a rental's rate in this mode, or 'private'. */
-  const priceOn = (tierId: string) => unitPriceDetail(activity, tierId, priceCtx)
+  const priceOn = (tierId: string) => unitPriceDetail(slotActivity, tierId, priceCtx)
   /** The struck-through "Was": the tier's own compare-at price, or its price before a discount. 0: none. */
   const wasPrice = (tierId: string, detail: { price: number; base: number }) => {
     const compareAt = rated ? 0 : (activity.priceTiers.find((tier) => tier.id === tierId)?.compareAtPrice ?? 0)
@@ -948,10 +955,17 @@ function BookingWidgetInner({
   const chosenTier = activity.priceTiers.find((tier) => (tierQty[tier.id] ?? 0) > 0) ?? activity.priceTiers[0]
   const chosenQty = chosenTier ? (tierQty[chosenTier.id] ?? 0) : 0
   /** Each extra spot on this time slot (0: none sold), and the usual spots: a private group's most guests. */
-  const extraEach = extraSpotPrice(activity, priceCtx, privateOptions ? chosenTier?.id : undefined)
-  const usualSpots = usualSpotsOf(activity)
+  const extraEach = extraSpotPrice(slotActivity, priceCtx, privateOptions ? chosenTier?.id : undefined)
+  const usualSpots = usualSpotsOf(slotActivity)
   /** A shared time slot whose usual spots are full: only extra spots are left. */
-  const extraOnly = Boolean(slot) && kind !== 'charter' && extraEach > 0 && seatsLeft > 0 && usualSpotsLeft(activity, { capacity: slot?.capacity, booked: slotBooked }) <= 0
+  const extraOnly = Boolean(slot) && kind !== 'charter' && extraEach > 0 && seatsLeft > 0 && usualSpotsLeft(slotActivity, { capacity: slot?.capacity, booked: slotBooked }) <= 0
+  /** A time's chip says when its usual spots are full and only extra spots are left (each time with its own day's extra spots). */
+  const extraLabelOn = (entry: AvailabilitySlot) => {
+    if (kind === 'charter') return undefined
+    const own = forSlot(activity, entry)
+    const each = own === slotActivity ? extraEach : extraSpotPrice(own, { ...priceCtx, startsAt: entry.startsAt })
+    return each > 0 && usualSpotsLeft(own, { capacity: entry.capacity, booked: bookedOn(entry, delta) }) <= 0 ? extraSpotWords(each, currency) : undefined
+  }
   const pickTier = (tierId: string, qty: number) =>
     setTierQty(Object.fromEntries(activity.priceTiers.map((tier) => [tier.id, tier.id === tierId ? qty : 0])))
   const shortDate = (key: string, offset: number) => {
@@ -1523,7 +1537,7 @@ function BookingWidgetInner({
                   wholeGroup={kind === 'charter'}
                   noun={kind === 'rental' ? rentalMeta.units : 'spots'}
                   // The usual spots are full: only extra spots are left, at their own price.
-                  extraLabel={extraEach > 0 && kind !== 'charter' && usualSpotsLeft(activity, { capacity: entry.capacity, booked: bookedOn(entry, delta) }) <= 0 ? extraSpotWords(extraEach, currency) : undefined}
+                  extraLabel={extraLabelOn(entry)}
                   selected={entry.departureId === departureId}
                   onSelect={() => setDepartureId(entry.departureId)}
                 />
@@ -1618,7 +1632,7 @@ function BookingWidgetInner({
               const roomLeft = privateTickets
                 ? privateMost - (headcount - qty * peopleOf(tier))
                 : goPrivate
-                  ? Math.min(slot ? slot.capacity - slotExtraSpotsOf(activity) : seatsLeft, privateOffer && privateOffer.extraGuest === 0 ? privateOffer.includedGuests : Number.POSITIVE_INFINITY) - (seatsUsed - qty * places)
+                  ? Math.min(slot ? slot.capacity - slotExtraSpotsOf(slotActivity) : seatsLeft, privateOffer && privateOffer.extraGuest === 0 ? privateOffer.includedGuests : Number.POSITIVE_INFINITY) - (seatsUsed - qty * places)
                   : seatsLeft - (seatsUsed - qty * places)
               const seatRoom = privateTickets ? (slot && seatsLeft > 0 ? Math.floor(roomLeft / peopleOf(tier)) : 0) : places > 0 ? Math.floor(roomLeft / places) : tier.maxQuantity
               const max = Math.min(tier.maxQuantity, Math.max(0, seatRoom))

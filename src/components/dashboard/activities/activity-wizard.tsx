@@ -42,22 +42,24 @@ import { TEMPLATES_EVENT } from '@/hooks/use-message-templates'
 import type { MessageTemplate } from '@/lib/messaging'
 import type { BookingDefaults } from '@/lib/booking-defaults'
 import type { CharterConfig, ChargeBy, ExtraSpots, GroupDiscount, GroupPrice, PriceChange } from '@/types'
-import { extraSpotsOf, sellsExtraSpots, usualSpotsOf, withExtraSpots } from '@/lib/extra-spots'
+import { extraSpotPriceOf, sellsExtraSpots, spotsPlanOf, usualSpotsOf, withExtraSpots } from '@/lib/extra-spots'
 import { PricingStep, defaultPricingDraft, draftFromPrice, effectiveChargeBy, groupTierIdOf, isGroupPriced, pricingDraftOf, pricingErrors, pricingFieldsOfDraft, pricingSummary, repriceDraft, savedTiersOf } from './pricing-step'
 import { ChangesPolicyEditor, type DraftCancellation } from './changes-policy-editor'
 import { DEFAULT_CHANGES, DEFAULT_PAYMENT, changesOf, changesSummary, depositLabel, paymentOf, policySummary, presetOf } from '@/lib/booking-policy'
 import { BookingExceptionsEditor, BookingSettingsEditor } from './booking-settings-editor'
 import { ACTIVITY_OVERRIDES_EVENT, applyActivityOverride, parseActivityOverrides, readActivityOverridesRaw, saveActivityOverride } from '@/lib/activity-overrides'
 import type { ActivityLocation, ActivitySchedule, ScheduleChange, WeekdayKey } from '@/types'
-import { cleanSpotsByWeekday, closingGapOf, describeSchedules, describeSpotsByWeekday, expandDays, isGeneratedSlotId, parseSlotId, plusExtraSpots, scheduleContextOf, sellsSpotsByWeekday, shiftDayKey, bookingWindowMonths, type ScheduleSource } from '@/lib/activity-schedule'
+import { cleanExtraByWeekday, cleanSpotsByWeekday, closingGapOf, describeSchedules, describeSpotsByWeekday, expandDays, isGeneratedSlotId, parseSlotId, plusExtraSpots, scheduleContextOf, sellsSpotsByWeekday, shiftDayKey, bookingWindowMonths, type ScheduleSource } from '@/lib/activity-schedule'
 import { useBookingLedger } from '@/hooks/use-booking-ledger'
-import { ScheduleStep, type BookedSlot, type ScheduleBase } from './schedule-step'
+import { ScheduleStep, type BookedSlot, type ScheduleBase, type ScheduleCapacity } from './schedule-step'
+import { CapacityBox, capacityWords, type CapacityValue } from './capacity-box'
 import { TODAY_KEY } from '@/lib/data/constants'
 import { defaultScheduleDraft, mergeScheduleChanges, modeForKind, scheduleDraftOf, scheduleSaveOf, scheduleSourceOf, validateScheduleDraft, withMode, type PickMode } from './schedule-draft'
 import {
   cn,
   formatCurrency,
   formatDuration,
+  fromDateKey,
   pluralize,
   slugify,
 } from '@/lib/utils'
@@ -170,12 +172,16 @@ export interface ActivityDraft {
   /** How the duration is typed; the value is always stored in minutes. */
   durationUnit: DurationUnit
   minAge: number
-  /** Spots per time slot (a pass: tickets per day). At least 1 to continue; 0 only while not filled in. */
+  /** Spots per time slot (a pass: tickets per day; private: the group size). Set on the Booking step. At least 1 to continue; 0 only while not filled in. */
   maxCapacity: number
-  /** Activities, tours and lessons: extra spots sold once the usual spots are full (private: guests over the most guests), each at its own price. Count 0: none. */
+  /** Activities, tours and lessons: extra spots sold once the usual spots are full (private: guests over the group size), at one price. Count 0: none usually. */
   extraSpots: ExtraSpots
-  /** Shared activities, lessons and passes: spots on some weekdays instead of `maxCapacity`. null or absent: the same every day. */
+  /** Weekdays with their own spots (private: group size; a rental: items out). null or absent: the same every day. */
   spotsByWeekday?: Partial<Record<WeekdayKey, number>> | null
+  /** Weekdays with their own extra spots (0: none that day). null or absent: the same every day. */
+  extraSpotsByWeekday?: Partial<Record<WeekdayKey, number>> | null
+  /** Rentals: the most items out at once. 0 or absent: all of the stock. */
+  rentalMaxOut?: number
   minParticipants: number
   description: string
   highlights: string[]
@@ -295,6 +301,8 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
     maxCapacity: restaurant ? DINING_BASICS.maxCapacity : TOUR_BASICS.maxCapacity,
     extraSpots: { count: 0, price: 0 },
     spotsByWeekday: null,
+    extraSpotsByWeekday: null,
+    rentalMaxOut: 0,
     minParticipants: 1,
     description: '',
     highlights: [''],
@@ -512,17 +520,91 @@ function paymentLine(pay: PaymentTerms, currency: CurrencyCode): string {
   return `${depositLabel(pay, (minor) => formatCurrency(minor, currency))} deposit, the rest ${pay.balanceDueDays === 0 ? 'on the day' : `${pay.balanceDueDays} ${pluralize(pay.balanceDueDays, 'day')} before`}.`
 }
 
-/** The spots by weekday a save writes: for kinds that have them, only days that differ from the usual number; else none. */
-export function savedSpotsByWeekday(draft: Pick<ActivityDraft, 'kind' | 'spotsByWeekday' | 'maxCapacity' | 'category'>): Partial<Record<WeekdayKey, number>> | undefined {
+/** A rental's stock across its items (set per item on Pricing). */
+function rentalStockOfDraft(draft: Pick<ActivityDraft, 'tiers' | 'kindSettings'>): number {
+  const rental = normalizeKindSettings(draft.kindSettings).rental
+  return draft.tiers.reduce((sum, tier) => sum + draftItemOf(rental, tier.id).stock, 0)
+}
+
+/** The usual capacity, as the Booking step shows it: spots, a private group's size, tickets per day, or a rental's items out at once (all of its stock unless capped). */
+export function usualCapacityOf(draft: Pick<ActivityDraft, 'kind' | 'maxCapacity' | 'rentalMaxOut' | 'tiers' | 'kindSettings'>): number {
+  if ((draft.kind ?? 'trip') !== 'rental') return draft.maxCapacity
+  const stock = rentalStockOfDraft(draft)
+  const cap = Math.floor(draft.rentalMaxOut ?? 0)
+  return cap >= 1 ? Math.min(cap, stock) : stock
+}
+
+/** The spots by weekday a save writes: for kinds that have them, only days that differ from the usual number (a rental's never over its stock); else none. */
+export function savedSpotsByWeekday(
+  draft: Pick<ActivityDraft, 'kind' | 'spotsByWeekday' | 'maxCapacity' | 'category'> & Partial<Pick<ActivityDraft, 'rentalMaxOut' | 'tiers' | 'kindSettings'>>,
+): Partial<Record<WeekdayKey, number>> | undefined {
   if (isDining(draft) || !sellsSpotsByWeekday(draft.kind)) return undefined
+  if ((draft.kind ?? 'trip') === 'rental' && draft.spotsByWeekday) {
+    const full = { tiers: draft.tiers ?? [], kindSettings: draft.kindSettings ?? defaultKindSettings(), kind: draft.kind, maxCapacity: draft.maxCapacity, rentalMaxOut: draft.rentalMaxOut }
+    const stock = rentalStockOfDraft(full)
+    const capped = Object.fromEntries(Object.entries(draft.spotsByWeekday).map(([key, value]) => [key, typeof value === 'number' ? Math.min(value, stock) : value]))
+    return cleanSpotsByWeekday(capped, usualCapacityOf(full))
+  }
   return cleanSpotsByWeekday(draft.spotsByWeekday, draft.maxCapacity)
 }
 
-/** The extra spots a save writes: a number and a price for kinds that sell them, else none. */
-export function savedExtraSpots(draft: Pick<ActivityDraft, 'kind' | 'extraSpots' | 'category'>): ExtraSpots {
+/** Extra spots somewhere other than the usual number: a weekday's own, or a date's on the calendar. */
+function extraOnSomeDays(draft: Pick<ActivityDraft, 'extraSpotsByWeekday'> & Partial<Pick<ActivityDraft, 'scheduleChanges'>>): boolean {
+  return (
+    Object.values(draft.extraSpotsByWeekday ?? {}).some((extra) => typeof extra === 'number' && extra > 0) ||
+    (draft.scheduleChanges ?? []).some((change) => change.action === 'spots' && (change.extraSpots ?? 0) > 0)
+  )
+}
+
+/**
+ * The extra spots a save writes: the usual number and the price, for kinds
+ * that sell them. The price is kept with no usual extra spots when a weekday
+ * or a date has some; none at all without a price.
+ */
+export function savedExtraSpots(draft: Pick<ActivityDraft, 'kind' | 'extraSpots' | 'category'> & Partial<Pick<ActivityDraft, 'extraSpotsByWeekday' | 'scheduleChanges'>>): ExtraSpots {
   const count = Math.max(0, Math.floor(draft.extraSpots?.count ?? 0))
   const price = Math.max(0, Math.round(draft.extraSpots?.price ?? 0))
-  return !isDining(draft) && sellsExtraSpots(draft.kind) && count > 0 && price > 0 ? { count, price } : { count: 0, price: 0 }
+  if (isDining(draft) || !sellsExtraSpots(draft.kind) || price <= 0) return { count: 0, price: 0 }
+  return count > 0 || extraOnSomeDays(draft) ? { count, price } : { count: 0, price: 0 }
+}
+
+/** The extra spots by weekday a save writes: only days that differ from the usual number, with a price set; else none. */
+export function savedExtraByWeekday(draft: Pick<ActivityDraft, 'kind' | 'extraSpots' | 'category'> & Partial<Pick<ActivityDraft, 'extraSpotsByWeekday' | 'scheduleChanges'>>): Partial<Record<WeekdayKey, number>> | undefined {
+  const saved = savedExtraSpots(draft)
+  if (saved.price <= 0) return undefined
+  return cleanExtraByWeekday(draft.extraSpotsByWeekday, saved.count)
+}
+
+/** A rental's cap on items out at once a save writes: only when it is fewer than the stock. */
+export function savedRentalMaxOut(draft: Pick<ActivityDraft, 'kind' | 'category' | 'rentalMaxOut' | 'tiers' | 'kindSettings'>): number | undefined {
+  if (isDining(draft) || (draft.kind ?? 'trip') !== 'rental') return undefined
+  const cap = Math.floor(draft.rentalMaxOut ?? 0)
+  return cap >= 1 && cap < rentalStockOfDraft(draft) ? cap : undefined
+}
+
+/** "10 spots + 3 extra at $40 · Sat, Sun 20 · extra Sat, Sun 0": the capacity in one line, for the Review step. */
+function capacitySummary(draft: ActivityDraft, currency: CurrencyCode): string {
+  const kind = draft.kind ?? 'trip'
+  const usual = usualCapacityOf(draft)
+  if (usual < 1) return 'Not set yet'
+  const stock = rentalStockOfDraft(draft)
+  const main =
+    kind === 'charter'
+      ? `Groups up to ${usual}`
+      : kind === 'rental'
+        ? `${usual} of ${stock} ${pluralize(stock, 'item')} out at once`
+        : kind === 'pass'
+          ? `${usual} ${pluralize(usual, 'ticket')} a day`
+          : kind === 'lesson'
+            ? `${usual} per class`
+            : `${usual} ${pluralize(usual, 'spot')}`
+  const extra = savedExtraSpots(draft)
+  const parts = [extra.count > 0 ? `${main} + ${extra.count} extra at ${formatCurrency(extra.price, currency)}` : extra.price > 0 ? `${main} · extra spots at ${formatCurrency(extra.price, currency)}` : main]
+  const byDay = describeSpotsByWeekday(savedSpotsByWeekday(draft))
+  if (byDay) parts.push(byDay)
+  const extraByDay = describeSpotsByWeekday(savedExtraByWeekday(draft), 0)
+  if (extraByDay) parts.push(`extra ${extraByDay}`)
+  return parts.join(' · ')
 }
 
 export function seatsFor(draft: ActivityDraft): ScheduleSeats {
@@ -548,13 +630,21 @@ export function seatsFor(draft: ActivityDraft): ScheduleSeats {
 
 /** What the schedule engine needs about the activity itself: where it runs from, its spots, its kind and length. */
 function scheduleBaseOf(draft: ActivityDraft, id = 'draft'): ScheduleBase {
+  const kind = draft.kind ?? 'trip'
+  const extra = draft.extraSpots ?? { count: 0, price: 0 }
+  const extraByWeekday = sellsExtraSpots(kind) ? cleanExtraByWeekday(draft.extraSpotsByWeekday, extra.count) : undefined
+  const cap = savedRentalMaxOut(draft)
   return {
     id,
     locations: draft.schedule.locations.map((site) => ({ locationId: site.locationId, times: [] })),
     maxCapacity: seatsFor(draft).capacity,
-    kind: draft.kind ?? 'trip',
+    kind,
     durationMinutes: draft.durationMinutes,
     ...(savedSpotsByWeekday(draft) ? { spotsByWeekday: savedSpotsByWeekday(draft) } : {}),
+    // A day's extra spots show on the calendar while the price is still to be typed (the step asks for it).
+    ...(sellsExtraSpots(kind) ? { extraSpots: { count: Math.max(0, Math.floor(extra.count)), price: Math.max(1, extra.price) } } : {}),
+    ...(extraByWeekday ? { extraSpotsByWeekday: extraByWeekday } : {}),
+    ...(cap !== undefined ? { rentalMaxOut: cap } : {}),
   }
 }
 
@@ -581,13 +671,14 @@ function upcomingDays(
   const ctx = { ...(defaults ? scheduleContextOf(defaults) : {}), bookable: { nowIso, maxAdvanceDays: 3650 } }
   // A pass's tickets are a daily limit (the season's or Basics' number), shared by the day's time slots at each location.
   const daily = (draft.kind ?? 'trip') === 'pass'
-  const extra = (draft.kind ?? 'trip') === 'charter' ? 0 : savedExtraSpots(draft).count
+  const charter = (draft.kind ?? 'trip') === 'charter'
+  const extra = charter ? 0 : savedExtraSpots(draft).count
   for (const day of expandDays(draftScheduleSource(draft), todayKey, shiftDayKey(todayKey, days - 1), ctx)) {
     if (day.slots.length === 0) continue
     const entry = byDay.get(day.dateKey) ?? { dateKey: day.dateKey, times: [], seats: 0 }
     entry.times = [...new Set([...entry.times, ...day.slots.map((slot) => slot.time)])].sort()
-    // Each shared time slot also sells its extra spots.
-    entry.seats += daily ? Math.max(...day.slots.map((slot) => slot.capacity)) : day.slots.reduce((sum, slot) => sum + plusExtraSpots(slot.capacity, extra), 0)
+    // Each shared time slot also sells its extra spots (its day's own, or the usual ones).
+    entry.seats += daily ? Math.max(...day.slots.map((slot) => slot.capacity)) : day.slots.reduce((sum, slot) => sum + plusExtraSpots(slot.capacity, charter ? 0 : (slot.extraSpots ?? extra)), 0)
     byDay.set(day.dateKey, entry)
   }
   return [...byDay.values()]
@@ -668,8 +759,8 @@ export function deriveForKind(draft: ActivityDraft): ActivityDraft {
       next.schedule = { ...next.schedule, lastEntryMinutes: last, locations: next.schedule.locations.map((site) => ({ ...site, schedule: { ...site.schedule, lastEntryMinutes: last } })) }
     }
   } else if (kind === 'charter') {
+    // The fewest guests are left as typed: the group size is typed a digit at a time on the Booking step, which checks the two.
     next.maxCapacity = settings.charter.maxGuests
-    if (next.minParticipants > next.maxCapacity) next.minParticipants = next.maxCapacity
   } else if (kind === 'lesson') {
     next.difficulty = LEVEL_DIFFICULTY[settings.lesson.level]
   } else if (kind === 'pass') {
@@ -737,8 +828,11 @@ export function draftFromActivity(source: Activity, nowIso: string): ActivityDra
     minAge: activity.minAge,
     // A private group's most guests, before its extra spots (a seeded one's spots count them too).
     maxCapacity: (activity.kind ?? 'trip') === 'charter' ? usualSpotsOf(activity) || activity.maxCapacity : activity.maxCapacity,
-    extraSpots: extraSpotsOf(activity) ?? { count: 0, price: 0 },
+    // The usual extra spots and their one price; the price stays with none usually when some days have their own.
+    extraSpots: extraSpotPriceOf(activity) > 0 ? { count: spotsPlanOf(activity).extra, price: extraSpotPriceOf(activity) } : { count: 0, price: 0 },
     spotsByWeekday: sellsSpotsByWeekday(activity.kind) && activity.spotsByWeekday ? { ...activity.spotsByWeekday } : null,
+    extraSpotsByWeekday: sellsExtraSpots(activity.kind) && activity.extraSpotsByWeekday ? { ...activity.extraSpotsByWeekday } : null,
+    rentalMaxOut: (activity.kind ?? 'trip') === 'rental' && activity.rentalMaxOut ? Math.floor(activity.rentalMaxOut) : 0,
     minParticipants: activity.minParticipants || 1,
     description: activity.description,
     highlights: activity.highlights.length > 0 ? [...activity.highlights] : [''],
@@ -977,12 +1071,9 @@ const TOUR_COPY_SCHEMAS = [
         .max(43200, 'Keep it under 30 days')
         .refine((minutes) => minutes === 0 || minutes >= 15, 'Give it at least 15 minutes, or leave it flexible'),
       minAge: z.number().int().min(0).max(99),
-      maxCapacity: z.number().int().min(0).max(500, 'Keep it under 500 spots per time slot'),
+      // Set on the Booking step (and checked there); the fewest guests are checked against it in validateStep.
+      maxCapacity: z.number().int().min(0),
       minParticipants: z.number().int().min(1, 'At least one guest must be required'),
-    })
-    .refine((draft) => draft.maxCapacity === 0 || draft.minParticipants <= draft.maxCapacity, {
-      message: 'The fewest guests cannot be more than the most guests',
-      path: ['minParticipants'],
     }),
 
   z.object({
@@ -1185,18 +1276,45 @@ function validateSchemaStep(step: number, draft: ActivityDraft): FieldErrors {
 /** Request or call with no set schedule: no days and times to set. */
 const isUnscheduled = (draft: Pick<ActivityDraft, 'booking'>) => (draft.booking?.method ?? 'instant') !== 'instant' && draft.booking?.scheduled === false
 
+/**
+ * The capacity, on the Booking step: every time slot sells at least one spot
+ * (there is no "no limit"), never fewer than the fewest guests, and extra
+ * spots anywhere (usually, on a weekday or a date) need their price.
+ */
+export function capacityErrors(draft: ActivityDraft): FieldErrors {
+  const errors: FieldErrors = {}
+  if (isDining(draft)) return errors
+  const kind = draft.kind ?? 'trip'
+  const settings = normalizeKindSettings(draft.kindSettings)
+  if (kind === 'lesson' && draft.maxCapacity < 1) errors.maxCapacity = 'A class needs at least one spot'
+  if ((kind === 'activity' || kind === 'trip') && draft.maxCapacity < 1) errors.maxCapacity = 'Each time slot needs at least one spot'
+  if (kind === 'charter' && settings.charter.maxGuests < 1) errors.maxCapacity = 'Allow at least one guest'
+  if (kind === 'pass' && draft.maxCapacity < 1) errors.maxCapacity = 'Sell at least one ticket a day'
+  if (kind !== 'rental' && kind !== 'package' && draft.maxCapacity > 500) errors.maxCapacity = 'Keep it under 500'
+  if (!errors.maxCapacity && kind !== 'rental' && kind !== 'package' && kind !== 'pass' && draft.maxCapacity >= 1 && draft.minParticipants > draft.maxCapacity) {
+    errors.maxCapacity = `At least the fewest guests (${draft.minParticipants})`
+  }
+  // Extra spots are sold only with a price for them.
+  const extraSomewhere = (draft.extraSpots?.count ?? 0) > 0 || extraOnSomeDays(draft)
+  if (sellsExtraSpots(kind) && extraSomewhere && (draft.extraSpots?.price ?? 0) <= 0) errors['extraSpots.price'] = 'Set a price'
+  return errors
+}
+
 function validateStep(step: number, draft: ActivityDraft): FieldErrors {
   const errors = validateSchemaStep(step, draft)
   const id = isDining(draft) ? DINING_STEPS[step]?.id : TOUR_STEPS[step]?.id
   // The Schedule step: a package runs on its activities' own times, so it has nothing to check.
   if (id === 'schedule' && !isDining(draft)) {
     if ((draft.kind ?? 'trip') === 'package') return {}
-    return validateScheduleDraft(draft, {
-      pickedLocationIds: draft.schedule.locations.map((site) => site.locationId),
-      requireLocation: true,
-      unscheduled: isUnscheduled(draft),
-      todayKey: TODAY_KEY,
-    })
+    return {
+      ...capacityErrors(draft),
+      ...validateScheduleDraft(draft, {
+        pickedLocationIds: draft.schedule.locations.map((site) => site.locationId),
+        requireLocation: true,
+        unscheduled: isUnscheduled(draft),
+        todayKey: TODAY_KEY,
+      }),
+    }
   }
   // Pricing: a group price that is set, ages the right way round.
   if (id === 'pricing' && !isDining(draft)) Object.assign(errors, pricingErrors(draft))
@@ -1224,14 +1342,11 @@ function validateStep(step: number, draft: ActivityDraft): FieldErrors {
   if (id !== 'basics' || isDining(draft)) return errors
   const kind = draft.kind ?? 'trip'
   const settings = normalizeKindSettings(draft.kindSettings)
-  // Every time slot sells at least one spot (there is no "no limit").
-  if (kind === 'lesson' && draft.maxCapacity < 1) errors.maxCapacity = 'A class needs at least one spot'
-  if ((kind === 'activity' || kind === 'trip') && draft.maxCapacity < 1) errors.maxCapacity = 'Each time slot needs at least one spot'
-  if (kind === 'charter' && settings.charter.maxGuests < 1) errors.maxCapacity = 'Allow at least one guest'
-  if (kind === 'pass' && draft.maxCapacity < 1) errors.maxCapacity = 'Sell at least one ticket a day'
-  // Extra spots are sold only with a price for them.
-  if (sellsExtraSpots(kind) && (draft.extraSpots?.count ?? 0) > 0 && (draft.extraSpots?.price ?? 0) <= 0) errors['extraSpots.price'] = 'Set a price'
   if (kind === 'lesson' && draft.durationMinutes < 15) errors.durationMinutes = 'Give each lesson at least 15 minutes'
+  // The spots are on the Booking step: the fewest guests say which number they can't be more than, and where it is.
+  if (!errors.minParticipants && kind !== 'rental' && kind !== 'package' && kind !== 'pass' && draft.maxCapacity >= 1 && draft.minParticipants > draft.maxCapacity) {
+    errors.minParticipants = `Can't be more than the ${capacityWords(kind).label.toLowerCase()} (${draft.maxCapacity}), set on the Booking step`
+  }
   if (kind === 'package') {
     delete errors.maxCapacity
     delete errors.durationMinutes
@@ -1941,10 +2056,12 @@ export function ActivityWizard({
           difficulty: draft.difficulty,
           durationMinutes: draft.durationMinutes,
           maxCapacity: draft.maxCapacity,
-          // Sold once the usual spots are full, each at its own price; none for kinds that don't sell them.
+          // Sold once the usual spots are full, at one price; none for kinds that don't sell them.
           extraSpots: savedExtraSpots(draft),
-          // Days with their own spots; null clears them.
+          // Days with their own spots and extra spots, and a rental's cap on items out; null clears them.
           spotsByWeekday: savedSpotsByWeekday(draft) ?? null,
+          extraSpotsByWeekday: savedExtraByWeekday(draft) ?? null,
+          rentalMaxOut: savedRentalMaxOut(draft) ?? null,
           minAge: text.minAge,
           minParticipants: draft.minParticipants,
           featured: draft.featured,
@@ -2049,8 +2166,71 @@ export function ActivityWizard({
   const scheduleBase = React.useMemo(
     () => scheduleBaseOf(draft, activityId ?? 'draft'),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [draft.schedule.locations, scheduleCapacity, draft.kind, draft.durationMinutes, draft.spotsByWeekday, activityId],
+    [draft.schedule.locations, scheduleCapacity, draft.kind, draft.durationMinutes, draft.maxCapacity, draft.spotsByWeekday, draft.extraSpotsByWeekday, draft.extraSpots, draft.rentalMaxOut, activityId],
   )
+  // How many each time slot takes: the box after the regular times, and each day's numbers for the calendar.
+  const capacity = React.useMemo<ScheduleCapacity | undefined>(() => {
+    if (isDining(draft) || (draft.kind ?? 'trip') === 'package') return undefined
+    const kind = draft.kind ?? 'trip'
+    const extra = draft.extraSpots ?? { count: 0, price: 0 }
+    const sells = sellsExtraSpots(kind)
+    const stock = rentalStockOfDraft(draft)
+    const usual = usualCapacityOf(draft)
+    const value: CapacityValue = {
+      spots: kind === 'rental' ? Math.floor(draft.rentalMaxOut ?? 0) : draft.maxCapacity,
+      extraCount: sells ? extra.count : 0,
+      extraPrice: sells ? extra.price : 0,
+      spotsByWeekday: draft.spotsByWeekday ?? null,
+      extraByWeekday: sells ? (draft.extraSpotsByWeekday ?? null) : null,
+    }
+    const settings = normalizeKindSettings(draft.kindSettings)
+    const onChange = (next: Partial<CapacityValue>) =>
+      patch({
+        // A private group's size is its most guests too; a rental's items out at once is its own number.
+        ...(next.spots !== undefined
+          ? kind === 'rental'
+            ? { rentalMaxOut: next.spots }
+            : kind === 'charter'
+              ? { maxCapacity: next.spots, kindSettings: { ...settings, charter: { ...settings.charter, maxGuests: next.spots } } }
+              : { maxCapacity: next.spots }
+          : {}),
+        ...(next.extraCount !== undefined || next.extraPrice !== undefined ? { extraSpots: { count: next.extraCount ?? extra.count, price: next.extraPrice ?? extra.price } } : {}),
+        ...(next.spotsByWeekday !== undefined ? { spotsByWeekday: next.spotsByWeekday } : {}),
+        ...(next.extraByWeekday !== undefined ? { extraSpotsByWeekday: next.extraByWeekday } : {}),
+      })
+    const day = (dateKey: string) => String(fromDateKey(dateKey).getDay()) as WeekdayKey
+    return {
+      box: (
+        <CapacityBox
+          kind={kind}
+          value={value}
+          onChange={onChange}
+          stock={stock}
+          currencySymbol={currencySymbol(currency)}
+          errors={errors}
+          weekly={!unscheduled}
+          extraElsewhere={(draft.scheduleChanges ?? []).some((change) => change.action === 'spots' && (change.extraSpots ?? 0) > 0)}
+          sharedNote={draft.schedule.locations.length > 1 ? 'Every location' : undefined}
+        />
+      ),
+      label: capacityWords(kind).column,
+      usualOn: (dateKey) => {
+        const own = draft.spotsByWeekday?.[day(dateKey)]
+        const ownExtra = sells ? draft.extraSpotsByWeekday?.[day(dateKey)] : undefined
+        return {
+          spots: own !== undefined && own >= 1 ? (kind === 'rental' ? Math.min(own, stock) : own) : usual,
+          extra: sells ? (ownExtra !== undefined && ownExtra >= 0 ? ownExtra : extra.count) : 0,
+        }
+      },
+      plain: { spots: usual, extra: sells ? extra.count : 0 },
+      showExtra: sells,
+      privateGroup: kind === 'charter',
+      // A rental can't lend out more than its stock on any day.
+      ...(kind === 'rental' ? { most: Math.max(1, stock) } : {}),
+    }
+    // patch is stable for the life of the wizard; errors and currency are read when they change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft.kind, draft.category, draft.maxCapacity, draft.extraSpots, draft.spotsByWeekday, draft.extraSpotsByWeekday, draft.rentalMaxOut, draft.tiers, draft.kindSettings, draft.scheduleChanges, draft.schedule.locations.length, errors, currency, unscheduled])
   // Booked time slots, with this browser's bookings: a generated one guests booked is kept and warned about like a seeded one.
   const ledger = useBookingLedger(tenantSlug)
   const liveBookedSlots = React.useMemo(() => bookedWithLedger(bookedSlots, ledger.delta, editing ? activityId : undefined, nowIso), [bookedSlots, ledger.delta, editing, activityId, nowIso])
@@ -2250,7 +2430,7 @@ export function ActivityWizard({
                             : undefined
                         }
                         southern={currency === 'AUD' || currency === 'NZD'}
-                        extraSpots={(draft.kind ?? 'trip') === 'charter' ? 0 : savedExtraSpots(draft).count}
+                        capacity={capacity}
                       />
                         </div>
                         {(draft.booking ?? DEFAULT_BOOKING).method === 'instant' ? (
@@ -2623,8 +2803,6 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
     durationMinutes: draft.durationMinutes,
     durationUnit: draft.durationUnit,
     difficulty: draft.difficulty,
-    extraSpots: draft.extraSpots ?? { count: 0, price: 0 },
-    spotsByWeekday: draft.spotsByWeekday ?? null,
   }
   return (
     <div className="flex flex-col gap-5">
@@ -3089,27 +3267,8 @@ function ReviewStep({
         { label: 'Category', value: draft.customCategory || themeLabel(draft.theme ?? defaultTheme(draft.category)), step: 0 },
         // A rental's charging, items, stock, deposits and late fee are all set on Pricing.
         { label: 'Setup', value: kindFacts(draft).join(' · '), step: (draft.kind ?? 'trip') === 'rental' ? TOUR_STEP_INDEX.pricing : TOUR_STEP_INDEX.basics },
-        ...(sellsExtraSpots(draft.kind)
-          ? [
-              {
-                label: 'Extra spots',
-                value: (() => {
-                  const extra = savedExtraSpots(draft)
-                  return extra.count > 0 ? `${extra.count} at ${formatCurrency(extra.price, currency)} each` : 'None'
-                })(),
-                step: TOUR_STEP_INDEX.basics,
-              },
-            ]
-          : []),
-        ...(savedSpotsByWeekday(draft)
-          ? [
-              {
-                label: (draft.kind ?? 'trip') === 'pass' ? 'Tickets by day' : 'Spots by day',
-                value: `${draft.maxCapacity} ${(draft.kind ?? 'trip') === 'pass' ? pluralize(draft.maxCapacity, 'ticket') : pluralize(draft.maxCapacity, 'spot')} · ${describeSpotsByWeekday(savedSpotsByWeekday(draft))}`,
-                step: TOUR_STEP_INDEX.basics,
-              },
-            ]
-          : []),
+        // How many each time slot takes is set with the schedule, on the Booking step.
+        ...((draft.kind ?? 'trip') !== 'package' ? [{ label: 'Capacity', value: capacitySummary(draft, currency), step: TOUR_STEP_INDEX.schedule }] : []),
         { label: 'Highlights', value: `${draft.highlights.filter(Boolean).length} bullets`, step: TOUR_STEP_INDEX.description },
         {
           label: draft.arrivalMode === 'meet' ? 'Meeting point' : draft.arrivalMode === 'venue' ? 'Venue' : 'Arrival',

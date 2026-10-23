@@ -74,7 +74,7 @@ import { useBookingLedger } from '@/hooks/use-booking-ledger'
 import { useScheduledDays } from '@/hooks/use-scheduled-days'
 import { depositLabel, hoursLabel, paymentOf, splitPayment } from '@/lib/booking-policy'
 import { groupPriced } from '@/lib/price-engine'
-import { slotExtraSpotsOf } from '@/lib/extra-spots'
+import { forSlot, slotExtraSpotsOf } from '@/lib/extra-spots'
 import type { PaymentTerms } from '@/types'
 
 /* ==========================================================================
@@ -362,8 +362,6 @@ export function CheckoutFlow({
   // Prices saved in the editor count here exactly as in the widget.
   const pricedActivity = usePricingOverride(given)
   const activity = useActivityWithDefaults(pricedActivity, tenant.slug)
-  // A private group's size, checked again against the saved edit (its most guests and extra spots), from the link as asked.
-  const party = partyGiven === undefined ? undefined : checkoutParty(activity, request?.party ?? partyGiven)
   const { defaults: bookingDefaults } = useBookingDefaults(tenant.slug)
   const fields = bookingDefaults.checkout
 
@@ -423,6 +421,10 @@ export function CheckoutFlow({
     () => (liveSlot || departure.legs || departure.capacity === undefined ? undefined : spotsBeyondStrip(given, applyActivityOverride(given, overrides[given.id]), { capacity: departure.capacity, seatsLeft: departure.seatsLeft, startsAt: givenDeparture.slotStartsAt ?? givenDeparture.startsAt, locationId: departure.locationId })),
     [liveSlot, departure.legs, departure.capacity, departure.seatsLeft, departure.locationId, givenDeparture.slotStartsAt, givenDeparture.startsAt, given, overrides],
   )
+  // The activity as this time slot sells it: its day's extra spots and a private group's size (a weekday's or a date's).
+  const slotActivity = React.useMemo(() => forSlot(activity, liveSlot ?? far), [activity, liveSlot, far])
+  // A private group's size, checked again against the saved edit (its size and extra spots that day), from the link as asked.
+  const party = partyGiven === undefined ? undefined : checkoutParty(slotActivity, request?.party ?? partyGiven)
   const ownDelta = departure.legs ? 0 : (delta[departure.id] ?? 0)
   const serverCapacity = far ? far.capacity : departure.capacity
   const serverLeft = far ? far.seatsLeft : departure.seatsLeft
@@ -443,7 +445,7 @@ export function CheckoutFlow({
   const slotIsEmpty = liveSlot ? liveSlot.capacity > 0 && liveSlot.seatsLeft >= liveSlot.capacity : (slotEmpty ?? privateGiven)
   const privateBooking = (requestedPrivate ?? privateGiven) && Boolean(activity.privateOption?.enabled) && slotIsEmpty
   // A private booking has its own price for the time slot, so its group stays within the usual spots, as in the widget.
-  const room = privateBooking && capacity !== undefined ? Math.min(seatsLeft, Math.max(1, capacity - slotExtraSpotsOf(activity))) : seatsLeft
+  const room = privateBooking && capacity !== undefined ? Math.min(seatsLeft, Math.max(1, capacity - slotExtraSpotsOf(slotActivity))) : seatsLeft
 
   // The link's tickets checked against the seats the guest saw, with the editor's tiers and extras. On a time slot further
   // out than the strip, a saved per-group price or new spots (extra spots too) check it again as well.
@@ -451,9 +453,9 @@ export function CheckoutFlow({
   const selection = React.useMemo(
     () =>
       request && (liveSlot || far || groupPriced(activity) || room < seatsLeft)
-        ? resolveSelection(activity, request.tiers, request.addOns, Math.max(1, room), itemsLeft, party)
+        ? resolveSelection(slotActivity, request.tiers, request.addOns, Math.max(1, room), itemsLeft, party)
         : serverSelection,
-    [request, liveSlot, far, activity, seatsLeft, room, itemsLeft, party, serverSelection],
+    [request, liveSlot, far, activity, slotActivity, seatsLeft, room, itemsLeft, party, serverSelection],
   )
 
   // Checked once the browser has read the saved schedule: a time slot it took off (cancelled, closed, its time removed) can't be booked.
@@ -472,7 +474,7 @@ export function CheckoutFlow({
   // The same engine and inputs as the widget: the slot's start, the clock, how full it is, its dynamic pricing and the business's rules.
   // Group rules count people (a charter: its party), worked out by the engine.
   const quote = React.useMemo(
-    () => buildQuote(activity, tenant.slug, selection, departure.priceMultiplier, {
+    () => buildQuote(slotActivity, tenant.slug, selection, departure.priceMultiplier, {
       days: rentalDays,
       party,
       private: privateBooking,
@@ -483,7 +485,7 @@ export function CheckoutFlow({
       booked,
       businessRules: pricing.rules,
     }),
-    [activity, tenant.slug, selection, departure.priceMultiplier, departure.slotStartsAt, departure.startsAt, capacity, booked, nowIso, pricing.rules, rentalDays, party, rentalMode, rentalHours, rentalLength, privateBooking],
+    [slotActivity, tenant.slug, selection, departure.priceMultiplier, departure.slotStartsAt, departure.startsAt, capacity, booked, nowIso, pricing.rules, rentalDays, party, rentalMode, rentalHours, rentalLength, privateBooking],
   )
 
   const [errors, setErrors] = React.useState<Errors>({})

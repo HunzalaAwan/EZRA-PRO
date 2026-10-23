@@ -15,8 +15,8 @@ import { useMessageTemplates } from '@/hooks/use-message-templates'
 import { useActivityOverrides } from '@/hooks/use-pricing-override'
 import { useBookingDefaults } from '@/hooks/use-booking-defaults'
 import { applyActivityOverride, applyScheduleOverride, parseActivityOverrides, readActivityOverridesRaw, saveScheduleOverride } from '@/lib/activity-overrides'
-import { cancelChangeId as cancelChangeIdFor, defaultSpots, expandSchedules, scheduleContextOf, spotsAfterEdit } from '@/lib/activity-schedule'
-import { slotExtraSpotsOf } from '@/lib/extra-spots'
+import { cancelChangeId as cancelChangeIdFor, defaultSpots, expandSchedules, scheduleContextOf, slotExtraOf, spotsAfterEdit } from '@/lib/activity-schedule'
+import { privateMostOf, slotExtraSpotsOf, usualSpotsOf } from '@/lib/extra-spots'
 import { NewDepartureDialog } from '@/components/dashboard/calendar/new-departure-dialog'
 import { CURRENT_TENANT, tenantById } from '@/lib/demo-core'
 import Image from 'next/image'
@@ -223,23 +223,32 @@ export function DepartureDetailSheet({
     const override = overrides[activity.id]
     const edited = override ? applyActivityOverride(activity, override) : activity
     // The extra spots in the shown spots: the edit's once laid over, else the ones the server's spots were sold with.
-    const [served, extraSpots] = ((): [typeof given, number] => {
-      const asServed: [typeof given, number] = [given, slotExtraSpotsOf(activity)]
-      if (!override || given.status === 'cancelled' || given.status === 'completed' || (activity.kind ?? 'trip') === 'charter') return asServed
+    // A private group: its size that day and the extra guests over it (a weekday's or a date's own, else the usual ones).
+    const charter = (activity.kind ?? 'trip') === 'charter'
+    const [served, extraSpots, group] = ((): [typeof given, number, { size: number; most: number } | undefined] => {
+      const usualGroup = charter ? { size: usualSpotsOf(edited), most: privateMostOf(edited) } : undefined
+      const asServed: [typeof given, number, typeof usualGroup] = [given, slotExtraSpotsOf(activity), usualGroup]
+      if (!override || given.status === 'cancelled' || given.status === 'completed') return asServed
       const day = given.startsAt.slice(0, 10)
       const primary = edited.locations[0]?.locationId
       const entry = expandSchedules(edited, day, day, scheduleContextOf(bookingDefaults)).find(
         (slot) => slot.time === given.startsAt.slice(11, 16) && (slot.locationId ?? primary) === (given.locationId ?? primary),
       )
       if (!entry) return asServed
-      const extraNow = slotExtraSpotsOf(edited)
+      if (charter) {
+        const size = entry.groupSize ?? usualGroup!.size
+        const extra = entry.extraSpots ?? Math.max(0, usualGroup!.most - usualGroup!.size)
+        return [given, 0, { size, most: size + extra }]
+      }
+      const extraNow = slotExtraOf(edited, entry)
       const spots = spotsAfterEdit(given.capacity, entry, defaultSpots(edited) !== defaultSpots(activity), slotExtraSpotsOf(activity), extraNow)
-      return [spots === given.capacity ? given : { ...given, capacity: Math.max(spots, given.booked) }, extraNow]
+      return [spots === given.capacity ? given : { ...given, capacity: Math.max(spots, given.booked) }, extraNow, undefined]
     })()
     const change = ledger.delta[served.id] ?? 0
     const departure = change ? { ...served, booked: Math.max(0, Math.min(served.capacity, served.booked + change)) } : served
     return {
       extraSpots,
+      group,
       extra: entriesOn(ledger, served.id),
       departure,
       activity,
@@ -262,7 +271,7 @@ export function DepartureDetailSheet({
 
   if (!detail) return null
 
-  const { departure, activity, guests: seededGuests, crew, resources, gross, paid, outstanding, media, extraSpots } = detail
+  const { departure, activity, guests: seededGuests, crew, resources, gross, paid, outstanding, media, extraSpots, group } = detail
   const tenant = tenantById.get(departure.tenantId) ?? CURRENT_TENANT
   const slotDay = departure.startsAt.slice(0, 10)
   const slotTime = departure.startsAt.slice(11, 16)
@@ -435,6 +444,12 @@ export function DepartureDetailSheet({
                   size="md"
                   unit="spot"
                 />
+                {group ? (
+                  <p className="mt-2 text-xs text-subtle tabular">
+                    One group of up to {group.size} {group.size === 1 ? 'guest' : 'guests'}
+                    {group.most > group.size ? `, ${group.most - group.size} extra allowed` : ''}.
+                  </p>
+                ) : null}
                 {extraSpots > 0 && departure.capacity > extraSpots ? (
                   <p className="mt-2 text-xs text-subtle tabular">
                     {departure.capacity - extraSpots} + {extraSpots} extra spots, sold once the {departure.capacity - extraSpots} are full.

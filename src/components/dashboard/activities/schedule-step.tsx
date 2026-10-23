@@ -31,7 +31,7 @@ import { Input } from '@/components/ui/input'
 import { Segmented } from '@/components/ui/segmented'
 import { BeforeInput } from './changes-policy-editor'
 import { SeasonCard, WholeNumberField } from './season-card'
-import { YearCalendar, type CalendarAction } from './year-calendar'
+import { YearCalendar, type CalendarAction, type DayNumbers } from './year-calendar'
 import { ScheduleChangesList } from './schedule-changes-list'
 import {
   addTimeOn,
@@ -47,8 +47,8 @@ import {
   seasonFromTemplate,
   seasonsAt,
   seasonsWarning,
+  setCapacityOn,
   setDayReason,
-  setSpotsOn,
   withMode,
   type PickMode,
   type ScheduleDraft,
@@ -57,8 +57,10 @@ import {
 /* ==========================================================================
    SCHEDULE STEP — when an activity runs, for the whole year. Top to bottom:
    a one-line summary, where it runs from, how guests pick a time, the
-   regular times (the first season, shown without a name), the seasons that
-   change them for part of the year, the year calendar (day-by-day changes),
+   regular times (the first season, shown without a name), the capacity
+   (how many each time slot takes, and on which weekdays that differs), the
+   seasons that change the times for part of the year, the year calendar
+   (day-by-day changes, spots and extra spots included),
    the list of closed days and changes with public holidays, and the booking
    window and cut-off. Booked time slots an edit drops are never removed;
    one line says so.
@@ -100,8 +102,30 @@ export interface ScheduleStepProps {
   rentalDay?: { pickup: string; ret: string; onChange: (pickup: string, ret: string) => void }
   /** Southern hemisphere: summer is December. Only the season templates read it, and a new season now always starts next month. */
   southern?: boolean
-  /** Extra spots each time slot sells on top of its spots: a day's spots can go down to what is booked less these. */
-  extraSpots?: number
+  /**
+   * The capacity: its box (shown after the regular times) and how the
+   * calendar reads a day's numbers. Absent: the calendar shows the spots the
+   * schedule gives, with no extra spots.
+   */
+  capacity?: ScheduleCapacity
+}
+
+/** How many each time slot takes, as the Booking step shows and changes it. */
+export interface ScheduleCapacity {
+  /** The capacity box: the usual numbers and the weekdays that differ. */
+  box: React.ReactNode
+  /** "Spots", "Group size", "Items out", "Tickets". */
+  label: string
+  /** A day's usual numbers before a change for that date: its weekday's own, or the usual ones. */
+  usualOn: (dateKey: string) => DayNumbers
+  /** The usual numbers, before any weekday's own: days with other numbers get a corner mark. */
+  plain: DayNumbers
+  /** Extra spots can be set per day: the kind sells them. */
+  showExtra: boolean
+  /** A private activity: a day's spots are its group's size. */
+  privateGroup?: boolean
+  /** The most a day's spots can be (a rental: its stock). */
+  most?: number
 }
 
 /** Words only (they fit a phone without icons); the line under the control says what the picked one does. */
@@ -135,7 +159,7 @@ export function ScheduleStep({
   onBookingStep,
   rentalDay,
   southern = false,
-  extraSpots = 0,
+  capacity,
 }: ScheduleStepProps) {
   const todayKey = nowIso.slice(0, 10)
   const fieldId = React.useId()
@@ -183,7 +207,9 @@ export function ScheduleStep({
   const shownSeasons = seasonsAt(value.schedules, active)
   const warning = value.scheduleMode === 'dates' ? null : seasonsWarning(shownSeasons, todayKey)
   const basicsSpots = defaultSpots(source)
-  const showSpots = kind !== 'charter'
+  const privateGroup = Boolean(capacity?.privateGroup)
+  const showSpots = Boolean(capacity) || kind !== 'charter'
+  const showExtra = Boolean(capacity?.showExtra)
   const closingGap = closingGapOf(base)
   const stepMinutes = Math.max(30, Math.min(240, base.durationMinutes || 60))
   const firstTime = shownSeasons.map((season) => (['1', '2', '3', '4', '5', '6', '0'] as WeekdayKey[]).map((key) => timesForWeekday(season, key, closingGap)).find((times) => times.length > 0)?.[0]).find(Boolean)
@@ -194,9 +220,31 @@ export function ScheduleStep({
     const season = seasonOf(day)
     return season && day ? timesForWeekday(season, String(fromDateKey(day.dateKey).getDay()) as WeekdayKey, closingGap) : []
   }
-  /** A day's usual spots, before a change for that date: its weekday's own, a season's (older saves), or the number in Basics. */
-  const usualOn = (dateKey: string) => weekdaySpotsOf(source, fromDateKey(dateKey).getDay()) ?? seasonOf(dayMap.get(dateKey))?.capacity ?? basicsSpots
-  const baseSpotsOf = (day: ScheduledDay | undefined) => (day ? usualOn(day.dateKey) : basicsSpots)
+  /**
+   * A day's usual numbers, before a change for that date: its weekday's own,
+   * a season's spots (older saves), or the usual ones. A private group's size
+   * has no season of its own.
+   */
+  const usualOn = (dateKey: string): DayNumbers => {
+    const usual = capacity?.usualOn(dateKey) ?? { spots: basicsSpots, extra: 0 }
+    if (privateGroup || weekdaySpotsOf(source, fromDateKey(dateKey).getDay()) !== undefined) return usual
+    return { spots: seasonOf(dayMap.get(dateKey))?.capacity ?? usual.spots, extra: usual.extra }
+  }
+  /** A time slot's numbers: its spots (a private group: its size) and its extra spots, its own or the day's usual ones. */
+  const numbersOfSlot = (slot: ScheduledDay['slots'][number]): DayNumbers => {
+    const usual = usualOn(slot.dateKey)
+    return { spots: privateGroup ? (slot.groupSize ?? usual.spots) : slot.capacity, extra: showExtra ? (slot.extraSpots ?? usual.extra) : 0 }
+  }
+  const numbersFor = (day: ScheduledDay | undefined, dateKey: string): DayNumbers => (day?.slots[0] ? numbersOfSlot(day.slots[0]) : usualOn(dateKey))
+  const plain = capacity?.plain ?? { spots: basicsSpots, extra: 0 }
+  /** Days whose time slots have other numbers than the usual ones (a weekday's own or a date's). */
+  const differs = (day: ScheduledDay) =>
+    plain.spots > 0 &&
+    day.slots.some((slot) => {
+      const numbers = numbersOfSlot(slot)
+      return numbers.spots !== plain.spots || (showExtra && numbers.extra !== plain.extra)
+    })
+  const spotsKey = privateGroup ? 'groupSize' : 'spots'
   const act = (action: CalendarAction) => {
     const changes = value.scheduleChanges
     let next = changes
@@ -211,13 +259,14 @@ export function ScheduleStep({
     } else if (action.type === 'remove') next = removeTimeOn(changes, action.dateKey, action.time, action.changeId, active)
     else if (action.type === 'close') next = closeDays(changes, action.dates, action.reason, active)
     else if (action.type === 'open') next = openDay(changes, action.dateKey, active)
-    else if (action.type === 'run' || action.type === 'spots') {
-      next =
-        action.type === 'run'
-          ? runAnyway(changes, action.dateKey, seasonTimesFor(dayMap.get(action.dateKey)), active)
-          : setSpotsOn(changes, [action.dateKey], action.spots, usualOn, active)
+    else if (action.type === 'run') {
+      next = runAnyway(changes, action.dateKey, seasonTimesFor(dayMap.get(action.dateKey)), active)
       if (action.reason && next !== changes) next = setDayReason(next, action.dateKey, action.reason, active)
-    } else if (action.type === 'spots-range') next = setSpotsOn(changes, action.dates, action.spots, usualOn, active)
+    } else if (action.type === 'capacity') {
+      // Only the number given changes; the other stays as each day has it.
+      next = setCapacityOn(changes, action.dates, (_dateKey, now) => ({ spots: action.spots ?? now.spots, extra: action.extra ?? now.extra }), usualOn, active, spotsKey)
+      if (action.reason && next !== changes && action.dates.length === 1) next = setDayReason(next, action.dates[0], action.reason, active)
+    } else if (action.type === 'capacity-usual') next = setCapacityOn(changes, action.dates, () => ({}), usualOn, active, spotsKey)
     else if (action.type === 'reason') next = setDayReason(changes, action.dateKey, action.reason, active)
     if (next !== changes) onChange({ scheduleChanges: next })
   }
@@ -377,6 +426,8 @@ export function ScheduleStep({
         </p>
       ) : null}
 
+      {unscheduled && capacity ? capacity.box : null}
+
       {unscheduled ? null : (
         <>
           {/* ---- 2. how guests pick a time ---- */}
@@ -427,6 +478,9 @@ export function ScheduleStep({
               )}
               {timesError ? <p className="text-xs font-medium text-danger">{timesError}</p> : null}
 
+              {/* ---- how many each time slot takes ---- */}
+              {capacity ? <div className="mt-3">{capacity.box}</div> : null}
+
               <div className="mt-3 flex flex-col gap-3">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
@@ -462,6 +516,9 @@ export function ScheduleStep({
             </section>
           )}
 
+          {/* With specific dates there are no regular times: the capacity comes before the year. */}
+          {value.scheduleMode === 'dates' && capacity ? capacity.box : null}
+
           {/* ---- 4. the year ---- */}
           <section className="flex flex-col gap-3">
             {multi && value.scheduleMode === 'dates' ? (
@@ -489,13 +546,15 @@ export function ScheduleStep({
                 todayKey={todayKey}
                 windowEndKey={windowEnd}
                 booked={booked}
-                spotsFor={(day) => day?.slots[0]?.capacity ?? baseSpotsOf(day)}
-                usualFor={baseSpotsOf}
-                usualSpots={basicsSpots}
-                extraSpots={extraSpots}
+                numbersFor={numbersFor}
+                usualFor={usualOn}
+                differs={differs}
+                showExtra={showExtra}
                 wholeDay={kind === 'pass'}
+                floor={!privateGroup}
+                mostSpots={capacity?.most}
                 showSpots={showSpots}
-                spotsLabel={kind === 'rental' ? 'Items' : kind === 'pass' ? 'Tickets' : 'Spots'}
+                spotsLabel={capacity?.label ?? (kind === 'rental' ? 'Items' : kind === 'pass' ? 'Tickets' : 'Spots')}
                 reasonFor={(dateKey) => dayReason(value.scheduleChanges, dateKey, active)}
                 seasonTimesFor={seasonTimesFor}
                 onAction={act}

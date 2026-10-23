@@ -8,20 +8,19 @@ import { Input } from '@/components/ui/input'
 import { RadioGroup, RadioGroupCard } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
 import { ACTIVITY_KIND_META, isTimedKind, LESSON_LEVELS } from '@/lib/activity-kinds'
 import { cn } from '@/lib/utils'
-import type { ActivityKind, CharterConfig, DifficultyLevel, ExtraSpots, LessonConfig, RentalCategory, RentalConfig, WeekdayKey } from '@/types'
+import type { ActivityKind, CharterConfig, DifficultyLevel, LessonConfig, RentalCategory, RentalConfig } from '@/types'
 
 import { DurationField, type DurationUnit } from './duration-field'
 import type { DraftTier } from './pricing-tier-editor'
 
 /* ==========================================================================
    What are you selling? The kind picker, and the one card of settings each
-   kind needs. Every number a kind cares about lives in its card, once:
-   seats for a trip, units for a rental, the group for a charter, the class
-   for a lesson, tickets for a pass, and the extra spots sold once the usual
-   ones are full. The schedule step only reads them.
+   kind needs: shared or private, how long, the fewest guests, how hard, a
+   course's level and days, a pass's validity. How many each time slot takes
+   (spots, a group's size, items out, tickets, extra spots) is set with the
+   schedule on the Booking step (capacity-box.tsx).
    ========================================================================== */
 
 export const KIND_ICONS: Record<ActivityKind, LucideIcon> = {
@@ -153,6 +152,8 @@ export const emptyRoute = (): DraftRoute => ({ enabled: false, distance: 0, unit
 /**
  * The numbers every activity carries, edited from inside a kind's card.
  * Ages, languages and a track are written in Requirements and Highlights.
+ * The spots themselves are set on the Booking step; `maxCapacity` is read
+ * here only to keep the fewest guests within them.
  */
 export interface SharedBasics {
   maxCapacity: number
@@ -160,10 +161,6 @@ export interface SharedBasics {
   durationMinutes: number
   durationUnit: DurationUnit
   difficulty: DifficultyLevel
-  /** Sold once the usual spots are full (a private group: guests over its most guests), each at its own price. Count 0: none. */
-  extraSpots: ExtraSpots
-  /** Spots on some weekdays instead of the usual number. null: the same every day (the switch is off). */
-  spotsByWeekday?: Partial<Record<WeekdayKey, number>> | null
 }
 
 /** The wizard's choices: group activity, activity and private charter are one card. */
@@ -220,21 +217,21 @@ const SLOT_CHOICES = [
   { value: true, label: 'Private', hint: 'One group has the time slot to itself', icon: Lock },
 ] as const
 
-/** Group activity, activity and private charter: how long, who books it, how many, how hard, and any extra spots. */
+/** Group activity, activity and private charter: how long, who books it, the fewest guests and how hard. The spots are on the Booking step. */
 export function TimedFields({
   privateGroup,
   onPrivate,
   shared,
   onShared,
   errors,
-  currencySymbol,
 }: {
   privateGroup: boolean
   onPrivate: (value: boolean) => void
   shared: SharedBasics
   onShared: (patch: Partial<SharedBasics>) => void
   errors: Record<string, string>
-  currencySymbol: string
+  /** Not read here any more (the extra-spot price is on the Booking step); kept so callers need not change. */
+  currencySymbol?: string
 }) {
   return (
     <div className="flex flex-col gap-5 rounded-xl border border-line bg-surface-sunken/40 p-4">
@@ -274,17 +271,7 @@ export function TimedFields({
         onChange={(durationMinutes, durationUnit) => onShared({ durationMinutes, durationUnit })}
         presets={[30, 60, 90, 120, 180, 240, 480, 1440]}
       />
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Field label={privateGroup ? 'Most guests' : 'Spots per time slot'} required error={errors.maxCapacity}>
-          <Input
-            type="number"
-            min={1}
-            value={shared.maxCapacity > 0 ? shared.maxCapacity : ''}
-            placeholder={privateGroup ? '6' : '16'}
-            suffix="guests"
-            onChange={(event) => onShared({ maxCapacity: num(event.target.value) })}
-          />
-        </Field>
+      <div className="grid gap-4 sm:grid-cols-2">
         <Field label={privateGroup ? 'Fewest guests' : 'Fewest guests to go ahead'} error={errors.minParticipants}>
           <Input
             type="number"
@@ -296,168 +283,11 @@ export function TimedFields({
         </Field>
         <DifficultyField value={shared.difficulty} onChange={(difficulty) => onShared({ difficulty })} />
       </div>
-      {/* A private time slot is one group's: its most guests stay the same every day. */}
-      {privateGroup ? null : <SpotsByDayField value={shared.spotsByWeekday} usual={shared.maxCapacity} onChange={(spotsByWeekday) => onShared({ spotsByWeekday })} />}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <ExtraSpotsFields
-          value={shared.extraSpots}
-          onChange={(extraSpots) => onShared({ extraSpots })}
-          usual={shared.maxCapacity}
-          privateGroup={privateGroup}
-          currencySymbol={currencySymbol}
-          errors={errors}
-        />
-      </div>
     </div>
   )
 }
 
 const num = (value: string, min = 0) => Math.max(min, Math.round(Number(value) || 0))
-const cents = (value: string) => Math.max(0, Math.round(Number(value) * 100) || 0)
-
-/**
- * Extra spots: how many, and what each one costs. Shared, they are sold once
- * the usual spots are full; private, they are guests over the most guests.
- * Empty: none, and nothing extra is charged. Two fields for the caller's grid.
- */
-export function ExtraSpotsFields({
-  value,
-  onChange,
-  usual,
-  privateGroup = false,
-  currencySymbol,
-  errors,
-}: {
-  value: ExtraSpots
-  onChange: (next: ExtraSpots) => void
-  /** Spots per time slot, or a private group's most guests. 0: not filled in yet. */
-  usual: number
-  privateGroup?: boolean
-  currencySymbol: string
-  errors: Record<string, string>
-}) {
-  const count = value.count > 0 ? value.count : 0
-  const hint = privateGroup ? `Guests above ${usual > 0 ? usual : 'the most guests'}, each` : `Sold once the ${usual > 0 ? `${usual} ` : ''}spots are full`
-  return (
-    <>
-      <Field label="Extra spots" optional description={hint} error={errors['extraSpots.count']}>
-        {(control) => (
-          <Input
-            {...control}
-            type="number"
-            min={0}
-            max={500}
-            placeholder="None"
-            suffix={count === 1 ? 'spot' : 'spots'}
-            value={count > 0 ? count : ''}
-            onChange={(event) => onChange({ ...value, count: Math.min(500, num(event.target.value)) })}
-          />
-        )}
-      </Field>
-      <Field label="Price per extra spot" required={count > 0} disabled={count <= 0} error={errors['extraSpots.price']}>
-        {(control) => (
-          <Input
-            {...control}
-            type="number"
-            min={0}
-            disabled={count <= 0}
-            placeholder={count > 0 ? '0' : 'No extra spots'}
-            leftIcon={<span className="text-sm font-medium">{currencySymbol}</span>}
-            value={count > 0 && value.price > 0 ? value.price / 100 : ''}
-            onChange={(event) => onChange({ ...value, price: cents(event.target.value) })}
-          />
-        )}
-      </Field>
-    </>
-  )
-}
-
-/* ---------- spots by weekday ---------- */
-
-const WEEK: { key: WeekdayKey; label: string }[] = [
-  { key: '1', label: 'Mon' },
-  { key: '2', label: 'Tue' },
-  { key: '3', label: 'Wed' },
-  { key: '4', label: 'Thu' },
-  { key: '5', label: 'Fri' },
-  { key: '6', label: 'Sat' },
-  { key: '0', label: 'Sun' },
-]
-
-/**
- * "Different spots on some days": a number for each weekday, filled in with
- * the usual one. A day left at the usual number (or cleared) has the usual
- * spots; a date changed on the calendar still wins over its weekday.
- */
-export function SpotsByDayField({
-  value,
-  usual,
-  onChange,
-  noun = 'spots',
-}: {
-  value: Partial<Record<WeekdayKey, number>> | null | undefined
-  /** The usual number: spots per time slot, or tickets per day. 0: not filled in yet. */
-  usual: number
-  onChange: (next: Partial<Record<WeekdayKey, number>> | null) => void
-  noun?: 'spots' | 'tickets'
-}) {
-  const on = value != null
-  const label = `Different ${noun} on some days`
-  const setDay = (key: WeekdayKey, spots: number | undefined) => {
-    const next = { ...(value ?? {}) }
-    if (spots === undefined || spots === usual) delete next[key]
-    else next[key] = spots
-    onChange(next)
-  }
-  return (
-    <div className="flex flex-col gap-3">
-      <label className="flex items-start justify-between gap-3">
-        <span>
-          <span className="block text-sm font-medium">{label}</span>
-          <span className="block text-xs text-subtle">Like more on weekends. Change a single date on the calendar.</span>
-        </span>
-        <Switch checked={on} onCheckedChange={(next) => onChange(next ? (value ?? {}) : null)} aria-label={label} />
-      </label>
-      {on ? (
-        <div role="group" aria-label={`${noun === 'tickets' ? 'Tickets' : 'Spots'} on each day`} className="flex flex-wrap gap-2">
-          {WEEK.map((day) => (
-            <DaySpotsInput key={day.key} label={day.label} spots={value?.[day.key]} usual={usual} onSpots={(spots) => setDay(day.key, spots)} />
-          ))}
-        </div>
-      ) : null}
-    </div>
-  )
-}
-
-/** One weekday's number: shows the usual one until changed; empty while typing goes back to it. */
-function DaySpotsInput({ label, spots, usual, onSpots }: { label: string; spots: number | undefined; usual: number; onSpots: (spots: number | undefined) => void }) {
-  const [typing, setTyping] = React.useState<string | null>(null)
-  const own = spots !== undefined && spots !== usual
-  const shown = typing ?? (spots !== undefined ? String(spots) : usual > 0 ? String(usual) : '')
-  return (
-    <label className="flex w-[4.5rem] flex-col gap-1">
-      <span className={cn('text-xs', own ? 'font-semibold text-foreground' : 'text-subtle')}>{label}</span>
-      <Input
-        type="number"
-        size="sm"
-        min={1}
-        max={500}
-        value={shown}
-        placeholder={usual > 0 ? String(usual) : ''}
-        className={cn(own && 'border-primary/60 bg-primary-soft/30')}
-        onFocus={() => setTyping(shown)}
-        onChange={(event) => {
-          const text = event.target.value
-          setTyping(text)
-          const next = Math.floor(Number(text))
-          if (text.trim() === '') onSpots(undefined)
-          else if (Number.isFinite(next) && next >= 1) onSpots(Math.min(500, next))
-        }}
-        onBlur={() => setTyping(null)}
-      />
-    </label>
-  )
-}
 
 /* ---------- small pieces ---------- */
 
@@ -651,7 +481,6 @@ export function KindFields({
   errors,
   shared,
   onShared,
-  currencySymbol = '$',
 }: {
   /** Not read here any more; kept so callers need not change. */
   tenantSlug?: string
@@ -660,7 +489,7 @@ export function KindFields({
   onChange: (settings: DraftKindSettings) => void
   /** Not read here any more; kept so callers need not change. */
   tiers?: DraftTier[]
-  /** For a lesson's extra-spot price. */
+  /** Not read here any more (the extra-spot price is on the Booking step); kept so callers need not change. */
   currencySymbol?: string
   errors: Record<string, string>
   shared: SharedBasics
@@ -718,6 +547,9 @@ export function KindFields({
             <Field label="Days in the course" required error={errors['lesson.sessions']} description="1 for a single lesson.">
               {(control) => <Input {...control} type="number" min={1} max={14} value={lesson.sessions} onChange={(e) => set('lesson', { sessions: num(e.target.value) })} />}
             </Field>
+            <Field label="Fewest to go ahead" error={errors.minParticipants}>
+              {(control) => <Input {...control} type="number" min={1} value={shared.minParticipants} onChange={(e) => onShared({ minParticipants: num(e.target.value, 1) })} />}
+            </Field>
           </div>
           <DurationField
             label={lesson.sessions > 1 ? 'Duration each day' : 'Duration'}
@@ -730,18 +562,6 @@ export function KindFields({
           />
         </Section>
 
-        <Section title="Class size">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Students per class" required error={errors.maxCapacity}>
-              {(control) => <Input {...control} type="number" min={1} value={shared.maxCapacity || ''} placeholder="8" onChange={(e) => onShared({ maxCapacity: num(e.target.value) })} />}
-            </Field>
-            <Field label="Fewest to go ahead" error={errors.minParticipants}>
-              {(control) => <Input {...control} type="number" min={1} value={shared.minParticipants} onChange={(e) => onShared({ minParticipants: num(e.target.value, 1) })} />}
-            </Field>
-            <ExtraSpotsFields value={shared.extraSpots} onChange={(extraSpots) => onShared({ extraSpots })} usual={shared.maxCapacity} currencySymbol={currencySymbol} errors={errors} />
-          </div>
-          <SpotsByDayField value={shared.spotsByWeekday} usual={shared.maxCapacity} onChange={(spotsByWeekday) => onShared({ spotsByWeekday })} />
-        </Section>
       </>,
     )
   }
@@ -765,11 +585,7 @@ export function KindFields({
             </SelectContent>
           </Select>
         </Field>
-        <Field label="Tickets per day" required error={errors.maxCapacity} description="Shared by the day's time slots.">
-          {(control) => <Input {...control} type="number" min={1} value={shared.maxCapacity || ''} placeholder="60" suffix="tickets" onChange={(e) => onShared({ maxCapacity: num(e.target.value) })} />}
-        </Field>
       </div>
-      <SpotsByDayField value={shared.spotsByWeekday} usual={shared.maxCapacity} noun="tickets" onChange={(spotsByWeekday) => onShared({ spotsByWeekday })} />
     </>,
   )
 }

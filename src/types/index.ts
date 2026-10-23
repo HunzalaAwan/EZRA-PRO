@@ -302,11 +302,16 @@ export interface ScheduleChange {
   id: string
   /** Day keys (YYYY-MM-DD) it applies to. */
   dates: string[]
-  /** closed: no time slots. times: these times instead. add: these times as well. spots: this many spots. */
+  /** closed: no time slots. times: these times instead. add: these times as well. spots: this many spots and/or extra spots. */
   action: 'closed' | 'times' | 'add' | 'spots'
   /** times / add: start times. closed with times: only those times close (absent: the whole day). */
   times?: string[]
+  /** Spots (a rental: items out at once). Absent on a 'spots' change: the day's usual number. */
   spots?: number
+  /** 'spots': extra spots those days (0: none; a private group: guests over its size), at the activity's extra-spot price. Absent: the day's usual extra spots. */
+  extraSpots?: number
+  /** 'spots' on a private activity: its group's size those days. Absent: the day's usual size. */
+  groupSize?: number
   /** "Public holiday", "Boat maintenance". */
   reason?: string
   locationId?: string
@@ -865,14 +870,24 @@ export interface Activity {
   /** Spots per time slot (a private group: its most guests), before any extra spots. */
   maxCapacity: number
   /**
-   * Spots on some weekdays instead of `maxCapacity` ('0' = Sunday … '6' =
-   * Saturday), each at least 1: "10 spots, 20 on Saturdays and Sundays". A day
-   * left out has the usual number. A date's own spots (a 'spots' change) win.
-   * Shared activities, lessons and passes only. Absent: the same every day.
+   * Spots on some weekdays instead of the usual number ('0' = Sunday … '6' =
+   * Saturday), each at least 1: "10 spots, 20 on Saturdays and Sundays". For
+   * a private activity, its group size; a rental, the items out at once (never
+   * more than its stock); a pass, its tickets per day. A day left out has the
+   * usual number. A date's own spots (a 'spots' change) win. Absent: the same
+   * every day.
    */
   spotsByWeekday?: Partial<Record<WeekdayKey, number>>
   /** Extra spots, sold once the usual spots are full, each at its own price. Absent: none. */
   extraSpots?: ExtraSpots
+  /**
+   * Extra spots on some weekdays instead of `extraSpots.count` (0: none that
+   * day), at the same price. A date's own extra spots (a 'spots' change) win.
+   * Kinds that sell extra spots only. Absent: the same every day.
+   */
+  extraSpotsByWeekday?: Partial<Record<WeekdayKey, number>>
+  /** Rentals: the most items out at once, across its items; never more than the stock. Absent: all of the stock. */
+  rentalMaxOut?: number
   minParticipants: number
   pricingModel: PricingModel
   basePrice: number
