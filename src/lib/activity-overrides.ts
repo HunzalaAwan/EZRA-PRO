@@ -19,7 +19,7 @@ import type {
 } from '@/types'
 import { fromPrice, privatePerPerson } from '@/lib/price-engine'
 import { rentalModes, type RentalMode } from '@/lib/activity-kinds'
-import { normalizeTime } from '@/lib/activity-schedule'
+import { cleanSpotsByWeekday, normalizeTime } from '@/lib/activity-schedule'
 import { sellsExtraSpots, withExtraSpots } from '@/lib/extra-spots'
 
 /* ==========================================================================
@@ -46,6 +46,8 @@ export interface ActivityOverride {
    * fields are read as spots instead (see `@/lib/extra-spots`).
    */
   extraSpots?: ExtraSpots
+  /** Spots on some weekdays instead of the usual number. null clears them; undefined keeps the seeded ones. */
+  spotsByWeekday?: Activity['spotsByWeekday'] | null
   minAge: number
   minParticipants: number
   featured: boolean
@@ -175,6 +177,13 @@ function extraSpotsAfter(activity: Activity, override: ActivityOverride): ExtraS
   return (override.priceTiers?.length ?? 0) > 0 ? undefined : activity.extraSpots
 }
 
+/** The spots by weekday after an edit: the ones it saved (null: none), else the seeded ones. No key when there are none either way. */
+function spotsByWeekdayAfter(activity: Activity, override: ActivityOverride): Pick<Activity, 'spotsByWeekday'> {
+  if (override.spotsByWeekday === undefined) return {}
+  const saved = cleanSpotsByWeekday(override.spotsByWeekday)
+  return saved ? { spotsByWeekday: saved } : activity.spotsByWeekday ? { spotsByWeekday: undefined } : {}
+}
+
 /** The seeded activity with the saved edit laid over it. Lists replace, scalars replace, everything else stays. */
 export function applyActivityOverride<T extends Activity>(activity: T, override?: ActivityOverride): T {
   if (!override) return activity
@@ -230,6 +239,7 @@ export function applyActivityOverride<T extends Activity>(activity: T, override?
     ride: override.ride ?? activity.ride,
     route: override.route === undefined ? activity.route : (override.route ?? undefined),
     extraSpots: extraSpotsAfter(activity, override),
+    ...spotsByWeekdayAfter(activity, override),
     ...pricingFields(activity, override),
     ...scheduleFields(activity, override),
     updatedAt: override.updatedAt,
@@ -428,6 +438,8 @@ export function applyPricingOverride<T extends Activity>(activity: T, override?:
     // The spots and extra spots decide who pays the extra-spot price, so they follow the edit too.
     maxCapacity: sellsExtraSpots(activity.kind) && override.maxCapacity > 0 ? override.maxCapacity : activity.maxCapacity,
     extraSpots: extraSpotsAfter(activity, override),
+    // A day's spots decide when its extra spots start, so they follow the edit too.
+    ...spotsByWeekdayAfter(activity, override),
     priceTiers,
     addOns,
     rental,

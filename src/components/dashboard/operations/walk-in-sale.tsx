@@ -88,7 +88,7 @@ function deskSlots(days: AvailabilityDay[], nowIso: string, delta: Record<string
 /** The seeded days with the saved schedule laid over them, like the storefront's strip. Nothing saved: as they are. */
 function scheduledDesk(source: Activity, days: AvailabilityDay[], saved: ActivityOverride | undefined, ctx: RebuildContext): AvailabilityDay[] {
   const closures = !source.runsOnClosures && ((ctx.closures?.length ?? 0) > 0 || Boolean(ctx.holidays?.enabled))
-  if (!saved && !source.schedules && !source.scheduleChanges && !closures) return days
+  if (!saved && !source.schedules && !source.scheduleChanges && !source.spotsByWeekday && !closures) return days
   try {
     const keep = new Set(days.map((day) => day.dateKey))
     // Only the days the desk sells: the rebuilt strip can run further ahead.

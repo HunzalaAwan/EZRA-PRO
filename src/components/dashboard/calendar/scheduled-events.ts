@@ -243,7 +243,7 @@ export function scheduleCalendarEvents(
     const override = opts.overrides[id]
     const own = byActivity.get(id) ?? []
     // Business closed days only change activities with time slots in view.
-    const custom = Boolean(override || base.schedules || base.scheduleChanges || (closuresOn && own.length > 0) || bookedGenerated.has(id))
+    const custom = Boolean(override || base.schedules || base.scheduleChanges || base.spotsByWeekday || (closuresOn && own.length > 0) || bookedGenerated.has(id))
     // The rest only past the seeded days, where the server has nothing.
     const from = custom ? fromKey : pastSeeded === undefined ? undefined : pastSeeded > fromKey ? pastSeeded : fromKey
     if (from === undefined) continue

@@ -8,9 +8,10 @@ import { Input } from '@/components/ui/input'
 import { RadioGroup, RadioGroupCard } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 import { ACTIVITY_KIND_META, isTimedKind, LESSON_LEVELS } from '@/lib/activity-kinds'
 import { cn } from '@/lib/utils'
-import type { ActivityKind, CharterConfig, DifficultyLevel, ExtraSpots, LessonConfig, RentalCategory, RentalConfig } from '@/types'
+import type { ActivityKind, CharterConfig, DifficultyLevel, ExtraSpots, LessonConfig, RentalCategory, RentalConfig, WeekdayKey } from '@/types'
 
 import { DurationField, type DurationUnit } from './duration-field'
 import type { DraftTier } from './pricing-tier-editor'
@@ -161,6 +162,8 @@ export interface SharedBasics {
   difficulty: DifficultyLevel
   /** Sold once the usual spots are full (a private group: guests over its most guests), each at its own price. Count 0: none. */
   extraSpots: ExtraSpots
+  /** Spots on some weekdays instead of the usual number. null: the same every day (the switch is off). */
+  spotsByWeekday?: Partial<Record<WeekdayKey, number>> | null
 }
 
 /** The wizard's choices: group activity, activity and private charter are one card. */
@@ -293,6 +296,8 @@ export function TimedFields({
         </Field>
         <DifficultyField value={shared.difficulty} onChange={(difficulty) => onShared({ difficulty })} />
       </div>
+      {/* A private time slot is one group's: its most guests stay the same every day. */}
+      {privateGroup ? null : <SpotsByDayField value={shared.spotsByWeekday} usual={shared.maxCapacity} onChange={(spotsByWeekday) => onShared({ spotsByWeekday })} />}
       <div className="grid gap-4 sm:grid-cols-3">
         <ExtraSpotsFields
           value={shared.extraSpots}
@@ -367,6 +372,92 @@ export function ExtraSpotsFields({
   )
 }
 
+/* ---------- spots by weekday ---------- */
+
+const WEEK: { key: WeekdayKey; label: string }[] = [
+  { key: '1', label: 'Mon' },
+  { key: '2', label: 'Tue' },
+  { key: '3', label: 'Wed' },
+  { key: '4', label: 'Thu' },
+  { key: '5', label: 'Fri' },
+  { key: '6', label: 'Sat' },
+  { key: '0', label: 'Sun' },
+]
+
+/**
+ * "Different spots on some days": a number for each weekday, filled in with
+ * the usual one. A day left at the usual number (or cleared) has the usual
+ * spots; a date changed on the calendar still wins over its weekday.
+ */
+export function SpotsByDayField({
+  value,
+  usual,
+  onChange,
+  noun = 'spots',
+}: {
+  value: Partial<Record<WeekdayKey, number>> | null | undefined
+  /** The usual number: spots per time slot, or tickets per day. 0: not filled in yet. */
+  usual: number
+  onChange: (next: Partial<Record<WeekdayKey, number>> | null) => void
+  noun?: 'spots' | 'tickets'
+}) {
+  const on = value != null
+  const label = `Different ${noun} on some days`
+  const setDay = (key: WeekdayKey, spots: number | undefined) => {
+    const next = { ...(value ?? {}) }
+    if (spots === undefined || spots === usual) delete next[key]
+    else next[key] = spots
+    onChange(next)
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      <label className="flex items-start justify-between gap-3">
+        <span>
+          <span className="block text-sm font-medium">{label}</span>
+          <span className="block text-xs text-subtle">Like more on weekends. Change a single date on the calendar.</span>
+        </span>
+        <Switch checked={on} onCheckedChange={(next) => onChange(next ? (value ?? {}) : null)} aria-label={label} />
+      </label>
+      {on ? (
+        <div role="group" aria-label={`${noun === 'tickets' ? 'Tickets' : 'Spots'} on each day`} className="flex flex-wrap gap-2">
+          {WEEK.map((day) => (
+            <DaySpotsInput key={day.key} label={day.label} spots={value?.[day.key]} usual={usual} onSpots={(spots) => setDay(day.key, spots)} />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+/** One weekday's number: shows the usual one until changed; empty while typing goes back to it. */
+function DaySpotsInput({ label, spots, usual, onSpots }: { label: string; spots: number | undefined; usual: number; onSpots: (spots: number | undefined) => void }) {
+  const [typing, setTyping] = React.useState<string | null>(null)
+  const own = spots !== undefined && spots !== usual
+  const shown = typing ?? (spots !== undefined ? String(spots) : usual > 0 ? String(usual) : '')
+  return (
+    <label className="flex w-[4.5rem] flex-col gap-1">
+      <span className={cn('text-xs', own ? 'font-semibold text-foreground' : 'text-subtle')}>{label}</span>
+      <Input
+        type="number"
+        size="sm"
+        min={1}
+        max={500}
+        value={shown}
+        placeholder={usual > 0 ? String(usual) : ''}
+        className={cn(own && 'border-primary/60 bg-primary-soft/30')}
+        onFocus={() => setTyping(shown)}
+        onChange={(event) => {
+          const text = event.target.value
+          setTyping(text)
+          const next = Math.floor(Number(text))
+          if (text.trim() === '') onSpots(undefined)
+          else if (Number.isFinite(next) && next >= 1) onSpots(Math.min(500, next))
+        }}
+        onBlur={() => setTyping(null)}
+      />
+    </label>
+  )
+}
 
 /* ---------- small pieces ---------- */
 
@@ -649,6 +740,7 @@ export function KindFields({
             </Field>
             <ExtraSpotsFields value={shared.extraSpots} onChange={(extraSpots) => onShared({ extraSpots })} usual={shared.maxCapacity} currencySymbol={currencySymbol} errors={errors} />
           </div>
+          <SpotsByDayField value={shared.spotsByWeekday} usual={shared.maxCapacity} onChange={(spotsByWeekday) => onShared({ spotsByWeekday })} />
         </Section>
       </>,
     )
@@ -657,25 +749,28 @@ export function KindFields({
   /* ---------- pass ---------- */
   const pass = settings.pass
   return shell(
-    <div className="grid gap-4 sm:grid-cols-2">
-      <Field label="Valid for" description="From the date the guest picks.">
-        <Select value={String(pass.validDays)} onValueChange={(value) => set('pass', { validDays: Number(value) })}>
-          <SelectTrigger aria-label="Valid for">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {[1, 2, 3, 5, 7].map((days) => (
-              <SelectItem key={days} value={String(days)}>
-                {days === 1 ? '1 day' : `${days} days`}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </Field>
-      <Field label="Tickets per day" required error={errors.maxCapacity} description="Shared by the day's time slots.">
-        {(control) => <Input {...control} type="number" min={1} value={shared.maxCapacity || ''} placeholder="60" suffix="tickets" onChange={(e) => onShared({ maxCapacity: num(e.target.value) })} />}
-      </Field>
-    </div>,
+    <>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Valid for" description="From the date the guest picks.">
+          <Select value={String(pass.validDays)} onValueChange={(value) => set('pass', { validDays: Number(value) })}>
+            <SelectTrigger aria-label="Valid for">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[1, 2, 3, 5, 7].map((days) => (
+                <SelectItem key={days} value={String(days)}>
+                  {days === 1 ? '1 day' : `${days} days`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label="Tickets per day" required error={errors.maxCapacity} description="Shared by the day's time slots.">
+          {(control) => <Input {...control} type="number" min={1} value={shared.maxCapacity || ''} placeholder="60" suffix="tickets" onChange={(e) => onShared({ maxCapacity: num(e.target.value) })} />}
+        </Field>
+      </div>
+      <SpotsByDayField value={shared.spotsByWeekday} usual={shared.maxCapacity} noun="tickets" onChange={(spotsByWeekday) => onShared({ spotsByWeekday })} />
+    </>,
   )
 }
 

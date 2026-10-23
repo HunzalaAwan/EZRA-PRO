@@ -18,7 +18,7 @@ import { CalendarPlus, Clock, Plus, Repeat, X } from 'lucide-react'
 import { cn, addDays, formatDateLong, formatDuration, fromDateKey, pluralize, toDateKey } from '@/lib/utils'
 import { NOW, getActivitiesByTenant, getLocationsByTenant, tenantById } from '@/lib/demo-core'
 import { applyActivityOverride, parseActivityOverrides, readActivityOverridesRaw, saveScheduleOverride, upsertScheduleChange } from '@/lib/activity-overrides'
-import { cancelChangeId, clockTime, defaultSpots, expandDays, scheduleContextOf, shortDay, sortTimes } from '@/lib/activity-schedule'
+import { cancelChangeId, clockTime, defaultSpots, expandDays, scheduleContextOf, shortDay, sortTimes, usualSpotsOn } from '@/lib/activity-schedule'
 import { useActivityOverrides } from '@/hooks/use-pricing-override'
 import { useBookingDefaults } from '@/hooks/use-booking-defaults'
 import { useLocations } from '@/hooks/use-locations'
@@ -176,6 +176,8 @@ export function NewDepartureDialog({
   const activity = activities.find((item) => item.id === activityId)
   const isCharter = activity?.kind === 'charter'
   const baseSpots = activity ? defaultSpots(activity) : 0
+  // The day's own usual spots (its weekday's, when set), filled in for it.
+  const dayUsual = activity ? usualSpotsOn(activity, date) : 0
   // Every time slot sells at least one spot: never filled in as 0.
   const spotsText = (value: number) => (value >= 1 ? String(value) : '')
   // The same words as the Schedule step: rentals count items, passes count tickets.
@@ -197,7 +199,7 @@ export function NewDepartureDialog({
     setDate(toDateKey(seedDate))
     setTimes([initialTime ?? firstTimeFor(toDateKey(seedDate))])
     setTimeDraft('')
-    setSpots(seed ? spotsText(defaultSpots(seed)) : '')
+    setSpots(seed ? spotsText(usualSpotsOn(seed, toDateKey(seedDate))) : '')
     setRepeat(false)
     setWeekdays([seedDate.getDay()])
     setUntil(toDateKey(addDays(seedDate, 28)))
@@ -208,7 +210,7 @@ export function NewDepartureDialog({
     setActivityId(next)
     const picked = activities.find((item) => item.id === next)
     if (picked) {
-      setSpots(spotsText(defaultSpots(picked)))
+      setSpots(spotsText(usualSpotsOn(picked, date)))
       setLocationId(picked.locations.map((site) => site.locationId).filter(Boolean)[0] ?? '')
     }
     setErrors((current) => ({ ...current, activityId: undefined, spots: undefined }))
@@ -303,8 +305,8 @@ export function NewDepartureDialog({
     const base = `add_${Date.now().toString(36)}`
     const shared = {
       action: 'add' as const,
-      // Spots only when they differ from the activity's own, so a later change to its spots still applies.
-      ...(isCharter || parsedSpots === baseSpots ? {} : { spots: parsedSpots }),
+      // Spots only when they differ from the day's usual ones, so a later change to its spots (or a weekday's) still applies.
+      ...(isCharter || parsedSpots === dayUsual ? {} : { spots: parsedSpots }),
       ...(multiSite && locationId ? { locationId } : {}),
     }
     // Today gets only the start times still ahead, so a repeat that starts today never adds a past time slot.
@@ -397,7 +399,10 @@ export function NewDepartureDialog({
                   min={TODAY_KEY}
                   value={date}
                   onChange={(event) => {
-                    setDate(event.target.value)
+                    const next = event.target.value
+                    // Spots still at the old day's usual number follow the new day's.
+                    if (activity && spots === spotsText(dayUsual)) setSpots(spotsText(usualSpotsOn(activity, next)))
+                    setDate(next)
                     setErrors((current) => ({ ...current, date: undefined, times: undefined }))
                   }}
                 />

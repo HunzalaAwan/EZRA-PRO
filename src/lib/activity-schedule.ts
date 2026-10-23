@@ -36,6 +36,7 @@ export type ScheduleSource = Pick<Activity, 'id' | 'locations' | 'maxCapacity'> 
       | 'extraSpots'
       | 'chargeBy'
       | 'groupPrice'
+      | 'spotsByWeekday'
     >
   >
 
@@ -56,7 +57,7 @@ export interface ScheduledSlot {
   time: string
   /** Spots in this time slot. */
   capacity: number
-  /** A season or a change set the spots (otherwise they are the activity's own). */
+  /** A change, the weekday's own spots or a season set the spots (otherwise they are the activity's own). */
   capacitySet?: boolean
   locationId?: string
   /** The season the day belongs to; null when no season covers it (a time only a change adds). */
@@ -238,6 +239,59 @@ export const plusExtraSpots = (usual: number, extra: number) => (usual > 0 ? usu
 /** Spots a time slot sells when nothing says otherwise: the usual spots (`defaultSpots`) plus the extra spots. */
 export const sellableSpots = (activity: ScheduleSource) => plusExtraSpots(defaultSpots(activity), slotExtraSpotsOf(activity))
 
+/* ---------- spots by weekday ---------- */
+
+/** Kinds whose spots can differ by weekday: shared activities and tours, lessons and passes (tickets per day). */
+export const sellsSpotsByWeekday = (kind: Activity['kind'] | undefined) => {
+  const k = kind ?? 'trip'
+  return k === 'trip' || k === 'activity' || k === 'lesson' || k === 'pass'
+}
+
+/**
+ * Spots by weekday as saved: whole numbers from 1 to 500, and (with `usual`)
+ * none that only repeat the usual number. Undefined when nothing is left.
+ */
+export function cleanSpotsByWeekday(value: Activity['spotsByWeekday'] | null | undefined, usual?: number): Activity['spotsByWeekday'] {
+  if (!value || typeof value !== 'object') return undefined
+  const out: Partial<Record<WeekdayKey, number>> = {}
+  for (const key of WEEKDAY_KEYS) {
+    const raw = value[key]
+    if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < 1) continue
+    const spots = Math.min(500, Math.floor(raw))
+    if (usual !== undefined && spots === usual) continue
+    out[key] = spots
+  }
+  return Object.keys(out).length > 0 ? out : undefined
+}
+
+/** The spots a weekday (0 = Sunday) has instead of the usual number; undefined: the usual number. */
+export function weekdaySpotsOf(activity: Pick<ScheduleSource, 'kind' | 'spotsByWeekday'>, weekday: number): number | undefined {
+  const map = activity.spotsByWeekday
+  if (!map || !sellsSpotsByWeekday(activity.kind)) return undefined
+  const raw = map[String(weekday) as WeekdayKey]
+  return typeof raw === 'number' && Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : undefined
+}
+
+/** A day's usual spots before any change for that date: its weekday's number, or the activity's (`defaultSpots`). */
+export function usualSpotsOn(activity: ScheduleSource, dateKey: string): number {
+  return (isDayKey(dateKey) ? weekdaySpotsOf(activity, dateOf(dateKey).getDay()) : undefined) ?? defaultSpots(activity)
+}
+
+/** Spots a time slot on that day sells when no change says otherwise: the day's usual spots plus the extra spots. */
+export const sellableSpotsOn = (activity: ScheduleSource, dateKey: string) => plusExtraSpots(usualSpotsOn(activity, dateKey), slotExtraSpotsOf(activity))
+
+/** "Sat, Sun 20 · Fri 15": the weekdays with their own spots, Monday first, days with the same number together. */
+export function describeSpotsByWeekday(value: Activity['spotsByWeekday']): string {
+  if (!value) return ''
+  const groups = new Map<number, string[]>()
+  for (const key of ['1', '2', '3', '4', '5', '6', '0'] as WeekdayKey[]) {
+    const spots = value[key]
+    if (typeof spots !== 'number' || spots < 1) continue
+    groups.set(spots, [...(groups.get(spots) ?? []), DAY_SHORT[Number(key)]])
+  }
+  return [...groups].map(([spots, days]) => `${days.join(', ')} ${spots}`).join(' · ')
+}
+
 /**
  * A seeded time slot's spots on sale after an edit: its own usual spots (the
  * server's, less the extra spots it was seeded with), or the edited
@@ -307,7 +361,9 @@ export function bookingWindowMonths(activity: Pick<ScheduleSource, 'bookingWindo
  * Every day in a range with its time slots, per location. Seasons apply in
  * list order (a later one wins where they overlap); business closed days
  * and public holidays close the day unless the activity runs on them; the
- * activity's own changes then apply in their order. An extra time (or
+ * activity's own changes then apply in their order. A time slot's spots: a
+ * change for that date, else its weekday's own spots, else the activity's
+ * (extra spots go on top when it is sold). An extra time (or
  * different times) on a closed day runs only when the change is for that
  * day alone; one over several days skips the closed ones. An extra time
  * the day already has stays as it was. Deterministic.
@@ -369,6 +425,8 @@ export function expandDays(activity: ScheduleSource, fromKey: string, toKey: str
     const weekday = cursor.getDay()
     const businessClosed = closedBy.get(dateKey)
     const dayChanges = changesByDay.get(dateKey)
+    // The weekday's own spots, when set: a change for the date still wins.
+    const weekdaySpots = weekdaySpotsOf(activity, weekday)
 
     for (const { locationId, seasons } of perLocation) {
       let season: ActivitySchedule | undefined
@@ -426,7 +484,7 @@ export function expandDays(activity: ScheduleSource, fromKey: string, toKey: str
         if (minStart && `${dateKey}T${time}:00` < minStart) continue
         const own = times.get(time)!
         const byTime = timeSpots.get(time)
-        const explicit = byTime?.spots ?? own.spots ?? daySpots?.spots ?? season?.capacity
+        const explicit = byTime?.spots ?? own.spots ?? daySpots?.spots ?? weekdaySpots ?? season?.capacity
         const source = byTime ?? own.change ?? daySpots?.change
         const slot: ScheduledSlot = {
           dateKey,
@@ -442,7 +500,7 @@ export function expandDays(activity: ScheduleSource, fromKey: string, toKey: str
       const day: ScheduledDay = { dateKey, scheduleId: season?.id ?? null, slots, changed }
       if (locationId !== undefined) day.locationId = locationId
       if (closed) day.closed = closed
-      if (pass && slots.length > 0) day.dayLimit = spotsFor(activity, base, daySpots?.spots ?? season?.capacity)
+      if (pass && slots.length > 0) day.dayLimit = spotsFor(activity, base, daySpots?.spots ?? weekdaySpots ?? season?.capacity)
       out.push(day)
     }
   }
@@ -522,11 +580,12 @@ export function parseSlotId(id: string): { activityId: string; dateKey: string; 
 
 /**
  * A time slot built from a generated id, for the server (checkout, the
- * manage page): the activity's default spots, nothing booked yet.
+ * manage page): the day's usual spots (its weekday's, or the activity's) and
+ * the extra spots, nothing booked yet.
  */
 export function departureFromSlotId(
   activity: Pick<Activity, 'id' | 'tenantId' | 'durationMinutes' | 'requiredResourceIds' | 'locations' | 'maxCapacity'> &
-    Partial<Pick<Activity, 'kind' | 'rental' | 'priceTiers' | 'extraSpots' | 'chargeBy' | 'groupPrice' | 'charter'>>,
+    Partial<Pick<Activity, 'kind' | 'rental' | 'priceTiers' | 'extraSpots' | 'chargeBy' | 'groupPrice' | 'charter' | 'spotsByWeekday'>>,
   id: string,
 ): Departure | undefined {
   const parsed = parseSlotId(id)
@@ -539,7 +598,7 @@ export function departureFromSlotId(
     locationId: parsed.locationId ?? activity.locations[0]?.locationId,
     startsAt,
     endsAt: plusMinutes(startsAt, Math.max(0, activity.durationMinutes || 0)),
-    capacity: sellableSpots(activity),
+    capacity: sellableSpotsOn(activity, parsed.dateKey),
     booked: 0,
     held: 0,
     status: 'scheduled',
@@ -861,7 +920,7 @@ export function rebuildAvailabilityDays(seeded: Activity, editedActivity: Activi
         id: entry.id,
         startsAt,
         endsAt: plusMinutes(startsAt, Math.max(0, edited.durationMinutes || 0)),
-        capacity: Math.max(sellableSpots(edited), entry.booked),
+        capacity: Math.max(sellableSpotsOn(edited, entry.dateKey), entry.booked),
         booked: 0,
         held: 0,
         status: 'scheduled',
@@ -1074,7 +1133,7 @@ export function rebuildScheduleRows(
     const locationId = entry.locationId ?? primary
     if (shown.has(entry.id) || byKey.has(matchKey(entry.dateKey, entry.time, locationId))) continue
     const startsAt = `${entry.dateKey}T${entry.time}:00`
-    const row = generatedRow(edited, entry.id, startsAt, Math.max(sellableSpots(edited), entry.booked), entry.booked, locationId)
+    const row = generatedRow(edited, entry.id, startsAt, Math.max(sellableSpotsOn(edited, entry.dateKey), entry.booked), entry.booked, locationId)
     out.push(isCancelledSlot(edited, startsAt, locationId) ? { ...row, status: 'cancelled' } : { ...row, outsideSchedule: true })
     shown.add(entry.id)
   }

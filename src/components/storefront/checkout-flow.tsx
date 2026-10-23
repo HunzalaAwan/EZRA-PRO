@@ -420,8 +420,8 @@ export function CheckoutFlow({
   const liveSlot = rebuilt?.live
   // A time slot further out than the strip: the server's, with the saved edit's spots and extra spots on it.
   const far = React.useMemo(
-    () => (liveSlot || departure.legs || departure.capacity === undefined ? undefined : spotsBeyondStrip(given, applyActivityOverride(given, overrides[given.id]), { capacity: departure.capacity, seatsLeft: departure.seatsLeft })),
-    [liveSlot, departure.legs, departure.capacity, departure.seatsLeft, given, overrides],
+    () => (liveSlot || departure.legs || departure.capacity === undefined ? undefined : spotsBeyondStrip(given, applyActivityOverride(given, overrides[given.id]), { capacity: departure.capacity, seatsLeft: departure.seatsLeft, startsAt: givenDeparture.slotStartsAt ?? givenDeparture.startsAt, locationId: departure.locationId })),
+    [liveSlot, departure.legs, departure.capacity, departure.seatsLeft, departure.locationId, givenDeparture.slotStartsAt, givenDeparture.startsAt, given, overrides],
   )
   const ownDelta = departure.legs ? 0 : (delta[departure.id] ?? 0)
   const serverCapacity = far ? far.capacity : departure.capacity

@@ -16,8 +16,9 @@ import { daysBetween, describeDates, tintOf, type PickMode } from './schedule-dr
 /* ==========================================================================
    YEAR CALENDAR — twelve small months from this one. Each day is tinted by
    the season it runs in, closed days are grey and struck through, changed
-   days carry a dot. A click opens that day: its times, add a time, close
-   it, change its spots. Shift-click picks a run of days to close at once.
+   days carry a dot, days with other spots than usual a corner mark. A click
+   opens that day: its times, add a time, close it, change its spots.
+   Shift-click picks a run of days to close or give other spots at once.
    Edits here are changes for those days only; a season card changes all
    of its days.
    ========================================================================== */
@@ -30,6 +31,8 @@ export type CalendarAction =
   | { type: 'open'; dateKey: string }
   | { type: 'run'; dateKey: string; reason?: string }
   | { type: 'spots'; dateKey: string; spots: number; reason?: string }
+  /** undefined: back to each day's usual spots. */
+  | { type: 'spots-range'; dates: string[]; spots: number | undefined }
   | { type: 'reason'; dateKey: string; reason: string }
 
 export interface YearCalendarProps {
@@ -45,6 +48,14 @@ export interface YearCalendarProps {
   booked: Map<string, Map<string, number>>
   /** The spots a day's time slots have. */
   spotsFor: (day: ScheduledDay | undefined) => number
+  /** A day's usual spots, before a change for that date (its weekday's own, or the usual number). */
+  usualFor?: (day: ScheduledDay | undefined) => number
+  /** The usual number (Basics): days whose time slots have other spots are marked. */
+  usualSpots?: number
+  /** Extra spots on top of each time slot's spots: a day's spots can go down to what is booked less these. */
+  extraSpots?: number
+  /** A pass: its tickets are the day's, shared by its time slots, so they go down to the day's bookings. */
+  wholeDay?: boolean
   showSpots: boolean
   /** The day panel's label for spots: "Spots", "Items". */
   spotsLabel?: string
@@ -66,6 +77,34 @@ const pad = (n: number) => String(n).padStart(2, '0')
 const reasonOf = (closed: ScheduledDay['closed']) => {
   const reason = closed?.reason?.trim() ?? ''
   return reason.toLowerCase() === 'closed' ? '' : reason
+}
+
+/** The time slots of a day with other spots than the usual number (a change for the date, or its weekday's own). */
+const otherSpots = (day: ScheduledDay | undefined, usual: number | undefined) => usual !== undefined && usual > 0 && Boolean(day?.slots.some((slot) => slot.capacity !== usual))
+
+/**
+ * The fewest spots some days can have: what their busiest time slot already
+ * has booked, less the extra spots sold on top, with that time slot's day,
+ * start and bookings. Null when nothing is booked.
+ */
+export function spotsFloor(dates: string[], booked: Map<string, Map<string, number>>, extra: number, wholeDay = false): { floor: number; count: number; dateKey: string; time: string } | null {
+  let worst: { count: number; dateKey: string; time: string } | null = null
+  for (const dateKey of dates) {
+    const row = [...(booked.get(dateKey) ?? [])].filter(([, count]) => count > 0)
+    // A pass's tickets are shared by the day's time slots: the floor is the whole day's bookings.
+    const counts: [string, number][] = wholeDay && row.length > 0 ? [['', row.reduce((sum, [, count]) => sum + count, 0)]] : row
+    for (const [time, count] of counts) if (!worst || count > worst.count) worst = { count, dateKey, time }
+  }
+  if (!worst) return null
+  return { ...worst, floor: Math.max(1, worst.count - Math.max(0, extra)) }
+}
+
+/** "12 already booked at 9:00. Spots can go down to 12." */
+export function floorMessage(found: { floor: number; count: number; dateKey: string; time: string }, extra: number, label: string, several: boolean) {
+  const at = found.time ? ` at ${clockTime(found.time)}` : ''
+  const where = several ? ` on ${dayName.format(fromDateKey(found.dateKey))}${at}` : at
+  const plus = extra > 0 && found.floor < found.count ? ` (${extra} extra on top)` : ''
+  return `${found.count} already booked${where}. ${label} can go down to ${found.floor}${plus}.`
 }
 
 /** The day an arrow, Page or Home/End key moves to (weeks start on Monday); undefined for any other key. */
@@ -182,6 +221,12 @@ export function YearCalendar(props: YearCalendarProps) {
           <span className="size-1.5 rounded-full bg-primary" aria-hidden="true" />
           Changed
         </span>
+        {props.showSpots && days.some((day) => day.dateKey >= todayKey && otherSpots(day, props.usualSpots)) ? (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-0 border-t-[6px] border-l-[6px] border-t-foreground/70 border-l-transparent" aria-hidden="true" />
+            Different {(props.spotsLabel ?? 'Spots').toLowerCase()}
+          </span>
+        ) : null}
         {windowEndKey < lastKey ? (
           <span className="inline-flex items-center gap-1.5">
             <span className="size-3 rounded-sm bg-primary-soft opacity-50" aria-hidden="true" />
@@ -220,6 +265,7 @@ export function YearCalendar(props: YearCalendarProps) {
                   const tint = runs ? (mode === 'dates' || index === undefined ? 'bg-primary-soft' : tintOf(index).cell) : ''
                   const reason = reasonOf(day?.closed)
                   const status = closed ? (reason ? `closed, ${reason}` : 'closed') : runs ? `${day!.slots.length} ${day!.slots.length === 1 ? 'time slot' : 'time slots'}` : 'no time slots'
+                  const spotsMark = !past && runs && props.showSpots && otherSpots(day, props.usualSpots)
                   return (
                     <button
                       key={key}
@@ -228,7 +274,7 @@ export function YearCalendar(props: YearCalendarProps) {
                       disabled={past}
                       tabIndex={key === tabKey ? 0 : -1}
                       aria-pressed={inSelection(key)}
-                      aria-label={`${dayName.format(fromDateKey(key))}: ${status}${day?.changed ? ', changed' : ''}`}
+                      aria-label={`${dayName.format(fromDateKey(key))}: ${status}${spotsMark ? `, ${props.spotsFor(day)} ${(props.spotsLabel ?? 'Spots').toLowerCase()}` : ''}${day?.changed ? ', changed' : ''}`}
                       onClick={(event) => select(key, event.shiftKey, event.currentTarget)}
                       onKeyDown={(event) => onDayKeyDown(event, key)}
                       onFocus={() => setFocusKey(key)}
@@ -246,6 +292,7 @@ export function YearCalendar(props: YearCalendarProps) {
                     >
                       {Number(key.slice(8, 10))}
                       {!past && day?.changed ? <span className="absolute bottom-0.5 left-1/2 size-1 -translate-x-1/2 rounded-full bg-primary" aria-hidden="true" /> : null}
+                      {spotsMark ? <span className="absolute top-0.5 right-0.5 size-0 border-t-[5px] border-l-[5px] border-t-foreground/70 border-l-transparent" aria-hidden="true" /> : null}
                     </button>
                   )
                 })}
@@ -290,6 +337,9 @@ function DayPanel({
   seasons,
   booked,
   spotsFor,
+  usualFor,
+  extraSpots = 0,
+  wholeDay = false,
   showSpots,
   spotsLabel = 'Spots',
   reasonFor,
@@ -316,10 +366,21 @@ function DayPanel({
   const commitReason = () => {
     if (reason.trim() !== reasonFor(dateKey).trim()) onAction({ type: 'reason', dateKey, reason })
   }
-  const commitSpots = () => {
-    const value = Math.floor(Number(spots))
-    if (spots.trim() === '' || !Number.isFinite(value) || value < 1) return setSpots(spotsText(spotsFor(day)))
-    if (value !== spotsFor(day)) onAction({ type: 'spots', dateKey, spots: value, reason })
+  const [spotsError, setSpotsError] = React.useState('')
+  const current = spotsFor(day)
+  const usual = usualFor ? usualFor(day) : current
+  // Spots go up to any number, and down to what is already booked.
+  const commitSpots = (raw = spots) => {
+    const value = Math.floor(Number(raw))
+    if (raw.trim() === '' || !Number.isFinite(value) || value < 1) {
+      setSpotsError('')
+      return setSpots(spotsText(current))
+    }
+    const floor = spotsFloor([dateKey], booked, extraSpots, wholeDay)
+    if (floor && value < floor.floor) return setSpotsError(floorMessage(floor, extraSpots, spotsLabel, false))
+    setSpotsError('')
+    setSpots(String(value))
+    if (value !== current) onAction({ type: 'spots', dateKey, spots: value, reason })
   }
   const note = reason.trim() ? reason : undefined
 
@@ -389,24 +450,41 @@ function DayPanel({
         </form>
 
         {showSpots && slots.length > 0 ? (
-          <label className="flex items-center gap-2">
-            <span className="w-14 shrink-0 text-xs text-subtle">{spotsLabel}</span>
-            <Input
-              type="number"
-              size="sm"
-              min={1}
-              className="w-24"
-              value={spots}
-              onChange={(event) => setSpots(event.target.value)}
-              onBlur={commitSpots}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  commitSpots()
-                }
-              }}
-            />
-          </label>
+          <div className="flex flex-col gap-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="flex items-center gap-2">
+                <span className="w-14 shrink-0 text-xs text-subtle">{spotsLabel}</span>
+                <Input
+                  type="number"
+                  size="sm"
+                  min={1}
+                  className="w-24"
+                  value={spots}
+                  error={spotsError ? true : undefined}
+                  onChange={(event) => setSpots(event.target.value)}
+                  onBlur={() => commitSpots()}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault()
+                      commitSpots()
+                    }
+                  }}
+                />
+              </label>
+              {current !== usual ? (
+                <button type="button" onClick={() => commitSpots(String(usual))} className="text-xs font-medium text-primary hover:underline">
+                  Back to usual ({usual})
+                </button>
+              ) : (
+                <span className="text-xs text-faint">Usually {usual}</span>
+              )}
+            </div>
+            {spotsError ? (
+              <p role="alert" className="text-xs font-medium text-danger">
+                {spotsError}
+              </p>
+            ) : null}
+          </div>
         ) : null}
         {/* A reason explains a change to the usual schedule; with specific dates there is no usual one. */}
         {mode === 'dates' && !closed ? null : (
@@ -440,9 +518,24 @@ function DayPanel({
   )
 }
 
-function RangePanel({ dates, mode, onAction, suggestTime, onDone }: YearCalendarProps & { dates: string[]; onDone: () => void }) {
+function RangePanel({ dates, days, mode, onAction, suggestTime, onDone, showSpots, spotsLabel = 'Spots', booked, spotsFor, usualFor, extraSpots = 0, wholeDay = false }: YearCalendarProps & { dates: string[]; onDone: () => void }) {
   const [reason, setReason] = React.useState('')
   const [time, setTime] = React.useState(suggestTime)
+  const [spots, setSpots] = React.useState('')
+  const [spotsError, setSpotsError] = React.useState('')
+  // Spots only matter on the days that run.
+  const byKey = React.useMemo(() => new Map(days.map((day) => [day.dateKey, day])), [days])
+  const running = dates.filter((key) => (byKey.get(key)?.slots.length ?? 0) > 0)
+  const changed = usualFor ? running.some((key) => spotsFor(byKey.get(key)) !== usualFor(byKey.get(key))) : false
+  /** New spots on every day that runs, or (undefined) each back to its usual number; never below what is booked. */
+  const changeSpots = (value: number | undefined) => {
+    const low = running
+      .map((key) => spotsFloor([key], booked, extraSpots, wholeDay))
+      .find((floor, index) => floor && (value ?? (usualFor ? usualFor(byKey.get(running[index])) : floor.floor)) < floor.floor)
+    if (low) return setSpotsError(floorMessage(low, extraSpots, spotsLabel, true))
+    onAction({ type: 'spots-range', dates: running, spots: value })
+    onDone()
+  }
   return (
     <div className="flex flex-col">
       <div className="border-b border-line-subtle px-4 py-3">
@@ -468,6 +561,47 @@ function RangePanel({ dates, mode, onAction, suggestTime, onDone }: YearCalendar
           <span className="w-14 shrink-0 text-xs text-subtle">Reason</span>
           <Input size="sm" className="min-w-0 flex-1" value={reason} placeholder="Optional" maxLength={60} onChange={(event) => setReason(event.target.value)} />
         </label>
+        {showSpots && running.length > 0 ? (
+          <div className="flex flex-col gap-1.5">
+            <form
+              className="flex flex-wrap items-center gap-2"
+              onSubmit={(event) => {
+                event.preventDefault()
+                const value = Math.floor(Number(spots))
+                if (spots.trim() === '' || !Number.isFinite(value) || value < 1) return setSpotsError(`Type the ${spotsLabel.toLowerCase()} for these days`)
+                changeSpots(value)
+              }}
+            >
+              <Input
+                type="number"
+                size="sm"
+                min={1}
+                className="w-24"
+                value={spots}
+                placeholder={spotsLabel}
+                aria-label={`${spotsLabel} on these days`}
+                error={spotsError ? true : undefined}
+                onChange={(event) => {
+                  setSpots(event.target.value)
+                  setSpotsError('')
+                }}
+              />
+              <Button type="submit" size="sm" variant="secondary">
+                Change {spotsLabel.toLowerCase()}
+              </Button>
+              {changed ? (
+                <button type="button" onClick={() => changeSpots(undefined)} className="text-xs font-medium text-primary hover:underline">
+                  Back to usual
+                </button>
+              ) : null}
+            </form>
+            {spotsError ? (
+              <p role="alert" className="text-xs font-medium text-danger">
+                {spotsError}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       <div className="border-t border-line-subtle px-4 py-3">
         <Button

@@ -595,13 +595,48 @@ export function runAnyway(changes: ScheduleChange[], dateKey: string, times: str
   return [...changes, { id: freshId('chg'), dates: [dateKey], action: 'add', times: sortTimes(times), reason: 'Runs on this closed day', ...scoped(locationId) }]
 }
 
-/** Spots for every time slot on one day; undefined goes back to the season's number. */
-export function setDaySpots(changes: ScheduleChange[], dateKey: string, spots: number | undefined, locationId?: string): ScheduleChange[] {
-  const existing = changes.find((change) => owned(change, locationId) && change.action === 'spots' && !(change.times?.length) && onlyOn(change, dateKey))
-  if (spots === undefined) return existing ? changes.filter((change) => change !== existing) : changes
-  const value = Math.max(0, Math.floor(spots))
-  if (existing) return changes.map((change) => (change === existing ? { ...change, spots: value } : change))
-  return [...changes, { id: freshId('chg'), dates: [dateKey], action: 'spots', spots: value, ...scoped(locationId) }]
+/**
+ * Spots for every time slot on some days, as one change; undefined goes back
+ * to each day's usual number (`usualOn`: its weekday's or the activity's).
+ * Days already given spots this way lose them first, and days whose usual
+ * number is already that many get no change.
+ */
+export function setSpotsOn(
+  changes: ScheduleChange[],
+  dateKeys: string[],
+  spots: number | undefined,
+  usualOn: (dateKey: string) => number,
+  locationId?: string,
+): ScheduleChange[] {
+  const days = new Set(dateKeys)
+  if (days.size === 0) return changes
+  const daySpots = (change: ScheduleChange) => owned(change, locationId) && change.action === 'spots' && !(change.times?.length)
+  // One day that already has its own spots: that change is updated (or removed), keeping its id.
+  const only = days.size === 1 ? [...days][0] : undefined
+  const own = only ? changes.find((change) => daySpots(change) && onlyOn(change, only)) : undefined
+  if (only && own) {
+    const value = spots === undefined ? undefined : Math.max(1, Math.floor(spots))
+    const keep = value !== undefined && usualOn(only) !== value
+    return changes.flatMap((change) => {
+      if (change === own) return keep ? [{ ...own, spots: value }] : []
+      if (!daySpots(change) || !change.dates.includes(only)) return [change]
+      const dates = change.dates.filter((key) => key !== only)
+      return dates.length > 0 ? [{ ...change, dates }] : []
+    })
+  }
+  let touched = false
+  const next = changes.flatMap((change) => {
+    if (!daySpots(change)) return [change]
+    const dates = change.dates.filter((key) => !days.has(key))
+    if (dates.length === change.dates.length) return [change]
+    touched = true
+    return dates.length > 0 ? [{ ...change, dates }] : []
+  })
+  if (spots === undefined) return touched ? next : changes
+  const value = Math.max(1, Math.floor(spots))
+  const differ = [...days].filter((key) => usualOn(key) !== value).sort()
+  if (differ.length === 0) return touched ? next : changes
+  return [...next, { id: freshId('chg'), dates: differ, action: 'spots', spots: value, ...scoped(locationId) }]
 }
 
 /** The reason on this day's own changes. */

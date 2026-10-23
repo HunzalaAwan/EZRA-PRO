@@ -19,6 +19,7 @@ import {
   scheduleImpact,
   shiftDayKey,
   timesForWeekday,
+  weekdaySpotsOf,
   type ScheduleSource,
   type ScheduledDay,
 } from '@/lib/activity-schedule'
@@ -47,7 +48,7 @@ import {
   seasonsAt,
   seasonsWarning,
   setDayReason,
-  setDaySpots,
+  setSpotsOn,
   withMode,
   type PickMode,
   type ScheduleDraft,
@@ -99,6 +100,8 @@ export interface ScheduleStepProps {
   rentalDay?: { pickup: string; ret: string; onChange: (pickup: string, ret: string) => void }
   /** Southern hemisphere: summer is December. Only the season templates read it, and a new season now always starts next month. */
   southern?: boolean
+  /** Extra spots each time slot sells on top of its spots: a day's spots can go down to what is booked less these. */
+  extraSpots?: number
 }
 
 /** Words only (they fit a phone without icons); the line under the control says what the picked one does. */
@@ -132,6 +135,7 @@ export function ScheduleStep({
   onBookingStep,
   rentalDay,
   southern = false,
+  extraSpots = 0,
 }: ScheduleStepProps) {
   const todayKey = nowIso.slice(0, 10)
   const fieldId = React.useId()
@@ -190,7 +194,9 @@ export function ScheduleStep({
     const season = seasonOf(day)
     return season && day ? timesForWeekday(season, String(fromDateKey(day.dateKey).getDay()) as WeekdayKey, closingGap) : []
   }
-  const baseSpotsOf = (day: ScheduledDay | undefined) => seasonOf(day)?.capacity ?? basicsSpots
+  /** A day's usual spots, before a change for that date: its weekday's own, a season's (older saves), or the number in Basics. */
+  const usualOn = (dateKey: string) => weekdaySpotsOf(source, fromDateKey(dateKey).getDay()) ?? seasonOf(dayMap.get(dateKey))?.capacity ?? basicsSpots
+  const baseSpotsOf = (day: ScheduledDay | undefined) => (day ? usualOn(day.dateKey) : basicsSpots)
   const act = (action: CalendarAction) => {
     const changes = value.scheduleChanges
     let next = changes
@@ -209,9 +215,10 @@ export function ScheduleStep({
       next =
         action.type === 'run'
           ? runAnyway(changes, action.dateKey, seasonTimesFor(dayMap.get(action.dateKey)), active)
-          : setDaySpots(changes, action.dateKey, action.spots === baseSpotsOf(dayMap.get(action.dateKey)) ? undefined : action.spots, active)
+          : setSpotsOn(changes, [action.dateKey], action.spots, usualOn, active)
       if (action.reason && next !== changes) next = setDayReason(next, action.dateKey, action.reason, active)
-    } else if (action.type === 'reason') next = setDayReason(changes, action.dateKey, action.reason, active)
+    } else if (action.type === 'spots-range') next = setSpotsOn(changes, action.dates, action.spots, usualOn, active)
+    else if (action.type === 'reason') next = setDayReason(changes, action.dateKey, action.reason, active)
     if (next !== changes) onChange({ scheduleChanges: next })
   }
 
@@ -483,6 +490,10 @@ export function ScheduleStep({
                 windowEndKey={windowEnd}
                 booked={booked}
                 spotsFor={(day) => day?.slots[0]?.capacity ?? baseSpotsOf(day)}
+                usualFor={baseSpotsOf}
+                usualSpots={basicsSpots}
+                extraSpots={extraSpots}
+                wholeDay={kind === 'pass'}
                 showSpots={showSpots}
                 spotsLabel={kind === 'rental' ? 'Items' : kind === 'pass' ? 'Tickets' : 'Spots'}
                 reasonFor={(dateKey) => dayReason(value.scheduleChanges, dateKey, active)}
@@ -498,7 +509,7 @@ export function ScheduleStep({
             changes={value.scheduleChanges.filter((change) => !active || !change.locationId || change.locationId === active)}
             mode={value.scheduleMode}
             todayKey={todayKey}
-            spotWord={kind === 'rental' ? 'items' : 'spots'}
+            spotWord={kind === 'rental' ? 'items' : kind === 'pass' ? 'tickets' : 'spots'}
             locationName={locationName}
             onRemove={(id) => onChange({ scheduleChanges: value.scheduleChanges.filter((change) => change.id !== id) })}
             onAddClosed={(dates, reason) => onChange({ scheduleChanges: closeDays(value.scheduleChanges, dates, reason, active) })}

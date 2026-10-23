@@ -864,6 +864,13 @@ export interface Activity {
   minAge: number
   /** Spots per time slot (a private group: its most guests), before any extra spots. */
   maxCapacity: number
+  /**
+   * Spots on some weekdays instead of `maxCapacity` ('0' = Sunday … '6' =
+   * Saturday), each at least 1: "10 spots, 20 on Saturdays and Sundays". A day
+   * left out has the usual number. A date's own spots (a 'spots' change) win.
+   * Shared activities, lessons and passes only. Absent: the same every day.
+   */
+  spotsByWeekday?: Partial<Record<WeekdayKey, number>>
   /** Extra spots, sold once the usual spots are full, each at its own price. Absent: none. */
   extraSpots?: ExtraSpots
   minParticipants: number

@@ -57,7 +57,7 @@ function scheduledPart(part: PackagePart, saved: ActivityOverride | undefined, c
   const source = part.source
   if (source) {
     const closures = !source.runsOnClosures && ((ctx.closures?.length ?? 0) > 0 || Boolean(ctx.holidays?.enabled))
-    if (!saved && !source.schedules && !source.scheduleChanges && !closures) return part.days
+    if (!saved && !source.schedules && !source.scheduleChanges && !source.spotsByWeekday && !closures) return part.days
     try {
       const keep = new Set(part.days.map((day) => day.dateKey))
       const primary = source.locations[0]?.locationId

@@ -72,7 +72,7 @@ export function useScheduledDays(activity: Activity, seededDays: AvailabilityDay
   const delta = opts.delta
   return React.useMemo(() => {
     const ctx = scheduleContextOf(defaults)
-    if (!saved && !activity.schedules && !activity.scheduleChanges && !hasClosures(ctx, activity) && !hasBookedGenerated(activity, delta)) return seededDays
+    if (!saved && !activity.schedules && !activity.scheduleChanges && !activity.spotsByWeekday && !hasClosures(ctx, activity) && !hasBookedGenerated(activity, delta)) return seededDays
     try {
       const edited = applyActivityOverride(activity, saved)
       return rebuildAvailabilityDays(activity, edited, seededDays, { ...ctx, nowIso, maxAdvanceDays: defaults.maxAdvanceDays, delta })
@@ -107,7 +107,7 @@ export function useScheduledRows(activity: Activity | undefined, rows: Departure
   return React.useMemo(() => {
     if (!activity) return rows
     const ctx = scheduleContextOf(defaults)
-    if (!saved && !activity.schedules && !activity.scheduleChanges && !hasClosures(ctx, activity) && !hasBookedGenerated(activity, delta)) return rows
+    if (!saved && !activity.schedules && !activity.scheduleChanges && !activity.spotsByWeekday && !hasClosures(ctx, activity) && !hasBookedGenerated(activity, delta)) return rows
     try {
       const edited = applyActivityOverride(activity, saved)
       return rebuildScheduleRows(activity, edited, rows, { ...ctx, fromKey: opts.todayKey, toKey: shiftDayKey(opts.todayKey, Math.max(0, opts.days - 1)), nowIso: opts.nowIso, delta })

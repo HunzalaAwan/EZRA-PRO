@@ -1,6 +1,6 @@
 import { clamp } from '@/lib/utils'
 import { addOnUnits, peopleOf, placesOf } from '@/lib/places'
-import { defaultSpots, isGeneratedSlotId, spotsAfterEdit } from '@/lib/activity-schedule'
+import { defaultSpots, expandSchedules, isGeneratedSlotId, spotsAfterEdit, weekdaySpotsOf, type ScheduledSlot } from '@/lib/activity-schedule'
 import { slotExtraSpotsOf } from '@/lib/extra-spots'
 import { rentalModes, type RentalMode } from '@/lib/activity-kinds'
 import { groupPriced, groupTierOf, guestLimitOf, privatePerPerson } from '@/lib/price-engine'
@@ -149,18 +149,37 @@ export function bookedOn(slot: Pick<AvailabilitySlot, 'departureId' | 'capacity'
 /**
  * A time slot further out than the rebuilt strip, as the server has it, with
  * a saved edit's spots and extra spots laid over it the way the strip lays
- * them (what is sold stays sold). Undefined when the edit changes nothing.
- * `seeded` is the activity as the server has it, `edited` with its saved edit.
+ * them (what is sold stays sold). With its start, a day's own spots count
+ * too: a change for that date, else its weekday's. Undefined when the edit
+ * changes nothing. `seeded` is the activity as the server has it, `edited`
+ * with its saved edit.
  */
 export function spotsBeyondStrip(
   seeded: Activity,
   edited: Activity,
-  slot: { capacity: number; seatsLeft: number },
+  slot: { capacity: number; seatsLeft: number; startsAt?: string; locationId?: string },
 ): { capacity: number; seatsLeft: number } | undefined {
-  const capacity = spotsAfterEdit(slot.capacity, { capacity: defaultSpots(edited) }, defaultSpots(edited) !== defaultSpots(seeded), slotExtraSpotsOf(seeded), slotExtraSpotsOf(edited))
+  const entry = daySpotsEntry(edited, slot) ?? { capacity: defaultSpots(edited) }
+  const capacity = spotsAfterEdit(slot.capacity, entry, defaultSpots(edited) !== defaultSpots(seeded), slotExtraSpotsOf(seeded), slotExtraSpotsOf(edited))
   if (capacity === slot.capacity) return undefined
   const sold = Math.max(0, slot.capacity - slot.seatsLeft)
   return { capacity: Math.max(capacity, sold), seatsLeft: Math.max(0, capacity - sold) }
+}
+
+/**
+ * A day's own spots for a time slot: the schedule's when a change for the
+ * date or the weekday set them, else the weekday's number; undefined when
+ * neither applies (the usual number).
+ */
+function daySpotsEntry(edited: Activity, slot: { startsAt?: string; locationId?: string }): Pick<ScheduledSlot, 'capacity' | 'capacitySet'> | undefined {
+  const dateKey = slot.startsAt?.slice(0, 10)
+  if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return undefined
+  const time = slot.startsAt!.slice(11, 16)
+  const primary = edited.locations[0]?.locationId
+  const weekday = weekdaySpotsOf(edited, new Date(`${dateKey}T12:00:00`).getDay())
+  const found = expandSchedules(edited, dateKey, dateKey).find((entry) => entry.time === time && (entry.locationId ?? primary) === (slot.locationId ?? primary))
+  if (found?.capacitySet && (found.change || weekday !== undefined)) return found
+  return weekday !== undefined ? { capacity: weekday, capacitySet: true } : undefined
 }
 
 /** The link's rental values (`m`, `h`, `n`, `l`), not yet checked. */
