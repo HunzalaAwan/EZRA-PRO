@@ -11,7 +11,7 @@ import { NOW } from '@/lib/data/constants'
 import { addDays } from '@/lib/utils'
 import { NOW_ISO } from '@/components/dashboard/activities/activity-data'
 import { ActivityWizard } from '@/components/dashboard/activities/activity-wizard'
-import { packageOptionsFor } from '@/components/dashboard/activities/activity-data'
+import { packageOptionsFor, suggestOptionsFor } from '@/components/dashboard/activities/activity-data'
 
 interface EditActivityPageProps {
   params: Promise<{ id: string }>
@@ -78,6 +78,7 @@ export default async function EditActivityPage({ params, searchParams }: EditAct
         locations={getLocationsByTenant(tenant.id)}
         waivers={getWaiversByTenant(tenant.id).map((waiver) => ({ id: waiver.id, title: waiver.title }))}
         packageOptions={packageOptionsFor(tenant.id)}
+        suggestOptions={suggestOptionsFor(tenant.id)}
         tenantId={tenant.id}
         pickupZones={getPickupZonesByTenant(tenant.id).map((zone) => ({ id: zone.id, name: zone.name, detail: `${zone.offsetMinutes} min before · ${zone.stops.length} stops`, fee: zone.fee }))}
         currency={tenant.currency}

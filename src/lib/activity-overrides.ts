@@ -21,6 +21,7 @@ import { fromPrice, privatePerPerson } from '@/lib/price-engine'
 import { rentalModes, type RentalMode } from '@/lib/activity-kinds'
 import { cleanExtraByWeekday, cleanSpotsByWeekday, normalizeTime } from '@/lib/activity-schedule'
 import { sellsExtraSpots, withExtraSpots } from '@/lib/extra-spots'
+import { cleanSoldOut } from '@/lib/sold-out'
 
 /* ==========================================================================
    Activity overrides — edits made in the activity editor, kept in the
@@ -54,6 +55,8 @@ export interface ActivityOverride {
   rentalMaxOut?: number | null
   minAge: number
   minParticipants: number
+  /** What the storefront suggests when a day is fully booked. null goes back to the default; undefined keeps the seeded one. */
+  soldOut?: Activity['soldOut'] | null
   featured: boolean
   crewIds: string[]
   /** The bases it runs from and the times at each; absent on edits saved before bases existed. */
@@ -264,10 +267,17 @@ export function applyActivityOverride<T extends Activity>(activity: T, override?
     route: override.route === undefined ? activity.route : (override.route ?? undefined),
     extraSpots: extraSpotsAfter(activity, override),
     ...dayCapacityAfter(activity, override),
+    ...soldOutAfter(activity, override),
     ...pricingFields(activity, override),
     ...scheduleFields(activity, override),
     updatedAt: override.updatedAt,
   })
+}
+
+/** What a day with no spots left suggests, after an edit: the saved setting, the seeded one, or (null) the default. */
+function soldOutAfter(activity: Activity, override: ActivityOverride): Pick<Activity, 'soldOut'> {
+  if (override.soldOut === undefined) return activity.soldOut ? { soldOut: activity.soldOut } : {}
+  return override.soldOut ? { soldOut: cleanSoldOut(override.soldOut) } : activity.soldOut ? { soldOut: undefined } : {}
 }
 
 /* ---------- schedule (schedule engine) ---------- */

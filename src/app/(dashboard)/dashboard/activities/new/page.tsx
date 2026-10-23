@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { getUsersByTenant, getLocationsByTenant, getWaiversByTenant, getPickupZonesByTenant } from '@/lib/demo'
 import { NOW_ISO } from '@/components/dashboard/activities/activity-data'
 import { ActivityWizard } from '@/components/dashboard/activities/activity-wizard'
-import { packageOptionsFor } from '@/components/dashboard/activities/activity-data'
+import { packageOptionsFor, suggestOptionsFor } from '@/components/dashboard/activities/activity-data'
 
 export const metadata: Metadata = {
   title: 'New activity',
@@ -47,6 +47,7 @@ export default async function NewActivityPage() {
         locations={getLocationsByTenant(tenant.id)}
         waivers={getWaiversByTenant(tenant.id).map((waiver) => ({ id: waiver.id, title: waiver.title }))}
         packageOptions={packageOptionsFor(tenant.id)}
+        suggestOptions={suggestOptionsFor(tenant.id)}
         tenantId={tenant.id}
         pickupZones={getPickupZonesByTenant(tenant.id).map((zone) => ({ id: zone.id, name: zone.name, detail: `${zone.offsetMinutes} min before · ${zone.stops.length} stops`, fee: zone.fee }))}
       />

@@ -15,6 +15,7 @@ import { useBookingDefaults } from '@/hooks/use-booking-defaults'
 import { useBookingLedger } from '@/hooks/use-booking-ledger'
 import type { AvailabilityDay } from '@/components/storefront/booking-widget'
 import type { DepartureRowLite } from '@/components/dashboard/activities/activity-data'
+import type { BookingDefaults } from '@/lib/booking-defaults'
 import type { Activity } from '@/types'
 
 /* ==========================================================================
@@ -29,7 +30,7 @@ import type { Activity } from '@/types'
    ========================================================================== */
 
 const pad = (n: number) => String(n).padStart(2, '0')
-const LOCAL_NOW = `${NOW.getFullYear()}-${pad(NOW.getMonth() + 1)}-${pad(NOW.getDate())}T${pad(NOW.getHours())}:${pad(NOW.getMinutes())}:00`
+export const LOCAL_NOW = `${NOW.getFullYear()}-${pad(NOW.getMonth() + 1)}-${pad(NOW.getDate())}T${pad(NOW.getHours())}:${pad(NOW.getMinutes())}:00`
 
 function subscribe(onChange: () => void) {
   window.addEventListener('storage', onChange)
@@ -70,17 +71,29 @@ export function useScheduledDays(activity: Activity, seededDays: AvailabilityDay
   const { defaults } = useBookingDefaults(opts.tenantSlug)
   const nowIso = (opts.nowIso ?? LOCAL_NOW).slice(0, 19)
   const delta = opts.delta
-  return React.useMemo(() => {
-    const ctx = scheduleContextOf(defaults)
-    if (!saved && !activity.schedules && !activity.scheduleChanges && !hasDayCapacity(activity) && !hasClosures(ctx, activity) && !hasBookedGenerated(activity, delta)) return seededDays
-    try {
-      const edited = applyActivityOverride(activity, saved)
-      return rebuildAvailabilityDays(activity, edited, seededDays, { ...ctx, nowIso, maxAdvanceDays: defaults.maxAdvanceDays, delta })
-    } catch {
-      // A broken saved edit never takes the storefront down: the seeded times still sell.
-      return seededDays
-    }
-  }, [activity, saved, defaults, seededDays, nowIso, delta])
+  return React.useMemo(() => scheduledDaysOf(activity, saved, seededDays, { defaults, nowIso, delta }), [activity, saved, defaults, seededDays, nowIso, delta])
+}
+
+/**
+ * The strip for an activity with its saved edit, as `useScheduledDays` builds
+ * it, for screens that show several activities (the fully booked suggestions).
+ */
+export function scheduledDaysOf(
+  activity: Activity,
+  saved: ActivityOverride | undefined,
+  seededDays: AvailabilityDay[],
+  opts: { defaults: BookingDefaults; nowIso: string; delta?: Record<string, number> },
+): AvailabilityDay[] {
+  const { defaults, nowIso, delta } = opts
+  const ctx = scheduleContextOf(defaults)
+  if (!saved && !activity.schedules && !activity.scheduleChanges && !hasDayCapacity(activity) && !hasClosures(ctx, activity) && !hasBookedGenerated(activity, delta)) return seededDays
+  try {
+    const edited = applyActivityOverride(activity, saved)
+    return rebuildAvailabilityDays(activity, edited, seededDays, { ...ctx, nowIso, maxAdvanceDays: defaults.maxAdvanceDays, delta })
+  } catch {
+    // A broken saved edit never takes the storefront down: the seeded times still sell.
+    return seededDays
+  }
 }
 
 export interface ScheduledRowsOptions {

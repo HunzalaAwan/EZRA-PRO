@@ -718,3 +718,13 @@ export function packageOptionsFor(tenantId: string) {
       locations: activity.locations.map((site) => ({ id: site.locationId, name: sites.find((entry) => entry.id === site.locationId)?.name ?? 'Main location' })),
     }))
 }
+
+/** The business's live activities a fully booked one can suggest: everything but packages and dining. */
+export function suggestOptionsFor(tenantId: string) {
+  return getActivitiesByTenant(tenantId)
+    .filter((activity) => activity.status === 'live' && activity.kind !== 'package' && activity.category !== 'restaurants')
+    .map((activity) => {
+      const image = activity.media.find((item) => item.isPrimary) ?? activity.media[0]
+      return { id: activity.id, name: activity.name, basePrice: activity.basePrice, ...(image ? { image: image.url } : {}) }
+    })
+}

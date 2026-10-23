@@ -701,6 +701,7 @@ export function ActivityDetailView({
                 packageParts={packageParts}
                 locations={locations}
                 checkoutPath={checkoutPath}
+                basePath={basePath}
                 businessPhone={tenant.contact.phone}
                 initialDateKey={initialDateKey}
                 initialGuests={initialGuests}
@@ -802,6 +803,7 @@ export function ActivityDetailView({
               packageParts={packageParts}
               locations={locations}
               checkoutPath={checkoutPath}
+              basePath={basePath}
                 businessPhone={tenant.contact.phone}
               initialDateKey={initialDateKey}
               initialGuests={initialGuests}

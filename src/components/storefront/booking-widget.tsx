@@ -83,6 +83,8 @@ import { useScheduledDays } from '@/hooks/use-scheduled-days'
 import { bookedOn } from '@/components/storefront/checkout-selection'
 import type { PackagePartView } from '@/lib/packages'
 import { PackageWidget } from '@/components/storefront/package-widget'
+import { SoldOutPanel, dayLabel, useSuggestedActivities, type OtherActivity } from '@/components/storefront/sold-out-panel'
+import { SUGGEST_LIMIT, cleanSoldOut, isFullDay, isOpenDay, nextOpenDays } from '@/lib/sold-out'
 
 /* ==========================================================================
    AVAILABILITY CONTRACT
@@ -358,17 +360,18 @@ export function checkoutHref(
 export function useStorefrontDays(activity: Activity, seededDays: AvailabilityDay[], opts: { tenantSlug: string; nowIso?: string }): AvailabilityDay[] {
   const ledger = useBookingLedger(opts.tenantSlug)
   const scheduledDays = useScheduledDays(activity, seededDays, { tenantSlug: opts.tenantSlug, nowIso: opts.nowIso, delta: ledger.delta })
-  return React.useMemo(
-    () =>
-      scheduledDays.map((day) => {
-        if (!day.slots.some((slot) => ledger.delta[slot.departureId])) return day
-        // A time slot off the schedule stays closed, even when a booking on it is cancelled or moved here.
-        const slots = day.slots.map((slot) => (slot.outsideSchedule ? slot : withLedger(slot, ledger.delta)))
-        const open = slots.filter((slot) => !slot.soldOut)
-        return { ...day, slots, seatsLeft: open.reduce((sum, slot) => sum + slot.seatsLeft, 0), soldOut: slots.length > 0 && open.length === 0 }
-      }),
-    [scheduledDays, ledger.delta],
-  )
+  return React.useMemo(() => ledgerDaysOf(scheduledDays, ledger.delta), [scheduledDays, ledger.delta])
+}
+
+/** The strip with this browser's bookings, moves and cancellations counted on each time slot. */
+export function ledgerDaysOf(days: AvailabilityDay[], delta: Record<string, number>): AvailabilityDay[] {
+  return days.map((day) => {
+    if (!day.slots.some((slot) => delta[slot.departureId])) return day
+    // A time slot off the schedule stays closed, even when a booking on it is cancelled or moved here.
+    const slots = day.slots.map((slot) => (slot.outsideSchedule ? slot : withLedger(slot, delta)))
+    const open = slots.filter((slot) => !slot.soldOut)
+    return { ...day, slots, seatsLeft: open.reduce((sum, slot) => sum + slot.seatsLeft, 0), soldOut: slots.length > 0 && open.length === 0 }
+  })
 }
 
 /** The rental mode and length the strip is priced in; the first the activity offers when none is picked. Undefined without rates. */
@@ -484,6 +487,10 @@ export interface BookingWidgetProps {
   businessPhone?: string
   /** Packages: each part with its own availability. */
   packageParts?: PackagePartView[]
+  /** The business's other activities with their days, for the ones a fully booked day suggests. */
+  others?: OtherActivity[]
+  /** The storefront's base path, for links to other activities. Default: the checkout path's parent. */
+  basePath?: string
 }
 
 /**
@@ -549,6 +556,8 @@ function BookingWidgetInner({
   variant = 'rail',
   className,
   businessPhone,
+  others,
+  basePath,
 }: BookingWidgetProps & { settings: BookingSettings }) {
   const router = useRouter()
   const reducedMotion = useReducedMotionSafe()
@@ -626,9 +635,16 @@ function BookingWidgetInner({
 
   const bookableDays = React.useMemo(() => days.filter((d) => !d.soldOut && d.slots.length > 0), [days])
 
+  // What a fully booked day suggests (the saved setting, or the activity's own).
+  const savedOverrides = useActivityOverrides()
+  const savedSoldOut = savedOverrides[activity.id]?.soldOut
+  const whenFull = React.useMemo(() => cleanSoldOut(savedSoldOut === undefined ? activity.soldOut : savedSoldOut), [savedSoldOut, activity.soldOut])
+  /** A sold-out day can be picked (or landed on from a link), to see what else there is. */
+  const fullPickable = whenFull.otherDays || whenFull.activityIds.length > 0
+
   const [dateKey, setDateKey] = React.useState<string>(() => {
     const requested = initialDateKey && days.find((d) => d.dateKey === initialDateKey)
-    if (requested && !requested.soldOut && requested.slots.length > 0) return requested.dateKey
+    if (requested && requested.slots.length > 0 && (!requested.soldOut || fullPickable)) return requested.dateKey
     return bookableDays[0]?.dateKey ?? days[0]?.dateKey ?? ''
   })
   // Until the guest picks a day, the strip follows the saved schedule as it arrives:
@@ -647,11 +663,17 @@ function BookingWidgetInner({
       return
     }
     if (pickedDay.current) return
+    // The day asked for is fully booked: stay on it, with what else there is.
+    const asked = initialDateKey ? days.find((d) => d.dateKey === initialDateKey) : undefined
+    if (asked && fullPickable && isFullDay(asked)) {
+      if (asked.dateKey !== dateKey) setDateKey(asked.dateKey)
+      return
+    }
     const requested = initialDateKey ? bookableDays.find((d) => d.dateKey === initialDateKey) : undefined
     const current = bookableDays.find((d) => d.dateKey === dateKey)
     const next = requested?.dateKey ?? current?.dateKey ?? bookableDays[0]?.dateKey
     if (next && next !== dateKey) setDateKey(next)
-  }, [locationId, bookableDays, days, dateKey, initialDateKey])
+  }, [locationId, bookableDays, days, dateKey, initialDateKey, fullPickable])
   // The strip can run months ahead: keep the picked day in view.
   React.useEffect(() => {
     const strip = stripRef.current
@@ -669,7 +691,8 @@ function BookingWidgetInner({
   )
 
   const [departureId, setDepartureId] = React.useState<string>(
-    () => openSlots[0]?.departureId ?? day?.slots[0]?.departureId ?? '',
+    // A fully booked day starts with no time picked, so nothing can be sent for it.
+    () => openSlots[0]?.departureId ?? '',
   )
 
   // Keep the time selection valid whenever the day changes.
@@ -679,6 +702,36 @@ function BookingWidgetInner({
   }, [openSlots, departureId])
 
   const slot = day?.slots.find((s) => s.departureId === departureId)
+
+  /* ---------- fully booked: the next days with spots and the other activities picked ---------- */
+  const dayFull = isFullDay(day)
+  /** Time slots on the strip, and not one spot left on any of them. */
+  const stripFull = bookableDays.length === 0 && days.some((entry) => entry.slots.length > 0)
+  const openDays = React.useMemo(() => {
+    if (!whenFull.otherDays || !dayFull || stripFull) return []
+    const after = nextOpenDays(days, dateKey)
+    // Nothing later: the nearest earlier days with spots.
+    return after.length > 0 ? after : days.filter((entry) => entry.dateKey < dateKey && isOpenDay(entry)).slice(-SUGGEST_LIMIT)
+  }, [whenFull.otherDays, dayFull, stripFull, days, dateKey])
+  const suggested = useSuggestedActivities(others, whenFull.activityIds, {
+    tenantSlug,
+    nowIso,
+    pickedKey: stripFull ? undefined : dateKey,
+    selfId: activity.id,
+    enabled: dayFull || stripFull,
+  })
+  const soldOutPanel =
+    dayFull || stripFull ? (
+      <SoldOutPanel
+        title={stripFull ? 'Fully booked on every date shown' : `Fully booked on ${dayLabel(dateKey)}`}
+        days={openDays}
+        onPickDay={pickDay}
+        activities={suggested}
+        basePath={basePath ?? checkoutPath.replace(/\/checkout\/?$/, '')}
+        currency={currency}
+      />
+    ) : null
+
   /** The activity as the picked time slot sells it: its day's extra spots and a private group's size (a weekday's or a date's). */
   const slotActivity = React.useMemo(() => forSlot(activity, slot), [activity, slot])
   /** The most guests a private group can be that day: its size and its extra spots. */
@@ -1507,6 +1560,7 @@ function BookingWidgetInner({
                 selected={entry.dateKey === dateKey}
                 onSelect={() => pickDay(entry.dateKey)}
                 emptyLabel={kind === 'trip' ? 'No times' : kind === 'lesson' ? 'No class' : kind === 'activity' ? 'No slots' : 'Closed'}
+                soldOutPickable={fullPickable}
               />
             ))}
           </div>
@@ -1514,8 +1568,11 @@ function BookingWidgetInner({
 
         {kindNote}
 
+        {/* ---------- fully booked: in place of the time slots (all of the steps when nothing on the strip is left) ---------- */}
+        {stripFull || !showTime ? soldOutPanel : null}
+
         {/* ---------- time slots ---------- */}
-        {showTime ? (
+        {showTime && !stripFull ? (
         <div>
           <div className="flex items-baseline justify-between gap-3">
             <h3 className="text-[0.8125rem] font-semibold tracking-tight text-foreground">
@@ -1528,7 +1585,9 @@ function BookingWidgetInner({
             ) : null}
           </div>
 
-          {day && day.slots.length > 0 ? (
+          {dayFull ? (
+            <div className="mt-3">{soldOutPanel}</div>
+          ) : day && day.slots.length > 0 ? (
             <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
               {day.slots.map((entry) => (
                 <TimeChip
@@ -1552,6 +1611,8 @@ function BookingWidgetInner({
         </div>
         ) : null}
 
+        {stripFull ? null : (
+        <>
         {/* ---------- tickets ---------- */}
         {kindBlock ?? (
         <div>
@@ -1874,6 +1935,9 @@ function BookingWidgetInner({
           </div>
         ) : null}
 
+        </>
+        )}
+
         {/* ---------- reserve ---------- */}
         <div className="space-y-3">
           {asking ? (
@@ -1903,6 +1967,7 @@ function BookingWidgetInner({
                   Bookings of more than {settings.groupLimit} {group.many} go by request. Send the details and we confirm with the price.
                 </p>
               ) : null}
+              {stripFull ? null : (
               <Button
                 size="lg"
                 fullWidth
@@ -1922,7 +1987,8 @@ function BookingWidgetInner({
                         ? 'Rent now'
                         : 'Reserve now'}
               </Button>
-              {requestMode ? <p className="text-center text-xs text-subtle">Nothing is charged now. We confirm and send a payment link.</p> : null}
+              )}
+              {requestMode && !stripFull ? <p className="text-center text-xs text-subtle">Nothing is charged now. We confirm and send a payment link.</p> : null}
               <div className="flex flex-col items-center gap-1.5">
                 {settings.otherDates ? (
                   <button type="button" onClick={() => setAsking('date')} className="text-sm font-medium text-primary hover:underline">
@@ -1972,8 +2038,11 @@ export function DateChip({
   selected,
   onSelect,
   emptyLabel = 'No times',
+  soldOutPickable = false,
 }: {
   emptyLabel?: string
+  /** A sold-out day can still be picked (to see the next days with spots and other activities). */
+  soldOutPickable?: boolean
   day: AvailabilityDay
   currency: CurrencyCode
   selected: boolean
@@ -1981,12 +2050,13 @@ export function DateChip({
 }) {
   const date = fromDateKey(day.dateKey)
   const unavailable = day.slots.length === 0 || day.soldOut
+  const disabled = day.slots.length === 0 || (day.soldOut && !soldOutPickable)
 
   return (
     <button
       type="button"
       onClick={onSelect}
-      disabled={unavailable}
+      disabled={disabled}
       aria-pressed={selected}
       className={cn(
         'group flex w-[4.75rem] shrink-0 snap-start flex-col items-center gap-0.5 rounded-xl border px-2 py-2.5',
@@ -1995,7 +2065,7 @@ export function DateChip({
         selected
           ? 'border-primary bg-primary text-on-primary shadow-md'
           : unavailable
-            ? 'cursor-not-allowed border-line-subtle bg-surface-sunken text-faint'
+            ? cn('border-line-subtle bg-surface-sunken text-faint', disabled ? 'cursor-not-allowed' : 'hover:border-line-strong')
             : 'border-line bg-surface text-foreground hover:-translate-y-0.5 hover:border-primary/50 hover:shadow-sm',
       )}
     >

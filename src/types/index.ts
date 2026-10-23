@@ -233,6 +233,18 @@ export interface ExtraSpots {
   price: number
 }
 
+/**
+ * What the storefront suggests when a day has no spots left: the next days
+ * with spots, and other activities of the business picked by the owner.
+ * Absent on an activity: other days on, no other activities.
+ */
+export interface SoldOutSuggestions {
+  /** The next days with spots left, as buttons that pick that day. */
+  otherDays: boolean
+  /** Other activities to suggest, in order; only those with spots show. Empty: none. */
+  activityIds: string[]
+}
+
 /** "From 6 guests, 10% off": the best rung the booking reaches applies to its tickets. */
 export interface GroupDiscount {
   fromGuests: number
@@ -889,6 +901,8 @@ export interface Activity {
   /** Rentals: the most items out at once, across its items; never more than the stock. Absent: all of the stock. */
   rentalMaxOut?: number
   minParticipants: number
+  /** What guests are offered when a day is fully booked. Absent: other days, no other activities. */
+  soldOut?: SoldOutSuggestions
   pricingModel: PricingModel
   basePrice: number
   currency: CurrencyCode

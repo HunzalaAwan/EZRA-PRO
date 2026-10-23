@@ -41,7 +41,7 @@ import { useBookingDefaults } from '@/hooks/use-booking-defaults'
 import { TEMPLATES_EVENT } from '@/hooks/use-message-templates'
 import type { MessageTemplate } from '@/lib/messaging'
 import type { BookingDefaults } from '@/lib/booking-defaults'
-import type { CharterConfig, ChargeBy, ExtraSpots, GroupDiscount, GroupPrice, PriceChange } from '@/types'
+import type { CharterConfig, ChargeBy, ExtraSpots, GroupDiscount, GroupPrice, PriceChange, SoldOutSuggestions } from '@/types'
 import { extraSpotPriceOf, sellsExtraSpots, spotsPlanOf, usualSpotsOf, withExtraSpots } from '@/lib/extra-spots'
 import { PricingStep, defaultPricingDraft, draftFromPrice, effectiveChargeBy, groupTierIdOf, isGroupPriced, pricingDraftOf, pricingErrors, pricingFieldsOfDraft, pricingSummary, repriceDraft, savedTiersOf } from './pricing-step'
 import { ChangesPolicyEditor, type DraftCancellation } from './changes-policy-editor'
@@ -53,6 +53,8 @@ import { cleanExtraByWeekday, cleanSpotsByWeekday, closingGapOf, describeSchedul
 import { useBookingLedger } from '@/hooks/use-booking-ledger'
 import { ScheduleStep, type BookedSlot, type ScheduleBase, type ScheduleCapacity } from './schedule-step'
 import { CapacityBox, capacityWords, type CapacityValue } from './capacity-box'
+import { SoldOutBox, soldOutSummary, type SuggestOption } from './sold-out-box'
+import { SOLD_OUT_DEFAULT, cleanSoldOut, isDefaultSoldOut } from '@/lib/sold-out'
 import { TODAY_KEY } from '@/lib/data/constants'
 import { defaultScheduleDraft, mergeScheduleChanges, modeForKind, scheduleDraftOf, scheduleSaveOf, scheduleSourceOf, validateScheduleDraft, withMode, type PickMode } from './schedule-draft'
 import {
@@ -182,6 +184,8 @@ export interface ActivityDraft {
   extraSpotsByWeekday?: Partial<Record<WeekdayKey, number>> | null
   /** Rentals: the most items out at once. 0 or absent: all of the stock. */
   rentalMaxOut?: number
+  /** What the storefront suggests on a fully booked day: other days, and other activities picked. Absent: the default. */
+  soldOut?: SoldOutSuggestions
   minParticipants: number
   description: string
   highlights: string[]
@@ -303,6 +307,7 @@ export function createDefaultDraft(category: VerticalKey, nowIso: string): Activ
     spotsByWeekday: null,
     extraSpotsByWeekday: null,
     rentalMaxOut: 0,
+    soldOut: { ...SOLD_OUT_DEFAULT, activityIds: [] },
     minParticipants: 1,
     description: '',
     highlights: [''],
@@ -582,6 +587,17 @@ export function savedRentalMaxOut(draft: Pick<ActivityDraft, 'kind' | 'category'
   return cap >= 1 && cap < rentalStockOfDraft(draft) ? cap : undefined
 }
 
+/** Suggestions on a fully booked day can be set: every kind with time slots of its own (not packages or dining). */
+export const suggestsWhenFull = (draft: Pick<ActivityDraft, 'kind' | 'category'>) => !isDining(draft) && (draft.kind ?? 'trip') !== 'package'
+
+/** What a fully booked day suggests, as saved: undefined for the default (other days, no activities) or a kind without it. */
+export function savedSoldOut(draft: Pick<ActivityDraft, 'kind' | 'category' | 'soldOut'>, selfId?: string): SoldOutSuggestions | undefined {
+  if (!suggestsWhenFull(draft)) return undefined
+  const value = cleanSoldOut(draft.soldOut)
+  const clean = { ...value, activityIds: value.activityIds.filter((id) => id !== selfId) }
+  return isDefaultSoldOut(clean) ? undefined : clean
+}
+
 /** "10 spots + 3 extra at $40 · Sat, Sun 20 · extra Sat, Sun 0": the capacity in one line, for the Review step. */
 function capacitySummary(draft: ActivityDraft, currency: CurrencyCode): string {
   const kind = draft.kind ?? 'trip'
@@ -833,6 +849,7 @@ export function draftFromActivity(source: Activity, nowIso: string): ActivityDra
     spotsByWeekday: sellsSpotsByWeekday(activity.kind) && activity.spotsByWeekday ? { ...activity.spotsByWeekday } : null,
     extraSpotsByWeekday: sellsExtraSpots(activity.kind) && activity.extraSpotsByWeekday ? { ...activity.extraSpotsByWeekday } : null,
     rentalMaxOut: (activity.kind ?? 'trip') === 'rental' && activity.rentalMaxOut ? Math.floor(activity.rentalMaxOut) : 0,
+    soldOut: cleanSoldOut(activity.soldOut),
     minParticipants: activity.minParticipants || 1,
     description: activity.description,
     highlights: activity.highlights.length > 0 ? [...activity.highlights] : [''],
@@ -1753,6 +1770,8 @@ export interface ActivityWizardProps {
   pickupZones?: PickupZoneOption[]
   /** The business's other activities, for building a package. */
   packageOptions?: PackageOption[]
+  /** The business's live activities a fully booked one can suggest. */
+  suggestOptions?: SuggestOption[]
   /** Saving clears this activity's old message switches in the business's message templates. */
   tenantId?: string
   /** Editing: the activity's upcoming time slots that have bookings, so a schedule edit that drops one says so. */
@@ -1829,6 +1848,7 @@ export function ActivityWizard({
   waivers = [],
   pickupZones = [],
   packageOptions = [],
+  suggestOptions = [],
   tenantId = '',
   mode = 'create',
   activityId,
@@ -2060,6 +2080,8 @@ export function ActivityWizard({
           spotsByWeekday: savedSpotsByWeekday(draft) ?? null,
           extraSpotsByWeekday: savedExtraByWeekday(draft) ?? null,
           rentalMaxOut: savedRentalMaxOut(draft) ?? null,
+          // What a fully booked day suggests; null: other days, no other activities.
+          soldOut: savedSoldOut(draft, activityId) ?? null,
           minAge: text.minAge,
           minParticipants: draft.minParticipants,
           featured: draft.featured,
@@ -2199,26 +2221,37 @@ export function ActivityWizard({
     const day = (dateKey: string) => String(fromDateKey(dateKey).getDay()) as WeekdayKey
     return {
       box: (
-        <CapacityBox
-          kind={kind}
-          value={value}
-          onChange={onChange}
-          stock={stock}
-          currencySymbol={currencySymbol(currency)}
-          errors={errors}
-          weekly={!unscheduled}
-          extraElsewhere={(draft.scheduleChanges ?? []).some((change) => change.action === 'spots' && (change.extraSpots ?? 0) > 0)}
-          sharedNote={draft.schedule.locations.length > 1 ? 'Every location' : undefined}
-          fewest={
-            kind === 'rental' || kind === 'pass'
-              ? undefined
-              : {
-                  label: kind === 'charter' ? 'Fewest guests' : kind === 'lesson' ? 'Fewest to go ahead' : 'Fewest guests to go ahead',
-                  value: draft.minParticipants,
-                  onChange: (minParticipants) => patch({ minParticipants }),
-                }
-          }
-        />
+        <div className="flex flex-col gap-4">
+          <CapacityBox
+            kind={kind}
+            value={value}
+            onChange={onChange}
+            stock={stock}
+            currencySymbol={currencySymbol(currency)}
+            errors={errors}
+            weekly={!unscheduled}
+            extraElsewhere={(draft.scheduleChanges ?? []).some((change) => change.action === 'spots' && (change.extraSpots ?? 0) > 0)}
+            sharedNote={draft.schedule.locations.length > 1 ? 'Every location' : undefined}
+            fewest={
+              kind === 'rental' || kind === 'pass'
+                ? undefined
+                : {
+                    label: kind === 'charter' ? 'Fewest guests' : kind === 'lesson' ? 'Fewest to go ahead' : 'Fewest guests to go ahead',
+                    value: draft.minParticipants,
+                    onChange: (minParticipants) => patch({ minParticipants }),
+                  }
+            }
+          />
+          {/* No time slots of its own to fill (a request with no set schedule): nothing to suggest. */}
+          {unscheduled ? null : (
+            <SoldOutBox
+              value={cleanSoldOut(draft.soldOut)}
+              onChange={(soldOut) => patch({ soldOut })}
+              options={suggestOptions.filter((option) => option.id !== activityId)}
+              currency={currency}
+            />
+          )}
+        </div>
       ),
       label: capacityWords(kind).column,
       usualOn: (dateKey) => {
@@ -2237,7 +2270,7 @@ export function ActivityWizard({
     }
     // patch is stable for the life of the wizard; errors and currency are read when they change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft.kind, draft.category, draft.maxCapacity, draft.extraSpots, draft.spotsByWeekday, draft.extraSpotsByWeekday, draft.rentalMaxOut, draft.tiers, draft.kindSettings, draft.scheduleChanges, draft.schedule.locations.length, errors, currency, unscheduled])
+  }, [draft.kind, draft.category, draft.maxCapacity, draft.extraSpots, draft.spotsByWeekday, draft.extraSpotsByWeekday, draft.rentalMaxOut, draft.tiers, draft.kindSettings, draft.scheduleChanges, draft.schedule.locations.length, draft.soldOut, suggestOptions, activityId, errors, currency, unscheduled])
   // Booked time slots, with this browser's bookings: a generated one guests booked is kept and warned about like a seeded one.
   const ledger = useBookingLedger(tenantSlug)
   const liveBookedSlots = React.useMemo(() => bookedWithLedger(bookedSlots, ledger.delta, editing ? activityId : undefined, nowIso), [bookedSlots, ledger.delta, editing, activityId, nowIso])
@@ -2473,6 +2506,7 @@ export function ActivityWizard({
                       nowIso={nowIso}
                       patch={patch}
                       onJump={(index) => goTo(index, -1)}
+                      suggestOptions={suggestOptions.filter((option) => option.id !== activityId)}
                     />
                   ) : null}
                 </motion.div>
@@ -3180,8 +3214,11 @@ function ReviewStep({
   nowIso,
   patch,
   onJump,
+  suggestOptions = [],
 }: {
   draft: ActivityDraft
+  /** The activities a fully booked day can suggest, to count the ones picked. */
+  suggestOptions?: SuggestOption[]
   locations?: Location[]
   waivers?: WaiverOption[]
   crew: WizardCrewMember[]
@@ -3276,6 +3313,7 @@ function ReviewStep({
         { label: 'Setup', value: kindFacts(draft).join(' · '), step: (draft.kind ?? 'trip') === 'rental' ? TOUR_STEP_INDEX.pricing : TOUR_STEP_INDEX.basics },
         // How many each time slot takes is set with the schedule, on the Booking step.
         ...((draft.kind ?? 'trip') !== 'package' ? [{ label: 'Capacity', value: capacitySummary(draft, currency), step: TOUR_STEP_INDEX.schedule }] : []),
+        ...(suggestsWhenFull(draft) && !isUnscheduled(draft) ? [{ label: 'When full', value: soldOutSummary(cleanSoldOut(draft.soldOut), suggestOptions), step: TOUR_STEP_INDEX.schedule }] : []),
         { label: 'Highlights', value: `${draft.highlights.filter(Boolean).length} bullets`, step: TOUR_STEP_INDEX.description },
         {
           label: draft.arrivalMode === 'meet' ? 'Meeting point' : draft.arrivalMode === 'venue' ? 'Venue' : 'Arrival',
