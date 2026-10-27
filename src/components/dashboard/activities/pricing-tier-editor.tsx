@@ -154,6 +154,13 @@ export const KIND_TIER_PRESETS: Partial<Record<ActivityKind, TierPreset[]>> = {
     { label: 'Infant', price: 0, description: '', counts: false, ageMax: 2 },
     { label: 'Local', price: 3900, description: 'Local ID at check-in', ratio: 0.85 },
   ],
+  // A shared shuttle's tickets: prices are set per destination in the price table.
+  transfer: [
+    { label: 'Adult', price: 0, description: '', ageMin: 12 },
+    { label: 'Child', price: 0, description: '', ageMin: 3, ageMax: 11 },
+    { label: 'Infant', price: 0, description: 'On a lap, no seat', counts: false, ageMax: 2 },
+    { label: 'Senior', price: 0, description: '', ageMin: 65 },
+  ],
   package: [
     { label: 'Adult', price: 22900, description: '', ageMin: 13 },
     { label: 'Child', price: 18900, description: '', ageMin: 4, ageMax: 12, ratio: 0.8 },
@@ -510,7 +517,7 @@ export interface GuestPricePreviewProps {
   className?: string
 }
 
-const PREVIEW_UNIT: Partial<Record<ActivityKind, string>> = { charter: 'per group, from', lesson: 'per person, from', pass: 'per ticket, from', package: 'per person, from' }
+const PREVIEW_UNIT: Partial<Record<ActivityKind, string>> = { charter: 'per group, from', lesson: 'per person, from', pass: 'per ticket, from', package: 'per person, from', transfer: 'per vehicle, from' }
 
 export function GuestPricePreview({ tiers, addOns, currency, kind = 'trip', className }: GuestPricePreviewProps) {
   const priced = tiers.filter((tier) => tier.label.trim().length > 0)
@@ -523,7 +530,8 @@ export function GuestPricePreview({ tiers, addOns, currency, kind = 'trip', clas
 
   const ticketTotal = sample.reduce((acc, row) => acc + row.tier.price * row.quantity, 0)
   const guests = sample.reduce((acc, row) => acc + (row.tier.countsTowardCapacity ? row.quantity : 0), 0)
-  const addOnTotal = requiredAddOns.reduce((acc, addOn) => acc + addOn.price * (addOn.per === 'booking' ? 1 : Math.max(guests, 1)), 0)
+  const unitsOf = (addOn: DraftAddOn) => (addOn.per === 'booking' || addOn.per === 'each' ? 1 : Math.max(guests, 1))
+  const addOnTotal = requiredAddOns.reduce((acc, addOn) => acc + addOn.price * unitsOf(addOn), 0)
   const total = ticketTotal + addOnTotal
   const leadId = leadTierId(priced, kind)
   const fromPrice = priced.find((tier) => tier.id === leadId)?.price ?? 0
@@ -559,7 +567,7 @@ export function GuestPricePreview({ tiers, addOns, currency, kind = 'trip', clas
             <span className="min-w-0 truncate">
               {addOn.label} <span className="text-faint">(required)</span>
             </span>
-            <span className="shrink-0 tabular">{formatCurrency(addOn.price * (addOn.per === 'booking' ? 1 : Math.max(guests, 1)), currency)}</span>
+            <span className="shrink-0 tabular">{formatCurrency(addOn.price * unitsOf(addOn), currency)}</span>
           </li>
         ))}
       </ul>

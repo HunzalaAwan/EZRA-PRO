@@ -100,6 +100,8 @@ export function defaultRules(slug: string): PricingRule[] {
     { id: 'rule_early', name: 'Early bird', kind: 'early_bird', percent: -10, activitySlugs: [], daysAhead: 30, active: true },
     { id: 'rule_group', name: 'Groups of 8 or more', kind: 'group', percent: -12, activitySlugs: [], minGuests: 8, active: true },
   ]
+  // A transfer company's sheet is its price: no demo discounts on top.
+  if (slug === 'caribe-transfers') return []
   if (slug !== 'blue-horizon') return common
   return [
     { id: 'rule_peak', name: 'Holiday peak', kind: 'season', percent: 15, activitySlugs: [], from: '12-18', to: '01-04', active: true },

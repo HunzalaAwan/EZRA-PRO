@@ -35,6 +35,8 @@ import { TicketQr, ticketPayload } from '@/components/ui/ticket-qr'
 import { usePricing } from '@/hooks/use-pricing'
 import { useWalkIns } from '@/hooks/use-walk-ins'
 import { ACTIVITY_KIND_META } from '@/lib/activity-kinds'
+import { addOnPer, addOnUnits } from '@/lib/places'
+import type { TransferHold } from '@/lib/transfers'
 import { applyRules, findPromo, giftProblem, promoDiscount, promoProblem } from '@/lib/pricing'
 import { clamp, cn, formatCurrency, formatTime, pluralize } from '@/lib/utils'
 import { EMPTY_GUEST, WALK_IN_SOURCES, summarize, type WalkInGuest, type WalkInRecord } from '@/lib/walk-ins'
@@ -51,6 +53,7 @@ import { hasDayCapacity, rebuildAvailabilityDays, scheduleContextOf, type Rebuil
 import type { AvailabilityDay } from '@/components/storefront/booking-widget'
 import { bookedOn } from '@/components/storefront/checkout-selection'
 
+import { TransferTill } from './walk-in-transfer'
 import { WalkInLog } from './walk-in-log'
 import { WalkInRevenue } from './walk-in-revenue'
 
@@ -67,13 +70,15 @@ export interface WalkInActivity {
   kind: ActivityKind
   image: string
   tiers: { id: string; label: string; price: number; min: number; max: number; seat: boolean }[]
-  addOns: { id: string; label: string; price: number; per: 'guest' | 'booking' }[]
+  addOns: { id: string; label: string; price: number; per: 'guest' | 'booking' | 'each' }[]
   /** `booked`: real bookings (the server's and this browser's), for filling-up and quiet-time prices. */
   slots: { id: string; startsAt: string; seatsLeft: number; itemsLeft?: Record<string, number>; capacity?: number; booked?: number; priceMultiplier?: number; extraSpots?: number; groupSize?: number }[]
   /** The full activity, so the desk prices with the same engine as the storefront and checkout. */
   source?: Activity
   /** Today and tomorrow as seeded, so the desk can lay the saved schedule over them. */
   days?: AvailabilityDay[]
+  /** Transfers: the seeded rides' vehicle holds around today, so the desk counts free vehicles. */
+  transferHolds?: TransferHold[]
 }
 
 /** What the desk can sell from a day strip: open time slots from this hour on. */
@@ -129,9 +134,10 @@ function useDeskActivities(activities: WalkInActivity[], tenantSlug: string, now
           // A time slot off the schedule stays closed, whatever this browser did on it.
           slots: day.slots.map((slot) => (slot.outsideSchedule ? slot : withLedger(slot, ledger.delta))),
         }))
-        return { ...entry, slots: deskSlots(days, nowIso, ledger.delta) }
+        return { ...entry, days, slots: deskSlots(days, nowIso, ledger.delta) }
       })
-      .filter((entry) => entry.slots.length > 0)
+      // A transfer sells any time it drives (the till checks), so it stays without time slots.
+      .filter((entry) => entry.slots.length > 0 || entry.kind === 'transfer')
   }, [activities, overrides, defaults, ledger.delta, nowIso])
 }
 
@@ -232,6 +238,9 @@ export function WalkInDesk({ tenantSlug, tenantName, currency, activities: seede
    THE TILL
    ========================================================================== */
 
+const NO_HOLDS: TransferHold[] = []
+const NO_DAYS: AvailabilityDay[] = []
+
 const COUNTRIES = ['United States', 'Canada', 'Australia', 'New Zealand', 'United Kingdom', 'Germany', 'France', 'Japan', 'China', 'South Korea', 'Mexico', 'Other']
 
 function WalkInTill({
@@ -279,6 +288,13 @@ function WalkInTill({
 
   const activity = activities.find((entry) => entry.slug === slug)
   const slot = activity?.slots.find((entry) => entry.id === slotId) ?? activity?.slots[0]
+  // Transfers: the activity with its saved edit (schedule and price table), for the transfer till.
+  const savedEdits = useActivityOverrides()
+  const transferSource = React.useMemo(() => {
+    if (activity?.kind !== 'transfer' || !activity.source) return undefined
+    const saved = savedEdits[activity.source.id]
+    return applyPricingOverride(applyActivityOverride(activity.source, saved), saved)
+  }, [activity, savedEdits])
   const todayKey = nowIso.slice(0, 10)
 
   React.useEffect(() => {
@@ -384,7 +400,7 @@ function WalkInTill({
         ...activity.addOns
           .filter((addOn) => extras[addOn.id])
           .map((addOn) => {
-            const units = addOn.per === 'booking' ? 1 : Math.max(1, guests)
+            const units = addOnUnits(addOn, guests)
             return { label: units > 1 ? `${units} × ${addOn.label}` : addOn.label, total: addOn.price * units }
           }),
       ]
@@ -514,7 +530,9 @@ function WalkInTill({
                 </span>
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium text-foreground">{entry.name}</span>
-                  <span className="block text-xs text-subtle">{ACTIVITY_KIND_META[entry.kind].short} · next {formatTime(entry.slots[0].startsAt)}</span>
+                  <span className="block text-xs text-subtle">
+                    {ACTIVITY_KIND_META[entry.kind].short} · {entry.kind === 'transfer' ? 'now or later today' : `next ${formatTime(entry.slots[0].startsAt)}`}
+                  </span>
                 </span>
               </button>
             </li>
@@ -522,6 +540,25 @@ function WalkInTill({
         </ul>
       </div>
 
+      {activity?.kind === 'transfer' && transferSource ? (
+        <div className="xl:col-span-2">
+          <TransferTill
+            key={activity.slug}
+            activity={transferSource}
+            tenantSlug={tenantSlug}
+            currency={currency}
+            nowIso={nowIso}
+            holds={activity.transferHolds ?? NO_HOLDS}
+            days={activity.days ?? NO_DAYS}
+            staff={staff}
+            onSold={(record) => {
+              onSold(record)
+              setReceipt(record)
+            }}
+          />
+        </div>
+      ) : (
+      <>
       {/* time, guests, extras, guest details */}
       {activity ? (
         <div className="flex flex-col gap-5">
@@ -627,7 +664,7 @@ function WalkInTill({
                         <Checkbox checked={Boolean(extras[addOn.id])} onCheckedChange={(checked) => setExtras((e) => ({ ...e, [addOn.id]: checked === true }))} />
                         {addOn.label}
                       </span>
-                      <span className="text-subtle tabular-nums">{formatCurrency(addOn.price, currency)} {addOn.per === 'booking' ? 'per booking' : 'per guest'}</span>
+                      <span className="text-subtle tabular-nums">{formatCurrency(addOn.price, currency)} {addOnPer(addOn)}</span>
                     </label>
                   ))}
                 </div>
@@ -804,6 +841,8 @@ function WalkInTill({
           ) : null}
         </div>
       </div>
+      </>
+      )}
     </div>
   )
 }
@@ -832,8 +871,13 @@ export function WalkInTicket({
         <p className="mt-2 text-sm font-semibold text-muted">{tenantName}</p>
         <h2 className="mt-1 text-xl font-semibold">{record.activityName}</h2>
         <p className="text-sm text-muted">
-          {formatTime(record.startsAt)} · {record.guests} {pluralize(record.guests, 'guest')} · {record.guest.name}
+          {formatTime(record.startsAt)} · {record.guests} {pluralize(record.guests, record.transfer ? 'passenger' : 'guest')} · {record.guest.name}
         </p>
+        {record.transfer?.legs[0] ? (
+          <p className="text-sm text-muted">
+            {record.transfer.legs[0].from} → {record.transfer.legs[0].to}
+          </p>
+        ) : null}
         <div className="mt-4 flex justify-center">
           <TicketQr value={ticketPayload(record.reference)} size={148} className="border border-line" />
         </div>

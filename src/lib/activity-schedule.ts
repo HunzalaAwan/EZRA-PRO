@@ -5,6 +5,7 @@ import { TODAY_KEY } from '@/lib/data/constants'
 import { holidaysBetween } from '@/lib/holidays'
 import { hasItems, rentalItemsOf, shortestRentalMs } from '@/lib/rental-items'
 import { extraSpotPriceOf, sellsExtraSpots, slotExtraSpotsOf, spotsPlanOf, usualSpotsOf } from '@/lib/extra-spots'
+import { fleetSize } from '@/lib/transfers'
 
 /* ==========================================================================
    Activity schedule — seasons, changes and closed days turned into time
@@ -39,6 +40,7 @@ export type ScheduleSource = Pick<Activity, 'id' | 'locations' | 'maxCapacity'> 
       | 'spotsByWeekday'
       | 'extraSpotsByWeekday'
       | 'rentalMaxOut'
+      | 'transfer'
     >
   >
 
@@ -175,10 +177,11 @@ export function timesForWeekday(schedule: ActivitySchedule, weekday: WeekdayKey,
 /**
  * How long before closing the last start time in opening hours is: the
  * activity's length, so nothing runs past closing. None for rentals, whose
- * hours are when a rental can start.
+ * hours are when a rental can start, nor for transfers, whose closing is the
+ * last pickup.
  */
 export function closingGapOf(activity: Pick<ScheduleSource, 'kind' | 'durationMinutes'>): number {
-  if ((activity.kind ?? 'trip') === 'rental') return 0
+  if ((activity.kind ?? 'trip') === 'rental' || activity.kind === 'transfer') return 0
   const minutes = Math.floor(activity.durationMinutes ?? 0)
   return Number.isFinite(minutes) && minutes > 0 ? minutes : 0
 }
@@ -226,7 +229,8 @@ export function syncLegacyLocations(locations: ActivityLocation[], schedules: Ac
 
 /**
  * Spots in a time slot when nothing says otherwise: a charter sells once, a
- * rental its stock, everything else the activity's spots. Extra spots are not
+ * rental its stock, a private or hourly transfer its vehicles (a shared
+ * shuttle its seats per run), everything else the activity's spots. Extra spots are not
  * in it: seasons, changes and the Schedule step count the usual spots, and a
  * time slot on sale adds the extra ones (`sellableSpots`).
  */
@@ -237,6 +241,9 @@ export function defaultSpots(activity: ScheduleSource): number {
     const stock = rentalStockOf(activity)
     const cap = rentalMaxOutOf(activity)
     return cap !== undefined ? Math.min(cap, stock) : stock
+  }
+  if (kind === 'transfer' && activity.transfer && activity.transfer.service !== 'shared') {
+    return fleetSize({ kind, transfer: activity.transfer, priceTiers: activity.priceTiers ?? [], maxCapacity: activity.maxCapacity })
   }
   return activity.maxCapacity
 }

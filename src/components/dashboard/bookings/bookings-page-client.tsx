@@ -5,7 +5,7 @@ import { useBookingLedger } from '@/hooks/use-booking-ledger'
 import { useBookingDefaults } from '@/hooks/use-booking-defaults'
 import { effectiveCancellation, effectivePayment } from '@/lib/booking-defaults'
 import { useMessageTemplates } from '@/hooks/use-message-templates'
-import { changeBooking } from '@/lib/booking-ledger'
+import { changeBooking, changeStartOf } from '@/lib/booking-ledger'
 import { refundFor, splitPayment } from '@/lib/booking-policy'
 import { MessageComposer, sendToGuests, type MessageRecipient } from '@/components/dashboard/bookings/message-composer'
 import { CancelBookingDialog, type ChangeTarget } from '@/components/dashboard/bookings/booking-change-dialogs'
@@ -166,7 +166,7 @@ export function BookingsPageClient({ tenant, allRows: firstRows, activities, loc
         const moved = change
           ? {
               ...row,
-              booking: { ...row.booking, partySize: change.party ?? row.booking.partySize, departureAt: change.movedTo?.startsAt ?? row.booking.departureAt },
+              booking: { ...row.booking, partySize: change.party ?? row.booking.partySize, departureAt: change.movedTo?.startsAt ?? row.booking.departureAt, ...(change.transfer ? { transfer: change.transfer } : {}) },
               departure: change.movedTo ? { ...row.departure, id: change.movedTo.departureId, startsAt: change.movedTo.startsAt } : row.departure,
             }
           : row
@@ -211,9 +211,8 @@ export function BookingsPageClient({ tenant, allRows: firstRows, activities, loc
     return {
       reference: row.booking.reference,
       bookingId: row.booking.id,
-      fromDepartureId: source.departure.id,
-      fromStartsAt: source.departure.startsAt,
-      fromParty: source.booking.partySize,
+      // A ride: the vehicles (a shared run: the seats) it holds on each leg's time slot.
+      ...changeStartOf({ departureId: source.departure.id, startsAt: source.departure.startsAt, partySize: source.booking.partySize, transfer: source.activity.kind === 'transfer' ? source.booking.transfer : undefined }),
       departureId: row.departure.id,
       startsAt: row.departure.startsAt,
       party: row.booking.partySize,
@@ -531,7 +530,7 @@ export function BookingsPageClient({ tenant, allRows: firstRows, activities, loc
           const target = targetOf(row)
           const hoursToGo = (new Date(row.departure.startsAt).getTime() - new Date(NOW).getTime()) / 3_600_000
           const pay = effectivePayment(row.activity, bookingDefaults)
-          const deposit = pay.collect === 'deposit' ? splitPayment(pay, row.booking.total, target.fromParty).now : 0
+          const deposit = pay.collect === 'deposit' ? splitPayment(pay, row.booking.total, row.activity.kind === 'transfer' ? row.booking.partySize : target.fromParty).now : 0
           const refund = refundFor(effectiveCancellation(row.activity, bookingDefaults), row.booking.amountPaid, hoursToGo, deposit)
           refunded += refund
           changeBooking(tenant.slug, row.booking.reference, target, { cancelled: true, refund }, { by: 'staff', what: `Cancelled from the bookings list${refund > 0 ? `, ${formatCurrency(refund, tenant.currency)} refunded` : ', no refund'}` })

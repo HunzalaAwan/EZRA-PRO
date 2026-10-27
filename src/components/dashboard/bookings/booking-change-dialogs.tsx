@@ -34,6 +34,8 @@ export interface ChangeTarget {
   fromDepartureId: string
   fromStartsAt: string
   fromParty: number
+  /** A ride's later legs' time slots (a round trip's return), from `changeStartOf`. */
+  fromLegDepartureIds?: string[]
   /** Where it is now, after any earlier move. */
   departureId: string
   startsAt: string
@@ -297,7 +299,7 @@ export function CancelBookingDialog({
     changeBooking(
       tenantSlug,
       target.reference,
-      { fromDepartureId: target.fromDepartureId, fromStartsAt: target.fromStartsAt, fromParty: target.fromParty },
+      { fromDepartureId: target.fromDepartureId, fromStartsAt: target.fromStartsAt, fromParty: target.fromParty, ...(target.fromLegDepartureIds ? { fromLegDepartureIds: target.fromLegDepartureIds } : {}) },
       { cancelled: true, refund },
       { by: 'staff', what: `Cancelled: ${reason}${refund > 0 ? `, ${money(refund)} refunded` : ', no refund'}` },
     )

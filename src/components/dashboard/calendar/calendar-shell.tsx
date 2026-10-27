@@ -58,6 +58,7 @@ import { AgendaView } from '@/components/dashboard/calendar/agenda-view'
 import { DepartureDetailSheet } from '@/components/dashboard/calendar/departure-detail-sheet'
 import { NewDepartureDialog } from '@/components/dashboard/calendar/new-departure-dialog'
 import { useScheduledEvents } from '@/components/dashboard/calendar/scheduled-events'
+import { foldRideDeltas } from '@/lib/transfer-changes'
 
 type ViewKey = 'month' | 'week' | 'day' | 'agenda'
 
@@ -185,18 +186,20 @@ export function CalendarShell({
       }),
     [cache.events, rangeFromKey, rangeToKey],
   )
+  // A ride moved onto a seeded time in this browser carries that time's gen_ id: it counts on the seeded slot.
+  const delta = React.useMemo(() => foldRideDeltas(ledger.delta, inRangeEvents), [ledger.delta, inRangeEvents])
   // Time slots added or closed on the schedule in this browser; only over days already loaded.
   const scheduledEvents = useScheduledEvents(inRangeEvents, {
     tenantId,
     tenantSlug,
     fromKey: rangeFromKey > cache.fromKey ? rangeFromKey : cache.fromKey,
     toKey: rangeToKey < cache.toKey ? rangeToKey : cache.toKey,
-    delta: ledger.delta,
+    delta,
   })
   const events = React.useMemo(() => {
     const inRange = scheduledEvents
       .map((event) => {
-        const change = ledger.delta[event.departure.id]
+        const change = delta[event.departure.id]
         if (!change) return event
         const booked = Math.max(0, Math.min(event.departure.capacity, event.departure.booked + change))
         const seatsLeft = Math.max(0, event.departure.capacity - booked - event.departure.held)
@@ -208,7 +211,7 @@ export function CalendarShell({
         }
       })
     return filterEvents(inRange, filters)
-  }, [scheduledEvents, filters, ledger.delta])
+  }, [scheduledEvents, filters, delta])
 
   const eventsByDay = React.useMemo(() => {
     const out: Record<string, CalendarEvent[]> = {}

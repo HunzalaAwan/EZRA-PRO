@@ -85,6 +85,9 @@ import type { PackagePartView } from '@/lib/packages'
 import { PackageWidget } from '@/components/storefront/package-widget'
 import { SoldOutPanel, dayLabel, useSuggestedActivities, type OtherActivity } from '@/components/storefront/sold-out-panel'
 import { SUGGEST_LIMIT, cleanSoldOut, isFullDay, isOpenDay, nextOpenDays } from '@/lib/sold-out'
+import type { TransferPricing } from '@/lib/transfers'
+import type { TransferAvailability } from '@/lib/storefront-availability'
+import { TransferWidget } from '@/components/storefront/transfer-widget'
 
 /* ==========================================================================
    AVAILABILITY CONTRACT
@@ -202,6 +205,8 @@ export interface Quote {
   countLabel: string
   /** Every change that moved a ticket price: the activity's own, group discounts, business rules, dynamic pricing. */
   appliedChanges: AppliedChange[]
+  /** Transfers: the owner's prices include every fee, so no booking fee or card processing is added. */
+  feesIncluded?: boolean
 }
 
 export interface QuoteOptions {
@@ -225,6 +230,8 @@ export interface QuoteOptions {
   booked?: number
   /** The business's price rules (Pricing → Price rules), applied after the activity's own changes. */
   businessRules?: PricingRule[]
+  /** Transfers: the trip, destination and hours the ride is priced by (the price table). */
+  transfer?: TransferPricing
 }
 
 /**
@@ -256,6 +263,7 @@ export function buildQuote(
     private: options.private,
     party: options.party,
     rental: { mode: options.rentalMode, hours: options.hours, days, lengthId: options.lengthId },
+    ...(options.transfer ? { transfer: options.transfer } : {}),
   })
   // The description the owner wrote for a group price: the shared group price's, or a private group's option's.
   const optionsPriced = (activity.kind ?? 'trip') === 'charter' && !privatePerPerson(activity)
@@ -298,8 +306,10 @@ export function buildQuote(
     subtotal += total
   }
 
-  const feeTotal = Math.round(subtotal * BOOKING_FEE_RATE)
-  const taxTotal = Math.round(subtotal * tax.rate)
+  // Transfers are sold at the owner's table prices, which include every fee: nothing is added on top.
+  const feesIncluded = (activity.kind ?? 'trip') === 'transfer'
+  const feeTotal = feesIncluded ? 0 : Math.round(subtotal * BOOKING_FEE_RATE)
+  const taxTotal = feesIncluded ? 0 : Math.round(subtotal * tax.rate)
 
   return {
     ticketLines,
@@ -325,6 +335,7 @@ export function buildQuote(
     party: priced.guests,
     countLabel: partyLabel(activity, priced.guests),
     appliedChanges: priced.appliedChanges,
+    ...(feesIncluded ? { feesIncluded: true } : {}),
   }
 }
 
@@ -491,6 +502,8 @@ export interface BookingWidgetProps {
   others?: OtherActivity[]
   /** The storefront's base path, for links to other activities. Default: the checkout path's parent. */
   basePath?: string
+  /** Transfers: the seeded rides' vehicle holds, so the widget counts free vehicles. */
+  transferAvailability?: TransferAvailability
 }
 
 /**
@@ -524,6 +537,8 @@ export function BookingWidget(rawProps: BookingWidgetProps) {
     )
   }
   const settings = bookingOf(props.activity)
+  // Transfers: their own widget (trip, where, who, when), instant or by request.
+  if (props.activity.kind === 'transfer') return <TransferWidget {...props} settings={settings} availability={rawProps.transferAvailability} />
   if (!showsSchedule(settings)) {
     const today = (props.nowIso ?? new Date().toISOString()).slice(0, 10)
     return (

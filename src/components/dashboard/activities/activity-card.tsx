@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 
 import { ACTIVITY_KIND_META } from '@/lib/activity-kinds'
+import { serviceOf } from '@/lib/transfers'
 import { KIND_ICONS } from './kind-fields'
 import type { Activity, ActivityKind, DifficultyLevel } from '@/types'
 import { cn, formatCurrency, formatDelta, formatDuration, formatNumber } from '@/lib/utils'
@@ -295,7 +296,7 @@ export function ActivityCard({ summary, tenantSlug, className }: ActivityCardPro
             <p className="font-display text-lg leading-tight font-semibold text-white">
               {formatCurrency(summary.fromPrice, activity.currency)}
               <span className="ml-1 text-xs font-medium text-white/70">
-                {activity.pricingModel === 'per_group' || activity.kind === 'charter' ? '/ group' : activity.kind === 'rental' || activity.pricingModel === 'per_unit' ? '/ unit' : '/ guest'}
+                {activity.kind === 'transfer' ? TRANSFER_UNIT[serviceOf(activity)] : activity.pricingModel === 'per_group' || activity.kind === 'charter' ? '/ group' : activity.kind === 'rental' || activity.pricingModel === 'per_unit' ? '/ unit' : '/ guest'}
               </span>
             </p>
           </div>
@@ -383,6 +384,9 @@ export function ActivityCard({ summary, tenantSlug, className }: ActivityCardPro
     </Card>
   )
 }
+
+/** A transfer's price is per vehicle, per seat on a shuttle, or per hour with a driver. */
+const TRANSFER_UNIT = { private: '/ vehicle', shared: '/ guest', hourly: '/ hour' } as const
 
 function KindChip({ kind }: { kind: ActivityKind }) {
   const Icon = KIND_ICONS[kind]

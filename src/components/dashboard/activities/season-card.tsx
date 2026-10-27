@@ -176,9 +176,11 @@ export interface SeasonCardProps {
   closingGap?: number
   /** The activity's regular times: just the week, with its name and dates only when it has dates. */
   regular?: boolean
+  /** Transfers: hours read as pickups (a pickup every 30 minutes, fixed), start times as a shuttle's runs. */
+  transfer?: boolean
 }
 
-export function SeasonCard({ season, tint, onChange, onRemove, todayKey, rental, errors = {}, stepMinutes, sharedNote, closingGap = 0, regular = false }: SeasonCardProps) {
+export function SeasonCard({ season, tint, onChange, onRemove, todayKey, rental, errors = {}, stepMinutes, sharedNote, closingGap = 0, regular = false, transfer = false }: SeasonCardProps) {
   const lists = React.useMemo(() => Object.fromEntries(WEEKDAY_KEYS.map((key) => [key, timesForWeekday(season, key, closingGap)])) as Record<WeekdayKey, string[]>, [season, closingGap])
   const hours = season.mode === 'hours'
   const openKeys = MON_FIRST.filter((key) => (hours ? Boolean(season.hours?.[key]) : lists[key].length > 0))
@@ -269,7 +271,7 @@ export function SeasonCard({ season, tint, onChange, onRemove, todayKey, rental,
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[0.8125rem] font-medium">
             {named ? null : <span className={cn('size-2.5 shrink-0 rounded-full', tintOf(tint).dot)} aria-hidden="true" />}
-            {hours ? (rental ? 'Rentals start between' : 'Open between') : 'Start times'}
+            {hours ? (transfer ? 'Pickups between' : rental ? 'Rentals start between' : 'Open between') : transfer ? 'Run times' : 'Start times'}
             {!named && sharedNote ? <span className="text-xs font-normal text-subtle">{sharedNote}</span> : null}
           </p>
           <label className="inline-flex items-center gap-2 text-xs font-medium text-muted">
@@ -374,10 +376,14 @@ export function SeasonCard({ season, tint, onChange, onRemove, todayKey, rental,
 
         {hours ? (
           <div className="flex flex-wrap items-center gap-2">
-            <label htmlFor={`${id}-every`} className="text-xs text-muted">
-              A start time every
-            </label>
-            <WholeNumberField id={`${id}-every`} size="sm" min={5} max={240} step={5} className="w-24" suffix="min" value={every} onValue={(next) => onChange({ ...season, every: next })} />
+            {transfer ? null : (
+              <>
+                <label htmlFor={`${id}-every`} className="text-xs text-muted">
+                  A start time every
+                </label>
+                <WholeNumberField id={`${id}-every`} size="sm" min={5} max={240} step={5} className="w-24" suffix="min" value={every} onValue={(next) => onChange({ ...season, every: next })} />
+              </>
+            )}
             <span className="text-xs text-subtle">
               {sample.length === 0 ? 'No start times yet' : `${sample.length} a day, ${clockTime(sample[0])} to ${clockTime(sample[sample.length - 1])}`}
             </span>

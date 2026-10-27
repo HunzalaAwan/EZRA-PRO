@@ -3,6 +3,7 @@ import {
   getActivitiesByTenant,
   getBookingsByDeparture,
   getDeparturesForDay,
+  getDeparturesInRange,
   getCustomerById,
   getLocationById,
   getPickupZonesByTenant,
@@ -11,6 +12,7 @@ import { addDays, hashSeed, toDateKey } from '@/lib/utils'
 import { rentalCategoryMeta } from '@/lib/activity-kinds'
 import { privateMostOf } from '@/lib/extra-spots'
 import { hasItems, itemsInBooking, itemsSentence, rentalItemsOf, rentalSpan } from '@/lib/rental-items'
+import { ridesOf, type TransferRide } from '@/lib/transfer-rides'
 import type { CharterRequest, WeatherSnapshot } from '@/types'
 
 /* ==========================================================================
@@ -338,6 +340,66 @@ export function getPickupRunSheet(tenantId: string, day: Date = NOW): PickupRunS
     zones: getPickupZonesByTenant(tenantId).map((zone) => ({ id: zone.id, name: zone.name, offsetMinutes: zone.offsetMinutes })),
     stops,
   }
+}
+
+/* --------------------------------------------------------------------------
+   TRANSFER RIDES — one row per leg of a transfer booking, on the day its
+   pickup falls (a round trip's return shows on its own day).
+   -------------------------------------------------------------------------- */
+
+export interface TransferRideSheet {
+  dayKey: string
+  rides: TransferRide[]
+}
+
+/** Longest gap between a booking's first slot and its last leg: a round trip's return comes up to ~10 days later. */
+const RIDE_LOOKBACK_DAYS = 21
+
+/** Seeded rides whose pickup falls on one of the days, by day key, each day in pickup order. */
+function transferRidesByDay(tenantId: string, dayKeys: string[]): Map<string, TransferRide[]> {
+  const out = new Map<string, TransferRide[]>(dayKeys.map((key) => [key, []]))
+  const transfers = new Map(getActivitiesByTenant(tenantId).filter((activity) => activity.kind === 'transfer').map((activity) => [activity.id, activity]))
+  if (transfers.size === 0 || dayKeys.length === 0) return out
+  const sorted = [...dayKeys].sort()
+  const from = addDays(new Date(`${sorted[0]}T00:00:00`), -RIDE_LOOKBACK_DAYS)
+  const to = addDays(new Date(`${sorted[sorted.length - 1]}T00:00:00`), 2)
+  const seen = new Set<string>()
+  for (const departure of getDeparturesInRange(tenantId, from, to)) {
+    const activity = transfers.get(departure.activityId)
+    if (!activity) continue
+    for (const booking of getBookingsByDeparture(departure.id)) {
+      if (seen.has(booking.id) || !booking.transfer || booking.status === 'cancelled' || booking.status === 'refunded') continue
+      seen.add(booking.id)
+      if (!booking.transfer.legs.some((leg) => out.has(leg.pickupAt.slice(0, 10)))) continue
+      const customer = getCustomerById(booking.customerId)
+      const extras = booking.lineItems.filter((line) => line.kind === 'addon').map((line) => ({ label: line.label, qty: line.quantity }))
+      const rides = ridesOf({
+        activity,
+        reference: booking.reference,
+        bookingId: booking.id,
+        details: booking.transfer,
+        guestName: customer ? `${customer.firstName} ${customer.lastName}` : 'Guest',
+        phone: customer?.phone ?? '',
+        status: booking.status,
+        extras,
+      })
+      for (const ride of rides) out.get(ride.pickupAt.slice(0, 10))?.push(ride)
+    }
+  }
+  for (const list of out.values()) list.sort((a, b) => (a.pickupAt < b.pickupAt ? -1 : a.pickupAt > b.pickupAt ? 1 : a.id.localeCompare(b.id)))
+  return out
+}
+
+/** The tenant's seeded transfer rides with a pickup on one day, in pickup order. */
+export function getTransferRideSheet(tenantId: string, dayKey: string): TransferRideSheet {
+  return { dayKey, rides: transferRidesByDay(tenantId, [dayKey]).get(dayKey) ?? [] }
+}
+
+/** A week of ride sheets from `fromKey`, so the board switches days without asking the server again. */
+export function getTransferRideWeek(tenantId: string, fromKey: string, days = 7): TransferRideSheet[] {
+  const keys = Array.from({ length: days }, (_, index) => toDateKey(addDays(new Date(`${fromKey}T12:00:00`), index)))
+  const byDay = transferRidesByDay(tenantId, keys)
+  return keys.map((dayKey) => ({ dayKey, rides: byDay.get(dayKey) ?? [] }))
 }
 
 /* --------------------------------------------------------------------------

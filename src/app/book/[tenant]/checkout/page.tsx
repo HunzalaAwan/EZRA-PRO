@@ -4,7 +4,8 @@ import { bookingOf } from '@/lib/booking-method'
 
 import { NOW, getActivityById, getDepartureById, getStorefront, getStorefrontAvailability, getLocationById, getWaiverById, getPickupZonesByTenant } from '@/lib/demo'
 import { locationAddress } from '@/lib/locations'
-import { buildDays, rentalItemsLeftFor } from '@/lib/storefront-availability'
+import { buildDays, buildTransferAvailability, rentalItemsLeftFor } from '@/lib/storefront-availability'
+import { decodeTransferQuery, encodeTransferQuery, legsFor, vehiclesLeftAt } from '@/lib/transfers'
 import { isGeneratedSlotId, slotFromDeparture } from '@/lib/activity-schedule'
 import { bookingReference, seatsRemaining } from '@/lib/utils'
 import type { Activity, Departure } from '@/types'
@@ -25,7 +26,7 @@ import {
   CheckoutFlow,
   type CheckoutDeparture,
 } from '@/components/storefront/checkout-flow'
-import { checkoutParty, resolveRental, resolveSelection, type RentalRequest } from '@/components/storefront/checkout-selection'
+import { checkoutParty, resolveRental, resolveSelection, resolveTransferSelection, transferCheckoutLegs, type RentalRequest } from '@/components/storefront/checkout-selection'
 
 interface TenantParams {
   tenant: string
@@ -72,6 +73,69 @@ export default async function CheckoutPage({
 
   // Request and call activities are confirmed by the business first; there is nothing to pay here yet.
   if (bookingOf(activity).method !== 'instant') redirect(`/book/${tenant.slug}/${activity.slug}`)
+
+  const nowIso = `${NOW.getFullYear()}-${String(NOW.getMonth() + 1).padStart(2, '0')}-${String(NOW.getDate()).padStart(2, '0')}T${String(NOW.getHours()).padStart(2, '0')}:${String(NOW.getMinutes()).padStart(2, '0')}:00`
+
+  /* ---------- transfers: the ride from the link, one time slot per leg ---------- */
+
+  if (activity.kind === 'transfer') {
+    const back = `/book/${tenant.slug}/${activity.slug}`
+    const request = decodeTransferQuery(query)
+    if (!request) redirect(back)
+    const ours = (row: Departure | undefined): row is Departure => Boolean(row && row.activityId === activity.id && row.tenantId === tenant.id && row.status !== 'cancelled')
+    const outbound = typeof query.d === 'string' ? getDepartureById(query.d) : undefined
+    const inbound = request.trip === 'round_trip' && typeof query.d2 === 'string' ? getDepartureById(query.d2) : undefined
+    if (!ours(outbound)) redirect(back)
+    if (request.trip === 'round_trip' && (!ours(inbound) || !request.returnAt || request.returnAt <= request.at)) redirect(back)
+    const legs = legsFor(activity, request)
+    if (legs.length === 0 || legs.length !== (request.trip === 'round_trip' ? 2 : 1)) redirect(back)
+    const ids = [outbound.id, ...(inbound ? [inbound.id] : [])]
+    // Vehicles free for every leg, as the seeded rides leave them; a shared run counts its seats.
+    const { holds } = buildTransferAvailability(activity)
+    const lefts = legs.map((leg) => vehiclesLeftAt(activity, holds, leg.pickupAt, leg.busyMinutes))
+    const left: Record<string, number> = {}
+    for (const entry of lefts) for (const [tierId, count] of Object.entries(entry)) left[tierId] = Math.min(left[tierId] ?? Number.POSITIVE_INFINITY, count)
+    const shared = activity.transfer?.service === 'shared'
+    const seatsLeft = shared
+      ? Math.min(...[outbound, ...(inbound ? [inbound] : [])].map((row) => seatsRemaining(row.capacity, row.booked, row.held)))
+      : Object.values(left).reduce((sum, count) => sum + count, 0)
+    const selection = resolveTransferSelection(activity, query.t, query.a, request, shared ? undefined : left)
+    const runs = [outbound, ...(inbound ? [inbound] : [])]
+    // A shared run carries the seats it has left, so checkout can take this browser's bookings off them.
+    const checkoutLegs = transferCheckoutLegs(activity, request, legs, ids).map((leg, index) =>
+      shared && runs[index] ? { ...leg, seatsLeft: seatsRemaining(runs[index].capacity, runs[index].booked, runs[index].held) } : leg,
+    )
+    const departure: CheckoutDeparture = {
+      id: outbound.id,
+      startsAt: checkoutLegs[0].startsAt,
+      endsAt: checkoutLegs[checkoutLegs.length - 1].endsAt,
+      seatsLeft,
+      priceMultiplier: 1,
+      capacity: outbound.capacity,
+      booked: outbound.booked,
+      slotStartsAt: outbound.startsAt,
+      slotEndsAt: outbound.endsAt,
+      legs: checkoutLegs,
+    }
+    const seed = `${ids.join('+')}|${new URLSearchParams(encodeTransferQuery(request)).toString()}|${selection.tiers
+      .filter((tier) => tier.qty > 0)
+      .map((tier) => `${tier.tierId}:${tier.qty}`)
+      .join(',')}`
+    return (
+      <CheckoutFlow
+        tenant={tenant}
+        activity={activity}
+        departure={departure}
+        selection={selection}
+        transferRequest={request}
+        transferHolds={holds}
+        request={{ tiers: typeof query.t === 'string' ? query.t : undefined, addOns: typeof query.a === 'string' ? query.a : undefined }}
+        basePath={`/book/${tenant.slug}`}
+        reference={bookingReference(seed)}
+        nowIso={nowIso}
+      />
+    )
+  }
 
   /* ---------- departure ---------- */
 
@@ -220,7 +284,7 @@ export default async function CheckoutPage({
       request={{ tiers: typeof query.t === 'string' ? query.t : undefined, addOns: typeof query.a === 'string' ? query.a : undefined, party: typeof query.g === 'string' ? query.g : undefined }}
       basePath={`/book/${tenant.slug}`}
       reference={reference}
-      nowIso={`${NOW.getFullYear()}-${String(NOW.getMonth() + 1).padStart(2, '0')}-${String(NOW.getDate()).padStart(2, '0')}T${String(NOW.getHours()).padStart(2, '0')}:${String(NOW.getMinutes()).padStart(2, '0')}:00`}
+      nowIso={nowIso}
     />
   )
 }

@@ -77,6 +77,10 @@ import type {
   PaymentTerms,
   PrivateOption,
   ExtraSpots,
+  ActivitySchedule,
+  TransferConfig,
+  TransferRate,
+  TransferVehicle,
 } from '@/types'
 import { DEFAULT_PAYMENT, policySummary, presetOf } from '@/lib/booking-policy'
 import { fromPrice } from '@/lib/price-engine'
@@ -348,6 +352,43 @@ export const TENANTS: Tenant[] = [
       addressLine: 'Rua de São Miguel 38, 1100-544 Lisboa',
     },
   },
+  {
+    id: 'tnt_caribe',
+    slug: 'caribe-transfers',
+    name: 'Caribe Transfers & Tours',
+    legalName: 'Transportadora Caribe Riviera S.A. de C.V.',
+    vertical: 'tours',
+    plan: 'growth',
+    status: 'active',
+    currency: 'USD',
+    timezone: 'America/Cancun',
+    locale: 'en-US',
+    country: 'Mexico',
+    city: 'Cancún, Q.R.',
+    createdAt: '2020-04-15T08:00:00',
+    branding: {
+      primaryColor: '#0B6E79',
+      accentColor: '#E07A2E',
+      logoText: 'Caribe',
+      coverImage:
+        'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=2000&q=80',
+    },
+    features: featuresFor('growth'),
+    stats: {
+      monthlyBookings: 0,
+      monthlyRevenue: 0,
+      activeActivities: 0,
+      teamSize: 0,
+      avgRating: 0,
+      reviewCount: 0,
+    },
+    contact: {
+      email: 'rides@caribetransfers.mx',
+      phone: '+52 998 555 0142',
+      website: 'https://caribetransfers.mx',
+      addressLine: 'Av. Tulum 220, SM 4, 77500 Cancún, Q.R.',
+    },
+  },
 ]
 
 export const tenantById = new Map(TENANTS.map((t) => [t.id, t]))
@@ -528,6 +569,7 @@ const BOOKING_BY_SLUG: Record<string, Partial<BookingSettings>> = {
   'molokai-channel-crossing': { method: 'request', scheduled: false, replyHours: 24 },
   'family-reef-snorkel': { method: 'instant', groupLimit: 12, otherDates: true, customQuote: true },
   'boat-rental': { method: 'instant', otherDates: true, customQuote: true },
+  'cancun-airport-private-transfer': { method: 'instant', customQuote: true },
 }
 
 /** Activities that take custom quote requests in the demo. */
@@ -709,6 +751,8 @@ export const TAX_RATE: Record<string, number> = {
   tnt_saltline: 0.13,
   tnt_ridgeline: 0.15,
   tnt_casavela: 0.13,
+  /** Prices on the sheet include everything. */
+  tnt_caribe: 0,
 }
 
 /* ==========================================================================
@@ -1105,6 +1149,76 @@ export const USERS: User[] = [
     isBookable: true,
     certifications: ['Lisbon Tourism Guide Licence'],
   },
+
+  /* ---- Caribe Transfers & Tours (5) ---- */
+  {
+    id: 'usr_ct_owner',
+    tenantId: 'tnt_caribe',
+    name: 'Valeria Ortiz',
+    email: 'valeria@caribetransfers.mx',
+    role: 'owner',
+    avatarUrl: av(16),
+    title: 'Owner',
+    phone: '+52 998 555 0101',
+    status: 'active',
+    lastActiveAt: '2026-09-11T08:20:00',
+    isBookable: false,
+  },
+  {
+    id: 'usr_ct_dispatch',
+    tenantId: 'tnt_caribe',
+    name: 'Diego Ramírez',
+    email: 'diego@caribetransfers.mx',
+    role: 'admin',
+    avatarUrl: av(14),
+    title: 'Dispatch',
+    phone: '+52 998 555 0102',
+    status: 'active',
+    lastActiveAt: '2026-09-11T08:57:00',
+    isBookable: false,
+  },
+  {
+    id: 'usr_ct_driver_luis',
+    tenantId: 'tnt_caribe',
+    name: 'Luis Hernández',
+    email: 'luis@caribetransfers.mx',
+    role: 'staff',
+    avatarUrl: av(18),
+    title: 'Driver',
+    phone: '+52 998 555 0103',
+    status: 'active',
+    lastActiveAt: '2026-09-11T07:40:00',
+    isBookable: true,
+    certifications: ['Federal tourist transport licence', 'First aid'],
+  },
+  {
+    id: 'usr_ct_driver_carlos',
+    tenantId: 'tnt_caribe',
+    name: 'Carlos Pech',
+    email: 'carlos@caribetransfers.mx',
+    role: 'staff',
+    avatarUrl: av(57),
+    title: 'Driver',
+    phone: '+52 998 555 0104',
+    status: 'active',
+    lastActiveAt: '2026-09-11T06:15:00',
+    isBookable: true,
+    certifications: ['Federal tourist transport licence'],
+  },
+  {
+    id: 'usr_ct_driver_marisol',
+    tenantId: 'tnt_caribe',
+    name: 'Marisol Canul',
+    email: 'marisol@caribetransfers.mx',
+    role: 'staff',
+    avatarUrl: av(43),
+    title: 'Driver',
+    phone: '+52 998 555 0105',
+    status: 'active',
+    lastActiveAt: '2026-09-11T08:05:00',
+    isBookable: true,
+    certifications: ['Federal tourist transport licence', 'First aid'],
+  },
 ]
 
 export const userById = new Map(USERS.map((u) => [u.id, u]))
@@ -1471,6 +1585,52 @@ export const RESOURCES: Resource[] = [
     status: 'available',
     location: 'Ground floor',
   },
+
+  /* Caribe — the fleet and the catamaran */
+  {
+    id: 'res_ct_car',
+    imageUrl: resourcePhoto('photo-1688619103602-35c5b27a6619'),
+    tenantId: 'tnt_caribe',
+    name: 'Toyota Camry',
+    kind: 'vehicle',
+    capacity: 3,
+    quantity: 6,
+    status: 'available',
+    location: 'Av. Tulum yard',
+  },
+  {
+    id: 'res_ct_van',
+    imageUrl: resourcePhoto('photo-1688619103602-35c5b27a6619'),
+    tenantId: 'tnt_caribe',
+    name: 'Toyota Hiace',
+    kind: 'vehicle',
+    capacity: 9,
+    quantity: 4,
+    status: 'available',
+    location: 'Av. Tulum yard',
+  },
+  {
+    id: 'res_ct_sprinter',
+    imageUrl: resourcePhoto('photo-1688619103602-35c5b27a6619'),
+    tenantId: 'tnt_caribe',
+    name: 'Mercedes Sprinter shuttle',
+    kind: 'vehicle',
+    capacity: 14,
+    quantity: 2,
+    status: 'available',
+    location: 'Cancun airport, Terminal 3 lot',
+  },
+  {
+    id: 'res_ct_cat',
+    imageUrl: resourcePhoto('photo-1505228395891-9a51e7e86bf6'),
+    tenantId: 'tnt_caribe',
+    name: 'Caribe Sol catamaran',
+    kind: 'vessel',
+    capacity: 40,
+    quantity: 1,
+    status: 'available',
+    location: 'Playa Tortugas pier',
+  },
 ]
 
 export const resourcesByTenant = new Map<string, Resource[]>()
@@ -1502,6 +1662,7 @@ const PHOTO_ALT: Record<string, string> = {
   'photo-1552566626-52f8b828add9': 'a warmly lit dining room set for service',
   'photo-1517248135467-4c7edcad34c4': 'guests seated at a candlelit restaurant terrace',
   'photo-1528605248644-14dd04022da1': 'a long table laid for a tasting menu',
+  'photo-1688619103602-35c5b27a6619': 'a white passenger van parked and ready for guests',
 }
 
 function buildMedia(slug: string, name: string, ids: string[]): ActivityMedia[] {
@@ -1515,7 +1676,20 @@ function buildMedia(slug: string, name: string, ids: string[]): ActivityMedia[] 
 }
 
 type TierSpec = [label: string, price: number, min: number, max: number, note?: string]
-type AddOnSpec = [label: string, price: number, note: string, max: number | null, icon?: string]
+type AddOnSpec = [label: string, price: number, note: string, max: number | null, icon?: string, per?: 'guest' | 'booking' | 'each']
+
+/**
+ * A transfer's settings in a spec: vehicles and prices listed in tier order,
+ * mapped onto the tier ids by `buildActivity`.
+ */
+type TransferSpec = Omit<TransferConfig, 'vehicles' | 'rates' | 'hourly'> & {
+  /** Private and hourly: one per tier, in tier order. */
+  vehicleList?: { passengers: number; bags: number; fleet: number; resourceId?: string }[]
+  /** Per zone id, in tier order: [one way, round trip]. */
+  rateTable?: Record<string, [number, number][]>
+  /** Hourly: per hour, in tier order. */
+  hourlyList?: number[]
+}
 
 interface SpecLocation {
   /** Optional most sold on a weekday across the day's departures. */
@@ -1555,6 +1729,10 @@ interface ActivitySpec {
   ride?: RideConfig
   route?: RouteInfo
   pass?: { validDays: number; reentry: boolean }
+  /** Transfers: the service, hub, destinations, vehicles and the price table. */
+  transfer?: TransferSpec
+  /** Seasons; absent: one all-year schedule from `times`. */
+  schedules?: ActivitySchedule[]
   /** Packages: the activities inside, by slug, with the times guests can pick. */
   package?: { parts: { slug: string; times: string[]; label?: string; location?: string }[]; gapMinutes: number; sameDay?: boolean; withinDays?: number }
   slug: string
@@ -3614,12 +3792,251 @@ const CASAVELA_SPECS: ActivitySpec[] = [
   },
 ]
 
+/* ---------- Caribe Transfers & Tours: airport rides in Cancún, priced from the owner's sheet ---------- */
+
+/** Every weekday open from `open` to `close`, a start every `every` minutes. */
+function hoursSeason(id: string, open: string, close: string, every = 30): ActivitySchedule {
+  const hours = { open, close }
+  return {
+    id,
+    name: 'All year',
+    from: null,
+    to: null,
+    mode: 'hours',
+    days: { '0': [], '1': [], '2': [], '3': [], '4': [], '5': [], '6': [] },
+    hours: { '0': hours, '1': hours, '2': hours, '3': hours, '4': hours, '5': hours, '6': hours },
+    every,
+  }
+}
+
+/** The start times of `hoursSeason` (the last one before closing), for the older per-base times. */
+function halfHours(open: string, close: string): string[] {
+  const minutes = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5))
+  const out: string[] = []
+  for (let at = minutes(open); at < minutes(close); at += 30) out.push(`${pad2(Math.floor(at / 60))}:${pad2(at % 60)}`)
+  return out
+}
+
+const CUN_MEETING = 'Outside arrivals at Terminals 2, 3 and 4. Your driver holds a sign with your name.'
+const CUN_HUB = { name: 'Cancun International Airport', code: 'CUN', kind: 'airport' as const, meetingNote: CUN_MEETING }
+/** The shared shuttle meets arrivals at its own stand, not where the private drivers wait. */
+const SHUTTLE_MEETING = 'Outside arrivals at Terminal 3, at the Caribe Transfers shuttle stand.'
+
+/** The destinations on the sheet, with their hotels and areas and the drive from the airport. */
+const CUN_ZONES = [
+  { id: 'tz_cancun_hz', name: 'Cancun Hotel Zone', driveMinutes: 25, places: ['Hyatt Ziva Cancun', 'Riu Palace Las Americas', 'Live Aqua Beach Resort', 'Grand Fiesta Americana Coral Beach', 'Iberostar Selection Cancun'] },
+  { id: 'tz_playa', name: 'Playa del Carmen', driveMinutes: 50, places: ['Playa del Carmen downtown', 'Playacar', 'Grand Hyatt Playa del Carmen', 'The Fives Beach Hotel', 'Paradisus Playa del Carmen'] },
+  { id: 'tz_tulum_hz', name: 'Tulum Hotel Zone', driveMinutes: 100, places: ['Tulum beach road', 'Azulik', 'Be Tulum', 'Papaya Playa Project', 'Dreams Tulum'] },
+  { id: 'tz_puerto_morelos', name: 'Puerto Morelos', driveMinutes: 25, places: ['Puerto Morelos town', 'Excellence Riviera Cancun', 'Now Jade Riviera Cancun', 'Desire Riviera Maya'] },
+  { id: 'tz_puerto_juarez', name: 'Puerto Juarez', driveMinutes: 30, places: ['Puerto Juarez ferry terminal', 'Ultramar ferry to Isla Mujeres', 'Downtown Cancun'] },
+]
+
+const SHUTTLE_FROM_HUB = ['09:00', '10:30', '12:00', '13:30', '15:00', '16:30', '18:00', '19:30']
+const SHUTTLE_TO_HUB = ['07:00', '09:00', '11:00', '13:00', '15:00']
+
+const CARIBE_SPECS: ActivitySpec[] = [
+  {
+    slug: 'cancun-airport-private-transfer',
+    kind: 'transfer',
+    transfer: {
+      service: 'private',
+      hub: CUN_HUB,
+      trips: ['from_hub', 'to_hub', 'round_trip', 'between'],
+      zones: CUN_ZONES.map((zone) => ({ ...zone, places: [...zone.places] })),
+      vehicleList: [
+        { passengers: 3, bags: 3, fleet: 6, resourceId: 'res_ct_car' },
+        { passengers: 9, bags: 9, fleet: 4, resourceId: 'res_ct_van' },
+      ],
+      // The owner's sheet, in USD cents: [car one way, car round trip], [van one way, van round trip].
+      rateTable: {
+        tz_cancun_hz: [[6000, 10000], [7000, 13000]],
+        tz_playa: [[7500, 14000], [9500, 18000]],
+        tz_tulum_hz: [[10000, 19000], [12000, 22000]],
+        tz_puerto_morelos: [[4500, 8500], [5000, 9000]],
+        tz_puerto_juarez: [[7000, 13000], [8000, 14000]],
+      },
+      freeWaitMinutes: 60,
+      checkInMinutes: 120,
+      askFlight: true,
+      maxVehicles: 4,
+    },
+    schedules: [hoursSeason('all_year', '06:00', '23:30')],
+    name: 'Cancun Airport Private Transfer',
+    tagline: 'Private, non-stop rides from Cancun airport to your hotel. Priced per vehicle.',
+    description:
+      'A private, air-conditioned vehicle just for your group, straight from Cancun International Airport to your hotel, or back for your flight. We track your flight, so if it is early or late your driver is there. Prices are per vehicle, not per person, and include all fees and parking. Our vehicles are authorised by the Cancun Airport Authority and fully insured.',
+    highlights: ['Prices per vehicle, not per person', 'Non-stop, direct to your hotel', 'Flight tracking and meet and greet', 'Authorised by the Cancun Airport Authority'],
+    included: ['Private transfer', 'Non-stop direct transfer', 'Flight tracking', 'Airport meet and greet', 'Air-conditioned, fully insured vehicle', 'All fees and parking'],
+    excluded: ['Tips for the driver'],
+    requirements: ['Your flight number and arrival or departure time', 'Your hotel name'],
+    meetingPoint: CUN_MEETING,
+    difficulty: 'easy',
+    durationMinutes: 100,
+    minAge: 0,
+    maxCapacity: 10,
+    pricingModel: 'per_unit',
+    tiers: [
+      ['Private car', 4500, 0, 6, '1 to 3 passengers · up to 3 suitcases'],
+      ['Private van', 5000, 0, 4, '4 to 9 passengers · up to 9 suitcases'],
+    ],
+    addOns: [
+      ['Child seat', 1000, 'Rear-facing, forward-facing or booster. Tell us the ages.', 3, 'Baby', 'each'],
+      ['Extra stop', 1500, 'A quick stop at a supermarket on the way.', 2, 'MapPin', 'each'],
+      ['Extra waiting time', 1500, 'Each 30 minutes past the free hour.', 4, 'Clock', 'each'],
+      ['Welcome drinks', 2000, 'A cooler with beer, soft drinks and water.', 1, 'GlassWater', 'booking'],
+    ],
+    photos: ['photo-1688619103602-35c5b27a6619', 'photo-1507525428034-b723cf961d3e', 'photo-1519046904884-53103b34b206'],
+    colorKey: 'lagoon',
+    rating: 4.9,
+    reviewCount: 812,
+    featured: true,
+    resources: [],
+    format: 'open',
+    times: halfHours('06:00', '23:30'),
+    popularity: 0.62,
+    freeCancelHours: 24,
+    lateRefundPercent: 0,
+    noticeHours: 12,
+  },
+  {
+    slug: 'cancun-airport-shared-shuttle',
+    kind: 'transfer',
+    transfer: {
+      service: 'shared',
+      hub: { ...CUN_HUB, meetingNote: SHUTTLE_MEETING },
+      trips: ['from_hub', 'to_hub', 'round_trip'],
+      zones: CUN_ZONES.map((zone) => ({ ...zone, places: [...zone.places] })),
+      // Per person, in USD cents: [one way, round trip] for Adult, Child, Infant (free, no seat).
+      rateTable: {
+        tz_cancun_hz: [[1800, 3200], [1200, 2200]],
+        tz_playa: [[2500, 4500], [1700, 3000]],
+        tz_tulum_hz: [[4000, 7500], [2800, 5000]],
+        tz_puerto_morelos: [[2000, 3600], [1400, 2500]],
+        tz_puerto_juarez: [[2200, 4000], [1500, 2700]],
+      },
+      freeWaitMinutes: 60,
+      checkInMinutes: 120,
+      askFlight: true,
+      shared: { fromHubTimes: SHUTTLE_FROM_HUB, toHubTimes: SHUTTLE_TO_HUB },
+    },
+    name: 'Cancun Airport Shared Shuttle',
+    tagline: 'A seat on our airport shuttle to the Hotel Zone and the Riviera Maya, from $18.',
+    description:
+      'The easy way between Cancun airport and your hotel when you travel light. Our air-conditioned Sprinter shuttles leave the airport eight times a day and collect from the hotels five times a day, with a few stops on the way. Book a seat for each traveller; children under 3 ride free on a lap.',
+    highlights: ['From $18 a seat', 'Eight runs a day from the airport', 'Air-conditioned Mercedes Sprinters', 'Children under 3 ride free'],
+    included: ['A seat on a shared shuttle', 'One suitcase and a carry-on each', 'Airport meet and greet'],
+    excluded: ['Tips for the driver', 'Extra stops'],
+    requirements: ['Your flight number and time', 'Your hotel name', 'Be at the hotel lobby 10 minutes before your pickup'],
+    meetingPoint: SHUTTLE_MEETING,
+    difficulty: 'easy',
+    durationMinutes: 100,
+    minAge: 0,
+    maxCapacity: 14,
+    tiers: [
+      ['Adult', 1800, 1, 14],
+      ['Child (3–11)', 1200, 0, 14],
+      ['Infant (0–2)', 0, 0, 4],
+    ],
+    addOns: [['Extra suitcase', 500, 'Each bag over one per person.', 6, 'Luggage', 'each']],
+    photos: ['photo-1688619103602-35c5b27a6619', 'photo-1519046904884-53103b34b206', 'photo-1507525428034-b723cf961d3e'],
+    colorKey: 'reef',
+    rating: 4.7,
+    reviewCount: 356,
+    resources: ['res_ct_sprinter'],
+    format: 'departures',
+    times: [...new Set([...SHUTTLE_FROM_HUB, ...SHUTTLE_TO_HUB])].sort(),
+    popularity: 0.55,
+    freeCancelHours: 24,
+    noticeHours: 6,
+  },
+  {
+    slug: 'private-driver-by-the-hour',
+    kind: 'transfer',
+    transfer: {
+      service: 'hourly',
+      trips: [],
+      zones: [],
+      vehicleList: [
+        { passengers: 3, bags: 3, fleet: 2, resourceId: 'res_ct_car' },
+        { passengers: 9, bags: 9, fleet: 2, resourceId: 'res_ct_van' },
+      ],
+      hourlyList: [4500, 6000],
+      minHours: 3,
+      maxHours: 10,
+      freeWaitMinutes: 0,
+      checkInMinutes: 60,
+      askFlight: false,
+      maxVehicles: 2,
+    },
+    schedules: [hoursSeason('all_year', '07:00', '20:00')],
+    name: 'Private Driver by the Hour',
+    tagline: 'A car or van and a bilingual driver for as long as you need. From 3 hours.',
+    description:
+      'Your own driver for the day. Anywhere from Cancun to Tulum: the cenotes, the ruins, a shopping run or a long lunch in Puerto Morelos. Pick a car for up to three or a van for up to nine; your driver collects you at your hotel and waits wherever you stop. Priced per vehicle per hour, fuel and tolls included.',
+    highlights: ['Anywhere from Cancun to Tulum', 'Bilingual drivers', 'Your driver waits at every stop', 'Fuel and tolls included'],
+    included: ['Vehicle and driver', 'Fuel and tolls', 'Bottled water'],
+    excluded: ['Entry tickets', 'Meals', 'Tips for the driver'],
+    requirements: ['The hotel or address we collect you from', 'A rough plan for the day'],
+    meetingPoint: 'We collect you from your hotel lobby.',
+    difficulty: 'easy',
+    durationMinutes: 180,
+    minAge: 0,
+    maxCapacity: 4,
+    pricingModel: 'per_unit',
+    tiers: [
+      ['Private car', 4500, 0, 2, 'Up to 3 passengers · per hour'],
+      ['Private van', 6000, 0, 2, 'Up to 9 passengers · per hour'],
+    ],
+    addOns: [['Child seat', 1000, 'Rear-facing, forward-facing or booster. Tell us the ages.', 3, 'Baby', 'each']],
+    photos: ['photo-1688619103602-35c5b27a6619', 'photo-1505228395891-9a51e7e86bf6', 'photo-1507525428034-b723cf961d3e'],
+    colorKey: 'sunset',
+    rating: 4.9,
+    reviewCount: 128,
+    resources: [],
+    format: 'open',
+    times: halfHours('07:00', '20:00'),
+    popularity: 0.25,
+    freeCancelHours: 24,
+    noticeHours: 24,
+  },
+  {
+    slug: 'isla-mujeres-catamaran-day',
+    name: 'Isla Mujeres Catamaran Day',
+    tagline: 'Sail to Isla Mujeres, snorkel the reef and lunch on the beach. Open bar on board.',
+    description:
+      'Board the Caribe Sol at Playa Tortugas and sail across the bay to Isla Mujeres. We stop on the way to snorkel the reef at El Farito, then tie up for lunch at a beach club and two hours to walk the island or rent a golf cart. The bar is open all day and the crew plays music on the sail back.',
+    highlights: ['Snorkel stop at El Farito reef', 'Lunch at a beach club on the island', 'Open bar on board', 'Two hours free on Isla Mujeres'],
+    included: ['Catamaran sail', 'Snorkel gear and a guide', 'Buffet lunch', 'Open bar', 'Marine park fee'],
+    excluded: ['Golf cart rental', 'Hotel pickup (book a transfer)', 'Photos'],
+    requirements: ['Ages 4 and over', 'Swimwear, a towel and reef-safe sunscreen'],
+    meetingPoint: 'Playa Tortugas pier, Cancun Hotel Zone km 6.5. Check in 30 minutes before.',
+    difficulty: 'easy',
+    durationMinutes: 420,
+    minAge: 4,
+    maxCapacity: 40,
+    tiers: [
+      ['Adult', 8900, 1, 12, 'Ages 12 and over'],
+      ['Child', 5900, 0, 8, 'Ages 4 to 11'],
+    ],
+    addOns: [['Photo pack', 2500, 'Every photo from the day, sent the same evening.', 1, 'Camera']],
+    photos: ['photo-1505228395891-9a51e7e86bf6', 'photo-1507525428034-b723cf961d3e', 'photo-1519046904884-53103b34b206'],
+    colorKey: 'coral',
+    rating: 4.8,
+    reviewCount: 402,
+    resources: ['res_ct_cat'],
+    times: ['09:30'],
+    popularity: 0.6,
+    freeCancelHours: 24,
+  },
+]
+
 export const SPEC_BY_TENANT: [string, ActivitySpec[]][] = [
   ['tnt_bluehorizon', BLUE_HORIZON_SPECS],
   ['tnt_coralcay', CORAL_CAY_SPECS],
   ['tnt_saltline', SALTLINE_SPECS],
   ['tnt_ridgeline', RIDGELINE_SPECS],
   ['tnt_casavela', CASAVELA_SPECS],
+  ['tnt_caribe', CARIBE_SPECS],
 ]
 
 /** Resolve a spec's bases to location ids, defaulting to the business's home base. */
@@ -3658,15 +4075,18 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     // "Tandem flight (2)": one ticket, two places.
     ...(/\((\d)\)\s*$/.test(label) ? { seats: Number(label.match(/\((\d)\)\s*$/)![1]) } : {}),
   }))
-  const addOns: AddOn[] = spec.addOns.map(([label, price, note, max, icon]) => ({
+  const addOns: AddOn[] = spec.addOns.map(([label, price, note, max, icon, per]) => ({
     id: `add_${spec.slug}_${label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`,
     label,
     price,
     description: note,
-    per: max != null && max <= 2 ? ('booking' as const) : ('guest' as const),
+    per: per ?? (max != null && max <= 2 ? ('booking' as const) : ('guest' as const)),
+    // 'each': guests pick how many, up to the spec's most.
+    ...(per === 'each' ? { maxQty: max ?? 9 } : {}),
     required: false,
     icon,
   }))
+  const transfer = spec.transfer ? transferConfigOf(spec.transfer, priceTiers) : undefined
   const freeHours = spec.freeCancelHours ?? 24
   const lateRefund = spec.lateRefundPercent ?? (freeHours >= 72 ? 50 : 0)
   const seededAt = createRng(hashSeed(`created:${id}`))
@@ -3687,7 +4107,8 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     locations: activityLocations(tenant, spec),
     guestQuestions: GUEST_QUESTIONS[spec.slug] ?? [],
     ...(PICKUP_BY_SLUG[spec.slug] ? { pickup: PICKUP_BY_SLUG[spec.slug] } : {}),
-    waiverId: MOTOR_ACTIVITIES.has(spec.slug) ? 'wvr_bluehorizon_motor' : `wvr_${tenant.id.replace(/^tnt_/, '')}_general`,
+    // Transfers ask for no waiver.
+    ...(spec.kind === 'transfer' ? {} : { waiverId: MOTOR_ACTIVITIES.has(spec.slug) ? 'wvr_bluehorizon_motor' : `wvr_${tenant.id.replace(/^tnt_/, '')}_general` }),
     // Motorised and animal activities: every guest signs their own waiver.
     ...(MOTOR_ACTIVITIES.has(spec.slug) || EACH_SIGNS.has(spec.slug) ? { waiverSigning: 'each' as const } : {}),
     ...(GUEST_DETAILS[spec.slug] ? { guestDetails: GUEST_DETAILS[spec.slug] } : {}),
@@ -3695,6 +4116,8 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     status: spec.status ?? 'live',
     format: spec.format ?? 'departures',
     kind: spec.kind ?? 'trip',
+    ...(transfer ? { transfer, theme: 'transfers' as const, ...(transfer.service === 'shared' ? { chargeBy: 'person' as const } : {}) } : {}),
+    ...(spec.schedules ? { schedules: spec.schedules } : {}),
     ...(spec.rental
       ? (() => {
           const { minutes, rateList, stockList, ...rest } = spec.rental
@@ -3734,8 +4157,8 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     ...(PAYMENT_BY_SLUG[spec.slug] ? { payment: PAYMENT_BY_SLUG[spec.slug] } : {}),
     ...(PRIVATE_BY_SLUG[spec.slug] ? { privateOption: PRIVATE_BY_SLUG[spec.slug] } : {}),
     ...(CHANGES_BY_SLUG[spec.slug] ? { changes: CHANGES_BY_SLUG[spec.slug] } : {}),
-    // Guided trips and rides offer a tip; rentals and passes do not.
-    ...(['trip', 'activity', 'charter', 'lesson'].includes(spec.kind ?? 'trip') ? { tips: true } : {}),
+    // Guided trips, rides and transfers offer a tip; rentals and passes do not.
+    ...(['trip', 'activity', 'charter', 'lesson', 'transfer'].includes(spec.kind ?? 'trip') ? { tips: true } : {}),
     ...(spec.ride ? { ride: spec.ride } : {}),
     ...(spec.route ? { route: spec.route } : {}),
     ...(spec.lesson ? { lesson: { ...spec.lesson } } : {}),
@@ -3754,7 +4177,8 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
         }
       : {}),
     difficulty: spec.difficulty,
-    durationMinutes: spec.durationMinutes,
+    // A transfer runs as long as its longest drive (by the hour: its fewest hours).
+    durationMinutes: transfer ? transferLength(transfer, spec.durationMinutes) : spec.durationMinutes,
     minAge: spec.minAge,
     maxCapacity: spec.maxCapacity,
     minParticipants: spec.minParticipants ?? 1,
@@ -3781,6 +4205,26 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     seoDescription: spec.seoDescription ?? spec.tagline,
     featured: spec.featured ?? false,
   }
+}
+
+/** A spec's transfer settings with vehicles and prices on the tier ids. */
+function transferConfigOf(spec: TransferSpec, tiers: PriceTier[]): TransferConfig {
+  const { vehicleList, rateTable, hourlyList, ...rest } = spec
+  const vehicles: TransferVehicle[] | undefined = vehicleList
+    ? tiers.flatMap((tier, index) => (vehicleList[index] ? [{ tierId: tier.id, ...vehicleList[index] }] : []))
+    : undefined
+  const rates: TransferRate[] = Object.entries(rateTable ?? {}).flatMap(([zoneId, row]) =>
+    row.flatMap(([oneWay, roundTrip], index) => (tiers[index] && oneWay > 0 ? [{ zoneId, tierId: tiers[index].id, oneWay, ...(roundTrip > 0 ? { roundTrip } : {}) }] : [])),
+  )
+  const hourly = hourlyList ? tiers.flatMap((tier, index) => (hourlyList[index] ? [{ tierId: tier.id, hour: hourlyList[index] }] : [])) : undefined
+  return { ...rest, ...(vehicles ? { vehicles } : {}), rates, ...(hourly ? { hourly } : {}) }
+}
+
+/** How long a transfer runs, for lists and the calendar: its longest drive, or a driver's fewest hours. */
+function transferLength(config: TransferConfig, fallback: number): number {
+  if (config.service === 'hourly') return (config.minHours ?? 1) * 60
+  const longest = Math.max(0, ...config.zones.map((zone) => zone.driveMinutes))
+  return longest > 0 ? longest : fallback
 }
 
 export const ACTIVITIES: Activity[] = SPEC_BY_TENANT.flatMap(([tenantId, specs]) => {

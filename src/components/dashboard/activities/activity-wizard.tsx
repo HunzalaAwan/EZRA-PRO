@@ -33,7 +33,7 @@ import {
 } from 'lucide-react'
 import { z } from 'zod'
 
-import type { Activity, ActivityKind, ActivityTheme, BookingSettings, ChangeRules, CurrencyCode, PackageConfig, PaymentTerms, PrivateOption, DifficultyLevel, GuestDetailsConfig, GuestQuestion, Location, VerticalKey } from '@/types'
+import type { Activity, ActivityKind, ActivityTheme, BookingSettings, ChangeRules, CurrencyCode, PackageConfig, PaymentTerms, PrivateOption, DifficultyLevel, GuestDetailsConfig, GuestQuestion, Location, TransferService, VerticalKey } from '@/types'
 import { DEFAULT_GUEST_FIELDS, bodyLimitLines, guestDetailsOf, rideAsQuestions, riderLimited } from '@/lib/guest-requirements'
 import { DEFAULT_BOOKING, METHOD_LABEL, bookingOf, groupUnit } from '@/lib/booking-method'
 import { EMPTY_PACKAGE, PackagePartsEditor, packageSeats, type PackageOption } from './package-parts-editor'
@@ -43,7 +43,21 @@ import type { MessageTemplate } from '@/lib/messaging'
 import type { BookingDefaults } from '@/lib/booking-defaults'
 import type { CharterConfig, ChargeBy, ExtraSpots, GroupDiscount, GroupPrice, PriceChange, SoldOutSuggestions } from '@/types'
 import { extraSpotPriceOf, sellsExtraSpots, spotsPlanOf, usualSpotsOf, withExtraSpots } from '@/lib/extra-spots'
-import { PricingStep, defaultPricingDraft, draftFromPrice, effectiveChargeBy, groupTierIdOf, isGroupPriced, pricingDraftOf, pricingErrors, pricingFieldsOfDraft, pricingSummary, repriceDraft, savedTiersOf } from './pricing-step'
+import { PricingStep, STARTER_LABEL, defaultPricingDraft, draftFromPrice, effectiveChargeBy, groupTierIdOf, isGroupPriced, pricingDraftOf, pricingErrors, pricingFieldsOfDraft, pricingSummary, repriceDraft, savedTiersOf } from './pricing-step'
+import { cleanTransferConfig } from '@/lib/transfers'
+import { FleetLine, RideTiming, SharedRunDirections, TransferCheckoutFields, TransferFields } from './transfer-fields'
+import {
+  configOfDraft,
+  fleetOfDraft,
+  lowestRateOf,
+  starterRows,
+  transferDraftErrors,
+  transferDraftOf,
+  transferFacts,
+  transferLengthOf,
+  vehicleDescription,
+  vehicleOf,
+} from './transfer-draft'
 import { ChangesPolicyEditor, type DraftCancellation } from './changes-policy-editor'
 import { DEFAULT_CHANGES, DEFAULT_PAYMENT, changesOf, changesSummary, depositLabel, paymentOf, policySummary, presetOf } from '@/lib/booking-policy'
 import { BookingExceptionsEditor, BookingSettingsEditor } from './booking-settings-editor'
@@ -56,7 +70,7 @@ import { CapacityBox, capacityWords, type CapacityValue } from './capacity-box'
 import { SoldOutBox, soldOutSummary, type SuggestOption } from './sold-out-box'
 import { SOLD_OUT_DEFAULT, cleanSoldOut, isDefaultSoldOut } from '@/lib/sold-out'
 import { TODAY_KEY } from '@/lib/data/constants'
-import { defaultScheduleDraft, mergeScheduleChanges, modeForKind, scheduleDraftOf, scheduleSaveOf, scheduleSourceOf, validateScheduleDraft, withMode, type PickMode } from './schedule-draft'
+import { defaultScheduleDraft, isStarterSchedule, mergeScheduleChanges, modeForKind, scheduleDraftOf, scheduleSaveOf, scheduleSourceOf, transferSeason, validateScheduleDraft, withMode, type PickMode } from './schedule-draft'
 import {
   cn,
   formatCurrency,
@@ -95,7 +109,7 @@ import {
   blankTier,
   type DraftTier,
 } from './pricing-tier-editor'
-import type { DraftAddOn } from './addon-editor'
+import { EACH_DEFAULT_MAX, type DraftAddOn } from './addon-editor'
 import { KindFields, KindPicker, TimedFields, defaultKindSettings, emptyRoute, normalizeKindSettings,
   draftItemOf, type DraftKindSettings, type DraftRoute, type SharedBasics } from './kind-fields'
 import { DURATION_UNITS, unitFor, type DurationUnit } from './duration-field'
@@ -425,6 +439,11 @@ function kindOverride(draft: ActivityDraft) {
   }
   if (kind === 'pass') return { pass: { ...settings.pass } }
   if (kind === 'package') return { package: { ...draft.package, parts: draft.package.parts.filter((part) => part.activityId) } }
+  if (kind === 'transfer') {
+    // The hub's meeting note is the Guests step's "Where the driver meets arrivals"; a shuttle's run directions follow its run times.
+    const config = configOfDraft(settings.transfer, draft.tiers, { meetingNote: draft.meetingPoint, runTimes: runTimesOfDraft(draft) })
+    return { transfer: cleanTransferConfig(config, draft.tiers) }
+  }
   if (kind === 'activity') {
     const { minHeightCm, maxWeightKg } = settings.activity
     return { ride: { ...(minHeightCm > 0 ? { minHeightCm } : {}), ...(maxWeightKg > 0 ? { maxWeightKg } : {}) } }
@@ -472,6 +491,15 @@ const LEVEL_DIFFICULTY: Record<DraftKindSettings['lesson']['level'], DifficultyL
   intermediate: 'moderate',
   advanced: 'challenging',
 }
+
+/** A shared shuttle's run times: every start time its seasons set. */
+export function runTimesOfDraft(draft: Pick<ActivityDraft, 'schedules'>): string[] {
+  const times = draft.schedules.flatMap((season) => (season.mode === 'times' ? Object.values(season.days ?? {}).flat() : []))
+  return [...new Set(times)].sort()
+}
+
+/** What a transfer's Details step suggests for Included: one click adds a line. */
+const TRANSFER_INCLUDED = ['Private, non-stop', 'Flight tracking', 'Meet and greet', 'Air-conditioned vehicle', 'All fees and parking']
 
 /** For a rental, how the opening hours read in Schedule: pick-up and return, and whether start times matter. */
 function rentalHoursFor(draft: ActivityDraft): { hourly: boolean; daily: boolean } | undefined {
@@ -587,8 +615,8 @@ export function savedRentalMaxOut(draft: Pick<ActivityDraft, 'kind' | 'category'
   return cap >= 1 && cap < rentalStockOfDraft(draft) ? cap : undefined
 }
 
-/** Suggestions on a fully booked day can be set: every kind with time slots of its own (not packages or dining). */
-export const suggestsWhenFull = (draft: Pick<ActivityDraft, 'kind' | 'category'>) => !isDining(draft) && (draft.kind ?? 'trip') !== 'package'
+/** Suggestions on a fully booked day can be set: every kind with time slots of its own (not packages or dining). A transfer's widget suggests times itself. */
+export const suggestsWhenFull = (draft: Pick<ActivityDraft, 'kind' | 'category'>) => !isDining(draft) && (draft.kind ?? 'trip') !== 'package' && draft.kind !== 'transfer'
 
 /** What a fully booked day suggests, as saved: undefined for the default (other days, no activities) or a kind without it. */
 export function savedSoldOut(draft: Pick<ActivityDraft, 'kind' | 'category' | 'soldOut'>, selfId?: string): SoldOutSuggestions | undefined {
@@ -602,6 +630,11 @@ export function savedSoldOut(draft: Pick<ActivityDraft, 'kind' | 'category' | 's
 function capacitySummary(draft: ActivityDraft, currency: CurrencyCode): string {
   const kind = draft.kind ?? 'trip'
   const usual = usualCapacityOf(draft)
+  const ride = normalizeKindSettings(draft.kindSettings).transfer
+  if (kind === 'transfer' && ride.service !== 'shared') {
+    const fleet = fleetOfDraft(ride, draft.tiers)
+    return `${fleet} ${pluralize(fleet, 'vehicle')}`
+  }
   if (usual < 1) return 'Not set yet'
   const stock = rentalStockOfDraft(draft)
   const main =
@@ -613,7 +646,9 @@ function capacitySummary(draft: ActivityDraft, currency: CurrencyCode): string {
           ? `${usual} ${pluralize(usual, 'ticket')} a day`
           : kind === 'lesson'
             ? `${usual} per class`
-            : `${usual} ${pluralize(usual, 'spot')}`
+            : kind === 'transfer'
+              ? `${usual} ${pluralize(usual, 'seat')} per run`
+              : `${usual} ${pluralize(usual, 'spot')}`
   const extra = savedExtraSpots(draft)
   const parts = [extra.count > 0 ? `${main} + ${extra.count} extra at ${formatCurrency(extra.price, currency)}` : extra.price > 0 ? `${main} · extra spots at ${formatCurrency(extra.price, currency)}` : main]
   const byDay = describeSpotsByWeekday(savedSpotsByWeekday(draft))
@@ -636,6 +671,12 @@ export function seatsFor(draft: ActivityDraft): ScheduleSeats {
   }
   if (kind === 'charter') {
     return { capacity: 1, one: 'group', many: 'groups', summary: `One group each, up to ${settings.charter.maxGuests + extra} guests` }
+  }
+  if (kind === 'transfer') {
+    // Private and by the hour: vehicles out at once. A shared shuttle: seats on each run.
+    if (settings.transfer.service === 'shared') return { capacity: n, one: 'seat', many: 'seats', summary: `${n} ${pluralize(n, 'seat')} per run`, varies: true }
+    const fleet = fleetOfDraft(settings.transfer, draft.tiers)
+    return { capacity: fleet, one: 'vehicle', many: 'vehicles', summary: `${fleet} ${pluralize(fleet, 'vehicle')}` }
   }
   if (kind === 'lesson') return { capacity: n, one: 'spot', many: 'spots', summary: `${n} ${pluralize(n, 'student')} per class${plus}`, varies: true }
   if (kind === 'pass') return { capacity: n, one: 'ticket', many: 'tickets', summary: `${n} ${pluralize(n, 'ticket')} per day`, varies: true }
@@ -782,6 +823,20 @@ export function deriveForKind(draft: ActivityDraft): ActivityDraft {
   } else if (kind === 'pass') {
     next.difficulty = 'easy'
     next.minParticipants = 1
+  } else if (kind === 'transfer') {
+    // Not asked for transfers: it runs as long as its longest drive (by the hour: the fewest hours), for anyone.
+    const t = settings.transfer
+    next.minParticipants = 1
+    next.difficulty = 'easy'
+    next.durationMinutes = transferLengthOf(t)
+    if (t.service !== 'shared') next.maxCapacity = Math.max(1, fleetOfDraft(t, draft.tiers))
+    // Each row's price is its lowest in the table (lists and the "from" price read it); a vehicle's description follows its numbers.
+    next.tiers = draft.tiers.map((tier) => {
+      const price = lowestRateOf(t, tier.id)
+      const description = t.service === 'shared' ? tier.description : vehicleDescription(tier.description, vehicleOf(t, tier.id), t.service)
+      const minQuantity = t.service === 'shared' ? tier.minQuantity : 0
+      return price === tier.price && description === tier.description && minQuantity === tier.minQuantity ? tier : { ...tier, price, description, minQuantity }
+    })
   }
   next.route = draft.route ?? emptyRoute()
   const capacity = seatsFor(next).capacity
@@ -857,7 +912,8 @@ export function draftFromActivity(source: Activity, nowIso: string): ActivityDra
     excluded: [...activity.excluded],
     requirements: [...activity.requirements],
     meetingPoint: activity.meetingPoint,
-    arrivalMode: activity.pickup?.required ? 'pickup' : restaurant || activity.category === 'wellness' ? 'venue' : 'meet',
+    // A transfer collects guests where they are: its meeting note is the hub's.
+    arrivalMode: activity.pickup?.required || activity.kind === 'transfer' ? 'pickup' : restaurant || activity.category === 'wellness' ? 'venue' : 'meet',
     media: activity.media.map((item) => ({ id: item.id, url: item.url, alt: item.alt, isPrimary: item.isPrimary })),
     tiers: activity.priceTiers.map((tier) => ({
       id: tier.id,
@@ -877,6 +933,7 @@ export function draftFromActivity(source: Activity, nowIso: string): ActivityDra
       price: addOn.price,
       description: addOn.description,
       per: addOn.per ?? 'guest',
+      ...(addOn.per === 'each' ? { maxQty: addOn.maxQty ?? EACH_DEFAULT_MAX } : {}),
       required: addOn.required,
     })),
     schedule: scheduleFromActivity(activity, base.schedule, homeTimes),
@@ -969,6 +1026,7 @@ export function draftFromActivity(source: Activity, nowIso: string): ActivityDra
         pass: activity.pass ? { ...blank.pass, ...activity.pass } : blank.pass,
         // Carried by the Height / Weight questions now, so an edit saves an empty `ride`.
         activity: { minHeightCm: 0, maxWeightKg: 0 },
+        transfer: transferDraftOf(activity.kind === 'transfer' ? activity.transfer : undefined),
       }
     })(),
   })
@@ -1307,8 +1365,11 @@ export function capacityErrors(draft: ActivityDraft): FieldErrors {
   if ((kind === 'activity' || kind === 'trip') && draft.maxCapacity < 1) errors.maxCapacity = 'Each time slot needs at least one spot'
   if (kind === 'charter' && settings.charter.maxGuests < 1) errors.maxCapacity = 'Allow at least one guest'
   if (kind === 'pass' && draft.maxCapacity < 1) errors.maxCapacity = 'Sell at least one ticket a day'
-  if (kind !== 'rental' && kind !== 'package' && draft.maxCapacity > 500) errors.maxCapacity = 'Keep it under 500'
-  if (!errors.maxCapacity && kind !== 'rental' && kind !== 'package' && kind !== 'pass' && draft.maxCapacity >= 1 && draft.minParticipants > draft.maxCapacity) {
+  // A transfer's vehicles are checked on Basics; a shared shuttle's seats here.
+  const shuttle = kind === 'transfer' && settings.transfer.service === 'shared'
+  if (shuttle && draft.maxCapacity < 1) errors.maxCapacity = 'Each run needs at least one seat'
+  if (kind !== 'rental' && kind !== 'package' && (kind !== 'transfer' || shuttle) && draft.maxCapacity > 500) errors.maxCapacity = 'Keep it under 500'
+  if (!errors.maxCapacity && kind !== 'rental' && kind !== 'package' && kind !== 'pass' && kind !== 'transfer' && draft.maxCapacity >= 1 && draft.minParticipants > draft.maxCapacity) {
     errors.minParticipants = `No more than the ${capacityWords(kind).label.toLowerCase()} (${draft.maxCapacity})`
   }
   // Extra spots are sold only with a price for them.
@@ -1354,6 +1415,11 @@ function validateStep(step: number, draft: ActivityDraft): FieldErrors {
     if (r.modes.includes('day') && r.maxDays > 0 && r.maxDays < r.minDays) errors['rental.maxDays'] = 'Most days cannot be fewer than the fewest'
     if (r.modes.includes('hour') && r.maxHours > 0 && r.maxHours < r.minHours) errors['rental.maxHours'] = 'Most hours cannot be fewer than the fewest'
   }
+  // A transfer's prices are its table: destinations, a price in each, hourly prices and hours. Its row names are checked on Basics.
+  if (id === 'pricing' && !isDining(draft) && (draft.kind ?? 'trip') === 'transfer') {
+    for (const key of Object.keys(errors)) if (key === 'tiers' || key.startsWith('tiers.')) delete errors[key]
+    Object.assign(errors, transferDraftErrors(normalizeKindSettings(draft.kindSettings).transfer, draft.tiers, 'pricing'))
+  }
   // With a location on the activity, its address is the meeting place; the note is optional.
   if (id === 'guests' && !isDining(draft) && draft.schedule.locations.length > 0) delete errors.meetingPoint
   if (id !== 'basics' || isDining(draft)) return errors
@@ -1370,6 +1436,11 @@ function validateStep(step: number, draft: ActivityDraft): FieldErrors {
   if (kind === 'lesson') {
     if (settings.lesson.sessions < 1) errors['lesson.sessions'] = 'A course has at least one day'
   }
+  if (kind === 'transfer') {
+    // Its length follows the drives (or the fewest hours): not asked, so not checked.
+    delete errors.durationMinutes
+    Object.assign(errors, transferDraftErrors(settings.transfer, draft.tiers, 'basics'))
+  }
   return errors
 }
 
@@ -1385,6 +1456,7 @@ function ListEditor({
   placeholder,
   tone = 'positive',
   error,
+  suggestions = [],
 }: {
   legend: string
   description?: string
@@ -1393,6 +1465,8 @@ function ListEditor({
   placeholder: string
   tone?: 'positive' | 'negative' | 'warning'
   error?: string
+  /** One-click lines; each shows until it is in the list. */
+  suggestions?: string[]
 }) {
   const inputRefs = React.useRef<(HTMLInputElement | null)[]>([])
 
@@ -1471,6 +1545,24 @@ function ListEditor({
       >
         Add {legend.toLowerCase().replace(/s$/, '')}
       </Button>
+
+      {suggestions.some((line) => !items.some((item) => item.trim().toLowerCase() === line.toLowerCase())) ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {suggestions
+            .filter((line) => !items.some((item) => item.trim().toLowerCase() === line.toLowerCase()))
+            .map((line) => (
+              <button
+                key={line}
+                type="button"
+                onClick={() => onChange([...items.filter((item) => item.trim().length > 0), line])}
+                className="inline-flex h-8 items-center gap-1 rounded-full border border-line bg-surface px-3 text-xs font-medium text-muted transition-colors hover:border-line-strong hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              >
+                <Plus className="size-3" aria-hidden="true" />
+                {line}
+              </button>
+            ))}
+        </div>
+      ) : null}
 
       {error ? (
         <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-danger">
@@ -2107,7 +2199,17 @@ export function ActivityWizard({
             ...ageFields(tier),
           })),
           privateOption: ['trip', 'activity', 'lesson'].includes(draft.kind ?? 'trip') && effectiveChargeBy(draft) === 'person' && draft.privateOption?.enabled ? draft.privateOption : undefined,
-          addOns: draft.addOns.map((addOn) => ({ id: addOn.id, label: addOn.label, price: addOn.price, description: addOn.description, per: addOn.per, required: addOn.required, ...(addOn.icon ? { icon: addOn.icon } : {}) })),
+          addOns: draft.addOns.map((addOn) => ({
+            id: addOn.id,
+            label: addOn.label,
+            price: addOn.price,
+            description: addOn.description,
+            per: addOn.per,
+            // Guests pick how many: up to this.
+            ...(addOn.per === 'each' ? { maxQty: Math.max(1, Math.floor(addOn.maxQty ?? EACH_DEFAULT_MAX)) } : {}),
+            required: addOn.required,
+            ...(addOn.icon ? { icon: addOn.icon } : {}),
+          })),
           payment: draft.payment?.useDefault ? { ...pay, useDefault: true } : (draft.payment ?? DEFAULT_PAYMENT),
           // The note and the message switches are no longer set on the activity: it gets the messages set up in Marketing.
           guestNote: '',
@@ -2219,6 +2321,33 @@ export function ActivityWizard({
         ...(next.extraByWeekday !== undefined ? { extraSpotsByWeekday: next.extraByWeekday } : {}),
       })
     const day = (dateKey: string) => String(fromDateKey(dateKey).getDay()) as WeekdayKey
+    if (kind === 'transfer') {
+      // Private and by the hour: the vehicles, set on Basics. A shuttle: its seats per run and which way each run goes. Then ride timing.
+      const ride = settings.transfer
+      const setRide = (transfer: typeof ride) => patch({ kindSettings: { ...settings, transfer } })
+      const fleet = fleetOfDraft(ride, draft.tiers)
+      return {
+        box: (
+          <div className="flex flex-col gap-4">
+            {ride.service === 'shared' ? (
+              <CapacityBox kind="transfer" value={value} onChange={onChange} currencySymbol={currencySymbol(currency)} errors={errors} weekly={!unscheduled} sharedNote={draft.schedule.locations.length > 1 ? 'Every location' : undefined} />
+            ) : (
+              <FleetLine value={ride} tiers={draft.tiers} onBasics={() => goTo(0, -1)} />
+            )}
+            <SharedRunDirections value={ride} runTimes={runTimesOfDraft(draft)} onChange={setRide} />
+            <RideTiming value={ride} onChange={setRide} />
+          </div>
+        ),
+        label: ride.service === 'shared' ? capacityWords('transfer').column : 'Vehicles',
+        usualOn: (dateKey) => {
+          const own = draft.spotsByWeekday?.[day(dateKey)]
+          return { spots: own !== undefined && own >= 1 ? own : usual, extra: 0 }
+        },
+        plain: { spots: usual, extra: 0 },
+        showExtra: false,
+        ...(ride.service === 'shared' ? {} : { most: Math.max(1, fleet) }),
+      }
+    }
     return {
       box: (
         <div className="flex flex-col gap-4">
@@ -2270,7 +2399,7 @@ export function ActivityWizard({
     }
     // patch is stable for the life of the wizard; errors and currency are read when they change.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft.kind, draft.category, draft.maxCapacity, draft.extraSpots, draft.spotsByWeekday, draft.extraSpotsByWeekday, draft.rentalMaxOut, draft.tiers, draft.kindSettings, draft.scheduleChanges, draft.schedule.locations.length, draft.soldOut, suggestOptions, activityId, errors, currency, unscheduled])
+  }, [draft.kind, draft.category, draft.maxCapacity, draft.extraSpots, draft.spotsByWeekday, draft.extraSpotsByWeekday, draft.rentalMaxOut, draft.tiers, draft.kindSettings, draft.scheduleChanges, draft.schedules, draft.schedule.locations.length, draft.soldOut, suggestOptions, activityId, errors, currency, unscheduled])
   // Booked time slots, with this browser's bookings: a generated one guests booked is kept and warned about like a seeded one.
   const ledger = useBookingLedger(tenantSlug)
   const liveBookedSlots = React.useMemo(() => bookedWithLedger(bookedSlots, ledger.delta, editing ? activityId : undefined, nowIso), [bookedSlots, ledger.delta, editing, activityId, nowIso])
@@ -2316,7 +2445,7 @@ export function ActivityWizard({
                   {step + 1}. {currentStep.label}
                 </CardTitle>
                 <CardDescription>
-                  {currentStep.id === 'pricing' && !dining && (draft.kind ?? 'trip') === 'rental' ? 'What you lend out, how many you have of each, what it costs, and the extras you offer.' : dining ? DINING_STEP_COPY[step] : STEP_COPY[currentStep.id]}
+                  {currentStep.id === 'pricing' && !dining && (draft.kind ?? 'trip') === 'rental' ? 'What you lend out, how many you have of each, what it costs, and the extras you offer.' : currentStep.id === 'pricing' && !dining && draft.kind === 'transfer' ? 'Your prices for each destination, and the extras you offer.' : currentStep.id === 'guests' && !dining && draft.kind === 'transfer' ? 'What checkout asks of guests.' : dining ? DINING_STEP_COPY[step] : STEP_COPY[currentStep.id]}
                 </CardDescription>
               </div>
             </CardHeader>
@@ -2343,6 +2472,15 @@ export function ActivityWizard({
                   {currentStep.id === 'description' ? <DescriptionStep draft={draft} patch={patch} errors={errors} part={dining ? undefined : 'copy'} /> : null}
                   {currentStep.id === 'guests' ? (
                     <div className="flex flex-col gap-6">
+                    {draft.kind === 'transfer' ? (
+                      // A ride collects guests where they are: checkout always asks the same few things.
+                      <TransferCheckoutFields
+                        value={normalizeKindSettings(draft.kindSettings).transfer}
+                        meetingPoint={draft.meetingPoint}
+                        onMeetingPoint={(meetingPoint) => patch({ meetingPoint })}
+                        error={errors.meetingPoint}
+                      />
+                    ) : (
                     <DescriptionStep
                       part="arrival"
                       draft={draft}
@@ -2360,6 +2498,7 @@ export function ActivityWizard({
                       }
                       allZoneIds={pickupZones.map((zone) => zone.id)}
                     />
+                    )}
                     <GuestQuestionsEditor
                       questions={draft.guestQuestions ?? []}
                       onChange={(guestQuestions) => patch({ guestQuestions })}
@@ -2478,7 +2617,7 @@ export function ActivityWizard({
                             value={draft.booking ?? DEFAULT_BOOKING}
                             onChange={(booking) => patch({ booking })}
                             // A rental counts "items", whatever it lends out (no category is picked in setup).
-                            groupWord={groupUnit(draft.kind, undefined, draft.booking?.groupCountBy).many}
+                            groupWord={draft.kind === 'transfer' ? 'passengers' : groupUnit(draft.kind, undefined, draft.booking?.groupCountBy).many}
                             rentedWord={(draft.kind ?? 'trip') === 'rental' ? 'items' : undefined}
                           />
                         ) : null}
@@ -2492,6 +2631,7 @@ export function ActivityWizard({
                       selected={draft.crewIds}
                       onChange={(crewIds) => patch({ crewIds })}
                       dining={dining}
+                      title={draft.kind === 'transfer' ? 'Drivers' : undefined}
                     />
                   ) : null}
                   {currentStep.id === 'review' ? (
@@ -2631,6 +2771,7 @@ function kindFacts(draft: ActivityDraft): string[] {
   // Ages are written in Requirements now; only a seeded minimum age shows.
   const age = draft.minAge > 0 ? [`Ages ${draft.minAge}+`] : []
   const spots = draft.maxCapacity > 0
+  if (kind === 'transfer') return transferFacts(s.transfer, draft.tiers)
   if (kind === 'rental') {
     const r = s.rental
     return [
@@ -2799,11 +2940,103 @@ function CategoryField({ draft, patch, tenantSlug }: { draft: ActivityDraft; pat
   )
 }
 
+/** The parts of a draft that make its schedule, as one value to keep or compare. */
+type KeptSchedule = { scheduleMode: ActivityDraft['scheduleMode']; schedules: ActivityDraft['schedules']; mode: ActivityDraft['schedule']['mode'] }
+const scheduleOfDraft = (draft: Pick<ActivityDraft, 'scheduleMode' | 'schedules' | 'schedule'>): KeptSchedule => ({ scheduleMode: draft.scheduleMode, schedules: draft.schedules, mode: draft.schedule.mode })
+
+/** A transfer's starting schedule for a service, in place of an untouched one; otherwise the seasons switched to its way of picking a time. */
+function transferSchedule(draft: Pick<ActivityDraft, 'schedules' | 'schedule'>, service: TransferService): Pick<ActivityDraft, 'scheduleMode' | 'schedules' | 'schedule'> {
+  const season = transferSeason(service)
+  const mode = season.mode === 'hours' ? 'hours' : 'times'
+  return { schedule: { ...draft.schedule, mode }, ...(isStarterSchedule(draft.schedules) ? { scheduleMode: mode, schedules: [season] } : withMode(draft, mode, 30, 0)) }
+}
+
+/**
+ * Picking "Transfer or transport": the rows become vehicles (a car and a
+ * van; the ones there are set aside), guests are collected, it is filed
+ * under Transfers, books 12 hours ahead, offers tips and has no waiver.
+ */
+export function transferPick(draft: ActivityDraft): Partial<ActivityDraft> {
+  const settings = normalizeKindSettings(draft.kindSettings)
+  const t = settings.transfer
+  // Back from another kind: the vehicles (or tickets) it had, with their numbers and prices; else a car and a van.
+  const rows = t.kept && t.kept.length > 0 ? { tiers: t.kept, vehicles: {} } : starterRows(t.service, [...draft.tiers, ...(draft.otherTiers ?? [])])
+  // Its run times or hours too, when the schedule wasn't touched while away.
+  const kept = t.keptSchedule && JSON.stringify(t.keptSchedule.left) === JSON.stringify(scheduleOfDraft(draft)) ? (t.keptSchedule.before as KeptSchedule) : null
+  return {
+    kind: 'transfer',
+    ...(kept ? { scheduleMode: kept.scheduleMode, schedules: kept.schedules, schedule: { ...draft.schedule, mode: kept.mode } } : transferSchedule(draft, t.service)),
+    tiers: rows.tiers,
+    otherTiers: draft.tiers,
+    chargeBy: null,
+    privateOption: { ...draft.privateOption, enabled: false },
+    kindSettings: { ...settings, transfer: { ...t, vehicles: { ...t.vehicles, ...rows.vehicles }, setAside: t.kept && t.kept.length > 0 ? (t.setAside ?? null) : null, kept: null, keptSchedule: null } },
+    arrivalMode: 'pickup',
+    theme: 'transfers',
+    noticeHours: draft.noticeHours > 0 ? draft.noticeHours : 12,
+    tips: true,
+    waiverId: null,
+    ...(t.service === 'shared' && draft.maxCapacity < 1 ? { maxCapacity: 14 } : {}),
+  }
+}
+
+/** Leaving a transfer for another kind: the rows set aside come back (or one first ticket), the arrival and schedule follow the new kind. */
+export function transferLeave(draft: ActivityDraft, next: ActivityKind): Partial<ActivityDraft> {
+  const back = draft.otherTiers && draft.otherTiers.length > 0 ? draft.otherTiers : [{ ...blankTier(STARTER_LABEL[next], 14900, draft.tiers), minQuantity: next === 'rental' ? 0 : 1 }]
+  const arrival: ArrivalMode = next === 'pass' || next === 'rental' || next === 'activity' || next === 'package' ? 'venue' : 'meet'
+  const schedule = isStarterSchedule(draft.schedules)
+    ? (({ scheduleMode, schedules }) => ({ scheduleMode, schedules }))(defaultScheduleDraft(next))
+    : draft.scheduleMode === 'dates' || draft.scheduleMode === modeForKind(next)
+      ? {}
+      : withMode(draft, modeForKind(next), 30, closingGapOf({ kind: next, durationMinutes: draft.durationMinutes }))
+  const settings = normalizeKindSettings(draft.kindSettings)
+  const nextMode = ACTIVITY_KIND_META[next].defaultFormat === 'open' ? 'hours' : 'times'
+  const left = scheduleOfDraft({ ...draft, ...schedule, schedule: { ...draft.schedule, mode: nextMode } })
+  return {
+    tiers: back,
+    otherTiers: null,
+    chargeBy: null,
+    arrivalMode: arrival,
+    // The vehicles (or tickets) and the schedule are kept, so picking a transfer again brings them back with their prices and times.
+    kindSettings: { ...settings, transfer: { ...settings.transfer, kept: draft.tiers, keptSchedule: { before: scheduleOfDraft(draft), left } } },
+    ...(draft.theme === 'transfers' ? { theme: defaultTheme(draft.category) } : {}),
+    ...schedule,
+  }
+}
+
+/**
+ * Switching what a transfer runs. Private and by the hour share their
+ * vehicles; a shared shuttle sells tickets, so crossing to or from it swaps
+ * the rows (the others are set aside and come back on the way back), its
+ * seats start at 14 and the schedule follows (hours driven, or set runs).
+ */
+export function transferService(draft: ActivityDraft, service: TransferService): Partial<ActivityDraft> {
+  const settings = normalizeKindSettings(draft.kindSettings)
+  const t = settings.transfer
+  if (service === t.service) return {}
+  const crossing = (service === 'shared') !== (t.service === 'shared')
+  if (!crossing) return { kindSettings: { ...settings, transfer: { ...t, service } } }
+  const rows = t.setAside && t.setAside.length > 0 ? { tiers: t.setAside, vehicles: {} } : starterRows(service, draft.tiers)
+  return {
+    tiers: rows.tiers,
+    kindSettings: { ...settings, transfer: { ...t, service, vehicles: { ...t.vehicles, ...rows.vehicles }, setAside: draft.tiers } },
+    ...transferSchedule(draft, service),
+    ...(service === 'shared' ? { maxCapacity: 14, spotsByWeekday: null } : { spotsByWeekday: null }),
+  }
+}
+
 function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOptions = [] }: StepProps & { tenantSlug?: string; packageOptions?: PackageOption[] }) {
   const dining = isDining(draft)
   const kind = draft.kind ?? 'trip'
   const settings = normalizeKindSettings(draft.kindSettings)
   const pickKind = (next: ActivityKind) => {
+    if (next === 'transfer') return patch(transferPick(draft))
+    if (kind === 'transfer') {
+      // Leaving a transfer: the rows set aside when it was picked come back (or a first ticket), and its starting schedule gives way.
+      const left = transferLeave(draft, next)
+      const mode = ACTIVITY_KIND_META[next].defaultFormat === 'open' ? 'hours' : 'times'
+      return patch({ ...left, kind: next, schedule: { ...draft.schedule, mode }, ...repriceDraft({ ...draft, ...left, kind: 'trip' }, { kind: next, chargeBy: null }, sharedKind.current) })
+    }
     const mode = ACTIVITY_KIND_META[next].defaultFormat === 'open' ? 'hours' : 'times'
     const arrival: ArrivalMode = next === 'pass' || next === 'rental' || next === 'activity' || next === 'package' ? 'venue' : 'meet'
     patch({
@@ -2859,7 +3092,7 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
         }
       >
         <Input
-          placeholder={dining ? 'Sunset Tasting Menu on the Terrace' : kind === 'rental' ? 'Island Jeep Rental' : kind === 'charter' ? 'Private Sunset Sail' : kind === 'lesson' ? 'Beginner Surf Lesson' : kind === 'pass' ? 'Beach Club Day Pass' : kind === 'activity' ? 'Upcountry Horseback Ride' : 'Molokini Crater Dawn Patrol'}
+          placeholder={dining ? 'Sunset Tasting Menu on the Terrace' : kind === 'transfer' ? 'Airport Private Transfer' : kind === 'rental' ? 'Island Jeep Rental' : kind === 'charter' ? 'Private Sunset Sail' : kind === 'lesson' ? 'Beginner Surf Lesson' : kind === 'pass' ? 'Beach Club Day Pass' : kind === 'activity' ? 'Upcountry Horseback Ride' : 'Molokini Crater Dawn Patrol'}
           value={draft.name}
           onChange={(event) => patch({ name: event.target.value })}
         />
@@ -2909,7 +3142,16 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
           }}
         />
       ) : null}
-      {dining || isTimedKind(kind) || kind === 'package' ? null : (
+      {kind === 'transfer' && !dining ? (
+        <TransferFields
+          value={settings.transfer}
+          tiers={draft.tiers}
+          onChange={(transfer, tiers) => patch({ kindSettings: { ...settings, transfer }, ...(tiers ? { tiers } : {}) })}
+          onService={(service) => patch(transferService(draft, service))}
+          errors={errors}
+        />
+      ) : null}
+      {dining || isTimedKind(kind) || kind === 'package' || kind === 'transfer' ? null : (
         <KindFields
           kind={kind}
           settings={settings}
@@ -2935,15 +3177,18 @@ function CrewPicker({
   selected,
   onChange,
   dining,
+  title = 'Who leads it',
 }: {
   crew: WizardCrewMember[]
   selected: string[]
   onChange: (ids: string[]) => void
   dining: boolean
+  /** "Drivers" for transfers. */
+  title?: string
 }) {
   return (
     <section className="mt-6 border-t border-line-subtle pt-6">
-      <p className="text-[0.8125rem] font-medium">Who leads it</p>
+      <p className="text-[0.8125rem] font-medium">{title}</p>
       <p className="mt-0.5 mb-2.5 text-xs text-muted">
         Put on every {dining ? 'service' : 'time slot'} by default and shown on the guest list. Change it for any
         single day from the calendar.
@@ -3067,8 +3312,9 @@ function DescriptionStep({
           description={dining ? undefined : 'Optional, but guests compare on this.'}
           items={draft.included}
           onChange={(included) => patch({ included })}
-          placeholder={copy.includedPlaceholder}
+          placeholder={draft.kind === 'transfer' && !dining ? 'Flight tracking' : copy.includedPlaceholder}
           error={errors.included}
+          suggestions={draft.kind === 'transfer' && !dining ? TRANSFER_INCLUDED : undefined}
         />
         <ListEditor
           legend="Not included"
@@ -3315,11 +3561,13 @@ function ReviewStep({
         ...((draft.kind ?? 'trip') !== 'package' ? [{ label: 'Capacity', value: capacitySummary(draft, currency), step: TOUR_STEP_INDEX.schedule }] : []),
         ...(suggestsWhenFull(draft) && !isUnscheduled(draft) ? [{ label: 'When full', value: soldOutSummary(cleanSoldOut(draft.soldOut), suggestOptions), step: TOUR_STEP_INDEX.schedule }] : []),
         { label: 'Highlights', value: `${draft.highlights.filter(Boolean).length} bullets`, step: TOUR_STEP_INDEX.description },
-        {
-          label: draft.arrivalMode === 'meet' ? 'Meeting point' : draft.arrivalMode === 'venue' ? 'Venue' : 'Arrival',
-          value: draft.meetingPoint || 'No fixed place',
-          step: TOUR_STEP_INDEX.guests,
-        },
+        draft.kind === 'transfer'
+          ? { label: 'Pickup', value: draft.meetingPoint || 'From the hotel or address guests give', step: TOUR_STEP_INDEX.guests }
+          : {
+              label: draft.arrivalMode === 'meet' ? 'Meeting point' : draft.arrivalMode === 'venue' ? 'Venue' : 'Arrival',
+              value: draft.meetingPoint || 'No fixed place',
+              step: TOUR_STEP_INDEX.guests,
+            },
         { label: 'Photos', value: `${draft.media.length} ${pluralize(draft.media.length, 'image')}`, step: TOUR_STEP_INDEX.media },
         {
           label: 'Pricing',
@@ -3380,11 +3628,14 @@ function ReviewStep({
           value: departures.toString(),
           icon: CalendarClock,
         },
-        {
-          label: `${seatsFor(draft).many.charAt(0).toUpperCase()}${seatsFor(draft).many.slice(1)} it can take · next 14 days`,
-          value: seats.toString(),
-          icon: Users,
-        },
+        // Private rides and drivers count vehicles, each out for a ride at a time: the fleet, not a sum over every half hour.
+        draft.kind === 'transfer' && seatsFor(draft).one === 'vehicle'
+          ? { label: 'Vehicles', value: seatsFor(draft).capacity.toString(), icon: Users }
+          : {
+              label: `${seatsFor(draft).many.charAt(0).toUpperCase()}${seatsFor(draft).many.slice(1)} it can take · next 14 days`,
+              value: seats.toString(),
+              icon: Users,
+            },
         { label: 'Lead price', value: formatCurrency(fromPrice, currency), icon: Tag },
       ]
 

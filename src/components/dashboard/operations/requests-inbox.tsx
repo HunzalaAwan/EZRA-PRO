@@ -19,7 +19,9 @@ import { useCharterRequests } from '@/hooks/use-charter-requests'
 import { ACTIVITY_KIND_META } from '@/lib/activity-kinds'
 import { REASON_LABEL } from '@/lib/booking-method'
 import { cn, formatCurrency, formatDateLong, formatRelative, formatTime } from '@/lib/utils'
-import type { ActivityKind, CharterRequest, CharterRequestStatus, CurrencyCode } from '@/types'
+import { directionLabel } from '@/lib/transfers'
+import { hhmm, partyLine } from '@/lib/transfer-changes'
+import type { ActivityKind, CharterRequest, CharterRequestStatus, CurrencyCode, TransferBookingDetails } from '@/types'
 
 /* ==========================================================================
    CUSTOM REQUESTS
@@ -50,6 +52,26 @@ type Filter = 'all' | CharterRequestStatus
 type Source = 'all' | 'request' | 'invoice'
 
 const sourceOf = (request: CharterRequest) => request.source ?? 'request'
+
+/** "Cancun International Airport (CUN)" → "CUN": a hub by its code when it has one. */
+const placeShort = (text: string) => /\(([A-Z0-9]{2,5})\)\s*$/.exec(text)?.[1] ?? text
+
+/**
+ * A ride asked for, in one line: "Arrival · CUN → Grand Hyatt Playa del Carmen · 4 passengers · 4 suitcases ·
+ * AA 1234 lands Oct 31 14:35 · Private van".
+ */
+export function rideRequestLine(details: TransferBookingDetails, tiers: { id: string; label: string }[] = []): string {
+  const first = details.legs[0]
+  const way = details.trip === 'round_trip' ? 'Round trip' : directionLabel(first?.direction ?? (details.trip === 'hourly' ? 'hourly' : 'between'))
+  const route = first && (first.from || first.to) ? `${placeShort(first.from) || '…'} → ${placeShort(first.to) || '…'}` : details.place
+  const day = (iso: string) => new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(iso))
+  const flights = details.legs.flatMap((leg) => (leg.flight ? [`${leg.flight.number} ${leg.direction === 'to_hub' ? 'takes off' : 'lands'} ${day(leg.flight.at)} ${hhmm(leg.flight.at)}`] : []))
+  const vehicles = details.vehicles.map((line) => {
+    const name = tiers.find((tier) => tier.id === line.tierId)?.label ?? 'Vehicle'
+    return line.qty > 1 ? `${line.qty} × ${name}` : name
+  })
+  return [way, route, partyLine(details), ...(details.hours ? [`${details.hours} hours`] : []), ...flights, ...vehicles].filter(Boolean).join(' · ')
+}
 
 export function RequestsInbox({
   tenantId,
@@ -261,6 +283,12 @@ export function RequestsInbox({
                 </div>
               </div>
             </dl>
+
+            {selected.transfer ? (
+              <p className="mt-4 rounded-xl border border-line px-4 py-3 text-sm font-medium text-foreground">
+                {rideRequestLine(selected.transfer, activityOf(selected.activitySlug)?.tiers)}
+              </p>
+            ) : null}
 
             {selected.message ? (
               <blockquote className="mt-4 rounded-xl bg-surface-sunken px-4 py-3 text-sm leading-relaxed text-foreground">{selected.message}</blockquote>

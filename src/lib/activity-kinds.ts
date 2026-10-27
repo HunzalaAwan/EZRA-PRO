@@ -1,6 +1,7 @@
 import type { Activity, ActivityFormat, ActivityKind, ActivityTheme, RentalCategory, RentalConfig, RouteInfo } from '@/types'
 import { formatDuration } from '@/lib/utils'
 import { privateMostOf, type SpotsSource } from '@/lib/extra-spots'
+import { biggestVehicle, serviceOf, transferUnit } from '@/lib/transfers'
 
 /* ==========================================================================
    Activity kinds — what an operator is selling. One niche (Tours &
@@ -16,7 +17,7 @@ export interface ActivityKindMeta {
   /** One line for the wizard's picker. */
   hint: string
   examples: string
-  icon: 'Route' | 'Zap' | 'Anchor' | 'KeyRound' | 'GraduationCap' | 'Ticket' | 'Layers'
+  icon: 'Route' | 'Zap' | 'Anchor' | 'KeyRound' | 'GraduationCap' | 'Ticket' | 'Layers' | 'Car'
   /** What a single bookable instance is called. */
   unit: string
   units: string
@@ -26,7 +27,7 @@ export interface ActivityKindMeta {
   defaultFormat: ActivityFormat
 }
 
-export const ACTIVITY_KINDS: ActivityKind[] = ['trip', 'activity', 'charter', 'rental', 'lesson', 'pass', 'package']
+export const ACTIVITY_KINDS: ActivityKind[] = ['trip', 'activity', 'charter', 'rental', 'lesson', 'pass', 'package', 'transfer']
 
 /**
  * Group activity, activity and private charter are set up the same way, so
@@ -117,6 +118,17 @@ export const ACTIVITY_KIND_META: Record<ActivityKind, ActivityKindMeta> = {
     booksBy: 'A time for each activity inside it',
     defaultFormat: 'departures',
   },
+  transfer: {
+    label: 'Transfer or transport',
+    short: 'Transfer',
+    hint: 'Rides from one place to another, priced per vehicle or per seat.',
+    examples: 'Airport transfers, shuttles, private drivers, port runs',
+    icon: 'Car',
+    unit: 'ride',
+    units: 'rides',
+    booksBy: 'A vehicle, or seats, for a ride',
+    defaultFormat: 'open',
+  },
 }
 
 export const LESSON_LEVELS = [
@@ -175,8 +187,9 @@ export const FUEL_LABEL: Record<NonNullable<RentalConfig['fuel']>, string> = {
 export const isDayRental = (activity: Pick<Activity, 'kind' | 'rental'>) =>
   (activity.kind ?? 'trip') === 'rental' && (activity.rental?.modes ? activity.rental.modes.length === 1 && activity.rental.modes[0] === 'day' : activity.rental?.billing === 'day')
 
-/** "2 jet skis", "6 guests", "1 vehicle": what a booking of this kind is counted in. */
+/** "2 jet skis", "6 guests", "1 vehicle", "4 passengers": what a booking of this kind is counted in. */
 export function partyLabel(activity: Pick<Activity, 'kind' | 'rental'>, count: number): string {
+  if (activity.kind === 'transfer') return `${count} ${count === 1 ? 'passenger' : 'passengers'}`
   if ((activity.kind ?? 'trip') === 'rental') {
     if ((activity.rental?.items?.length ?? 0) > 0) return `${count} ${count === 1 ? 'item' : 'items'}`
     const meta = rentalCategoryMeta(activity.rental?.category)
@@ -198,9 +211,15 @@ const privateMost = (activity: SpotsSource) => privateMostOf(activity)
 
 /** The chip on a storefront card: what it is at a glance. */
 export function kindChipLabel(
-  activity: Pick<Activity, 'kind' | 'durationMinutes' | 'maxCapacity' | 'rental' | 'charter' | 'lesson' | 'pass' | 'package'> & Partial<Pick<Activity, 'chargeBy' | 'groupPrice' | 'extraSpots'>>,
+  activity: Pick<Activity, 'kind' | 'durationMinutes' | 'maxCapacity' | 'rental' | 'charter' | 'lesson' | 'pass' | 'package'> & Partial<Pick<Activity, 'chargeBy' | 'groupPrice' | 'extraSpots' | 'transfer'>>,
 ): string {
   switch (activity.kind ?? 'trip') {
+    case 'transfer': {
+      const service = serviceOf(activity)
+      if (service === 'shared') return 'Shared shuttle'
+      if (service === 'hourly') return `Driver · from ${activity.transfer?.minHours ?? 1}h`
+      return 'Private · per vehicle'
+    }
     case 'rental': {
       const modes = activity.rental?.modes
       if (modes && modes.length > 1) return 'Rental · by the hour or day'
@@ -238,6 +257,8 @@ const DIFFICULTY_WORD: Record<Activity['difficulty'], string> = {
 /** The badge on a listing: difficulty for a trip, what it is for everything else. */
 export function kindBadge(activity: Pick<Activity, 'kind' | 'difficulty' | 'rental' | 'lesson' | 'pass'>): string {
   switch (activity.kind ?? 'trip') {
+    case 'transfer':
+      return 'Transfer'
     case 'rental':
       return 'Rental'
     case 'activity':
@@ -257,10 +278,19 @@ export function kindBadge(activity: Pick<Activity, 'kind' | 'difficulty' | 'rent
 
 /** Two or three short facts for a listing card, in the kind's own terms. Age only when one is set. */
 export function kindCardFacts(
-  activity: Pick<Activity, 'kind' | 'difficulty' | 'maxCapacity' | 'minAge' | 'rental' | 'charter' | 'lesson' | 'pass' | 'route' | 'package'> & Partial<Pick<Activity, 'chargeBy' | 'groupPrice' | 'extraSpots'>>,
+  activity: Pick<Activity, 'kind' | 'difficulty' | 'maxCapacity' | 'minAge' | 'rental' | 'charter' | 'lesson' | 'pass' | 'route' | 'package'> &
+    Partial<Pick<Activity, 'chargeBy' | 'groupPrice' | 'extraSpots' | 'transfer' | 'priceTiers' | 'schedules' | 'locations'>>,
 ): string[] {
   const age = activity.minAge > 0 ? [`Ages ${activity.minAge}+`] : []
   switch (activity.kind ?? 'trip') {
+    case 'transfer': {
+      const service = serviceOf(activity)
+      const most = biggestVehicle({ kind: activity.kind, transfer: activity.transfer, priceTiers: activity.priceTiers ?? [] }) || activity.maxCapacity
+      if (service === 'shared') return ['Per seat', `${sharedRunsADay(activity)} runs a day`]
+      if (service === 'hourly') return [`From ${activity.transfer?.minHours ?? 1} hours`, `Up to ${most} passengers`]
+      const code = activity.transfer?.hub?.code?.trim()
+      return ['Price per vehicle', `Up to ${most} per vehicle`, ...(code ? [code] : [])]
+    }
     case 'activity':
       return [`${activity.maxCapacity} per slot`, activity.route ? routeLabel(activity.route) : DIFFICULTY_WORD[activity.difficulty], ...age]
     case 'rental': {
@@ -286,15 +316,36 @@ export function kindCardFacts(
   }
 }
 
+/** A shared shuttle's runs a day: its run times (either way), else the most start times of its first season, else its base's. */
+function sharedRunsADay(activity: Partial<Pick<Activity, 'transfer' | 'schedules' | 'locations'>>): number {
+  const shared = activity.transfer?.shared
+  if (shared) return new Set([...shared.fromHubTimes, ...shared.toHubTimes]).size
+  const season = activity.schedules?.[0]
+  if (season?.mode === 'times') return Math.max(0, ...Object.values(season.days ?? {}).map((times) => new Set(times).size))
+  return activity.locations?.[0]?.times.length ?? 0
+}
+
 /**
  * The "good to know" line on the detail page for kinds that have no difficulty.
  * Says only what the activity sets: an age when there is one, never "All ages".
  * Height and weight limits show in the Requirements section.
  */
-export function kindNote(activity: Pick<Activity, 'kind' | 'minAge' | 'maxCapacity' | 'rental' | 'charter' | 'lesson' | 'pass' | 'ride' | 'difficulty' | 'package'>): { title: string; body: string } | null {
+export function kindNote(
+  activity: Pick<Activity, 'kind' | 'minAge' | 'maxCapacity' | 'rental' | 'charter' | 'lesson' | 'pass' | 'ride' | 'difficulty' | 'package'> & Partial<Pick<Activity, 'transfer'>>,
+): { title: string; body: string } | null {
   const age = activity.minAge > 0 ? `Minimum age ${activity.minAge}.` : null
   const join = (parts: (string | null | undefined | false)[]) => parts.filter(Boolean).join(' ')
   switch (activity.kind ?? 'trip') {
+    case 'transfer': {
+      const service = serviceOf(activity)
+      if (service === 'shared') return { title: 'Shared shuttle.', body: 'You share the ride with other guests. Be at the meeting point 10 minutes early.' }
+      if (service === 'hourly') return { title: 'By the hour.', body: 'The driver is yours for the hours you book. Extra time is charged by the hour.' }
+      const config = activity.transfer
+      const wait = Math.max(0, config?.freeWaitMinutes ?? 60)
+      const waitWords = wait === 60 ? 'an hour' : wait % 60 === 0 ? `${wait / 60} hours` : `${wait} minutes`
+      const hub = Boolean(config?.hub?.name?.trim())
+      return { title: 'Private.', body: join(['Only your group in the vehicle.', hub && wait > 0 ? `We track your flight and wait ${waitWords} after it lands, free.` : null]) }
+    }
     case 'activity':
       return { title: `${DIFFICULTY_WORD[activity.difficulty]}.`, body: join([age, 'Arrive 15 minutes before your time slot.']) }
     case 'rental': {
@@ -339,6 +390,7 @@ export const STOREFRONT_GROUPS: Record<ActivityKind, { label: string; blurb: str
   lesson: { label: 'Lessons & courses', blurb: 'Coached, with a level and a small class.' },
   pass: { label: 'Passes & tickets', blurb: 'Entry for the day. Come and go.' },
   package: { label: 'Packages & combos', blurb: 'More than one activity, one booking, a better price.' },
+  transfer: { label: 'Transfers & transport', blurb: 'Rides to and from the airport, and drivers by the hour.' },
 }
 
 /**
@@ -346,8 +398,9 @@ export const STOREFRONT_GROUPS: Record<ActivityKind, { label: string; blurb: str
  * the activity charges: a private one per group (its own way) or per person,
  * a shared one per person or, with a group price, per group.
  */
-export function priceUnit(activity: Pick<Activity, 'kind' | 'rental'> & Partial<Pick<Activity, 'chargeBy' | 'groupPrice'>>): string {
+export function priceUnit(activity: Pick<Activity, 'kind' | 'rental'> & Partial<Pick<Activity, 'chargeBy' | 'groupPrice' | 'transfer'>>): string {
   const kind = activity.kind ?? 'trip'
+  if (kind === 'transfer') return transferUnit(activity)
   if (kind === 'rental') return `per ${rentalCategoryMeta(activity.rental?.category).unit}${activity.rental?.billing === 'day' ? ' a day' : ''}`
   if (kind === 'charter') return activity.chargeBy === 'person' ? 'per person' : 'per group'
   if (activity.chargeBy === 'group' && activity.groupPrice) return 'per group'
@@ -390,6 +443,7 @@ export function defaultTheme(vertical: string): ActivityTheme {
 export function themeOf(activity: Pick<Activity, 'theme' | 'slug' | 'kind' | 'rental' | 'category'>): ActivityTheme {
   if (activity.theme) return activity.theme
   const slug = activity.slug
+  if (activity.kind === 'transfer') return 'transfers'
   if (activity.kind === 'pass') return 'attractions'
   if (activity.kind === 'rental') {
     const category = activity.rental?.category

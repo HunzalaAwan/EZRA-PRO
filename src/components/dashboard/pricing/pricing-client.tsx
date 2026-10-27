@@ -45,7 +45,8 @@ import {
   type RuleKind,
 } from '@/lib/pricing'
 import { cn, formatCurrency, formatDateLong, pluralize } from '@/lib/utils'
-import type { Activity, CurrencyCode } from '@/types'
+import type { Activity, CurrencyCode, TransferConfig, TransferTrip } from '@/types'
+import { activeZones, biggestVehicle, planVehicles, transferOf, transferRateFor, tripLabel, tripsOffered, type TransferPricing } from '@/lib/transfers'
 
 /* ==========================================================================
    PRICING
@@ -223,8 +224,9 @@ function RulesTab({ pricing, tenantSlug, activities, currency, nowIso, peaks, fi
 export function checkPrice(
   activity: Activity,
   count: number,
-  ctx: { startsAt: string; nowIso: string; rules: PricingRule[]; multiplier?: number; capacity?: number; booked?: number },
+  ctx: { startsAt: string; nowIso: string; rules: PricingRule[]; multiplier?: number; capacity?: number; booked?: number; transfer?: TransferPricing },
 ): { result: PriceBookingResult; before: number } | { result?: undefined; most: number; spotsLeft?: boolean } | null {
+  if (activity.kind === 'transfer') return checkTransferPrice(activity, count, ctx)
   // A private group priced per group books one option for the party; per person it books a ticket for each guest.
   const options = (activity.kind ?? 'trip') === 'charter' && !privatePerPerson(activity)
   const kind = activity.kind ?? 'trip'
@@ -256,6 +258,46 @@ export function checkPrice(
   return { result, before: result.ticketLines.reduce((sum, line) => sum + line.baseUnitPrice * line.quantity, 0) }
 }
 
+/** A transfer's first trip and destination to check: an arrival to its first destination, or a driver for the fewest hours. */
+export function defaultTransferPricing(config: TransferConfig): TransferPricing | undefined {
+  if (config.service === 'hourly') return { trip: 'hourly', hours: Math.max(1, config.minHours ?? 1) }
+  const zone = activeZones(config).find((entry) => entry.name.trim())
+  const trips = tripsOffered(config)
+  const trip = trips.includes('from_hub') ? 'from_hub' : trips[0]
+  if (!zone || !trip) return undefined
+  return trip === 'between' ? { trip, zoneId: zone.id, toZoneId: zone.id } : { trip, zoneId: zone.id }
+}
+
+/**
+ * A transfer as the storefront prices it: the cheapest vehicles that carry
+ * the passengers (a suitcase each), from the price table at that trip and
+ * destination; a shuttle a lead ticket each, up to the seats left on the run.
+ * Too many for one booking gets no price, only the most there can be.
+ */
+function checkTransferPrice(
+  activity: Activity,
+  count: number,
+  ctx: { startsAt: string; nowIso: string; rules: PricingRule[]; multiplier?: number; capacity?: number; booked?: number; transfer?: TransferPricing },
+): { result: PriceBookingResult; before: number } | { result?: undefined; most: number; spotsLeft?: boolean } | null {
+  const config = transferOf(activity)
+  const pricing = config ? (ctx.transfer ?? defaultTransferPricing(config)) : undefined
+  if (!config || !pricing) return null
+  let lines: { tierId: string; qty: number }[]
+  if (config.service === 'shared') {
+    const lead = activity.priceTiers.find((tier) => tier.countsTowardCapacity && (transferRateFor(config, tier.id, pricing) ?? 0) > 0)
+    if (!lead) return null
+    const left = ctx.capacity !== undefined ? Math.max(0, ctx.capacity - Math.max(0, ctx.booked ?? 0)) : Number.POSITIVE_INFINITY
+    if (count > left) return { most: left, spotsLeft: true }
+    lines = [{ tierId: lead.id, qty: count }]
+  } else {
+    const plan = planVehicles(activity, { passengers: count, bags: count }, pricing)
+    if (!plan.best) return { most: Math.max(1, biggestVehicle(activity) * Math.max(1, config.maxVehicles ?? 4)) }
+    lines = plan.best.lines.map((line) => ({ tierId: line.tierId, qty: line.qty }))
+  }
+  const result = priceBooking({ activity, lines, startsAt: ctx.startsAt, nowIso: ctx.nowIso, businessRules: ctx.rules, priceMultiplier: ctx.multiplier, party: count, transfer: pricing })
+  return { result, before: result.ticketLines.reduce((sum, line) => sum + line.baseUnitPrice * line.quantity, 0) }
+}
+
 function PriceCheck({ tenantSlug, activities, currency, nowIso, rules, peaks, fills, focusSlug }: { tenantSlug: string; activities: PricingActivity[]; currency: CurrencyCode; nowIso: string; rules: PricingRule[]; peaks: Record<string, number>; fills?: Record<string, SlotFill>; /** The activity the rules list is showing: the check follows it. */ focusSlug?: string }) {
   const overrides = useActivityOverrides()
   const { defaults } = useBookingDefaults(tenantSlug)
@@ -266,6 +308,8 @@ function PriceCheck({ tenantSlug, activities, currency, nowIso, rules, peaks, fi
   const [dateKey, setDateKey] = React.useState(() => shiftDayKey(todayKey, 35))
   const [picked, setPicked] = React.useState('')
   const [count, setCount] = React.useState(2)
+  // A transfer is priced at a trip and destination (a driver: for some hours).
+  const [ride, setRide] = React.useState<{ trip?: TransferTrip; zoneId?: string; hours?: number }>({})
   React.useEffect(() => {
     if (focusSlug) setSlug(focusSlug)
   }, [focusSlug])
@@ -285,6 +329,20 @@ function PriceCheck({ tenantSlug, activities, currency, nowIso, rules, peaks, fi
     }
   }, [edited, dateKey, validDay, defaults])
   const times = React.useMemo(() => [...new Set(slots.map((slot) => slot.time))].sort(), [slots])
+  // A transfer's trip, destination and hours: what was picked while it is still sold, else its first.
+  const rideConfig = edited ? transferOf(edited) : undefined
+  const ridePricing = React.useMemo<TransferPricing | undefined>(() => {
+    if (!rideConfig) return undefined
+    const first = defaultTransferPricing(rideConfig)
+    if (!first || rideConfig.service === 'hourly') {
+      const min = Math.max(1, rideConfig.minHours ?? 1)
+      const max = Math.max(min, rideConfig.maxHours ?? min)
+      return first ? { ...first, hours: Math.min(max, Math.max(min, ride.hours ?? first.hours ?? min)) } : undefined
+    }
+    const trip = ride.trip && tripsOffered(rideConfig).includes(ride.trip) ? ride.trip : first.trip
+    const zoneId = activeZones(rideConfig).some((zone) => zone.id === ride.zoneId) ? ride.zoneId : first.zoneId
+    return trip === 'between' ? { trip, zoneId, toZoneId: zoneId } : { trip, zoneId }
+  }, [rideConfig, ride])
   const time = times.includes(picked) ? picked : (times[0] ?? '')
 
   // How full the time slot is, for filling-up and quiet-time changes and the extra spots: the seeded spots and
@@ -315,13 +373,14 @@ function PriceCheck({ tenantSlug, activities, currency, nowIso, rules, peaks, fi
       // That day's own extra spots and a private group's size, as the storefront sells them.
       const daySlot = slots.find((entry) => entry.time === time)
       const priced = applyPricingOverride(seeded, override)
-      return checkPrice(daySlot ? forSlot(priced, { capacity: fill?.capacity, ...slotNumbersOf(daySlot) }) : priced, count, { startsAt: `${dateKey}T${time || '12:00'}:00`, nowIso, rules: checked, multiplier, capacity: fill?.capacity, booked: fill?.booked })
+      return checkPrice(daySlot ? forSlot(priced, { capacity: fill?.capacity, ...slotNumbersOf(daySlot) }) : priced, count, { startsAt: `${dateKey}T${time || '12:00'}:00`, nowIso, rules: checked, multiplier, capacity: fill?.capacity, booked: fill?.booked, ...(ridePricing ? { transfer: ridePricing } : {}) })
     } catch {
       return null
     }
-  }, [seeded, override, validDay, dateKey, time, count, nowIso, rules, peaks, slug, fill, slots])
+  }, [seeded, override, validDay, dateKey, time, count, nowIso, rules, peaks, slug, fill, slots, ridePricing])
 
-  const unit = seeded?.kind === 'rental' ? 'items' : 'guests'
+  const unit = seeded?.kind === 'rental' ? 'items' : seeded?.kind === 'transfer' ? 'passengers' : 'guests'
+  const unitOne = unit === 'items' ? 'item' : unit === 'passengers' ? 'passenger' : 'guest'
   const money = (value: number) => formatCurrency(value, currency)
 
   return (
@@ -350,14 +409,48 @@ function PriceCheck({ tenantSlug, activities, currency, nowIso, rules, peaks, fi
             </SelectContent>
           </Select>
         </div>
-        <Input type="number" min={1} max={99} value={count} suffix={pluralize(count, unit === 'items' ? 'item' : 'guest')} onChange={(e) => setCount(Math.min(99, Math.max(1, Math.floor(Number(e.target.value)) || 1)))} aria-label={unit === 'items' ? 'Items' : 'Guests'} />
+        {rideConfig && ridePricing ? (
+          rideConfig.service === 'hourly' ? (
+            <Input
+              type="number"
+              min={rideConfig.minHours ?? 1}
+              max={rideConfig.maxHours ?? 24}
+              value={ridePricing.hours ?? 1}
+              suffix="hours"
+              aria-label="Hours"
+              onChange={(e) => setRide({ ...ride, hours: Math.max(1, Math.floor(Number(e.target.value)) || 1) })}
+            />
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              <Select value={ridePricing.trip} onValueChange={(trip) => setRide({ ...ride, trip: trip as TransferTrip })}>
+                <SelectTrigger aria-label="Trip"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {tripsOffered(rideConfig).map((trip) => (
+                    <SelectItem key={trip} value={trip}>{tripLabel(trip, rideConfig.hub)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={ridePricing.zoneId ?? ''} onValueChange={(zoneId) => setRide({ ...ride, zoneId })}>
+                <SelectTrigger aria-label="Destination"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {activeZones(rideConfig)
+                    .filter((zone) => zone.name.trim())
+                    .map((zone) => (
+                      <SelectItem key={zone.id} value={zone.id}>{zone.name}</SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )
+        ) : null}
+        <Input type="number" min={1} max={99} value={count} suffix={pluralize(count, unitOne)} onChange={(e) => setCount(Math.min(99, Math.max(1, Math.floor(Number(e.target.value)) || 1)))} aria-label={unit.charAt(0).toUpperCase() + unit.slice(1)} />
         {check && !check.result ? (
           <p className="rounded-xl bg-surface-sunken px-4 py-3 text-sm font-medium text-danger">
             {check.spotsLeft
               ? check.most > 0
                 ? `Only ${check.most} ${pluralize(check.most, 'spot')} left at this time`
                 : 'No spots left at this time'
-              : `Up to ${check.most} ${pluralize(check.most, 'guest')} per booking`}
+              : `Up to ${check.most} ${pluralize(check.most, unitOne)} per booking`}
           </p>
         ) : check?.result ? (
           <div className="rounded-xl bg-surface-sunken px-4 py-3 text-sm">

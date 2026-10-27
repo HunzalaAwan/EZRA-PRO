@@ -145,9 +145,9 @@ export function NewDepartureDialog({
 }: NewDepartureDialogProps) {
   const router = useRouter()
 
-  // Packages have no times of their own: they book onto their activities' times.
+  // Packages have no times of their own: they book onto their activities' times. Transfers run on rides, not added time slots.
   const seeded = React.useMemo(
-    () => getActivitiesByTenant(tenantId).filter((activity) => activity.status !== 'archived' && activity.kind !== 'package'),
+    () => getActivitiesByTenant(tenantId).filter((activity) => activity.status !== 'archived' && activity.kind !== 'package' && activity.kind !== 'transfer'),
     [tenantId],
   )
   const overrides = useActivityOverrides()

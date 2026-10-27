@@ -1,6 +1,7 @@
 'use client'
 
 import { categoryLabel, themeLabel, themeOf } from '@/lib/activity-kinds'
+import { transferCapacityLabel } from './transfer-draft'
 import * as React from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
@@ -228,7 +229,8 @@ export function ActivityTable({
         defaultSortDir: 'desc',
         cell: ({ activity }) => (
           <span className="text-muted">
-            {activity.minParticipants}–{activity.maxCapacity}
+            {/* A transfer counts vehicles (a shuttle: seats per run), not guests. */}
+            {transferCapacityLabel(activity) ?? `${activity.minParticipants}–${activity.maxCapacity}`}
           </span>
         ),
       },

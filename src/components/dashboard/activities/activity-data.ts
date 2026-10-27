@@ -703,11 +703,11 @@ export function getActivityDetail(activityId: string): ActivityDetailData | unde
   return detail
 }
 
-/** The business's activities a package can be built from: everything but other packages. */
+/** The business's activities a package can be built from: everything but other packages and transfers (a ride has no set time slot to join). */
 export function packageOptionsFor(tenantId: string) {
   const sites = getLocationsByTenant(tenantId)
   return getActivitiesByTenant(tenantId)
-    .filter((activity) => activity.kind !== 'package' && activity.status !== 'archived')
+    .filter((activity) => activity.kind !== 'package' && activity.kind !== 'transfer' && activity.status !== 'archived')
     .map((activity) => ({
       id: activity.id,
       name: activity.name,
@@ -719,10 +719,10 @@ export function packageOptionsFor(tenantId: string) {
     }))
 }
 
-/** The business's live activities a fully booked one can suggest: everything but packages and dining. */
+/** The business's live activities a fully booked one can suggest: everything but packages, transfers and dining. */
 export function suggestOptionsFor(tenantId: string) {
   return getActivitiesByTenant(tenantId)
-    .filter((activity) => activity.status === 'live' && activity.kind !== 'package' && activity.category !== 'restaurants')
+    .filter((activity) => activity.status === 'live' && activity.kind !== 'package' && activity.kind !== 'transfer' && activity.category !== 'restaurants')
     .map((activity) => {
       const image = activity.media.find((item) => item.isPrimary) ?? activity.media[0]
       return { id: activity.id, name: activity.name, basePrice: activity.basePrice, ...(image ? { image: image.url } : {}) }

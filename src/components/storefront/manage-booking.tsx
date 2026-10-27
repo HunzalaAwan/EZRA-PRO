@@ -5,6 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import {
   CalendarDays,
+  Car,
   CheckCircle2,
   ClipboardList,
   CreditCard,
@@ -12,6 +13,7 @@ import {
   MapPin,
   MessageCircle,
   Minus,
+  Plane,
   Plus,
   Send,
   Users,
@@ -20,7 +22,9 @@ import {
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Field } from '@/components/ui/field'
 import { IconButton } from '@/components/ui/icon-button'
+import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
 import { TicketQr, ticketPayload } from '@/components/ui/ticket-qr'
@@ -46,9 +50,12 @@ import { forSlot } from '@/lib/extra-spots'
 import { usePricingOverride } from '@/hooks/use-pricing-override'
 import { usePricing } from '@/hooks/use-pricing'
 import { extraSpotPrice, groupPriced, guestLimitOf, privatePerPerson, unitPrice, usualSpotsLeft, type PriceContext } from '@/lib/price-engine'
-import { changeBooking, withLedger } from '@/lib/booking-ledger'
+import { changeBooking, changeStartOf, withLedger } from '@/lib/booking-ledger'
 import { changesSummary, hoursLabel, refundFor, splitPayment } from '@/lib/booking-policy'
-import type { Activity, ActivityKind, BookingStatus, CancellationPolicy, ChangeRules, CurrencyCode, GuestQuestion, PaymentTerms, WaiverTemplate } from '@/types'
+import { useTransferHolds } from '@/hooks/use-transfer-holds'
+import { FLIGHT_NUMBER, airlineOf, directionLabel, timeFieldLabels, transferOf, type TransferHold } from '@/lib/transfers'
+import { applyRideEdit, askedTimeOf, flightLine, hhmm, isHubLeg, movedToOf, partyLine, returnTooSoon, rideFits, rideHeadline, type RideEdit } from '@/lib/transfer-changes'
+import type { Activity, ActivityKind, BookingStatus, CancellationPolicy, ChangeRules, CurrencyCode, GuestQuestion, PaymentTerms, TransferBookingDetails, WaiverTemplate } from '@/types'
 
 /* ==========================================================================
    MANAGE BOOKING — the guest's own page, from the link in every message.
@@ -138,6 +145,8 @@ export function ManageBooking(
         days: AvailabilityDay[]
         thread?: InboxThread
         nowIso: string
+        /** Transfers: the ride as booked, and the seeded rides' vehicle holds. */
+        transfer?: { details: TransferBookingDetails; holds: TransferHold[] }
       },
 ) {
   const shell = 'mx-auto w-full max-w-3xl px-4 pb-24 pt-28 sm:px-6'
@@ -190,12 +199,22 @@ export function addGuestsPlan(priced: Activity, ctx: PriceContext, { partySize, 
   return { privateGroup, perGroup, extraEach, pricePerGuest, usual, cost, limit, privateMost, room, priceStops }
 }
 
-function ManageBookingInner({ tenant, booking, guest, activity: given, departure, source, waiver, days: rawDays, thread, nowIso }: InnerProps) {
+/** One leg's fields in "Change flight details". */
+interface RideLegForm {
+  flightNumber: string
+  airline: string
+  /** "HH:MM": the flight's time (hub legs) or the pickup. */
+  time: string
+}
+
+const TIME = /^([01]\d|2[0-3]):[0-5]\d$/
+
+function ManageBookingInner({ tenant, booking, guest, activity: given, departure, source, waiver, days: rawDays, thread, nowIso, transfer }: InnerProps) {
   // Its own cancellation and payment terms, or the business defaults it follows.
   const { defaults: bookingDefaults } = useBookingDefaults(tenant.slug)
   const activity = React.useMemo(() => ({ ...given, ...resolveTerms({ policy: given.policy, payment: given.payment }, bookingDefaults) }), [given, bookingDefaults])
   const [state, update] = useManageState(tenant.slug, booking.reference)
-  const [open, setOpen] = React.useState<'waiver' | 'details' | 'move' | 'guests' | 'cancel' | null>(null)
+  const [open, setOpen] = React.useState<'waiver' | 'details' | 'move' | 'guests' | 'cancel' | 'ride' | null>(null)
   const now = React.useMemo(() => new Date(nowIso), [nowIso])
   const currency = tenant.currency
   const money = (minor: number) => formatCurrency(minor, currency)
@@ -204,7 +223,10 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
   // dashboard and every availability count see them the moment the guest makes them.
   const ledger = useBookingLedger(tenant.slug)
   const change = ledger.changes[booking.reference]
-  const start = { fromDepartureId: departure.id, fromStartsAt: departure.startsAt, fromParty: booking.partySize }
+  // A ride's time slot counts vehicles (a shared run: seats), so its changes start from those.
+  const start = changeStartOf({ departureId: departure.id, startsAt: departure.startsAt, partySize: booking.partySize, transfer: transfer?.details })
+  /** The ride as it stands: changed here (a new flight, time or hotel), or as booked. */
+  const ride = transfer ? (change?.transfer ?? transfer.details) : undefined
   // The schedule the owner saved (cancelled and closed times, added ones) over the seeded days, then this browser's changes.
   const scheduledDays = useScheduledDays(source, rawDays, { tenantSlug: tenant.slug, nowIso, delta: ledger.delta })
   const days = React.useMemo(
@@ -212,7 +234,8 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
     [scheduledDays, ledger.delta],
   )
   const currentDepartureId = change?.movedTo?.departureId ?? departure.id
-  const startsAt = change?.movedTo?.startsAt ?? departure.startsAt
+  // A ride starts at its first pickup.
+  const startsAt = ride?.legs[0]?.pickupAt ?? change?.movedTo?.startsAt ?? departure.startsAt
   // Added guests pay the first ticket's price on the time slot the booking is on: saved prices, price changes and the business's rules.
   // Per group (shared or private) the group price covers the guests in the usual spots. Guests in extra spots pay the extra-spot price.
   const priced = usePricingOverride(source)
@@ -233,6 +256,66 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
   // The time slot's own day: its extra spots and a private group's size (a weekday's or a date's).
   const plan = addGuestsPlan(forSlot(priced, onSlot), priceCtx, { partySize, seatsLeft: seatsLeftNow, pricePerGuest: given.pricePerGuest })
   const { privateGroup, perGroup, extraEach, pricePerGuest, usual: usualForBooking, cost: addCost, limit: groupLimit, privateMost, room: roomNow, priceStops } = plan
+  /* ---------- a ride: its legs, and a new flight, time or hotel ---------- */
+  const rideHolds = useTransferHolds(priced, tenant.slug, transfer?.holds)
+  const rideConfig = ride ? transferOf(priced) : undefined
+  const rideShared = rideConfig?.service === 'shared'
+  const [rideForm, setRideForm] = React.useState<{ legs: RideLegForm[]; place: string }>({ legs: [], place: '' })
+  const [rideErrors, setRideErrors] = React.useState<Record<string, string>>({})
+  /** A leg can change until the reschedule cutoff before its pickup. */
+  const legOpen = (pickupAt: string) => (new Date(pickupAt).getTime() - now.getTime()) / 3_600_000 >= activity.changes.rescheduleHours
+  const rideChangeable = Boolean(ride && ride.legs.some((leg) => legOpen(leg.pickupAt)))
+  const openRide = () => {
+    if (!ride) return
+    setRideForm({
+      legs: ride.legs.map((leg) => ({ flightNumber: leg.flight?.number ?? '', airline: leg.flight?.airline ?? '', time: hhmm(askedTimeOf(priced, ride, leg)) })),
+      place: ride.place,
+    })
+    setRideErrors({})
+    setOpen(open === 'ride' ? null : 'ride')
+  }
+  const saveRide = () => {
+    if (!ride) return
+    const found: Record<string, string> = {}
+    ride.legs.forEach((leg, index) => {
+      if (!legOpen(leg.pickupAt)) return
+      const form = rideForm.legs[index]
+      if (rideConfig?.askFlight && isHubLeg(leg.direction) && !FLIGHT_NUMBER.test((form?.flightNumber ?? '').trim())) found[`flight.${index}`] = 'Add your flight number, like AA 1234.'
+      if (!rideShared && !TIME.test(form?.time ?? '')) found[`time.${index}`] = 'Add the time, like 14:35.'
+    })
+    if (!rideForm.place.trim()) found.place = 'Add the hotel or address.'
+    if (Object.keys(found).length > 0) {
+      setRideErrors(found)
+      return
+    }
+    const edit: RideEdit = {
+      legs: ride.legs.map((leg, index) => {
+        if (!legOpen(leg.pickupAt)) return undefined
+        const form = rideForm.legs[index]
+        const day = askedTimeOf(priced, ride, leg).slice(0, 10)
+        return { flightNumber: form.flightNumber, airline: form.airline, ...(rideShared ? {} : { at: `${day}T${form.time}:00` }) }
+      }),
+      place: rideForm.place,
+    }
+    const next = applyRideEdit(priced, ride, edit)
+    if (returnTooSoon(priced, next)) {
+      setRideErrors({ 'time.1': 'Your return has to be after you arrive.' })
+      return
+    }
+    if (next.legs.some((leg, index) => leg.pickupAt < nowIso && leg.pickupAt !== ride.legs[index]?.pickupAt)) {
+      setRideErrors({ form: "Pick a time that hasn't passed." })
+      return
+    }
+    if (!rideFits(priced, rideHolds, next, booking.reference)) {
+      setRideErrors({ form: "No vehicles free at the new time. Message us and we'll sort it." })
+      return
+    }
+    const moved = movedToOf(ride, next)
+    changeBooking(tenant.slug, booking.reference, start, { transfer: next, ...(moved ? { movedTo: moved } : {}) }, { by: 'guest', what: 'Flight details changed' })
+    setOpen(null)
+    toast.success('Ride updated', { description: next.legs.map((leg) => `${directionLabel(leg.direction, rideConfig?.hub)}: pickup ${formatDateLong(new Date(leg.pickupAt))} at ${hhmm(leg.pickupAt)}`).join('. ') })
+  }
+
   const hoursToGo = (new Date(startsAt).getTime() - now.getTime()) / 3_600_000
   const past = hoursToGo < 0
   const cancelled = Boolean(change?.cancelled) || booking.status === 'cancelled' || booking.status === 'refunded'
@@ -322,17 +405,26 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
               <CalendarDays className="mt-0.5 size-4 text-primary" aria-hidden="true" />
               <div>
                 <dt className="text-xs text-subtle">When</dt>
-                <dd className="font-medium">{formatDateLong(new Date(startsAt))} · {formatTime(startsAt)}</dd>
-                {change?.movedTo ? <dd className="text-xs text-success">Moved from {formatDateLong(new Date(departure.startsAt))} · {formatTime(departure.startsAt)}</dd> : null}
+                <dd className="font-medium">{formatDateLong(new Date(startsAt))} · {ride ? `Pickup ${hhmm(startsAt)}` : formatTime(startsAt)}</dd>
+                {change?.movedTo && !ride ? <dd className="text-xs text-success">Moved from {formatDateLong(new Date(departure.startsAt))} · {formatTime(departure.startsAt)}</dd> : null}
               </div>
             </div>
             <div className="flex items-start gap-2">
               <Users className="mt-0.5 size-4 text-primary" aria-hidden="true" />
               <div>
-                <dt className="text-xs text-subtle">Guests</dt>
-                <dd className="font-medium">{partySize} {pluralize(partySize, 'guest')}</dd>
+                <dt className="text-xs text-subtle">{ride ? 'Passengers' : 'Guests'}</dt>
+                <dd className="font-medium">{ride ? partyLine(ride) : `${partySize} ${pluralize(partySize, 'guest')}`}</dd>
               </div>
             </div>
+            {ride ? (
+              <div className="flex items-start gap-2 sm:col-span-2">
+                <Car className="mt-0.5 size-4 text-primary" aria-hidden="true" />
+                <div>
+                  <dt className="text-xs text-subtle">Trip</dt>
+                  <dd className="font-medium">{rideHeadline(priced, ride)}</dd>
+                </div>
+              </div>
+            ) : (
             <div className="flex items-start gap-2 sm:col-span-2">
               <MapPin className="mt-0.5 size-4 text-primary" aria-hidden="true" />
               <div>
@@ -343,12 +435,48 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
                 {activity.locationName && !booking.pickup ? <dd className="text-xs text-subtle">{activity.locationName}</dd> : null}
               </div>
             </div>
+            )}
           </dl>
           <div className="shrink-0">
             {cancelled ? <Badge variant="neutral">Cancelled</Badge> : past ? <Badge variant="neutral">Completed</Badge> : <Badge variant="success">Confirmed</Badge>}
           </div>
         </div>
       </div>
+
+      {ride ? (
+        <section className={cn(section, 'mt-6')} aria-labelledby="your-rides">
+          <h2 id="your-rides" className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Car className="size-4 text-primary" aria-hidden="true" />
+            {ride.legs.length > 1 ? 'Your rides' : 'Your ride'}
+          </h2>
+          <ol className="mt-3 flex list-none flex-col divide-y divide-line-subtle p-0">
+            {ride.legs.map((leg, index) => {
+              const flight = flightLine(leg, rideConfig?.hub?.kind)
+              const meet = leg.direction === 'from_hub' ? rideConfig?.hub?.meetingNote || activity.meetingPoint : `We collect you at ${leg.from}`
+              return (
+                <li key={`${leg.direction}-${index}`} className="flex flex-col gap-0.5 py-3 first:pt-0 last:pb-0">
+                  <p className="text-sm font-semibold text-foreground">
+                    {directionLabel(leg.direction, rideConfig?.hub)}
+                    <span className="font-normal text-subtle"> · {formatDateLong(new Date(leg.pickupAt))}</span>
+                  </p>
+                  <p className="text-sm text-foreground tabular">
+                    Pickup {hhmm(leg.pickupAt)}
+                    {flight ? (
+                      <span className="text-muted">
+                        {' '}
+                        · <Plane className="inline size-3.5 align-[-2px]" aria-hidden="true" /> {flight}
+                      </span>
+                    ) : null}
+                  </p>
+                  {leg.from || leg.to ? <p className="text-xs text-muted">{leg.from} → {leg.to}</p> : null}
+                  <p className="text-xs text-subtle">{meet}</p>
+                </li>
+              )
+            })}
+          </ol>
+          {ride.note ? <p className="mt-3 text-xs text-muted">Note for the driver: {ride.note}</p> : null}
+        </section>
+      ) : null}
 
       {cancelled ? (
         <div role="status" className="mt-6 rounded-2xl border border-line bg-surface-sunken px-5 py-4 text-sm">
@@ -449,19 +577,25 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
             </li>
           </ul>
           <div className="mt-3 flex flex-wrap gap-2">
-            {rules.reschedule ? (
+            {ride ? (
+              <Button variant="secondary" leftIcon={<Plane />} disabled={!rideChangeable} onClick={openRide}>
+                Change flight details
+              </Button>
+            ) : null}
+            {rules.reschedule && !ride ? (
               <Button variant="secondary" leftIcon={<CalendarDays />} disabled={!canMove} onClick={() => setOpen(open === 'move' ? null : 'move')}>
                 {rules.rescheduleFee > 0 ? `Move for ${money(rules.rescheduleFee)}` : 'Move to another time'}
               </Button>
             ) : null}
-            {rules.addGuests ? (
+            {rules.addGuests && !ride ? (
               <Button variant="secondary" leftIcon={<Users />} disabled={roomNow <= 0} onClick={() => setOpen(open === 'guests' ? null : 'guests')}>Add guests</Button>
             ) : null}
             {rules.cancelOnline ? (
               <Button variant="ghost" leftIcon={<XCircle />} onClick={() => setOpen(open === 'cancel' ? null : 'cancel')}>Cancel booking</Button>
             ) : null}
           </div>
-          {rules.reschedule && !canMove ? (
+          {ride && !rideChangeable ? <p className="mt-2 text-xs text-muted">Message us to change it.</p> : null}
+          {rules.reschedule && !canMove && !ride ? (
             <p className="mt-2 text-xs text-muted">
               {rules.maxReschedules > 0 && moves >= rules.maxReschedules
                 ? 'This booking has been moved as many times as allowed.'
@@ -470,6 +604,67 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
             </p>
           ) : null}
           {!rules.cancelOnline ? <p className="mt-2 text-xs text-muted">To cancel, call {tenant.phone} or send a message below.</p> : null}
+
+          {open === 'ride' && ride ? (
+            <div className="mt-4 flex flex-col gap-4 border-t border-line-subtle pt-4">
+              {ride.legs.map((leg, index) => {
+                const form = rideForm.legs[index] ?? { flightNumber: '', airline: '', time: '' }
+                const editable = legOpen(leg.pickupAt)
+                const hubLeg = isHubLeg(leg.direction)
+                const labels = timeFieldLabels(rideConfig?.hub)
+                const setLeg = (patch: Partial<RideLegForm>) => setRideForm((current) => ({ ...current, legs: current.legs.map((entry, at) => (at === index ? { ...entry, ...patch } : entry)) }))
+                return (
+                  <fieldset key={`${leg.direction}-${index}`} disabled={!editable} className="flex flex-col gap-3">
+                    <legend className="text-sm font-semibold text-foreground">
+                      {directionLabel(leg.direction, rideConfig?.hub)}
+                      <span className="font-normal text-subtle"> · {formatDateLong(new Date(askedTimeOf(priced, ride, leg)))}</span>
+                    </legend>
+                    {editable ? null : <p className="text-xs text-muted">Message us to change it.</p>}
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                      {hubLeg && rideConfig?.askFlight ? (
+                        <>
+                          <Field label="Flight number" required error={rideErrors[`flight.${index}`]}>
+                            <Input
+                              value={form.flightNumber}
+                              placeholder="AA 1234"
+                              autoComplete="off"
+                              onChange={(e) => {
+                                const value = e.target.value.toUpperCase()
+                                const airline = airlineOf(value)
+                                setLeg({ flightNumber: value, ...(airline ? { airline } : {}) })
+                              }}
+                            />
+                          </Field>
+                          <Field label="Airline" optional>
+                            <Input value={form.airline} autoComplete="off" onChange={(e) => setLeg({ airline: e.target.value })} />
+                          </Field>
+                        </>
+                      ) : null}
+                      {rideShared ? null : (
+                        <Field label={hubLeg ? (leg.direction === 'from_hub' ? labels.arrives : labels.leaves) : 'Pickup at'} required error={rideErrors[`time.${index}`]}>
+                          <Input type="time" step={300} value={form.time} onChange={(e) => setLeg({ time: e.target.value })} />
+                        </Field>
+                      )}
+                    </div>
+                  </fieldset>
+                )
+              })}
+              <Field label={ride.trip === 'between' || ride.trip === 'hourly' ? 'Pick up from' : 'Hotel name'} required error={rideErrors.place}>
+                <Input value={rideForm.place} autoComplete="off" onChange={(e) => setRideForm((current) => ({ ...current, place: e.target.value }))} />
+              </Field>
+              {rideErrors.form ? (
+                <p role="alert" className="text-sm font-medium text-danger">
+                  {rideErrors.form}
+                </p>
+              ) : null}
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setOpen(null)}>
+                  Keep as is
+                </Button>
+                <Button onClick={saveRide}>Save changes</Button>
+              </div>
+            </div>
+          ) : null}
 
           {open === 'move' ? (
             <div className="mt-4 flex flex-col gap-3 border-t border-line-subtle pt-4">

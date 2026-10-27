@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Anchor, GraduationCap, KeyRound, Layers, Lock, Route, Ticket, UsersRound, Zap, type LucideIcon } from 'lucide-react'
+import { Anchor, Car, GraduationCap, KeyRound, Layers, Lock, Route, Ticket, UsersRound, Zap, type LucideIcon } from 'lucide-react'
 
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -14,6 +14,7 @@ import type { ActivityKind, CharterConfig, DifficultyLevel, LessonConfig, Rental
 
 import { DurationField, type DurationUnit } from './duration-field'
 import type { DraftTier } from './pricing-tier-editor'
+import { defaultTransferDraft, normalizeTransferDraft, type DraftTransfer } from './transfer-draft'
 
 /* ==========================================================================
    What are you selling? The kind picker, and the one card of settings each
@@ -31,6 +32,7 @@ export const KIND_ICONS: Record<ActivityKind, LucideIcon> = {
   lesson: GraduationCap,
   pass: Ticket,
   package: Layers,
+  transfer: Car,
 }
 
 export interface DraftKindSettings {
@@ -75,6 +77,8 @@ export interface DraftKindSettings {
   lesson: { level: LessonConfig['level']; sessions: number; ratio: number; certification: string; equipmentIncluded: boolean }
   pass: { validDays: number; reentry: boolean }
   activity: { minHeightCm: number; maxWeightKg: number }
+  /** Transfers: service, hub, trips, destinations, vehicles, the price table and ride timing (transfer-draft.ts). */
+  transfer: DraftTransfer
 }
 
 export function defaultKindSettings(): DraftKindSettings {
@@ -107,6 +111,7 @@ export function defaultKindSettings(): DraftKindSettings {
     lesson: { level: 'beginner', sessions: 1, ratio: 0, certification: '', equipmentIncluded: false },
     pass: { validDays: 1, reentry: false },
     activity: { minHeightCm: 0, maxWeightKg: 0 },
+    transfer: defaultTransferDraft(),
   }
 }
 
@@ -135,6 +140,7 @@ export function normalizeKindSettings(settings: Partial<DraftKindSettings> | und
     lesson: { ...base.lesson, ...settings?.lesson },
     pass: { ...base.pass, ...settings?.pass },
     activity: { ...base.activity, ...settings?.activity },
+    transfer: normalizeTransferDraft(settings?.transfer),
   }
 }
 
@@ -164,7 +170,7 @@ export interface SharedBasics {
 }
 
 /** The wizard's choices: group activity, activity and private charter are one card. */
-const PICKER_KINDS: ActivityKind[] = ['trip', 'rental', 'lesson', 'pass', 'package']
+const PICKER_KINDS: ActivityKind[] = ['trip', 'rental', 'transfer', 'lesson', 'pass', 'package']
 
 const TIMED_CARD = {
   label: 'Activity or tour',
@@ -490,7 +496,8 @@ export function KindFields({
   const set = <K extends keyof DraftKindSettings>(key: K, patch: Partial<DraftKindSettings[K]>) =>
     onChange({ ...settings, [key]: { ...settings[key], ...patch } })
 
-  if (isTimedKind(kind)) return null
+  // A transfer's card (TransferFields) edits its vehicle rows too, so the Basics step renders it itself.
+  if (isTimedKind(kind) || kind === 'transfer') return null
 
   const shell = (children: React.ReactNode) => (
     <div className="flex flex-col gap-4 rounded-xl border border-line bg-surface-sunken/40 p-4">

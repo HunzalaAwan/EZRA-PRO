@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Backpack, Camera, Car, Gift, Plus, Sandwich, ShoppingBag, Trash2 } from 'lucide-react'
+import { Baby, Backpack, Camera, Car, Clock, Gift, GlassWater, Luggage, MapPin, Plus, Sandwich, ShoppingBag, Trash2 } from 'lucide-react'
 
 import type { CurrencyCode } from '@/types'
 import { cn, formatCurrency } from '@/lib/utils'
@@ -23,11 +23,16 @@ export interface DraftAddOn {
   /** Minor units. */
   price: number
   description: string
-  /** Charged once for each guest, or once for the booking. */
-  per: 'guest' | 'booking'
+  /** Charged once for each guest, once for the booking, or for each one the guest picks. */
+  per: 'guest' | 'booking' | 'each'
+  /** 'each': the most one booking can take. Absent: 9. */
+  maxQty?: number
   required: boolean
   icon?: string
 }
+
+/** The most of an 'each' extra a booking can take, when none is set. */
+export const EACH_DEFAULT_MAX = 9
 
 let addOnCounter = 0
 
@@ -51,6 +56,8 @@ export interface AddOnPreset {
   description: string
   /** Absent: per guest. */
   per?: DraftAddOn['per']
+  /** 'each': the most a booking can take. */
+  maxQty?: number
   icon: typeof Camera
 }
 
@@ -63,6 +70,27 @@ const ADDON_PRESETS: AddOnPreset[] = [
   { label: 'Gift wrap', price: 900, description: 'A printed voucher in an envelope.', per: 'booking', icon: Gift },
 ]
 
+/** Extras a transfer usually sells; the ones guests pick a number of are charged each. */
+export const TRANSFER_ADDON_PRESETS: AddOnPreset[] = [
+  { label: 'Child seat', price: 1000, description: 'Tell us the ages.', per: 'each', maxQty: 3, icon: Baby },
+  { label: 'Extra stop', price: 1500, description: 'A quick stop on the way.', per: 'each', maxQty: 2, icon: MapPin },
+  { label: 'Extra waiting time (30 min)', price: 1500, description: 'Each 30 minutes past the free wait.', per: 'each', maxQty: 4, icon: Clock },
+  { label: 'Oversized item', price: 1000, description: 'A surfboard, golf bag or bike.', per: 'each', maxQty: 3, icon: Luggage },
+  { label: 'Welcome drinks', price: 2000, description: 'Cold drinks and water on board.', per: 'booking', icon: GlassWater },
+]
+
+const PER_CHOICES = [
+  ['guest', 'Per guest'],
+  ['booking', 'Per booking'],
+  ['each', 'Each'],
+] as const
+
+const PER_HINT: Record<DraftAddOn['per'], string> = {
+  guest: 'Charged for every guest on the booking.',
+  booking: 'Charged once, whatever the group size.',
+  each: 'Guests pick how many.',
+}
+
 /* ==========================================================================
    EDITOR
    ========================================================================== */
@@ -74,10 +102,12 @@ export interface AddonEditorProps {
   errors?: Record<string, string>
   /** One-click starting points; defaults to a set most businesses offer. */
   presets?: AddOnPreset[]
+  /** "Each" (guests pick how many) is offered. Only where the storefront asks for a number: transfers. An extra already sold that way keeps it. */
+  allowEach?: boolean
   className?: string
 }
 
-export function AddonEditor({ addOns, onChange, currency, errors, presets = ADDON_PRESETS, className }: AddonEditorProps) {
+export function AddonEditor({ addOns, onChange, currency, errors, presets = ADDON_PRESETS, allowEach = false, className }: AddonEditorProps) {
   const update = (index: number, patch: Partial<DraftAddOn>) => {
     onChange(addOns.map((addOn, i) => (i === index ? { ...addOn, ...patch } : addOn)))
   }
@@ -143,10 +173,7 @@ export function AddonEditor({ addOns, onChange, currency, errors, presets = ADDO
                     aria-label={`How ${addOn.label || `extra ${index + 1}`} is charged`}
                     className="inline-flex h-8 items-center rounded-lg border border-line bg-surface-sunken p-0.5"
                   >
-                    {([
-                      ['guest', 'Per guest'],
-                      ['booking', 'Per booking'],
-                    ] as const).map(([per, label]) => {
+                    {PER_CHOICES.filter(([per]) => per !== 'each' || allowEach || addOn.per === 'each').map(([per, label]) => {
                       const on = addOn.per === per
                       return (
                         <button
@@ -154,7 +181,7 @@ export function AddonEditor({ addOns, onChange, currency, errors, presets = ADDO
                           type="button"
                           role="radio"
                           aria-checked={on}
-                          onClick={() => update(index, { per })}
+                          onClick={() => update(index, per === 'each' ? { per, maxQty: addOn.maxQty ?? EACH_DEFAULT_MAX } : { per })}
                           className={cn('h-full rounded-md px-2.5 text-xs font-medium transition-colors', on ? 'bg-surface text-foreground shadow-xs' : 'text-muted hover:text-foreground')}
                         >
                           {label}
@@ -162,9 +189,23 @@ export function AddonEditor({ addOns, onChange, currency, errors, presets = ADDO
                       )
                     })}
                   </div>
-                  <span className="text-xs text-subtle">
-                    {addOn.per === 'booking' ? 'Charged once, whatever the group size.' : 'Charged for every guest on the booking.'}
-                  </span>
+                  {addOn.per === 'each' ? (
+                    <label className="inline-flex items-center gap-2 text-xs text-muted">
+                      Most
+                      <Input
+                        type="number"
+                        size="sm"
+                        min={1}
+                        max={20}
+                        className="w-20"
+                        inputClassName="tabular"
+                        aria-label={`Most ${addOn.label || `of extra ${index + 1}`} per booking`}
+                        value={addOn.maxQty ?? EACH_DEFAULT_MAX}
+                        onChange={(event) => update(index, { maxQty: Math.min(20, Math.max(1, Math.floor(Number(event.target.value)) || 1)) })}
+                      />
+                    </label>
+                  ) : null}
+                  <span className="text-xs text-subtle">{PER_HINT[addOn.per] ?? PER_HINT.guest}</span>
 
                   <label className="flex cursor-pointer items-center gap-2 text-xs text-muted">
                     <Switch
@@ -221,6 +262,7 @@ export function AddonEditor({ addOns, onChange, currency, errors, presets = ADDO
                 const addOn = blankAddOn(preset.label, preset.price, addOns)
                 addOn.description = preset.description
                 addOn.per = preset.per ?? 'guest'
+                if (addOn.per === 'each') addOn.maxQty = preset.maxQty ?? EACH_DEFAULT_MAX
                 onChange([...addOns, addOn])
               }}
               className={cn(

@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation'
 
 import { BOOKINGS, NOW, getBookingDetail, getLocationById, getStorefront, getWaiverById } from '@/lib/demo'
 import { getSeedThreads } from '@/lib/inbox'
-import { buildDays } from '@/lib/storefront-availability'
+import { buildDays, buildTransferAvailability } from '@/lib/storefront-availability'
 import { ManageBooking } from '@/components/storefront/manage-booking'
 import { changesOf, paymentOf } from '@/lib/booking-policy'
 
@@ -82,6 +82,8 @@ export default async function ManageBookingPage({ params }: { params: Promise<{ 
       days={buildDays(activity, 30)}
       thread={thread}
       nowIso={nowIso}
+      // Transfers: the ride as booked, and the seeded rides' vehicle holds for checking a new flight time.
+      transfer={activity.kind === 'transfer' && detail.booking.transfer ? { details: detail.booking.transfer, holds: buildTransferAvailability(activity).holds } : undefined}
     />
   )
 }

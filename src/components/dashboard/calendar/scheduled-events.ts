@@ -123,6 +123,8 @@ function rebuildActivity(
   const spotsChanged = defaultSpots(edited) !== defaultSpots(base)
   const extraWas = slotExtraSpotsOf(base)
   const ahead = (slot: ScheduledSlot) => `${slot.dateKey}T${slot.time}:00` >= LOCAL_NOW
+  // Transfers drive all day in half hours: only slots with rides show (seeded, or booked in this browser), never the empty grid.
+  const ridesOnly = (base.kind ?? 'trip') === 'transfer'
 
   const out: ScheduledCalendarEvent[] = []
   const used = new Set<string>()
@@ -135,7 +137,7 @@ function rebuildActivity(
       out.push(withSpots(match, slot, spotsChanged, extraWas, slotExtraOf(edited, slot)))
       continue
     }
-    if (legacy.has(key) || !ahead(slot)) continue
+    if (legacy.has(key) || !ahead(slot) || ridesOnly) continue
     const event = generatedEvent(base, edited, slot, 'scheduled')
     if (event) out.push(event)
   }
@@ -160,7 +162,7 @@ function rebuildActivity(
   }
   // Added times that were closed again (cancelled from the calendar, or on a closed day).
   for (const [key, slot] of closed) {
-    if (byKey.has(key) || legacy.has(key) || !ahead(slot)) continue
+    if (byKey.has(key) || legacy.has(key) || !ahead(slot) || ridesOnly) continue
     const event = generatedEvent(base, edited, slot, 'cancelled')
     if (!event) continue
     const { departure } = event

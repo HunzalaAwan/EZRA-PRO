@@ -30,7 +30,7 @@ import {
   formatTime,
   pluralize,
 } from '@/lib/utils'
-import type { Activity, GuestQuestion, PickupZone, Tenant, WaiverTemplate } from '@/types'
+import type { Activity, GuestQuestion, PickupZone, Tenant, TransferBookingDetails, WaiverTemplate } from '@/types'
 import { useIsHydrated, useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { useActivityWithDefaults, useBookingDefaults } from '@/hooks/use-booking-defaults'
 import type { CheckoutFields } from '@/lib/booking-defaults'
@@ -48,7 +48,24 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { toast } from '@/components/ui/toaster'
 import { buildQuote, type AvailabilityDay, type QuoteSelection } from '@/components/storefront/booking-widget'
-import { bookedOn, checkoutParty, resolveRental, resolveSelection, spotsBeyondStrip, type RentalRequest } from '@/components/storefront/checkout-selection'
+import { bookedOn, checkoutParty, resolveRental, resolveSelection, resolveTransferSelection, spotsBeyondStrip, transferCheckoutLegs, type RentalRequest } from '@/components/storefront/checkout-selection'
+import { CheckoutTransfer, EMPTY_TRANSFER_FORM, flightsOf, requestWithForm, transferFormFrom, validateTransfer, type TransferForm } from '@/components/storefront/checkout-transfer'
+import { useTransferHolds } from '@/hooks/use-transfer-holds'
+import {
+  bookingDetailsOf,
+  legsFor,
+  pricingOf,
+  slotStartOf,
+  transferOf,
+  transferSlotId,
+  tripLabel,
+  vehiclesLeftAt,
+  vehiclesSentence,
+  zoneById,
+  type TransferHold,
+  type TransferRequest,
+} from '@/lib/transfers'
+import { flightLine, hhmm, partyLine } from '@/lib/transfer-changes'
 import {
   EMPTY_WAIVER,
   GuestDetailsStep,
@@ -113,6 +130,8 @@ export interface CheckoutLeg {
   startsAt: string
   endsAt: string
   meetingPoint: string
+  /** A shared shuttle's run: the seats the server has left on it (this browser's bookings come off in the flow). */
+  seatsLeft?: number
 }
 
 /** A package's parts, one line each: what, when, where. */
@@ -177,6 +196,10 @@ export interface CheckoutFlowProps {
   basePath: string
   /** Deterministic confirmation code, generated on the server. */
   reference: string
+  /** Transfers: the ride from the widget's link (trip, destination, passengers, suitcases, times). */
+  transferRequest?: TransferRequest
+  /** Transfers: the seeded rides' vehicle holds, so the vehicles are checked again here. */
+  transferHolds?: TransferHold[]
 }
 
 /* ==========================================================================
@@ -356,6 +379,8 @@ export function CheckoutFlow({
   request,
   basePath,
   reference,
+  transferRequest,
+  transferHolds,
 }: CheckoutFlowProps) {
   const reducedMotion = useReducedMotionSafe()
   // The activity's own payment and cancellation terms, or the business defaults it follows, plus the business's own questions.
@@ -363,7 +388,8 @@ export function CheckoutFlow({
   const pricedActivity = usePricingOverride(given)
   const activity = useActivityWithDefaults(pricedActivity, tenant.slug)
   const { defaults: bookingDefaults } = useBookingDefaults(tenant.slug)
-  const fields = bookingDefaults.checkout
+  // Transfers always ask for a mobile number: the driver messages the guest on the day.
+  const fields = React.useMemo(() => (transferRequest ? { ...bookingDefaults.checkout, phone: 'required' as const } : bookingDefaults.checkout), [transferRequest, bookingDefaults.checkout])
 
   /* ---------- the rental and the meeting point, as the owner saved them ---------- */
 
@@ -470,11 +496,71 @@ export function CheckoutFlow({
     Boolean(seededDays) &&
     (rebuilt ? Boolean(rebuilt.slot.outsideSchedule) : Boolean(stripFrom && stripTo && slotDay >= stripFrom && slotDay <= stripTo))
 
+  /* ---------- transfers: the ride, its details and its vehicles ---------- */
+
+  const rideConfig = transferRequest ? transferOf(activity) : undefined
+  const [rideForm, setRideForm] = React.useState<TransferForm>(() => (transferRequest ? transferFormFrom(given, transferRequest) : EMPTY_TRANSFER_FORM))
+  // The request with the flight times and hotel typed here: a new flight time moves the pickup, on the same date.
+  const rideRequest = React.useMemo(
+    () => (transferRequest && rideConfig ? requestWithForm(activity, transferRequest, rideForm) : undefined),
+    [transferRequest, rideConfig, activity, rideForm],
+  )
+  const rideLegs = React.useMemo(() => (rideRequest ? legsFor(activity, rideRequest) : []), [activity, rideRequest])
+  /** A destination taken off (or switched off) since the link was made. */
+  const zoneSold = (id: string | undefined) => {
+    const zone = zoneById(rideConfig, id)
+    return Boolean(zone && zone.active !== false)
+  }
+  const rideZoneGone =
+    transferRequest !== undefined &&
+    (!rideConfig || (transferRequest.trip !== 'hourly' && (!zoneSold(transferRequest.zoneId) || (transferRequest.trip === 'between' && !zoneSold(transferRequest.toZoneId)))))
+  // The vehicles, checked again with this browser's bookings and the saved prices (the link's vehicles while they still fit the group).
+  const rideHolds = useTransferHolds(activity, tenant.slug, transferHolds)
+  const rideSelection = React.useMemo(
+    () => (rideRequest ? (request ? resolveTransferSelection(activity, request.tiers, request.addOns, rideRequest) : serverSelection) : undefined),
+    [rideRequest, request, activity, serverSelection],
+  )
+  const rideLeft = React.useMemo(() => {
+    const left: Record<string, number> = {}
+    for (const leg of rideLegs) {
+      for (const [tierId, count] of Object.entries(vehiclesLeftAt(activity, rideHolds, leg.pickupAt, leg.busyMinutes, reference))) left[tierId] = Math.min(left[tierId] ?? Number.POSITIVE_INFINITY, count)
+    }
+    return left
+  }, [activity, rideHolds, rideLegs, reference])
+  const rideVehicles = (rideSelection?.tiers ?? []).filter((line) => line.qty > 0)
+  /** Private and hourly: the vehicles are no longer free at this time (booked meanwhile, or a new flight time). */
+  const vehiclesTaken =
+    rideConfig !== undefined && rideConfig.service !== 'shared' && !rideZoneGone && (rideVehicles.length === 0 || rideVehicles.some((line) => line.qty > (rideLeft[line.tierId] ?? 0)))
+  // Each leg's time slot: the link's while the pickup stays in it, else the slot its new pickup falls in.
+  const rideDeparture = React.useMemo<CheckoutDeparture>(() => {
+    if (!rideRequest || rideLegs.length === 0) return departure
+    const linked = givenDeparture.legs ?? []
+    const ids = rideLegs.map((leg, index) => {
+      const before = linked[index]
+      return before && slotStartOf(before.startsAt) === slotStartOf(leg.pickupAt) ? before.departureId : transferSlotId(activity, leg.slotStartsAt)
+    })
+    const legs = transferCheckoutLegs(activity, rideRequest, rideLegs, ids)
+    return { ...departure, startsAt: legs[0].startsAt, endsAt: legs[legs.length - 1].endsAt, legs }
+  }, [rideRequest, rideLegs, departure, givenDeparture.legs, activity])
+  /** "4 passengers · 4 suitcases · Private van". */
+  const rideLine = rideRequest ? [partyLine(rideRequest), rideConfig?.service === 'shared' ? '' : vehiclesSentence(activity, rideVehicles)].filter(Boolean).join(' · ') : ''
+  const [rideBooked, setRideBooked] = React.useState<TransferBookingDetails | null>(null)
+
   const pricing = usePricing(tenant.slug)
   // The same engine and inputs as the widget: the slot's start, the clock, how full it is, its dynamic pricing and the business's rules.
   // Group rules count people (a charter: its party), worked out by the engine.
   const quote = React.useMemo(
-    () => buildQuote(slotActivity, tenant.slug, selection, departure.priceMultiplier, {
+    () =>
+      rideRequest
+        ? // A ride: the price table for the trip and destination, from the first pickup, for the passengers.
+          buildQuote(activity, tenant.slug, rideSelection ?? serverSelection, 1, {
+            party: rideRequest.passengers,
+            transfer: pricingOf(rideRequest),
+            startsAt: rideLegs[0]?.pickupAt,
+            nowIso,
+            businessRules: pricing.rules,
+          })
+        : buildQuote(slotActivity, tenant.slug, selection, departure.priceMultiplier, {
       days: rentalDays,
       party,
       private: privateBooking,
@@ -485,8 +571,14 @@ export function CheckoutFlow({
       booked,
       businessRules: pricing.rules,
     }),
-    [slotActivity, tenant.slug, selection, departure.priceMultiplier, departure.slotStartsAt, departure.startsAt, capacity, booked, nowIso, pricing.rules, rentalDays, party, rentalMode, rentalHours, rentalLength, privateBooking],
+    [slotActivity, tenant.slug, selection, departure.priceMultiplier, departure.slotStartsAt, departure.startsAt, capacity, booked, nowIso, pricing.rules, rentalDays, party, rentalMode, rentalHours, rentalLength, privateBooking, rideRequest, rideSelection, serverSelection, rideLegs, activity],
   )
+  /** A shared shuttle: a run with fewer seats left than the tickets, counting this browser's other bookings on it. */
+  const runsFull =
+    rideConfig?.service === 'shared' &&
+    !rideZoneGone &&
+    (givenDeparture.legs ?? []).some((leg) => leg.seatsLeft !== undefined && Math.max(0, leg.seatsLeft - Math.max(0, delta[leg.departureId] ?? 0)) < Math.max(1, quote.seats))
+  const ridesTaken = vehiclesTaken || runsFull
 
   const [errors, setErrors] = React.useState<Errors>({})
   const [submitting, setSubmitting] = React.useState(false)
@@ -614,6 +706,47 @@ export function CheckoutFlow({
   const balanceWhen = terms.collect === 'later' || terms.balanceDueDays === 0 ? 'on the day' : `on ${formatDateLong(balanceDate)}`
   const optIn = useCheckoutOptIn(tenant)
   const finishPayment = () => {
+    // A ride: one entry for the booking (not one per leg), holding its vehicles (a shared run: its seats) from each pickup.
+    if (rideRequest && rideConfig) {
+      const shared = rideConfig.service === 'shared'
+      const details = bookingDetailsOf(activity, rideRequest, {
+        vehicles: shared ? [] : rideVehicles,
+        departureIds: (rideDeparture.legs ?? []).map((leg) => leg.departureId),
+        flights: flightsOf(rideRequest, rideForm),
+        place: rideForm.place,
+        dropOff: rideForm.dropOff,
+        note: rideForm.note,
+      })
+      // A round trip's departure can collect them from another hotel.
+      const returnPlace = rideForm.returnPlace.trim()
+      if (rideRequest.trip === 'round_trip' && !rideForm.sameHotel && returnPlace && details.legs[1]) details.legs[1] = { ...details.legs[1], from: returnPlace }
+      recordBooking(tenant.slug, [
+        {
+          id: reference,
+          reference,
+          activitySlug: activity.slug,
+          activityName: activity.name,
+          departureId: details.legs[0]?.departureId || departure.id,
+          startsAt: details.legs[0]?.pickupAt ?? rideDeparture.startsAt,
+          endsAt: rideDeparture.endsAt,
+          party: shared ? Math.max(1, quote.seats) : Math.max(1, rideVehicles.reduce((sum, line) => sum + line.qty, 0)),
+          transfer: details,
+          source: 'storefront' as const,
+          name: `${guest.firstName} ${guest.lastName}`.trim(),
+          email: guest.email,
+          phone: guest.phone,
+          total: displayQuote.total,
+          paidNow: split.now,
+          currency: tenant.currency,
+          createdAt: nowIso ?? new Date().toISOString().slice(0, 19),
+        },
+      ])
+      setRideBooked(details)
+      optIn.record(guest.email, guest.phone)
+      pricing.recordRedemption(promoOff > 0 ? promo?.code : undefined, giftOff > 0 && card ? { code: card.code, amount: giftOff } : undefined)
+      setConfirmed(true)
+      return
+    }
     // Take the seats: one entry per part for a package, so each activity's own count drops.
     const legs = departure.legs ?? [{ departureId: departure.id, activitySlug: activity.slug, activityName: activity.name, label: activity.name, startsAt: departure.startsAt, endsAt: departure.endsAt, meetingPoint: meetingPointFor(activity, departure) }]
     recordBooking(
@@ -674,6 +807,7 @@ export function CheckoutFlow({
       }),
     )
     if (pickupZones.length > 0) Object.assign(next, validatePickup(pickup, pickupRequired))
+    if (transferRequest && rideConfig) Object.assign(next, validateTransfer(activity, transferRequest, rideForm, nowIso))
     if (scope === 'all' && displayQuote.total > 0) {
       const paymentResult = paymentSchema.safeParse(payment)
       if (!paymentResult.success) Object.assign(next, collectErrors(paymentResult.error.issues))
@@ -687,6 +821,7 @@ export function CheckoutFlow({
   }
 
   const pay = () => {
+    if (ridesTaken || rideZoneGone) return
     if (!validate('all')) return
     setSubmitting(true)
     window.setTimeout(() => {
@@ -697,6 +832,7 @@ export function CheckoutFlow({
   }
 
   const expressPay = (method: string) => {
+    if (ridesTaken || rideZoneGone) return
     if (!validate('guest')) {
       toast.error('Add your contact details first, so we know where to send the tickets')
       return
@@ -725,7 +861,8 @@ export function CheckoutFlow({
         balanceWhen={balanceWhen}
         tenant={tenant}
         activity={activity}
-        departure={departure}
+        departure={rideRequest ? rideDeparture : departure}
+        ride={rideRequest && rideBooked ? { details: rideBooked, line: rideLine, trip: tripLabel(rideRequest.trip, rideConfig?.hub) } : undefined}
         quote={displayQuote}
         guest={guest}
         reference={reference}
@@ -750,6 +887,23 @@ export function CheckoutFlow({
     )
   }
 
+  if (rideZoneGone) {
+    return (
+      <div className="mx-auto w-full max-w-[88rem] px-4 pb-20 pt-24 sm:px-6 sm:pt-28 lg:px-10">
+        <div className="mx-auto mt-6 flex max-w-md flex-col items-center gap-3 rounded-2xl border border-line bg-surface p-8 text-center">
+          <h1 className="font-display text-xl font-semibold tracking-tight text-foreground">This destination is no longer offered.</h1>
+          <p className="text-sm text-muted">Pick another one for {activity.name}.</p>
+          <Button asChild className="mt-2" leftIcon={<ArrowLeft aria-hidden="true" />}>
+            <Link href={`${basePath}/${activity.slug}`}>Back to {activity.name}</Link>
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  /** What the summaries show: a ride's legs follow the flight times typed here. */
+  const shown = rideRequest ? rideDeparture : departure
+
   return (
     <div className="mx-auto w-full max-w-[88rem] px-4 pb-20 pt-24 sm:px-6 sm:pt-28 lg:px-10">
       {/* ---------- breadcrumb ---------- */}
@@ -768,7 +922,7 @@ export function CheckoutFlow({
             Secure checkout
           </h1>
           <p className="mt-2 text-sm text-muted">
-            Your details and payment on one page. Your spots are held for the next 15 minutes.
+            {rideRequest ? 'Your details and payment on one page. Your ride is held for the next 15 minutes.' : 'Your details and payment on one page. Your spots are held for the next 15 minutes.'}
           </p>
 
           {/* ---------- mobile summary ---------- */}
@@ -777,17 +931,39 @@ export function CheckoutFlow({
             onToggle={() => setSummaryOpen((value) => !value)}
             activity={activity}
             tenant={tenant}
-            departure={departure}
+            departure={shown}
             quote={displayQuote}
             reducedMotion={reducedMotion}
           />
 
+          {ridesTaken ? (
+            <div role="alert" className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/40 bg-warning-soft px-4 py-3 text-sm text-foreground">
+              <span>{runsFull ? 'Those seats were just booked. Pick another run.' : 'Those vehicles were just booked. Pick another time.'}</span>
+              <Link href={`${basePath}/${activity.slug}`} className="font-medium text-primary hover:underline">
+                Pick another time
+              </Link>
+            </div>
+          ) : null}
+
           {/* ---------- details, then payment, one page ---------- */}
           <div className="mt-8 space-y-10">
             <div className="space-y-4">
-              <GuestStep guest={guest} setGuest={setGuest} errors={errors} fields={fields} />
+              <GuestStep guest={guest} setGuest={setGuest} errors={errors} fields={fields} ride={Boolean(rideRequest)} />
               <CheckoutOptIn optIn={optIn} />
             </div>
+            {transferRequest && rideConfig ? (
+              <div className="border-t border-line-subtle pt-10">
+                <CheckoutTransfer
+                  activity={activity}
+                  request={transferRequest}
+                  legs={rideLegs}
+                  form={rideForm}
+                  setForm={setRideForm}
+                  errors={errors}
+                  changeHref={`${basePath}/${activity.slug}`}
+                />
+              </div>
+            ) : null}
             <CheckoutDiscounts
               promos={pricing.promos}
               giftCards={pricing.giftCards}
@@ -892,7 +1068,7 @@ export function CheckoutFlow({
 
           {activity.customRequests ? (
             <div className="mt-8 lg:hidden">
-              <CustomQuoteCard activity={activity} tenantSlug={tenant.slug} departure={departure} guest={guest} />
+              <CustomQuoteCard activity={activity} tenantSlug={tenant.slug} departure={shown} guest={guest} />
             </div>
           ) : null}
 
@@ -905,6 +1081,7 @@ export function CheckoutFlow({
               size="lg"
               onClick={pay}
               loading={submitting}
+              disabled={ridesTaken}
               leftIcon={<Lock aria-hidden="true" />}
               className="sm:min-w-52"
             >
@@ -921,12 +1098,13 @@ export function CheckoutFlow({
             <OrderSummary
               activity={activity}
               tenant={tenant}
-              departure={departure}
+              departure={shown}
               quote={displayQuote}
               split={split}
               balanceWhen={balanceWhen}
+              ride={rideRequest ? { line: rideLine, trip: tripLabel(rideRequest.trip, rideConfig?.hub) } : undefined}
             />
-            {activity.customRequests ? <CustomQuoteCard activity={activity} tenantSlug={tenant.slug} departure={departure} guest={guest} /> : null}
+            {activity.customRequests ? <CustomQuoteCard activity={activity} tenantSlug={tenant.slug} departure={shown} guest={guest} /> : null}
           </div>
         </aside>
       </div>
@@ -1112,11 +1290,14 @@ function GuestStep({
   setGuest,
   errors,
   fields,
+  ride = false,
 }: {
   guest: GuestState
   setGuest: React.Dispatch<React.SetStateAction<GuestState>>
   errors: Errors
   fields: CheckoutFields
+  /** A ride: the driver messages this number on the day. */
+  ride?: boolean
 }) {
   const set = (key: keyof GuestState) => (value: string) =>
     setGuest((prev) => ({ ...prev, [key]: value }))
@@ -1128,7 +1309,7 @@ function GuestStep({
           Who is the booking for?
         </h2>
         <p className="mt-1.5 text-sm text-muted">
-          We send the tickets and any weather updates here.
+          {ride ? 'We send your booking and the driver\'s details here.' : 'We send the tickets and any weather updates here.'}
         </p>
       </div>
 
@@ -1165,7 +1346,13 @@ function GuestStep({
           />
         </Field>
         {fields.phone === 'off' ? null : (
-          <Field label="Mobile" error={errors.phone} description="For day-of updates only." required={fields.phone === 'required'} optional={fields.phone === 'optional'}>
+          <Field
+            label={ride ? 'Mobile number' : 'Mobile'}
+            error={errors.phone}
+            description={ride ? 'The driver messages you here on the day.' : 'For day-of updates only.'}
+            required={fields.phone === 'required'}
+            optional={fields.phone === 'optional'}
+          >
             <Input
               type="tel"
               inputMode="tel"
@@ -1502,14 +1689,20 @@ function SummaryLines({
           <span>Subtotal</span>
           <span className="tabular">{formatCurrency(quote.subtotal, tenant.currency)}</span>
         </div>
-        <div className="flex items-baseline justify-between gap-3">
-          <span>{quote.feeLabel}</span>
-          <span className="tabular">{formatCurrency(quote.feeTotal, tenant.currency)}</span>
-        </div>
-        <div className="flex items-baseline justify-between gap-3">
-          <span>{quote.taxLabel}</span>
-          <span className="tabular">{formatCurrency(quote.taxTotal, tenant.currency)}</span>
-        </div>
+        {quote.feesIncluded ? (
+          <p className="text-subtle">All fees included</p>
+        ) : (
+          <>
+            <div className="flex items-baseline justify-between gap-3">
+              <span>{quote.feeLabel}</span>
+              <span className="tabular">{formatCurrency(quote.feeTotal, tenant.currency)}</span>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
+              <span>{quote.taxLabel}</span>
+              <span className="tabular">{formatCurrency(quote.taxTotal, tenant.currency)}</span>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="mt-3 flex items-baseline justify-between gap-3 border-t border-line pt-3">
@@ -1529,6 +1722,7 @@ function OrderSummary({
   quote,
   split,
   balanceWhen = 'later',
+  ride,
 }: {
   activity: Activity
   tenant: Tenant
@@ -1537,6 +1731,8 @@ function OrderSummary({
   /** What is paid today and what is left, when not everything is paid now. */
   split?: { now: number; later: number }
   balanceWhen?: string
+  /** A ride: its trip ("Round trip") and who and what ("4 passengers · 4 suitcases · Private van"). */
+  ride?: { line: string; trip: string }
 }) {
   const media = activity.media.find((m) => m.isPrimary) ?? activity.media[0]
 
@@ -1555,7 +1751,7 @@ function OrderSummary({
           <p className="mt-1 truncate text-xs text-subtle">{tenant.name}</p>
           <p className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-muted">
             <Clock className="size-3" aria-hidden="true" />
-            {departure.returnsAt ? `${quote.days}-day rental` : quote.lengthLabel ? quote.lengthLabel : quote.hours ? `${quote.hours}-hour rental` : formatDuration(activity.durationMinutes)}
+            {ride ? ride.trip : departure.returnsAt ? `${quote.days}-day rental` : quote.lengthLabel ? quote.lengthLabel : quote.hours ? `${quote.hours}-hour rental` : formatDuration(activity.durationMinutes)}
           </p>
         </div>
       </div>
@@ -1567,7 +1763,7 @@ function OrderSummary({
             <dt className="sr-only">Date and time</dt>
             {departure.legs ? (
               <dd>
-                <LegList legs={departure.legs} compact />
+                <LegList legs={departure.legs} compact={!ride} />
               </dd>
             ) : departure.returnsAt ? (
               <>
@@ -1589,9 +1785,10 @@ function OrderSummary({
           <Users className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
           <div className="min-w-0">
             <dt className="sr-only">Party</dt>
-            <dd className="text-muted">{quote.countLabel}</dd>
+            <dd className="text-muted">{ride ? ride.line : quote.countLabel}</dd>
           </div>
         </div>
+        {ride ? null : (
         <div className="flex items-start gap-2.5">
           <MapPin className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
           <div className="min-w-0">
@@ -1606,6 +1803,7 @@ function OrderSummary({
             </dd>
           </div>
         </div>
+        )}
       </dl>
 
       <div className="p-4">
@@ -1708,6 +1906,29 @@ function MobileSummary({
   )
 }
 
+/** A booked ride's legs: what, the date and pickup, the flight, from and to, and where the driver meets them. */
+function RideList({ legs, booked }: { legs: CheckoutLeg[]; booked: TransferBookingDetails }) {
+  return (
+    <ol className="flex list-none flex-col gap-3 p-0">
+      {legs.map((leg, index) => {
+        const ride = booked.legs[index]
+        const flight = ride ? flightLine(ride) : ''
+        return (
+          <li key={`${leg.departureId}-${index}`} className="min-w-0">
+            <p className="text-sm font-medium text-foreground">{leg.label}</p>
+            <p className="text-xs text-subtle tabular">
+              {formatDateLong(leg.startsAt)} · Pickup {hhmm(leg.startsAt)}
+              {flight ? ` · ${flight}` : ''}
+            </p>
+            {ride && (ride.from || ride.to) ? <p className="text-xs text-muted">{ride.from} → {ride.to}</p> : null}
+            <p className="text-xs leading-relaxed text-muted">{leg.meetingPoint}</p>
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
 /* ==========================================================================
    CONFIRMATION
    ========================================================================== */
@@ -1745,6 +1966,7 @@ function Confirmation({
   basePath,
   onCopy,
   reducedMotion,
+  ride,
 }: {
   tenant: Tenant
   activity: Activity
@@ -1757,6 +1979,8 @@ function Confirmation({
   reducedMotion: boolean
   paid?: { now: number; later: number }
   balanceWhen?: string
+  /** A ride: the booked legs with their flights, and who and what is coming. */
+  ride?: { details: TransferBookingDetails; line: string; trip: string }
 }) {
   const download = (filename: string, mime: string, content: string) => {
     const blob = new Blob([content], { type: mime })
@@ -1776,22 +2000,38 @@ function Confirmation({
       now.getUTCHours(),
     )}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`
 
-    const ics = [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'PRODID:-//EZRA Pro//Storefront//EN',
-      'CALSCALE:GREGORIAN',
-      'BEGIN:VEVENT',
-      `UID:${reference}@ezrapro.com`,
-      `DTSTAMP:${stamp}`,
-      `DTSTART;TZID=${tenant.timezone}:${icsStamp(departure.startsAt)}`,
-      `DTEND;TZID=${tenant.timezone}:${icsStamp(departure.endsAt)}`,
-      `SUMMARY:${activity.name} — ${tenant.name}`,
-      `LOCATION:${tenant.contact.addressLine.replace(/,/g, '\\,')}`,
-      `DESCRIPTION:Confirmation ${reference}. ${meetingPointFor(activity, departure).replace(/,/g, '\\,')}`,
-      'END:VEVENT',
-      'END:VCALENDAR',
-    ].join('\r\n')
+    const esc = (text: string) => text.replace(/,/g, '\\,')
+    // A ride: one event per leg, from its pickup, with its flight and where the driver meets them.
+    const events = ride
+      ? (departure.legs ?? []).map((leg, index) => {
+          const booked = ride.details.legs[index]
+          const flight = booked ? flightLine(booked) : ''
+          return [
+            'BEGIN:VEVENT',
+            `UID:${reference}-${index + 1}@ezrapro.com`,
+            `DTSTAMP:${stamp}`,
+            `DTSTART;TZID=${tenant.timezone}:${icsStamp(leg.startsAt)}`,
+            `DTEND;TZID=${tenant.timezone}:${icsStamp(leg.endsAt)}`,
+            `SUMMARY:${leg.label} — ${tenant.name}`,
+            `LOCATION:${esc(booked?.from || leg.meetingPoint)}`,
+            `DESCRIPTION:Confirmation ${reference}.${flight ? ` ${flight}.` : ''} ${esc(leg.meetingPoint)}`,
+            'END:VEVENT',
+          ]
+        })
+      : [
+          [
+            'BEGIN:VEVENT',
+            `UID:${reference}@ezrapro.com`,
+            `DTSTAMP:${stamp}`,
+            `DTSTART;TZID=${tenant.timezone}:${icsStamp(departure.startsAt)}`,
+            `DTEND;TZID=${tenant.timezone}:${icsStamp(departure.endsAt)}`,
+            `SUMMARY:${activity.name} — ${tenant.name}`,
+            `LOCATION:${esc(tenant.contact.addressLine)}`,
+            `DESCRIPTION:Confirmation ${reference}. ${esc(meetingPointFor(activity, departure))}`,
+            'END:VEVENT',
+          ],
+        ]
+    const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//EZRA Pro//Storefront//EN', 'CALSCALE:GREGORIAN', ...events.flat(), 'END:VCALENDAR'].join('\r\n')
 
     download(`${reference}.ics`, 'text/calendar;charset=utf-8', ics)
     toast.success('Calendar invite downloaded')
@@ -1889,13 +2129,20 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
         className="mt-7 text-center"
       >
         <h1 className="font-display text-display-sm font-semibold tracking-tight text-foreground">
-          You are booked, {guest.firstName || 'friend'}
+          {ride ? 'Your ride is booked' : `You are booked, ${guest.firstName || 'friend'}`}
         </h1>
+        {ride ? (
+          <p className="mx-auto mt-3 max-w-lg text-base leading-relaxed text-muted">
+            We have emailed the details to <span className="font-medium text-foreground">{guest.email || 'your inbox'}</span>. Your driver messages{' '}
+            {guest.phone || 'your mobile'} on the day.
+          </p>
+        ) : (
         <p className="mx-auto mt-3 max-w-lg text-base leading-relaxed text-muted">
           We have emailed your tickets to{' '}
           <span className="font-medium text-foreground">{guest.email || 'your inbox'}</span>. Show
           the code below at the meeting point — a screenshot is fine.
         </p>
+        )}
       </motion.div>
 
       {/* ---------- reference ---------- */}
@@ -1934,18 +2181,18 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
           </div>
           <div>
             <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">
-              When
+              {ride ? 'Trip' : 'When'}
             </dt>
             <dd className="mt-1 text-sm font-medium tabular text-foreground">
-              {departure.legs ? <LegList legs={departure.legs} compact /> : <>{formatDateLong(departure.startsAt)} · {formatTime(departure.startsAt)}{departure.returnsAt ? ` to ${formatDateLong(departure.returnsAt)} · ${formatTime(departure.returnsAt)}` : ""}</>}
+              {ride ? ride.trip : departure.legs ? <LegList legs={departure.legs} compact /> : <>{formatDateLong(departure.startsAt)} · {formatTime(departure.startsAt)}{departure.returnsAt ? ` to ${formatDateLong(departure.returnsAt)} · ${formatTime(departure.returnsAt)}` : ""}</>}
             </dd>
           </div>
           <div>
             <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">
-              Guests
+              {ride ? 'Passengers' : 'Guests'}
             </dt>
             <dd className="mt-1 text-sm font-medium text-foreground">
-              {quote.countLabel}
+              {ride ? ride.line : quote.countLabel}
             </dd>
           </div>
           <div>
@@ -1959,10 +2206,12 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
           </div>
           <div className="sm:col-span-2">
             <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">
-              Meeting point
+              {ride ? (ride.details.legs.length > 1 ? 'Your rides' : 'Your ride') : 'Meeting point'}
             </dt>
             <dd className="mt-1 text-sm leading-relaxed text-muted">
-              {departure.legs ? (
+              {ride ? (
+                <RideList legs={departure.legs ?? []} booked={ride.details} />
+              ) : departure.legs ? (
                 <LegList legs={departure.legs} />
               ) : (
                 <>

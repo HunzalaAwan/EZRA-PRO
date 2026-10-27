@@ -3,6 +3,7 @@ import { applyRules, type PricingRule } from '@/lib/pricing'
 import { rateFor, rentalModes, type RentalMode } from '@/lib/activity-kinds'
 import { extraSpotsOf, privateMostOf, slotExtraSpotsOf, spotsPlanOf } from '@/lib/extra-spots'
 import { peopleOf, placesOf } from '@/lib/places'
+import { activeZones, transferOf, transferRateFor, tripsOffered, zoneById, type TransferPricing } from '@/lib/transfers'
 import { formatCurrency } from '@/lib/utils'
 
 /* ==========================================================================
@@ -34,6 +35,10 @@ import { formatCurrency } from '@/lib/utils'
    spots plus its extra spots; a private group is at most its most guests plus
    its extra spots (`guestLimitOf`). Every screen stops there; the engine
    prices what it gets.
+   Transfers (`ctx.transfer`): each vehicle size (a shared shuttle: each
+   ticket) starts from its price in the table for the trip and destination;
+   one not sold there counts as none. Driver by the hour multiplies by the
+   hours. Without `ctx.transfer` (lists, the "from" check) a tier's own price.
    ========================================================================== */
 
 /** The parts of an activity the engine reads. A full `Activity` fits. */
@@ -53,6 +58,7 @@ export type PricedActivity = Pick<Activity, 'slug' | 'kind' | 'currency' | 'pric
       | 'rental'
       | 'maxCapacity'
       | 'extraSpots'
+      | 'transfer'
     >
   >
 
@@ -87,6 +93,8 @@ export interface PriceContext {
   /** People on the booking, for group discounts and group rules (a charter: its party). */
   guests?: number
   rental?: RentalPricing
+  /** Transfers: the trip, destination and hours the ride is priced by. */
+  transfer?: TransferPricing
 }
 
 export interface AppliedChange {
@@ -127,7 +135,7 @@ export interface PriceBookingInput extends Omit<PriceContext, 'guests'> {
   lines: { tierId: string; qty: number }[]
   /** The private option: one price for the group, the whole time to themselves. */
   private?: boolean
-  /** Charters: the group size. */
+  /** Charters: the group size. Transfers: the passengers (group rules count them). */
   party?: number
 }
 
@@ -160,6 +168,7 @@ export function defaultChargeBy(kind: ActivityKind | undefined): ChargeBy {
     case 'charter':
       return 'group'
     case 'rental':
+    case 'transfer':
       return 'item'
     default:
       return 'person'
@@ -494,12 +503,27 @@ function runSteps(activity: PricedActivity, scope: Scope, base: number, ctx: Pri
   return { price: Math.max(0, Math.round(price)), factor, applied }
 }
 
-/** A tier's base: its price, or a rental's rate for how it is rented. */
-function baseOf(activity: PricedActivity, tierId: string, rental?: RentalPricing): number | undefined {
+/** A transfer priced at a trip: its table decides every price. */
+const transferPriced = (activity: PricedActivity, transfer?: TransferPricing): transfer is TransferPricing =>
+  (activity.kind ?? 'trip') === 'transfer' && Boolean(transfer) && Boolean(activity.transfer)
+
+/** A tier's price for a ride: its price in the table; a shared shuttle's free ticket (an infant) with none rides free everywhere. */
+function rideRateOf(activity: PricedActivity, tierId: string, transfer: TransferPricing): number | undefined {
+  const rate = transferRateFor(activity.transfer, tierId, transfer)
+  if (rate !== undefined || activity.transfer?.service !== 'shared') return rate
+  const tier = activity.priceTiers.find((entry) => entry.id === tierId)
+  const listed = activity.transfer.rates.some((entry) => entry.tierId === tierId)
+  return tier && tier.price === 0 && !listed ? 0 : undefined
+}
+
+/** A tier's base: its price, a rental's rate for how it is rented, or a transfer's price for the trip. */
+function baseOf(activity: PricedActivity, tierId: string, rental?: RentalPricing, transfer?: TransferPricing): number | undefined {
   const tier = activity.priceTiers.find((entry) => entry.id === tierId)
   if (!tier) return undefined
   // A rated rental item with no rate in this mode isn't sold that way: no price to fall back on.
   if (isRated(activity, rental?.mode)) return rateFor(activity, tierId, rental!.mode!, rental?.lengthId)
+  // A vehicle (or ticket) not sold for this trip and destination: no price either.
+  if (transferPriced(activity, transfer)) return rideRateOf(activity, tierId, transfer)
   return tier.price
 }
 
@@ -536,7 +560,7 @@ export function unitPriceDetail(activity: PricedActivity, tierId: string, ctx: P
     const result = runSteps(activity, { kind: 'group' }, base, ctx, false)
     return { price: result.price, base, applied: result.applied, ...(spots ? { extraSpot: extraPrice(spots.price, result.factor) } : {}) }
   }
-  const base = baseOf(activity, tierId, ctx.rental) ?? 0
+  const base = baseOf(activity, tierId, ctx.rental, ctx.transfer) ?? 0
   const result = runSteps(activity, { kind: 'tier', tierId, base }, base, ctx, chargeByOf(activity) === 'person')
   return { price: result.price, base, applied: result.applied, ...(spots ? { extraSpot: extraPrice(spots.price, result.factor) } : {}) }
 }
@@ -563,9 +587,45 @@ export function unitPrice(activity: PricedActivity, tierId: string, ctx: PriceCo
    The lead ("from") price
    -------------------------------------------------------------------------- */
 
-/** Every way the lead price can be counted: each sellable tier, or each rental rate in the modes asked for. */
-function leadCandidates(activity: PricedActivity, rental?: RentalPricing): { tierId: string; rental?: RentalPricing }[] {
+type LeadCandidate = { tierId: string; rental?: RentalPricing; transfer?: TransferPricing }
+
+/**
+ * A transfer's lead candidates: every destination × vehicle with a one-way
+ * price (a shared shuttle: its lead ticket in every destination), or each
+ * vehicle's hourly price. With `transfer`, only that trip and destination.
+ */
+function transferCandidates(activity: PricedActivity, transfer?: TransferPricing): LeadCandidate[] {
+  const config = transferOf({ kind: activity.kind, transfer: activity.transfer })
+  if (!config) return []
+  // A shared shuttle leads with its lead ticket (the first priced one that takes a seat), like any per-person activity.
+  const shared = config.service === 'shared'
+  const paid = activity.priceTiers.filter((tier) => config.rates.some((rate) => rate.tierId === tier.id && rate.oneWay > 0))
+  const leadTier = shared ? (paid.find((tier) => tier.countsTowardCapacity) ?? paid[0]) : undefined
+  const tiers = shared ? (leadTier ? [leadTier] : []) : activity.priceTiers
+  const priced = (tierId: string, pricing: TransferPricing) => {
+    const rate = transferRateFor(config, tierId, pricing)
+    return rate !== undefined && rate > 0
+  }
+  if (transfer) return tiers.filter((tier) => priced(tier.id, transfer)).map((tier) => ({ tierId: tier.id, transfer }))
+  if (config.service === 'hourly') return tiers.filter((tier) => priced(tier.id, { trip: 'hourly', hours: 1 })).map((tier) => ({ tierId: tier.id, transfer: { trip: 'hourly' as const, hours: 1 } }))
+  // One way: an arrival when it is sold, else the first trip offered (hotel to hotel within the same destination).
+  const offered = tripsOffered(config)
+  const trip = offered.includes('from_hub') ? 'from_hub' : offered.includes('to_hub') ? 'to_hub' : offered.includes('between') ? 'between' : (offered[0] ?? 'from_hub')
+  const out: LeadCandidate[] = []
+  for (const zone of activeZones(config)) {
+    const pricing: TransferPricing = trip === 'between' ? { trip, zoneId: zone.id, toZoneId: zone.id } : { trip, zoneId: zone.id }
+    for (const tier of tiers) if (priced(tier.id, pricing)) out.push({ tierId: tier.id, transfer: pricing })
+  }
+  return out
+}
+
+/** Every way the lead price can be counted: each sellable tier, each rental rate in the modes asked for, or each transfer price. */
+function leadCandidates(activity: PricedActivity, rental?: RentalPricing, transfer?: TransferPricing): LeadCandidate[] {
   if (groupPriced(activity)) return [{ tierId: 'group' }]
+  if ((activity.kind ?? 'trip') === 'transfer') {
+    const rides = transferCandidates(activity, transfer)
+    if (rides.length > 0) return rides
+  }
   const modes = (activity.kind ?? 'trip') === 'rental' && (activity.rental?.rates?.length ?? 0) > 0 ? (rental?.mode ? [rental.mode] : rentalModes(activity)) : []
   if (modes.length > 0) {
     const out: { tierId: string; rental?: RentalPricing }[] = []
@@ -596,9 +656,9 @@ function leadCandidates(activity: PricedActivity, rental?: RentalPricing): { tie
  * cheapest item rate, or the group price. 0 when everything is free.
  */
 export function leadPrice(activity: PricedActivity, ctx: PriceContext = {}): number {
-  const candidates = leadCandidates(activity, ctx.rental)
+  const candidates = leadCandidates(activity, ctx.rental, ctx.transfer)
   if (candidates.length === 0) return 0
-  return Math.min(...candidates.map((candidate) => unitPrice(activity, candidate.tierId, { ...ctx, rental: candidate.rental ?? ctx.rental })))
+  return Math.min(...candidates.map((candidate) => unitPrice(activity, candidate.tierId, { ...ctx, rental: candidate.rental ?? ctx.rental, transfer: candidate.transfer ?? ctx.transfer })))
 }
 
 /**
@@ -625,6 +685,18 @@ export function slotLeadPrice(activity: PricedActivity, slot: { priceOverride?: 
    A booking
    -------------------------------------------------------------------------- */
 
+/** "Private van · Playa del Carmen · Round trip", "Private car · Puerto Juarez to Playa del Carmen", "Private van · 5 hours". */
+function transferLineLabel(activity: PricedActivity, label: string, ride: TransferPricing, hours: number): string {
+  if (ride.trip === 'hourly') return `${label} · ${hours} ${hours === 1 ? 'hour' : 'hours'}`
+  const zone = zoneById(activity.transfer, ride.zoneId)?.name
+  if (ride.trip === 'between') {
+    const to = zoneById(activity.transfer, ride.toZoneId)?.name
+    return zone && to ? `${label} · ${zone} to ${to}` : label
+  }
+  const named = zone ? `${label} · ${zone}` : label
+  return ride.trip === 'round_trip' ? `${named} · Round trip` : named
+}
+
 export function priceBooking(input: PriceBookingInput): PriceBookingResult {
   const { activity } = input
   const kind = activity.kind ?? 'trip'
@@ -633,8 +705,12 @@ export function priceBooking(input: PriceBookingInput): PriceBookingResult {
   const hours = Math.max(1, Math.floor(rental.hours ?? 1))
   const rated = isRated(activity, rental.mode)
   const byLength = rated && rental.mode === 'length'
-  // A rated rental item with no rate in the mode can't be booked that way, so it is left off.
-  const sellable = (tierId: string) => !rated || rateFor(activity, tierId, rental.mode!, rental.lengthId) !== undefined
+  // Transfers: the price table for the trip and destination; a driver by the hour is priced per hour.
+  const ride = transferPriced(activity, input.transfer) ? input.transfer : undefined
+  const rideHours = ride?.trip === 'hourly' ? Math.max(1, Math.floor(ride.hours ?? 1)) : 1
+  // A rated rental item with no rate in the mode can't be booked that way, so it is left off; so is a vehicle not sold for the trip.
+  const sellable = (tierId: string) =>
+    ride ? rideRateOf(activity, tierId, ride) !== undefined : !rated || rateFor(activity, tierId, rental.mode!, rental.lengthId) !== undefined
   const qtyOf = (tierId: string) => (sellable(tierId) ? input.lines.reduce((sum, line) => (line.tierId === tierId ? sum + Math.max(0, Math.floor(line.qty)) : sum), 0) : 0)
 
   let headcount = 0
@@ -645,8 +721,8 @@ export function priceBooking(input: PriceBookingInput): PriceBookingResult {
     headcount += qty * peopleOf(tier)
     seats += qty * placesOf(tier)
   }
-  // A private group priced per group says how many are coming; priced per person, its tickets do.
-  const guests = kind === 'charter' && !privatePerPerson(activity) ? Math.max(1, input.party ?? headcount) : headcount
+  // A private group priced per group says how many are coming; priced per person, its tickets do. A transfer: its passengers.
+  const guests = kind === 'charter' && !privatePerPerson(activity) ? Math.max(1, input.party ?? headcount) : kind === 'transfer' ? (input.party ?? headcount) : headcount
   const ctx: PriceContext = {
     startsAt: input.startsAt,
     nowIso: input.nowIso,
@@ -656,6 +732,7 @@ export function priceBooking(input: PriceBookingInput): PriceBookingResult {
     businessRules: input.businessRules,
     rental,
     guests,
+    ...(ride ? { transfer: ride } : {}),
   }
 
   const priv = activity.privateOption
@@ -721,8 +798,8 @@ export function priceBooking(input: PriceBookingInput): PriceBookingResult {
     for (const tier of activity.priceTiers) {
       const qty = qtyOf(tier.id)
       if (qty <= 0) continue
-      const base = baseOf(activity, tier.id, rental) ?? tier.price
-      const span = byLength ? 1 : rated && rental.mode === 'hour' ? hours : days
+      const base = baseOf(activity, tier.id, rental, ride) ?? tier.price
+      const span = ride ? rideHours : byLength ? 1 : rated && rental.mode === 'hour' ? hours : days
       const unit = runSteps(activity, { kind: 'tier', tierId: tier.id, base }, base, ctx, ladder)
       if (!leadSet) {
         leadFactor = unit.factor
@@ -739,13 +816,15 @@ export function priceBooking(input: PriceBookingInput): PriceBookingResult {
       lines.push({
         id: tier.id,
         tierId: tier.id,
-        label: byLength
-          ? `${tier.label} · ${activity.rental?.lengths?.find((length) => length.id === rental.lengthId)?.label ?? 'set length'}`
-          : rated && rental.mode === 'hour'
-            ? `${tier.label} · ${hours} ${hours === 1 ? 'hour' : 'hours'}${unitPrice < full ? ' · capped' : ''}`
-            : days > 1
-              ? `${tier.label} · ${days} days${unitPrice < full ? ' · capped' : ''}`
-              : tier.label,
+        label: ride
+          ? transferLineLabel(activity, tier.label, ride, rideHours)
+          : byLength
+            ? `${tier.label} · ${activity.rental?.lengths?.find((length) => length.id === rental.lengthId)?.label ?? 'set length'}`
+            : rated && rental.mode === 'hour'
+              ? `${tier.label} · ${hours} ${hours === 1 ? 'hour' : 'hours'}${unitPrice < full ? ' · capped' : ''}`
+              : days > 1
+                ? `${tier.label} · ${days} days${unitPrice < full ? ' · capped' : ''}`
+                : tier.label,
         quantity: usualQty,
         unitPrice,
         total: unitPrice * usualQty,
@@ -849,7 +928,7 @@ export function priceCalendar(activity: PricedActivity, fromKey: string, months 
       const startsAt = `${dateKey}T${time || '00:00'}:00`
       const ctx: PriceContext = { startsAt, nowIso: options.withDemand ? options.nowIso : undefined, businessRules: time ? rules : untimedRules, rental: options.rental }
       for (const candidate of candidates) {
-        const detail = unitPriceDetail(priced, candidate.tierId, { ...ctx, rental: candidate.rental ?? ctx.rental })
+        const detail = unitPriceDetail(priced, candidate.tierId, { ...ctx, rental: candidate.rental ?? ctx.rental, transfer: candidate.transfer })
         if (!best || detail.price < best.price) best = { price: detail.price, changes: detail.applied.map((change) => change.label) }
       }
     }

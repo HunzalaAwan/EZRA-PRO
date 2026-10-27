@@ -22,6 +22,8 @@ export const KIND_PRICING: Record<ActivityKind, { title: string; text: (sessions
   lesson: { title: 'Prices', text: (sessions) => (sessions > 1 ? `Per person, for the whole ${sessions}-day course.` : 'Per person, per lesson.') },
   pass: { title: 'Prices', text: () => 'Per ticket, for the day.' },
   package: { title: 'Prices', text: () => 'Per person, for every part together.' },
+  // The transfer price table titles itself by service (transfer-price-table.tsx); this is its fallback.
+  transfer: { title: 'Prices per vehicle', text: () => 'Guests see the price for the vehicle that fits their group.' },
 }
 
 /** A private activity priced per person: a price for each guest, the time slot still the group's own. */

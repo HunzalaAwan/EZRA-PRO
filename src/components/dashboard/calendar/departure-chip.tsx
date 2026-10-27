@@ -123,6 +123,8 @@ export function DepartureChip({
   const time = formatTime(departure.startsAt)
   const soldOut = treatment === 'sold_out' || seatsLeft <= 0
   const cancelled = treatment === 'cancelled'
+  /** Private transfers and drivers by the hour count vehicles out, not seats. */
+  const unit = activity.kind === 'transfer' && activity.transfer?.service !== 'shared' ? 'vehicles' : null
 
   const shell =
     treatment === 'cancelled'
@@ -133,7 +135,7 @@ export function DepartureChip({
           ? cn(EVENT_TINT_STRONG, EVENT_BORDER, EVENT_INK, SOLD_OUT_RING)
           : cn(EVENT_TINT, EVENT_BORDER, EVENT_INK)
 
-  const accessibleName = `${time} · ${activity.name} · ${departure.booked} of ${departure.capacity} spots booked${
+  const accessibleName = `${time} · ${activity.name} · ${departure.booked} of ${departure.capacity} ${unit ?? 'spots'} booked${
     cancelled ? ' · cancelled' : soldOut ? ' · sold out' : ''
   }`
 
@@ -246,7 +248,7 @@ export function DepartureChip({
       {roomy ? (
         <span className="tabular flex items-center gap-1.5 text-xs font-medium opacity-80">
           <span>
-            {departure.booked}/{departure.capacity} seats
+            {unit ? `${departure.booked} of ${departure.capacity} ${unit}` : `${departure.booked}/${departure.capacity} seats`}
           </span>
           {!cancelled ? (
             <span className="opacity-70">{soldOut ? 'sold out' : `${seatsLeft} left`}</span>

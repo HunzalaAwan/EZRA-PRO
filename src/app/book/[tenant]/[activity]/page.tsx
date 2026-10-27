@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 
 import { NOW, getBookingRows, getStorefront, getLocationsByTenant } from '@/lib/demo'
-import { buildDays, buildPackageParts } from '@/lib/storefront-availability'
+import { buildDays, buildPackageParts, buildTransferAvailability } from '@/lib/storefront-availability'
 import { addDays, clamp, toDateKey } from '@/lib/utils'
 import {
   ActivityDetailView,
@@ -189,6 +189,7 @@ export default async function ActivityPage({
       initialGuests={initialGuests}
       recentBookings={recentBookings}
       packageParts={activity.kind === 'package' ? buildPackageParts(activity) : undefined}
+      transferAvailability={activity.kind === 'transfer' ? buildTransferAvailability(activity) : undefined}
       nowIso={`${NOW.getFullYear()}-${String(NOW.getMonth() + 1).padStart(2, '0')}-${String(NOW.getDate()).padStart(2, '0')}T${String(NOW.getHours()).padStart(2, '0')}:${String(NOW.getMinutes()).padStart(2, '0')}:00`}
     />
   )

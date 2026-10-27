@@ -1,5 +1,5 @@
 import { NOW } from '@/lib/data/constants'
-import type { CurrencyCode } from '@/types'
+import type { CurrencyCode, TransferBookingDetails } from '@/types'
 
 /* ==========================================================================
    Booking ledger — what changed after the demo data was built: bookings
@@ -26,6 +26,11 @@ export interface LedgerEntry {
   /** Set when the entry is one part of a package booking. */
   packageSlug?: string
   packageName?: string
+  /**
+   * Transfers: the ride. One entry per booking, not per leg; `party` is the
+   * vehicles (a shared shuttle: its seats), and `peopleOfEntry` the passengers.
+   */
+  transfer?: TransferBookingDetails
   name: string
   email: string
   phone?: string
@@ -48,12 +53,20 @@ export interface BookingChange {
   fromDepartureId: string
   fromStartsAt: string
   fromParty: number
+  /**
+   * Transfers: the time slots of the ride's later legs as booked (a round
+   * trip's return), which hold the same `fromParty` as the first. `transfer`
+   * replaces them once the ride is changed.
+   */
+  fromLegDepartureIds?: string[]
   movedTo?: { departureId: string; startsAt: string }
   moves: number
   party?: number
   cancelled?: boolean
   refund?: number
   fee?: number
+  /** Transfers: the ride as changed (a new flight, time or hotel). Its first leg's slot moves with `movedTo`. */
+  transfer?: TransferBookingDetails
   history: ChangeEvent[]
 }
 
@@ -110,7 +123,7 @@ export function recordBooking(slug: string, entries: LedgerEntry[]) {
 export function changeBooking(
   slug: string,
   reference: string,
-  start: Pick<BookingChange, 'fromDepartureId' | 'fromStartsAt' | 'fromParty'>,
+  start: Pick<BookingChange, 'fromDepartureId' | 'fromStartsAt' | 'fromParty' | 'fromLegDepartureIds'>,
   patch: Partial<Omit<BookingChange, 'history' | 'fromDepartureId' | 'fromStartsAt' | 'fromParty'>>,
   event: Omit<ChangeEvent, 'at'>,
 ) {
@@ -122,35 +135,75 @@ export function changeBooking(
   })
 }
 
+/** A ride's later legs' time slots (a round trip's return): they hold the same as the first leg. */
+const laterLegSlots = (details: TransferBookingDetails | undefined): string[] =>
+  (details?.legs ?? []).slice(1).map((leg) => leg.departureId).filter(Boolean)
+
 /**
  * Seats each departure gains or loses from the ledger: new bookings take
  * seats, cancellations give them back, a move gives back the old time and
- * takes the new one.
+ * takes the new one. A ride takes its vehicles (or seats) on every leg's
+ * time slot, so a round trip's return counts on its own slot.
  */
 export function seatDeltas(store: LedgerStore): Record<string, number> {
   const delta: Record<string, number> = {}
   const add = (id: string, seats: number) => {
     delta[id] = (delta[id] ?? 0) + seats
   }
-  for (const entry of store.entries) add(entry.departureId, entry.party)
+  for (const entry of store.entries) {
+    add(entry.departureId, entry.party)
+    for (const id of laterLegSlots(entry.transfer)) add(id, entry.party)
+  }
   for (const change of Object.values(store.changes)) {
     add(change.fromDepartureId, -change.fromParty)
+    for (const id of change.fromLegDepartureIds ?? []) add(id, -change.fromParty)
     if (change.cancelled) continue
-    add(change.movedTo?.departureId ?? change.fromDepartureId, change.party ?? change.fromParty)
+    const party = change.party ?? change.fromParty
+    add(change.movedTo?.departureId ?? change.fromDepartureId, party)
+    for (const id of change.transfer ? laterLegSlots(change.transfer) : (change.fromLegDepartureIds ?? [])) add(id, party)
   }
   return delta
 }
 
-/** Ledger entries on one departure, with their changes applied. */
+/**
+ * Where a booking's changes start from: its time slot, and what it holds
+ * there. A ride holds its vehicles (a shared run: its seats) on every leg.
+ */
+export function changeStartOf(booking: {
+  departureId: string
+  startsAt: string
+  partySize: number
+  transfer?: TransferBookingDetails
+}): Pick<BookingChange, 'fromDepartureId' | 'fromStartsAt' | 'fromParty' | 'fromLegDepartureIds'> {
+  const start = { fromDepartureId: booking.departureId, fromStartsAt: booking.startsAt, fromParty: booking.partySize }
+  const ride = booking.transfer
+  if (!ride) return start
+  const later = laterLegSlots(ride)
+  const fromParty = ride.service === 'shared' ? booking.partySize : Math.max(1, ride.vehicles.reduce((sum, line) => sum + line.qty, 0))
+  return { ...start, fromParty, ...(later.length > 0 ? { fromLegDepartureIds: later } : {}) }
+}
+
+/** Ledger entries on one departure, with their changes applied. A ride is on every leg's time slot. */
 export function entriesOn(store: LedgerStore, departureId: string) {
   return store.entries
     .map((entry) => {
       const change = store.changes[entry.id]
       if (!change) return entry
       if (change.cancelled) return null
-      return { ...entry, departureId: change.movedTo?.departureId ?? entry.departureId, startsAt: change.movedTo?.startsAt ?? entry.startsAt, party: change.party ?? entry.party }
+      return {
+        ...entry,
+        departureId: change.movedTo?.departureId ?? entry.departureId,
+        startsAt: change.movedTo?.startsAt ?? entry.startsAt,
+        party: change.party ?? entry.party,
+        ...(change.transfer ? { transfer: change.transfer } : {}),
+      }
     })
-    .filter((entry): entry is LedgerEntry => entry !== null && entry.departureId === departureId)
+    .filter((entry): entry is LedgerEntry => entry !== null && (entry.departureId === departureId || laterLegSlots(entry.transfer).includes(departureId)))
+}
+
+/** People on an entry: a transfer's passengers (its `party` counts vehicles or seats), else its party. */
+export function peopleOfEntry(entry: LedgerEntry): number {
+  return entry.transfer ? entry.transfer.passengers : entry.party
 }
 
 /** Slots with the ledger applied: fewer seats where it booked, more where it gave back. */

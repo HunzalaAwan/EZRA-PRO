@@ -352,8 +352,10 @@ export interface AddOn {
   label: string
   price: number
   description: string
-  /** Charged once for each guest, or once for the whole booking. Absent: per guest. */
-  per?: 'guest' | 'booking'
+  /** Charged once for each guest, once for the booking, or for each one the guest picks. Absent: per guest. */
+  per?: 'guest' | 'booking' | 'each'
+  /** 'each': the most a booking can take. Default 9. */
+  maxQty?: number
   required: boolean
   icon?: string
 }
@@ -593,14 +595,173 @@ export interface CharterRequest {
     sentAt: string
   }
   paidAt?: string
+  /** A ride the guest asked about: the trip, where, when and who. */
+  transfer?: TransferBookingDetails
 }
 
 /**
  * What is being sold: seats on a trip, a slot on an activity (a ride, a
- * zipline, a flight), a private charter, a rental, a lesson, a pass, or a
- * package of the business's own activities sold together.
+ * zipline, a flight), a private charter, a rental, a lesson, a pass, a
+ * package of the business's own activities sold together, or a transfer
+ * (a ride from one place to another).
  */
-export type ActivityKind = 'trip' | 'activity' | 'charter' | 'rental' | 'lesson' | 'pass' | 'package'
+export type ActivityKind = 'trip' | 'activity' | 'charter' | 'rental' | 'lesson' | 'pass' | 'package' | 'transfer'
+
+/* ==========================================================================
+   TRANSFERS — rides from one place to another
+   ========================================================================== */
+
+/** Private: one group per vehicle, priced per vehicle. Shared: seats on set runs, priced per person. Hourly: a vehicle and driver by the hour. */
+export type TransferService = 'private' | 'shared' | 'hourly'
+
+/** What guests book. 'hourly' is only used by the hourly service; a config's `trips` never lists it. */
+export type TransferTrip = 'from_hub' | 'to_hub' | 'round_trip' | 'between' | 'hourly'
+
+/** One ride's way: a round trip is a 'from_hub' leg and a 'to_hub' leg. */
+export type TransferDirection = Exclude<TransferTrip, 'round_trip'>
+
+export type TransferHubKind = 'airport' | 'port' | 'station' | 'other'
+
+/** Where rides start or end: an airport, a port, a station. */
+export interface TransferHub {
+  /** "Cancun International Airport". */
+  name: string
+  /** "CUN". Optional. */
+  code?: string
+  kind: TransferHubKind
+  /** Where the driver meets arrivals: "Outside arrivals, holding a sign with your name". */
+  meetingNote?: string
+}
+
+/** A destination: an area with its own price and drive time. */
+export interface TransferZone {
+  /** Stable: "tz_<slug>". */
+  id: string
+  /** "Playa del Carmen". */
+  name: string
+  /** Hotels and areas in it, so guests find where they stay. May be empty. */
+  places: string[]
+  /** One-way drive from the hub (or between nearby zones), minutes. Sets pickup times and how long a vehicle is out. */
+  driveMinutes: number
+  /** false: kept, not sold. Absent: sold. */
+  active?: boolean
+}
+
+/** A vehicle size. Its name, description and "from" price are on the price tier with the same id. */
+export interface TransferVehicle {
+  tierId: string
+  /** Most passengers one carries. */
+  passengers: number
+  /** Most suitcases one carries. */
+  bags: number
+  /** How many the business has. */
+  fleet: number
+  /** In repair or off the road. */
+  outOfService?: number
+  /** The Resources entry it is, for the rides board's unit picker. Optional. */
+  resourceId?: string
+}
+
+/** One price in the table, minor units: one zone, one vehicle (shared: one ticket). */
+export interface TransferRate {
+  zoneId: string
+  tierId: string
+  oneWay: number
+  /** Absent or 0: twice the one-way price. */
+  roundTrip?: number
+}
+
+/** Hotel to hotel between two given zones, instead of the higher zone's price. */
+export interface TransferPairRate {
+  fromZoneId: string
+  toZoneId: string
+  tierId: string
+  oneWay: number
+}
+
+export interface TransferConfig {
+  service: TransferService
+  /** Required when `trips` has a hub trip. */
+  hub?: TransferHub
+  /** What guests can book. Private and shared only; hourly reads as ['hourly']. */
+  trips: Exclude<TransferTrip, 'hourly'>[]
+  zones: TransferZone[]
+  /** Private and hourly: the vehicle sizes, one per price tier. Shared: absent (seats per run are `maxCapacity`). */
+  vehicles?: TransferVehicle[]
+  /** Private and shared: the price table. */
+  rates: TransferRate[]
+  pairRates?: TransferPairRate[]
+  /** Hourly: per vehicle per hour, minor units. */
+  hourly?: { tierId: string; hour: number }[]
+  /** Hourly: fewest and most hours. */
+  minHours?: number
+  maxHours?: number
+  /** Arrivals: free waiting after landing, minutes. Default 60. */
+  freeWaitMinutes: number
+  /** Departures: guests reach the hub this long before their flight or sailing, minutes. Default 120 (airport), 60 (port, station, other). */
+  checkInMinutes: number
+  /** Checkout asks for a flight (or ferry/train) number. Default: true for an airport hub. */
+  askFlight: boolean
+  /** Shared: which run times go which way, "HH:MM". A time in both lists shares its seats. Absent: every time goes both ways. */
+  shared?: { fromHubTimes: string[]; toHubTimes: string[] }
+  /** Most vehicles one booking takes online; more sends a request. Default 4. */
+  maxVehicles?: number
+}
+
+/** A flight (or sailing, or train) on a ride. */
+export interface TransferFlight {
+  /** "AA 1234". */
+  number: string
+  /** "American Airlines". */
+  airline?: string
+  /** Local ISO: when it lands (arrival) or leaves (departure). */
+  at: string
+}
+
+/** One ride of a booking. */
+export interface TransferLeg {
+  direction: TransferDirection
+  /** Local ISO: when the driver collects them (an arrival: when the flight lands). */
+  pickupAt: string
+  /** The time slot it holds: a seeded id or a `gen_…` id. '' on a request. */
+  departureId: string
+  /** "Cancun International Airport (CUN)", "Grand Hyatt Playa del Carmen". */
+  from: string
+  to: string
+  flight?: TransferFlight
+}
+
+/**
+ * What a transfer booking carries: on `Booking`, `LedgerEntry`, `BookingChange` and `CharterRequest`.
+ *
+ * On a transfer booking, `Booking.partySize` is passengers, `Booking.departureId` the first leg's
+ * slot and `Booking.departureAt` the first pickup. Ticket lines: one per vehicle size (`tierId` set,
+ * `quantity` = vehicles, `unitPrice` = that vehicle's price for the zone and trip); a shared shuttle
+ * has one per ticket type with `quantity` = people. A private or hourly slot's `capacity` is the
+ * fleet and `booked` the vehicles whose ride starts in it; a shared run counts seats.
+ */
+export interface TransferBookingDetails {
+  service: TransferService
+  trip: TransferTrip
+  /** Hub trips: the destination. Between: where they are picked up. Absent for hourly. */
+  zoneId?: string
+  /** Between: the drop-off zone. */
+  toZoneId?: string
+  passengers: number
+  bags: number
+  /** Private and hourly: vehicles by size. Shared: []. */
+  vehicles: { tierId: string; qty: number }[]
+  /** The hotel or address: where they stay (hub trips) or are collected (between, hourly). */
+  place: string
+  /** Between: where they go. Hourly: their plan for the day. */
+  dropOff?: string
+  /** Hourly. */
+  hours?: number
+  /** One leg, or two for a round trip, in time order. */
+  legs: TransferLeg[]
+  /** For the driver: a wheelchair, a stroller, a surfboard. */
+  note?: string
+}
 
 /** One activity inside a package, and the start times guests can pick for it. */
 export interface PackagePart {
@@ -819,6 +980,8 @@ export interface Activity {
   pass?: PassConfig
   /** Packages: the activities inside it. */
   package?: PackageConfig
+  /** Transfers: the service, hub, destinations, vehicles and price table. */
+  transfer?: TransferConfig
   ride?: RideConfig
   /** Distance or track, when the trip or activity has one. */
   route?: RouteInfo
@@ -1096,6 +1259,8 @@ export interface Booking {
   answers?: Record<string, string>
   /** Where the shuttle collects the party. */
   pickup?: { zoneId: string; stop: string; time: string }
+  /** Transfers: the ride. `partySize` is passengers, `departureId` the first leg's slot, `departureAt` the first pickup. */
+  transfer?: TransferBookingDetails
   departureId: string
   customerId: string
   status: BookingStatus

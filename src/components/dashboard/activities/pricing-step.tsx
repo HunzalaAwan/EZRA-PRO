@@ -9,12 +9,14 @@ import { cn, currencySymbol, formatCurrency, pluralize } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 
-import { AddonEditor, type DraftAddOn } from './addon-editor'
+import { AddonEditor, TRANSFER_ADDON_PRESETS, type DraftAddOn } from './addon-editor'
 import { DINING_ADDON_PRESETS, DINING_TIER_PRESETS, DiningBookingFields, type DiningDraft } from './dining-fields'
 import { RentalChargingFields, RentalRatesEditor, draftItemOf, normalizeKindSettings, type DraftKindSettings } from './kind-fields'
 import { KIND_PRICING, PRIVATE_PER_PERSON_PRICING, PrivateBookingFields, canBookPrivately } from './kind-pricing-extras'
 import { PaymentTermsEditor } from './payment-terms-editor'
 import { GuestPricePreview, KIND_TIER_PRESETS, MoneyInput, PricingTierEditor, TIER_PRESETS, blankTier, leadTierId, tierOfDraft, type DraftTier } from './pricing-tier-editor'
+import { TransferPriceTable } from './transfer-price-table'
+import { configOfDraft } from './transfer-draft'
 
 /* ==========================================================================
    THE PRICING STEP — how it charges (where there is a choice), the prices,
@@ -124,6 +126,7 @@ export function pricingDraftOf(activity: {
 export function chargeOptions(kind: ActivityKind): ChargeBy[] {
   switch (kind) {
     case 'rental':
+    case 'transfer':
       return []
     case 'package':
     case 'pass':
@@ -140,6 +143,8 @@ export function effectiveChargeBy(draft: Pick<PricingDraft, 'kind' | 'chargeBy' 
     const modes = normalizeKindSettings(draft.kindSettings).rental.modes
     return modes.length === 1 && modes[0] === 'length' ? 'duration' : 'item'
   }
+  // A transfer: per vehicle, or per person on a shared shuttle (its tickets get per-person rules like any shared activity).
+  if (kind === 'transfer') return normalizeKindSettings(draft.kindSettings).transfer.service === 'shared' ? 'person' : 'item'
   const options = chargeOptions(kind)
   return draft.chargeBy && options.includes(draft.chargeBy) ? draft.chargeBy : defaultChargeBy(kind)
 }
@@ -196,7 +201,7 @@ export function pricingErrors(draft: PricingDraft, dining = false): Record<strin
   const options = isPrivateGroupPriced(draft)
   if (grouped && (draft.groupPrice?.price ?? 0) <= 0) errors['groupPrice.price'] = 'Set a price for the group'
   // Ages the wrong way round would save as one age ("12–12"). Only prices per guest have ages; per group they are hidden, so not checked.
-  if (!grouped && !options && kind !== 'rental') {
+  if (!grouped && !options && kind !== 'rental' && kind !== 'transfer') {
     draft.tiers.forEach((tier, index) => {
       if ((tier.ageMin ?? 0) > 0 && (tier.ageMax ?? 0) > 0 && tier.ageMax! < tier.ageMin!) errors[`tiers.${index}.ageMax`] = 'The oldest age is under the youngest'
     })
@@ -239,6 +244,7 @@ export const STARTER_LABEL: Record<ActivityKind, string> = {
   lesson: 'Student',
   pass: 'Day ticket',
   package: 'Adult',
+  transfer: 'Private car',
 }
 
 const isStarterRow = (tiers: DraftTier[]) => tiers.length === 1 && Object.values(STARTER_LABEL).includes(tiers[0].label)
@@ -346,6 +352,10 @@ export function pricedFromDraft(draft: PricingDraft, options: { currency: Curren
     // The time slot is the group's, per person or per group, up to its most guests and its extra spots.
     activity.charter = { maxGuests: normalizeKindSettings(draft.kindSettings).charter.maxGuests, requestToBook: false, noticeHours: 0 }
   }
+  if (kind === 'transfer') {
+    // The price table as it will be saved: the storefront's "from" price is its lowest one way (by the hour: per hour).
+    activity.transfer = configOfDraft(normalizeKindSettings(draft.kindSettings).transfer, draft.tiers)
+  }
   if (kind === 'rental') {
     const r = normalizeKindSettings(draft.kindSettings).rental
     const items = draft.tiers.map((tier) => {
@@ -394,12 +404,22 @@ export function pricingSummary(draft: PricingDraft, currency: CurrencyCode, dini
     ? [`Per group, ${money(group.price)}`]
     : kind === 'rental'
       ? [`${named} ${pluralize(named, 'item')} from ${from}`]
+      : kind === 'transfer'
+        ? [transferPricingHead(normalizeKindSettings(draft.kindSettings).transfer, named, from)]
       : isPrivateGroupPriced(draft, dining)
         ? [`${named} group ${pluralize(named, 'price')} from ${from}`]
         : kind === 'charter' && !dining
           ? [`Per person, ${named} ${pluralize(named, 'price')} from ${from}`]
           : [`${named} ${pluralize(named, 'price')} from ${from}`]
   return [...head, `${draft.addOns.length} ${pluralize(draft.addOns.length, 'extra')}`].filter(Boolean).join(' · ')
+}
+
+/** "5 destinations, 2 vehicles, from $45", "2 vehicles from $45 an hour". */
+function transferPricingHead(transfer: DraftKindSettings['transfer'], named: number, from: string): string {
+  if (transfer.service === 'hourly') return `${named} ${pluralize(named, 'vehicle')} from ${from} an hour`
+  const zones = transfer.zones.filter((zone) => zone.name.trim()).length
+  const rows = transfer.service === 'shared' ? `${named} ${pluralize(named, 'ticket')}` : `${named} ${pluralize(named, 'vehicle')}`
+  return `${zones} ${pluralize(zones, 'destination')}, ${rows}, from ${from}`
 }
 
 /* ---------- small layout pieces ---------- */
@@ -574,7 +594,9 @@ export function PricingStep({ draft, patch, errors, currency, dining = false, ac
   const pricingCopy = kind === 'charter' && perPerson ? { title: PRIVATE_PER_PERSON_PRICING.title, text: () => PRIVATE_PER_PERSON_PRICING.text } : KIND_PRICING[kind]
   const privateShown = perPerson && canBookPrivately(kind)
   // One price for the group leaves nothing to cap; a cap set before stays editable so it never applies unseen.
-  const capShown = (perPerson || kind === 'rental') || (draft.priceCap ?? 0) > 0
+  const transfer = kind === 'transfer' ? settings.transfer : null
+  // A price cap is not offered for transfers (a cap set before stays editable so it never applies unseen).
+  const capShown = (transfer ? false : perPerson || kind === 'rental') || (draft.priceCap ?? 0) > 0
 
   return (
     <div className="flex flex-col">
@@ -590,7 +612,14 @@ export function PricingStep({ draft, patch, errors, currency, dining = false, ac
       ) : null}
 
       {/* Prices */}
-      {kind === 'rental' ? (
+      {transfer ? (
+        <Block
+          title={transfer.service === 'hourly' ? 'Price per hour' : transfer.service === 'shared' ? 'Prices per person' : 'Prices per vehicle'}
+          hint={transfer.service === 'hourly' ? undefined : 'A row for each destination.'}
+        >
+          <TransferPriceTable value={transfer} tiers={draft.tiers} onChange={(next) => patch({ kindSettings: { ...settings, transfer: next } })} currency={currency} errors={errors} />
+        </Block>
+      ) : kind === 'rental' ? (
         <Block title="Items and prices" hint="The lowest rate is the “from” price.">
           <RentalRatesEditor
             tiers={draft.tiers}
@@ -666,8 +695,14 @@ export function PricingStep({ draft, patch, errors, currency, dining = false, ac
       </Block>
 
       {/* Extras */}
-      <Block title="Extras" hint="Offered once a time slot is picked.">
-        <AddonEditor addOns={draft.addOns} onChange={(addOns) => patch({ addOns })} currency={currency} errors={errors} />
+      <Block title="Extras" hint={transfer ? 'Offered with the ride.' : 'Offered once a time slot is picked.'}>
+        <AddonEditor
+          addOns={draft.addOns}
+          onChange={(addOns) => patch({ addOns })}
+          currency={currency}
+          errors={errors}
+          {...(transfer ? { presets: TRANSFER_ADDON_PRESETS, allowEach: true } : {})}
+        />
       </Block>
 
       {/* Payment: the terms guests get. Untouched it follows the business default; a change makes them this activity's own. */}
@@ -677,7 +712,7 @@ export function PricingStep({ draft, patch, errors, currency, dining = false, ac
           onChange={(next) => patch({ payment: { ...next, useDefault: false } })}
           currency={currency}
           examplePrice={examplePrice}
-          wholeGroup={kind === 'charter' || kind === 'rental' || grouped}
+          wholeGroup={kind === 'charter' || kind === 'rental' || grouped || (transfer !== null && transfer.service !== 'shared')}
           followsDefault={Boolean(draft.payment?.useDefault)}
         />
       </Block>

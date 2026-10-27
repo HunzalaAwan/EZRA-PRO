@@ -5,6 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import {
   Anchor,
+  Car,
   ArrowRight,
   Clock,
   Flame,
@@ -67,6 +68,7 @@ const GROUP_ICONS: Record<ActivityKind, LucideIcon> = {
   lesson: GraduationCap,
   pass: Ticket,
   package: Layers,
+  transfer: Car,
 }
 
 type GroupKey = ActivityKind | 'all'

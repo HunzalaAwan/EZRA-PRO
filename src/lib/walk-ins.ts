@@ -1,4 +1,4 @@
-import type { ActivityKind } from '@/types'
+import type { ActivityKind, TransferBookingDetails } from '@/types'
 
 /* ==========================================================================
    Walk-ins: sales made at the desk to guests who turn up without booking.
@@ -49,6 +49,8 @@ export interface WalkInRecord {
   note?: string
   /** Seeded from history rather than sold in this browser. */
   seeded?: boolean
+  /** Transfers sold at the desk: the ride (trip, legs, vehicles), as on the booking. `guests` is the passengers. */
+  transfer?: TransferBookingDetails
 }
 
 export const WALK_IN_SOURCES = ['Walked past', 'Hotel or concierge', 'Friend or family', 'Online search', 'Social media', 'Came back again', 'Other'] as const

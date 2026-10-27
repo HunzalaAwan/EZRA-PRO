@@ -37,7 +37,11 @@ import {
 } from '@/lib/utils'
 import type { Activity, DifficultyLevel, Location, Tenant } from '@/types'
 import { locationAddress } from '@/lib/locations'
-import { kindBadge, kindChipLabel, kindNote, rentalCategoryMeta, routeLabel, categoryLabel, themeLabel, themeOf } from '@/lib/activity-kinds'
+import { kindBadge, kindChipLabel, kindNote, priceUnit, rentalCategoryMeta, routeLabel, categoryLabel, themeLabel, themeOf } from '@/lib/activity-kinds'
+import { biggestVehicle, serviceOf } from '@/lib/transfers'
+import type { TransferAvailability } from '@/lib/storefront-availability'
+import { TransferPriceList } from '@/components/storefront/transfer-price-list'
+import { transferPriceNote } from '@/components/storefront/transfer-widget'
 import { bodyLimitLines } from '@/lib/guest-requirements'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { useActivityWithDefaults } from '@/hooks/use-booking-defaults'
@@ -139,6 +143,8 @@ export interface ActivityDetailViewProps {
   locations?: Location[]
   /** Packages: each part with its own availability. */
   packageParts?: PackagePartView[]
+  /** Transfers: the seeded rides' vehicle holds, for the widget. */
+  transferAvailability?: TransferAvailability
 }
 
 /* ==========================================================================
@@ -160,6 +166,7 @@ export function ActivityDetailView({
   initialGuests,
   recentBookings,
   packageParts,
+  transferAvailability,
 }: ActivityDetailViewProps) {
   // The prices saved in the editor, then its own payment and cancellation terms or the business defaults it follows.
   const priced = usePricingOverride(given)
@@ -184,7 +191,15 @@ export function ActivityDetailView({
   const suitability = activity.accessibility ?? []
   const limits = bodyLimitLines(activity)
   const hasRequirements = activity.requirements.length + bring.length + suitability.length + limits.length > 0
-  const sections = React.useMemo(() => SECTIONS.filter((section) => section.id !== 'requirements' || hasRequirements), [hasRequirements])
+  const transfer = activity.kind === 'transfer'
+  const sections = React.useMemo(
+    () =>
+      SECTIONS.filter((section) => section.id !== 'requirements' || hasRequirements).flatMap((section): { id: string; label: string }[] =>
+        // Transfers: their price table right after About.
+        transfer && section.id === 'about' ? [section, { id: 'prices', label: 'Prices' }] : [section],
+      ),
+    [hasRequirements, transfer],
+  )
 
   // The strip as the widget shows it: the saved schedule, this browser's bookings, every time slot priced by the engine.
   // Rebuilt from the activity as the server sent it, so the spots an edit changes (extra spots too) are counted once.
@@ -203,7 +218,7 @@ export function ActivityDetailView({
   }, [pricedDays])
 
   const fromPrice = shownFromPrice(activity, pricedDays, stripRental)
-  const fromUnit = fromUnitLabel(activity)
+  const fromUnit = transfer ? priceUnit(activity) : fromUnitLabel(activity)
   // Other activities with their saved prices.
   const overrides = useActivityOverrides()
   const relatedPriced = React.useMemo(() => related.map((item) => applyPricingOverride(item, overrides[item.id])), [related, overrides])
@@ -311,7 +326,13 @@ export function ActivityDetailView({
             </span>
             <Fact icon={Clock}>{kindChipLabel(activity)}</Fact>
             <Fact icon={Users}>
-              {activity.kind === 'activity'
+              {transfer
+                ? serviceOf(activity) === 'shared'
+                  ? `${activity.maxCapacity} seats per run`
+                  : serviceOf(activity) === 'hourly'
+                    ? `Up to ${biggestVehicle(activity) || activity.maxCapacity} passengers`
+                    : `Up to ${biggestVehicle(activity) || activity.maxCapacity} per vehicle`
+                : activity.kind === 'activity'
                 ? `${activity.maxCapacity} per time slot`
                 : activity.kind === 'rental'
                 ? (activity.rental?.items?.length ?? 0) > 1
@@ -323,6 +344,7 @@ export function ActivityDetailView({
                     ? `Whole group, up to ${guestLimitOf(activity)}`
                     : `Up to ${activity.maxCapacity} guests`}
             </Fact>
+            {transfer && activity.transfer?.hub?.name ? <Fact icon={MapPin}>{activity.transfer.hub.code || activity.transfer.hub.name} meet and greet</Fact> : null}
             {activity.route ? <Fact icon={RouteIcon}>{routeLabel(activity.route)}{activity.route.elevationM ? ` · ${activity.route.elevationM} m climb` : ''}</Fact> : null}
             {languages.length > 0 ? <Fact icon={Languages}>{languages.join(', ')}</Fact> : null}
             <Fact icon={CalendarCheck}>
@@ -442,6 +464,13 @@ export function ActivityDetailView({
                 </p>
               </div>
             </Section>
+
+            {/* ---------- transfers: the price table ---------- */}
+            {transfer ? (
+              <Section id="prices" title="Prices">
+                <TransferPriceList activity={activity} currency={tenant.currency} />
+              </Section>
+            ) : null}
 
             {/* ---------- included ---------- */}
             <Section id="included" title="What's included">
@@ -706,6 +735,7 @@ export function ActivityDetailView({
                 initialDateKey={initialDateKey}
                 initialGuests={initialGuests}
                 nowIso={nowIso}
+                transferAvailability={transferAvailability}
               />
               <TrustBar
                 variant="inline"
@@ -774,7 +804,9 @@ export function ActivityDetailView({
               <span className="ml-1 text-xs font-medium text-subtle">{fromUnit}</span>
             </p>
             <p className="mt-1 truncate text-xs text-subtle">
-              {nextOpen
+              {transfer
+                ? transferPriceNote(activity)
+                : nextOpen
                 ? `Next start time ${new Intl.DateTimeFormat('en-US', {
                     weekday: 'short',
                     hour: 'numeric',
@@ -808,6 +840,7 @@ export function ActivityDetailView({
               initialDateKey={initialDateKey}
               initialGuests={initialGuests}
               nowIso={nowIso}
+              transferAvailability={transferAvailability}
               variant="sheet"
             />
           </SheetBody>

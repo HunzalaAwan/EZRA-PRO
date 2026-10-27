@@ -9,7 +9,9 @@
 import * as React from 'react'
 import Link from 'next/link'
 import { useBookingLedger } from '@/hooks/use-booking-ledger'
-import { changeBooking, entriesOn } from '@/lib/booking-ledger'
+import { changeBooking, changeStartOf, entriesOn, peopleOfEntry } from '@/lib/booking-ledger'
+import { flightLine, hhmm, slotIdsOf } from '@/lib/transfer-changes'
+import type { TransferBookingDetails } from '@/types'
 import { MessageComposer, sendToGuests, type MessageRecipient } from '@/components/dashboard/bookings/message-composer'
 import { useMessageTemplates } from '@/hooks/use-message-templates'
 import { useActivityOverrides } from '@/hooks/use-pricing-override'
@@ -244,12 +246,16 @@ export function DepartureDetailSheet({
       const spots = spotsAfterEdit(given.capacity, entry, defaultSpots(edited) !== defaultSpots(activity), slotExtraSpotsOf(activity), extraNow)
       return [spots === given.capacity ? given : { ...given, capacity: Math.max(spots, given.booked) }, extraNow, undefined]
     })()
-    const change = ledger.delta[served.id] ?? 0
+    // A ride's slot also goes by the gen_ id of its time (rides moved onto it in this browser).
+    const ids = slotIdsOf(activity, served)
+    const change = ids.reduce((sum, id) => sum + (ledger.delta[id] ?? 0), 0)
     const departure = change ? { ...served, booked: Math.max(0, Math.min(served.capacity, served.booked + change)) } : served
+    const extra = ids.flatMap((id) => entriesOn(ledger, id)).filter((entry, index, all) => all.findIndex((other) => other.id === entry.id) === index)
     return {
       extraSpots,
       group,
-      extra: entriesOn(ledger, served.id),
+      ids,
+      extra,
       departure,
       activity,
       guests,
@@ -271,8 +277,24 @@ export function DepartureDetailSheet({
 
   if (!detail) return null
 
-  const { departure, activity, guests: seededGuests, crew, resources, gross, paid, outstanding, media, extraSpots, group } = detail
+  const { departure, activity, guests: seededGuests, crew, resources, gross, paid, outstanding, media, extraSpots, group, ids: slotIds } = detail
   const tenant = tenantById.get(departure.tenantId) ?? CURRENT_TENANT
+  /** Private transfers and drivers by the hour: the slot counts vehicles out. */
+  const byVehicle = activity.kind === 'transfer' && activity.transfer?.service !== 'shared'
+  /** A ride on this slot: its pickup and flight ("Pickup 14:35 · AA 1234 lands 14:35"). */
+  const rideLine = (details: TransferBookingDetails | undefined, reference: string) => {
+    if (!details) return null
+    const current = ledger.changes[reference]?.transfer ?? details
+    const leg = current.legs.find((entry) => slotIds.includes(entry.departureId)) ?? current.legs[0]
+    if (!leg) return null
+    const flight = flightLine(leg, activity.transfer?.hub?.kind)
+    return (
+      <p className="truncate text-xs text-muted tabular-nums">
+        Pickup {hhmm(leg.pickupAt)}
+        {flight ? ` · ${flight}` : ''}
+      </p>
+    )
+  }
   const slotDay = departure.startsAt.slice(0, 10)
   const slotTime = departure.startsAt.slice(11, 16)
   /** The change "Cancel" saves for this time slot; one id per day, start time and location. */
@@ -297,6 +319,9 @@ export function DepartureDetailSheet({
   const guests = seededGuests.filter(({ booking }) => {
     const change = ledger.changes[booking.reference]
     if (booking.status === 'cancelled' || booking.status === 'refunded' || change?.cancelled) return false
+    // A ride is here while one of its legs is: a round trip's return sits on its own slot, and a changed ride on its new ones.
+    const ride = change?.transfer ?? booking.transfer
+    if (ride) return ride.legs.some((leg) => slotIds.includes(leg.departureId))
     return !change?.movedTo || change.movedTo.departureId === departure.id
   })
   const recipients: MessageRecipient[] = [
@@ -323,13 +348,13 @@ export function DepartureDetailSheet({
       changeBooking(
         tenantSlug,
         booking.reference,
-        { fromDepartureId: booking.departureId, fromStartsAt: booking.departureAt, fromParty: booking.partySize },
+        changeStartOf({ departureId: booking.departureId, startsAt: booking.departureAt, partySize: booking.partySize, transfer: booking.transfer }),
         { cancelled: true, refund: booking.amountPaid },
         { by: 'staff', what: `Cancelled: the whole time was called off, ${formatCurrency(booking.amountPaid, currency)} refunded` },
       )
     }
     for (const entry of detail.extra) {
-      changeBooking(tenantSlug, entry.id, { fromDepartureId: entry.departureId, fromStartsAt: entry.startsAt, fromParty: entry.party }, { cancelled: true, refund: entry.paidNow }, { by: 'staff', what: 'Cancelled: the whole time was called off' })
+      changeBooking(tenantSlug, entry.id, { fromDepartureId: entry.departureId, fromStartsAt: entry.startsAt, fromParty: entry.party, ...(entry.transfer ? { fromLegDepartureIds: entry.transfer.legs.slice(1).map((leg) => leg.departureId).filter(Boolean) } : {}) }, { cancelled: true, refund: entry.paidNow }, { by: 'staff', what: 'Cancelled: the whole time was called off' })
     }
     const template = templates.find((entry) => entry.key === 'cancelled')
     if (template) {
@@ -426,7 +451,7 @@ export function DepartureDetailSheet({
                 <Fact
                   icon={Users}
                   label="Party mix"
-                  value={`${guests.length} ${guests.length === 1 ? 'booking' : 'bookings'} · ${formatNumber(departure.booked)} guests`}
+                  value={`${guests.length} ${guests.length === 1 ? 'booking' : 'bookings'} · ${formatNumber(departure.booked)} ${byVehicle ? 'vehicles' : 'guests'}`}
                 />
                 <Fact
                   icon={Anchor}
@@ -442,7 +467,7 @@ export function DepartureDetailSheet({
                   capacity={departure.capacity}
                   held={departure.held}
                   size="md"
-                  unit="spot"
+                  unit={byVehicle ? 'vehicle' : 'spot'}
                 />
                 {group ? (
                   <p className="mt-2 text-xs text-subtle tabular">
@@ -619,6 +644,7 @@ export function DepartureDetailSheet({
                         <p className="truncate font-mono text-xs text-subtle">
                           {booking.reference} · {booking.channel.replace(/_/g, ' ')}
                         </p>
+                        {rideLine(booking.transfer, booking.reference)}
                         {ledger.changes[booking.reference]?.cancelled ? (
                           <p className="text-xs text-danger">Cancelled since</p>
                         ) : ledger.changes[booking.reference]?.movedTo && ledger.changes[booking.reference]?.movedTo?.departureId !== departure.id ? (
@@ -648,9 +674,10 @@ export function DepartureDetailSheet({
                         <p className="truncate text-xs text-subtle">
                           <span className="font-mono">{entry.reference}</span> · {entry.packageName ? `Package · ${entry.packageName}` : entry.source === 'dashboard' ? 'Booked by your team' : 'Booked online'}
                         </p>
+                        {rideLine(entry.transfer, entry.reference)}
                       </div>
                       <span className="tabular shrink-0 text-[0.75rem] font-semibold text-muted">
-                        {entry.party} <span className="font-normal text-subtle">{entry.party === 1 ? 'guest' : 'guests'}</span>
+                        {peopleOfEntry(entry)} <span className="font-normal text-subtle">{peopleOfEntry(entry) === 1 ? 'guest' : 'guests'}</span>
                       </span>
                       <StatusBadge kind="booking" status="confirmed" size="sm" showIcon={false} className="shrink-0" />
                     </li>

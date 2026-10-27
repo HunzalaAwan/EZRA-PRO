@@ -45,6 +45,9 @@ export function capacityWords(kind: ActivityKind): { label: string; column: stri
       return { label: 'Tickets per day', column: 'Tickets', unit: ['ticket', 'tickets'], placeholder: '60' }
     case 'rental':
       return { label: 'Items out at once', column: 'Items out', unit: ['item', 'items'], placeholder: '6' }
+    case 'transfer':
+      // A shared shuttle's seats; private rides count vehicles, set on Basics.
+      return { label: 'Seats per run', column: 'Seats', unit: ['seat', 'seats'], placeholder: '14' }
     default:
       return { label: 'Spots per time slot', column: 'Spots', unit: ['spot', 'spots'], placeholder: '16' }
   }

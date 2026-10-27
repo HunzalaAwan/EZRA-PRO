@@ -16,8 +16,10 @@ import type {
   RentalConfig,
   RideConfig,
   RouteInfo,
+  TransferConfig,
 } from '@/types'
 import { fromPrice, privatePerPerson } from '@/lib/price-engine'
+import { cleanTransferConfig } from '@/lib/transfers'
 import { rentalModes, type RentalMode } from '@/lib/activity-kinds'
 import { cleanExtraByWeekday, cleanSpotsByWeekday, normalizeTime } from '@/lib/activity-schedule'
 import { sellsExtraSpots, withExtraSpots } from '@/lib/extra-spots'
@@ -68,6 +70,8 @@ export interface ActivityOverride {
   lesson?: LessonConfig
   pass?: PassConfig
   package?: Activity['package']
+  /** Transfers: service, hub, destinations, vehicles and the price table. */
+  transfer?: TransferConfig
   guestQuestions?: GuestQuestion[]
   /** null clears the waiver; undefined keeps the seeded one. */
   waiverId?: string | null
@@ -240,6 +244,7 @@ export function applyActivityOverride<T extends Activity>(activity: T, override?
     lesson: override.lesson ?? activity.lesson,
     pass: override.pass ?? activity.pass,
     package: override.package ?? activity.package,
+    ...(override.transfer || activity.transfer ? { transfer: override.transfer ?? activity.transfer } : {}),
     priceTiers: override.priceTiers && override.priceTiers.length > 0 ? override.priceTiers : activity.priceTiers,
     basePrice: overrideBasePrice(activity, override),
     addOns: override.addOns ?? activity.addOns,
@@ -398,7 +403,12 @@ function privateOptionOf(activity: Activity, override: ActivityOverride): Activi
 /** The "from" price after an edit: the lowest sellable tier, a rental's lowest item rate, or the group price. */
 function overrideBasePrice(activity: Activity, override: ActivityOverride): number {
   const touched =
-    (override.priceTiers?.length ?? 0) > 0 || override.rental !== undefined || override.kind !== undefined || override.chargeBy !== undefined || override.groupPrice !== undefined
+    (override.priceTiers?.length ?? 0) > 0 ||
+    override.rental !== undefined ||
+    override.transfer !== undefined ||
+    override.kind !== undefined ||
+    override.chargeBy !== undefined ||
+    override.groupPrice !== undefined
   if (!touched) return activity.basePrice
   return fromPrice({
     slug: activity.slug,
@@ -406,6 +416,7 @@ function overrideBasePrice(activity: Activity, override: ActivityOverride): numb
     kind: override.kind ?? activity.kind,
     priceTiers: override.priceTiers && override.priceTiers.length > 0 ? override.priceTiers : activity.priceTiers,
     rental: override.rental ?? activity.rental,
+    transfer: override.transfer ?? activity.transfer,
     ...pricingFields(activity, override),
   })
 }
@@ -451,6 +462,8 @@ export function applyPricingOverride<T extends Activity>(activity: T, override?:
       })
     : activity.addOns
   const rental = activity.rental && override.rental ? rentalPricingOf(activity, activity.rental, override.rental) : activity.rental
+  // Transfers: the edited price table, kept to the tiers still sold (a vehicle whose tier the edit dropped stops selling).
+  const transfer = override.transfer ? cleanTransferConfig(override.transfer, priceTiers) : activity.transfer
   // A private group: its most guests as the edit saved them, and (a save from before extra spots) what its price
   // covered and its extra guests, as saved (none saved: none charged).
   const charter =
@@ -477,6 +490,7 @@ export function applyPricingOverride<T extends Activity>(activity: T, override?:
     priceTiers,
     addOns,
     rental,
+    ...(transfer ? { transfer } : {}),
     charter,
     privateOption: privateOptionOf(activity, override),
     priceCap: override.priceCap === undefined ? activity.priceCap : override.priceCap || undefined,

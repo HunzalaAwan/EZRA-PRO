@@ -94,10 +94,13 @@ import { RefundDialog, type RefundResult } from '@/components/dashboard/bookings
 import { MessageComposer, type MessageRecipient } from '@/components/dashboard/bookings/message-composer'
 import { CancelBookingDialog, ChangeBookingDialog, type ChangeTarget } from '@/components/dashboard/bookings/booking-change-dialogs'
 import { useBookingLedger } from '@/hooks/use-booking-ledger'
+import { changeStartOf } from '@/lib/booking-ledger'
 import { useInbox } from '@/hooks/use-inbox'
 import { changesOf } from '@/lib/booking-policy'
 import { ChannelBadge } from '@/components/dashboard/bookings/bookings-table'
 import { formatAnswer } from '@/lib/guest-requirements'
+import { RideCard } from '@/components/dashboard/bookings/ride-card'
+import { serviceOf } from '@/lib/transfers'
 
 /* ==========================================================================
    SMALL PARTS
@@ -262,12 +265,12 @@ export function BookingDetailContent({
     ? { ...bookedDeparture, id: change.movedTo.departureId, startsAt: change.movedTo.startsAt, endsAt: shiftIso(change.movedTo.startsAt, lengthMinutes) }
     : bookedDeparture
   const nowIso = formatIsoLocal(NOW)
+  // A ride's changes start from the vehicles (a shared run: the seats) it holds on each leg's time slot.
+  const start = changeStartOf({ departureId: bookedDeparture.id, startsAt: bookedDeparture.startsAt, partySize: seeded.partySize, transfer: activity.kind === 'transfer' ? seeded.transfer : undefined })
   const target: ChangeTarget = {
     reference: seeded.reference,
     bookingId: seeded.id,
-    fromDepartureId: bookedDeparture.id,
-    fromStartsAt: bookedDeparture.startsAt,
-    fromParty: seeded.partySize,
+    ...start,
     departureId: departure.id,
     startsAt: departure.startsAt,
     party: booking.partySize,
@@ -304,6 +307,9 @@ export function BookingDetailContent({
     booking.status === 'cancelled' ||
     booking.status === 'refunded' ||
     booking.status === 'completed'
+  /** A transfer is changed through its ride (new flight, time or hotel), not by picking another time slot. */
+  const ride = activity.kind === 'transfer' && seeded.transfer ? seeded.transfer : undefined
+  const byVehicle = Boolean(ride) && serviceOf(activity) !== 'shared'
 
   /* ----------------------------------------------------------------------
      Line items
@@ -511,7 +517,7 @@ export function BookingDetailContent({
           <Button size="sm" variant="secondary" leftIcon={<MessageSquare />} onClick={actions.message}>
             Message guest
           </Button>
-          {!isClosed ? (
+          {!isClosed && !ride ? (
             <Button size="sm" variant="secondary" leftIcon={<CalendarDays />} onClick={actions.modify}>
               Change
             </Button>
@@ -528,10 +534,12 @@ export function BookingDetailContent({
               </IconButton>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem onSelect={actions.modify} disabled={isClosed}>
-                <Pencil />
-                Change time or guests
-              </DropdownMenuItem>
+              {ride ? null : (
+                <DropdownMenuItem onSelect={actions.modify} disabled={isClosed}>
+                  <Pencil />
+                  Change time or guests
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 onSelect={() =>
                   toast.success('Invoice downloaded', { description: `${booking.reference}.pdf` })
@@ -580,6 +588,19 @@ export function BookingDetailContent({
       <div className={cn('grid gap-4', layout === 'page' && 'lg:grid-cols-5 lg:items-start')}>
         {/* ---------------- MAIN COLUMN ---------------- */}
         <div className={cn('flex min-w-0 flex-col gap-4', mainClass)}>
+          {ride ? (
+            <RideCard
+              activity={activity}
+              details={ride}
+              change={change}
+              reference={seeded.reference}
+              tenantSlug={tenant.slug}
+              // A private ride holds vehicles on its slot; a shared one, seats.
+              start={start}
+              drivers={getUsersByTenant(seeded.tenantId)}
+              closed={booking.status === 'cancelled' || booking.status === 'refunded'}
+            />
+          ) : null}
           {/* Departure */}
           <SectionCard
             title="Time slot"
@@ -657,7 +678,7 @@ export function BookingDetailContent({
 
               <Badge variant="neutral" size="sm">
                 <Users aria-hidden="true" />
-                {departure.booked}/{departure.capacity} seats sold
+                {departure.booked}/{departure.capacity} {byVehicle ? 'vehicles out' : 'seats sold'}
               </Badge>
             </div>
           </SectionCard>

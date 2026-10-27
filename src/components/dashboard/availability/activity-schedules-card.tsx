@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useBookingDefaults } from '@/hooks/use-booking-defaults'
 import { useActivityOverrides } from '@/hooks/use-pricing-override'
 import { applyActivityOverride } from '@/lib/activity-overrides'
-import { clockTime, describeSchedules, expandSchedules, scheduleContextOf, schedulesOf, shiftDayKey, shortDay, sortTimes } from '@/lib/activity-schedule'
+import { WEEKDAY_KEYS, clockTime, describeSchedules, expandSchedules, scheduleContextOf, schedulesOf, shiftDayKey, shortDay, sortTimes, timesForWeekday } from '@/lib/activity-schedule'
 import { cn, formatNumber, pluralize } from '@/lib/utils'
 import type { Activity, ScheduleChange } from '@/types'
 
@@ -50,6 +50,31 @@ const isCancel = (change: ScheduleChange) => change.action === 'closed' && chang
 function summaryOf(activity: Activity, maxAdvanceDays: number, todayKey: string): string {
   const parts = describeSchedules(activity, { maxAdvanceDays, todayKey }).split(' · ')
   return (activity.bookingWindow?.monthsAhead ? parts : parts.filter((part) => !part.startsWith('books up to'))).join(' · ')
+}
+
+const WEEKDAY_WORD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+/**
+ * A transfer's schedule in its own words: "Rides 6:00 AM–11:30 PM, every day"
+ * (private, by the hour) or "Runs 7:00 AM, 9:00 AM… every day" (a shuttle).
+ * Undefined when it has seasons or days that differ: the usual line says those.
+ */
+function transferSummary(activity: Activity): string | undefined {
+  if (activity.kind !== 'transfer') return undefined
+  const seasons = schedulesOf(activity)
+  if (seasons.length !== 1) return undefined
+  const season = seasons[0]
+  const open = WEEKDAY_KEYS.filter((key) => (season.mode === 'hours' ? Boolean(season.hours?.[key]) : timesForWeekday(season, key).length > 0))
+  if (open.length === 0) return undefined
+  const days = open.length === 7 ? 'every day' : open.map((key) => WEEKDAY_WORD[Number(key)]).join(', ')
+  if (season.mode === 'hours') {
+    const first = season.hours?.[open[0]]
+    if (!first || open.some((key) => season.hours?.[key]?.open !== first.open || season.hours?.[key]?.close !== first.close)) return undefined
+    return `Rides ${clockTime(first.open)}–${clockTime(first.close)}, ${days}`
+  }
+  const times = timesForWeekday(season, open[0])
+  if (open.some((key) => timesForWeekday(season, key).join() !== times.join())) return undefined
+  return `Runs ${times.map(clockTime).join(', ')}, ${days}`
 }
 
 /** The next thing that changes on the schedule from today: a change on a day, or a season starting. */
@@ -108,7 +133,7 @@ export function ActivitySchedulesCard({ tenantSlug, activities, todayKey, nowIso
         const count = expandSchedules(activity, todayKey, lastKey, ctx).filter((slot) => slot.dateKey > todayKey || slot.time >= nowTime).length
         return {
           activity,
-          summary: summaryOf(activity, defaults.maxAdvanceDays, todayKey),
+          summary: transferSummary(activity) ?? summaryOf(activity, defaults.maxAdvanceDays, todayKey),
           count,
           next: nextChange(activity, todayKey),
         }

@@ -67,6 +67,7 @@ export function useCharterRequests(slug: string, tenantId: string, seeded: Chart
         ...(entry.when ? { when: entry.when } : {}),
         ...(entry.lines ? { lines: entry.lines } : {}),
         ...(entry.phone ? { phone: entry.phone } : {}),
+        ...(entry.transfer ? { transfer: entry.transfer } : {}),
         name: entry.name ?? 'Guest',
         email: entry.email ?? '',
         message: entry.message ?? '',

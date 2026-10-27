@@ -6,6 +6,19 @@ import { rentalModes, type RentalMode } from '@/lib/activity-kinds'
 import { groupPriced, groupTierOf, guestLimitOf, privatePerPerson } from '@/lib/price-engine'
 import type { Activity } from '@/types'
 import type { AvailabilitySlot, QuoteSelection } from '@/components/storefront/booking-widget'
+import type { CheckoutLeg } from '@/components/storefront/checkout-flow'
+import {
+  directionLabel,
+  planFits,
+  planVehicles,
+  pricingOf,
+  transferOf,
+  transferRateFor,
+  zoneById,
+  type PlannedLeg,
+  type TransferRequest,
+} from '@/lib/transfers'
+import { rideHeadline } from '@/lib/transfer-changes'
 
 /* ==========================================================================
    Checkout selection — the widget's `t=tierId:qty|…` and `a=addOnId:qty|…`
@@ -261,4 +274,84 @@ export function resolveRental(activity: Activity, request: RentalRequest, slot: 
     return { mode, days, hours, lengthId: length?.id, startsAt: `${dayKey}T${activity.rental?.pickupTime ?? '09:00'}:00`, endsAt: returnsAt, returnsAt }
   }
   return { mode, days, hours, lengthId: length?.id, startsAt: slot.startsAt, endsAt: hours ? plusMinutes(slot.startsAt, hours * 60) : slot.endsAt }
+}
+
+/* ==========================================================================
+   Transfers — the vehicles (a shared shuttle: the tickets) and extras of a
+   ride read back from the link and checked against the group and what is
+   free, and the ride's legs as checkout lists them.
+   ========================================================================== */
+
+/**
+ * A ride's selection from the link. Private and hourly: the link's vehicles
+ * when they still carry the passengers and suitcases, are sold for this trip
+ * and destination and (with `left`) are free; else the cheapest set that fits.
+ * Shared: the link's tickets within each ticket's limits (the passengers on
+ * the lead ticket when there are none). Extras: 'each' keeps how many were
+ * picked (up to its most), the others one per passenger or one per booking.
+ */
+export function resolveTransferSelection(
+  activity: Activity,
+  rawTiers: string | string[] | undefined,
+  rawAddOns: string | string[] | undefined,
+  request: TransferRequest,
+  left?: Record<string, number>,
+): QuoteSelection {
+  const askedTiers = parsePairs(rawTiers)
+  const askedAddOns = parsePairs(rawAddOns)
+  const config = transferOf(activity)
+  const pricing = pricingOf(request)
+  const passengers = Math.max(1, Math.floor(request.passengers || 1))
+  const need = { passengers, bags: Math.max(0, Math.floor(request.bags || 0)) }
+
+  let tiers: QuoteSelection['tiers']
+  if (config?.service === 'shared') {
+    tiers = activity.priceTiers.map((tier) => ({ tierId: tier.id, qty: clamp(Math.max(askedTiers.get(tier.id) ?? 0, tier.minQuantity), 0, tier.maxQuantity) }))
+    if (tiers.length > 0 && tiers.every((tier) => tier.qty === 0)) {
+      const lead = activity.priceTiers.find((tier) => tier.countsTowardCapacity && transferRateFor(config, tier.id, pricing) !== undefined) ?? activity.priceTiers[0]
+      tiers = tiers.map((tier) => (tier.tierId === lead.id ? { ...tier, qty: clamp(passengers, 1, Math.max(1, lead.maxQuantity)) } : tier))
+    }
+  } else {
+    const asked = activity.priceTiers.map((tier) => ({ tierId: tier.id, qty: askedTiers.get(tier.id) ?? 0 })).filter((line) => line.qty > 0)
+    const keep =
+      asked.length > 0 &&
+      asked.every((line) => transferRateFor(config, line.tierId, pricing) !== undefined && (!left || line.qty <= (left[line.tierId] ?? 0))) &&
+      planFits(activity, asked, need)
+    const lines = keep ? asked : (planVehicles(activity, need, pricing, left).best?.lines ?? [])
+    tiers = activity.priceTiers.map((tier) => ({ tierId: tier.id, qty: lines.find((line) => line.tierId === tier.id)?.qty ?? 0 }))
+  }
+
+  const addOns = activity.addOns.map((addOn) => {
+    const asked = askedAddOns.get(addOn.id) ?? 0
+    if (addOn.per === 'each') return { addOnId: addOn.id, qty: addOnUnits(addOn, passengers, addOn.required ? Math.max(1, asked) : asked) }
+    return { addOnId: addOn.id, qty: asked > 0 || addOn.required ? addOnUnits(addOn, passengers) : 0 }
+  })
+  return { tiers, addOns }
+}
+
+/**
+ * A ride's legs as checkout lists them: "Arrival · Playa del Carmen", the
+ * pickup to the end of the vehicle's busy time, and where to meet (an
+ * arrival: the hub's meeting note; otherwise the hotel the driver collects
+ * from). `departureIds`: each leg's time slot, in leg order.
+ */
+export function transferCheckoutLegs(activity: Activity, request: TransferRequest, legs: PlannedLeg[], departureIds: string[]): CheckoutLeg[] {
+  const config = transferOf(activity)
+  const zone = zoneById(config, request.zoneId)?.name
+  return legs.map((leg, index) => {
+    const label =
+      leg.direction === 'from_hub' || leg.direction === 'to_hub'
+        ? `${directionLabel(leg.direction, config?.hub)}${zone ? ` · ${zone}` : ''}`
+        : rideHeadline(activity, request)
+    const meetingPoint = leg.direction === 'from_hub' ? config?.hub?.meetingNote?.trim() || activity.meetingPoint : leg.from ? `We collect you at ${leg.from}` : activity.meetingPoint
+    return {
+      departureId: departureIds[index] ?? '',
+      activitySlug: activity.slug,
+      activityName: activity.name,
+      label,
+      startsAt: leg.pickupAt,
+      endsAt: plusMinutes(leg.pickupAt, leg.busyMinutes),
+      meetingPoint,
+    }
+  })
 }

@@ -107,6 +107,7 @@ import { DepartureSchedule } from './departure-schedule'
 import { ACTIVITY_FORMAT_META } from '@/lib/activity-format'
 import { ACTIVITY_KIND_META } from '@/lib/activity-kinds'
 import { KIND_ICONS } from './kind-fields'
+import { transferCapacityLabel } from './transfer-draft'
 
 /* ==========================================================================
    SMALL PARTS
@@ -471,7 +472,7 @@ function OverviewTab({ detail }: { detail: ActivityDetailData }) {
               </Badge>
               <Badge size="sm" variant="neutral">
                 <Users className="size-3" aria-hidden="true" />
-                {activity.maxCapacity > 0 ? `${activity.minParticipants}–${activity.maxCapacity} guests` : `${activity.minParticipants}+ guests`}
+                {transferCapacityLabel(activity) ?? (activity.maxCapacity > 0 ? `${activity.minParticipants}–${activity.maxCapacity} guests` : `${activity.minParticipants}+ guests`)}
               </Badge>
               {activity.minAge > 0 ? (
                 <Badge size="sm" variant="neutral">
@@ -1130,9 +1131,9 @@ export function ActivityDetail({ detail, tenantSlug, nowIso }: ActivityDetailPro
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <Users className="size-3.5" aria-hidden="true" />
-                {activity.minParticipants}–{activity.maxCapacity} guests
+                {transferCapacityLabel(activity) ?? `${activity.minParticipants}–${activity.maxCapacity} guests`}
               </span>
-              <DifficultyMeter difficulty={activity.difficulty} />
+              {activity.kind === 'transfer' ? null : <DifficultyMeter difficulty={activity.difficulty} />}
               <span className="inline-flex items-center gap-1.5" title={ACTIVITY_KIND_META[activity.kind ?? 'trip'].hint}>
                 {React.createElement(KIND_ICONS[activity.kind ?? 'trip'], { className: 'size-3.5', 'aria-hidden': true })}
                 {ACTIVITY_KIND_META[activity.kind ?? 'trip'].label}

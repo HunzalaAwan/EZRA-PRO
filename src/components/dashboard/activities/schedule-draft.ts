@@ -1,4 +1,4 @@
-import type { Activity, ActivityKind, ActivityLocation, ActivitySchedule, ScheduleChange, WeekdayKey } from '@/types'
+import type { Activity, ActivityKind, ActivityLocation, ActivitySchedule, ScheduleChange, TransferService, WeekdayKey } from '@/types'
 import { ACTIVITY_KIND_META } from '@/lib/activity-kinds'
 import {
   WEEKDAY_KEYS,
@@ -90,6 +90,17 @@ export function allYearSeason(mode: 'times' | 'hours' = 'times'): ActivitySchedu
   return { ...season, mode: 'hours', hours, every: 30, days: emptyWeek() }
 }
 
+/**
+ * A transfer's first schedule: private rides and drivers by the hour pick
+ * up any half hour from 06:00 to 23:30; a shared shuttle has set runs.
+ * Same fixed id as `allYearSeason`, so the server and the browser agree.
+ */
+export function transferSeason(service: TransferService): ActivitySchedule {
+  if (service === 'shared') return { ...allYearSeason('times'), days: sameEveryDay(['09:00', '11:00', '13:00', '15:00', '17:00']) }
+  const hours = Object.fromEntries(WEEKDAY_KEYS.map((key) => [key, { open: '06:00', close: '23:30' }])) as Record<WeekdayKey, { open: string; close: string } | null>
+  return { ...allYearSeason('hours'), hours, every: 30 }
+}
+
 /** The way a kind usually sells: opening hours for open-entry kinds (rentals, passes, activities), start times otherwise. */
 export function modeForKind(kind: ActivityKind): 'times' | 'hours' {
   return ACTIVITY_KIND_META[kind]?.defaultFormat === 'open' ? 'hours' : 'times'
@@ -98,7 +109,7 @@ export function modeForKind(kind: ActivityKind): 'times' | 'hours' {
 /** The schedule fields of a new activity. */
 export function defaultScheduleDraft(kind: ActivityKind = 'trip'): Omit<ScheduleDraft, 'noticeHours'> {
   const mode = modeForKind(kind)
-  return { scheduleMode: mode, schedules: [allYearSeason(mode)], scheduleChanges: [], bookingWindowMonths: 0, runsOnClosures: false }
+  return { scheduleMode: mode, schedules: [kind === 'transfer' ? transferSeason('private') : allYearSeason(mode)], scheduleChanges: [], bookingWindowMonths: 0, runsOnClosures: false }
 }
 
 /** The gap every list of times shares, when they are evenly spaced; undefined when they aren't. */
@@ -193,6 +204,14 @@ const canonical = (value: unknown): unknown =>
 /** The first season a new activity starts with, not yet changed. */
 const isUntouchedStart = (schedules: ActivitySchedule[]) =>
   schedules.length === 1 && schedules[0].id === 'season_all' && JSON.stringify(canonical(schedules[0])) === JSON.stringify(canonical(allYearSeason(schedules[0].mode)))
+
+/** Still a starting schedule, as a new activity or a new transfer begins it: picking a kind or a service can replace it. */
+export function isStarterSchedule(schedules: ActivitySchedule[]): boolean {
+  if (schedules.length === 0 || isUntouchedStart(schedules)) return true
+  if (schedules.length !== 1) return false
+  const own = JSON.stringify(canonical(schedules[0]))
+  return (['private', 'shared'] as const).some((service) => own === JSON.stringify(canonical(transferSeason(service))))
+}
 
 /**
  * Every season switched to start times or opening hours. A new activity's

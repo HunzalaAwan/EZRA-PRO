@@ -55,6 +55,7 @@ import {
 } from '@/components/ui/data-table'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Pagination } from '@/components/ui/pagination'
+import { rideHeadline } from '@/lib/transfer-changes'
 
 /* ==========================================================================
    The reservations list.
@@ -424,6 +425,7 @@ function BookingCard({
           <span aria-hidden="true" className="h-4 w-1 shrink-0 rounded-full" style={{ background: ACTIVITY_COLOR_VAR[activity.colorKey] }} />
           {activity.name}
         </p>
+        {booking.transfer ? <p className="mt-0.5 truncate pl-3 text-[0.8125rem] text-subtle">{rideHeadline(activity, booking.transfer)}</p> : null}
 
         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.8125rem] text-subtle">
           <span className="tabular-nums">
@@ -643,14 +645,22 @@ export function BookingsTable({
         header: 'Activity',
         sortable: true,
         hideBelow: 'lg',
-        cell: ({ activity, departure }) => (
+        cell: ({ activity, departure, booking }) => (
           <span className="flex min-w-[9rem] max-w-[15rem] items-center gap-2.5 2xl:max-w-[19rem]">
             <span
               aria-hidden="true"
               className="h-4 w-1 shrink-0 rounded-full"
               style={{ background: ACTIVITY_COLOR_VAR[activity.colorKey] }}
             />
-            <span className="truncate text-sm text-foreground">{activity.name}</span>
+            {booking.transfer ? (
+              // A ride: what kind of ride and where, under the name.
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate text-sm text-foreground">{activity.name}</span>
+                <span className="truncate text-[0.8125rem] text-subtle">{rideHeadline(activity, booking.transfer)}</span>
+              </span>
+            ) : (
+              <span className="truncate text-sm text-foreground">{activity.name}</span>
+            )}
             {activity.locations.length > 1 && departure.locationId ? (
               <span className="hidden max-w-[8rem] shrink-0 truncate text-[0.8125rem] text-faint 2xl:inline">· {getLocationById(departure.locationId)?.name}</span>
             ) : null}

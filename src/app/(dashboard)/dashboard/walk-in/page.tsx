@@ -3,7 +3,7 @@ import { requireWorkspaceRoute } from '@/lib/workspace'
 
 import { NOW_ISO } from '@/components/dashboard/activities/activity-data'
 import { getActivitiesByTenant, getBookingRows, getPaymentsByBooking, getUsersByTenant } from '@/lib/demo'
-import { buildDays } from '@/lib/storefront-availability'
+import { buildDays, buildTransferAvailability } from '@/lib/storefront-availability'
 import { createRng, hashSeed } from '@/lib/utils'
 import { WALK_IN_SOURCES, dayKeys, type WalkInRecord } from '@/lib/walk-ins'
 import { PageHeader } from '@/components/dashboard/page-header'
@@ -24,6 +24,15 @@ function minutesBefore(iso: string, minutes: number): string {
   date.setMinutes(date.getMinutes() - minutes)
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:00`
+}
+
+/** A transfer's vehicle holds that overlap today or tomorrow (the desk sells nothing further out). */
+function holdsAroundToday(activity: Parameters<typeof buildTransferAvailability>[0]) {
+  const [y, m, d] = NOW_ISO.slice(0, 10).split('-').map(Number)
+  const from = new Date(y, m - 1, d).getTime()
+  // Round trips sold at the desk can return days later: keep two weeks of holds.
+  const to = new Date(y, m - 1, d + 15).getTime()
+  return buildTransferAvailability(activity).holds.filter((hold) => hold.toMs > from && hold.fromMs < to)
 }
 
 export default async function WalkInPage() {
@@ -51,6 +60,8 @@ export default async function WalkInPage() {
         days,
         // The desk prices with the same engine as the storefront and checkout.
         source: activity,
+        // Transfers: the seeded rides that hold vehicles today and tomorrow, so the desk sells only free vehicles.
+        ...(activity.kind === 'transfer' ? { transferHolds: holdsAroundToday(activity) } : {}),
       }
     })
 

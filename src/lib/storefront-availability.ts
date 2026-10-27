@@ -4,6 +4,7 @@ import { hasItems, itemsInBooking, rentalItemsOf, rentalSpan, shortestRentalMs }
 import { timeOf, type PackagePartView } from '@/lib/packages'
 import type { Activity } from '@/types'
 import { slotLeadPrice } from '@/lib/price-engine'
+import { holdsOfDetails, type TransferHold } from '@/lib/transfers'
 import type { AvailabilityDay, AvailabilitySlot } from '@/components/storefront/booking-widget'
 
 /* ==========================================================================
@@ -56,6 +57,32 @@ export function rentalItemsLeftFor(activity: Activity, startsAt: string): Record
   if (!hasItems(activity)) return undefined
   // Every seeded time slot ahead (the demo seeds about 60 days).
   return rentalItemsLeftAt(activity, rentalHolds(activity, 62), startsAt)
+}
+
+/** A transfer's seeded rides as vehicle holds, for the widget, checkout and the manage page to count free vehicles. */
+export interface TransferAvailability {
+  holds: TransferHold[]
+}
+
+/**
+ * Every seeded ride of a transfer that still holds its vehicles, one hold per
+ * leg per vehicle size: rides whose first pickup is from two weeks back (a
+ * round trip's return can still be ahead) to the end of the seeded days.
+ * Cancelled and refunded bookings hold nothing. Server-only.
+ */
+export function buildTransferAvailability(activity: Activity): TransferAvailability {
+  if (activity.kind !== 'transfer' || !activity.transfer) return { holds: [] }
+  const departures = getDeparturesInRange(activity.tenantId, addDays(NOW, -14), addDays(NOW, 62)).filter((departure) => departure.activityId === activity.id)
+  const seen = new Set<string>()
+  const holds: TransferHold[] = []
+  for (const departure of departures) {
+    for (const booking of getBookingsByDeparture(departure.id)) {
+      if (seen.has(booking.id) || !booking.transfer || booking.status === 'cancelled' || booking.status === 'refunded') continue
+      seen.add(booking.id)
+      holds.push(...holdsOfDetails(activity, booking.transfer, booking.reference))
+    }
+  }
+  return { holds }
 }
 
 export function buildDays(activity: Activity, STRIP_DAYS = 21): AvailabilityDay[] {

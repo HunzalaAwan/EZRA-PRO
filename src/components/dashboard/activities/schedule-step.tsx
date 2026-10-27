@@ -212,6 +212,8 @@ export function ScheduleStep({
   const showExtra = Boolean(capacity?.showExtra)
   const closingGap = closingGapOf(base)
   const stepMinutes = Math.max(30, Math.min(240, base.durationMinutes || 60))
+  // Transfers: how guests pick a time follows the service (set on Basics), so it is not switched here.
+  const transfer = kind === 'transfer'
   const firstTime = shownSeasons.map((season) => (['1', '2', '3', '4', '5', '6', '0'] as WeekdayKey[]).map((key) => timesForWeekday(season, key, closingGap)).find((times) => times.length > 0)?.[0]).find(Boolean)
 
   /* ---- calendar edits ---- */
@@ -430,11 +432,20 @@ export function ScheduleStep({
 
       {unscheduled ? null : (
         <>
-          {/* ---- 2. how guests pick a time ---- */}
+          {/* ---- 2. how guests pick a time (a transfer's is fixed: any half hour while you drive, or a shuttle's runs) ---- */}
           <div className="flex flex-col gap-2">
-            <p className="text-[0.8125rem] font-medium">How guests pick a time</p>
-            <Segmented label="How guests pick a time" className="max-w-full self-start overflow-x-auto" value={value.scheduleMode} onValueChange={switchMode} options={MODE_OPTIONS} />
-            <p className="text-xs text-subtle">{MODE_HINT[value.scheduleMode]}</p>
+            {transfer ? (
+              <>
+                <p className="text-[0.8125rem] font-medium">{value.scheduleMode === 'hours' ? 'Hours you drive' : 'Shuttle runs'}</p>
+                <p className="text-xs text-subtle">{value.scheduleMode === 'hours' ? 'Guests book any pickup time in these hours.' : 'Guests pick one of your runs.'}</p>
+              </>
+            ) : (
+              <>
+                <p className="text-[0.8125rem] font-medium">How guests pick a time</p>
+                <Segmented label="How guests pick a time" className="max-w-full self-start overflow-x-auto" value={value.scheduleMode} onValueChange={switchMode} options={MODE_OPTIONS} />
+                <p className="text-xs text-subtle">{MODE_HINT[value.scheduleMode]}</p>
+              </>
+            )}
             {rentalDay ? (
               <div className="mt-1 flex flex-wrap items-center gap-2">
                 <span className="text-xs text-muted">Day rentals go out after</span>
@@ -466,6 +477,7 @@ export function ScheduleStep({
                   onChange={(next) => updateSeason(regular.id, next)}
                   todayKey={todayKey}
                   rental={kind === 'rental'}
+                  transfer={transfer}
                   errors={errors}
                   stepMinutes={stepMinutes}
                   closingGap={closingGap}
@@ -506,6 +518,7 @@ export function ScheduleStep({
                     onRemove={() => removeSeason(season.id)}
                     todayKey={todayKey}
                     rental={kind === 'rental'}
+                    transfer={transfer}
                     errors={errors}
                     stepMinutes={stepMinutes}
                     closingGap={closingGap}
@@ -568,7 +581,7 @@ export function ScheduleStep({
             changes={value.scheduleChanges.filter((change) => !active || !change.locationId || change.locationId === active)}
             mode={value.scheduleMode}
             todayKey={todayKey}
-            spotWord={kind === 'rental' ? 'items' : kind === 'pass' ? 'tickets' : 'spots'}
+            spotWord={kind === 'rental' ? 'items' : kind === 'pass' ? 'tickets' : transfer ? (value.scheduleMode === 'hours' ? 'vehicles' : 'seats') : 'spots'}
             locationName={locationName}
             onRemove={(id) => onChange({ scheduleChanges: value.scheduleChanges.filter((change) => change.id !== id) })}
             onAddClosed={(dates, reason) => onChange({ scheduleChanges: closeDays(value.scheduleChanges, dates, reason, active) })}

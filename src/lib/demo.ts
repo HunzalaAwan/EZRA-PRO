@@ -21,6 +21,22 @@
 import { rentalItemsOf, rentalSpan } from '@/lib/rental-items'
 import { departureFromSlotId, isGeneratedSlotId, parseSlotId } from '@/lib/activity-schedule'
 import { slotExtraSpotsOf } from '@/lib/extra-spots'
+import { priceBooking } from '@/lib/price-engine'
+import {
+  airlineOf,
+  bookingDetailsOf,
+  fleetSize,
+  legsFor,
+  planVehicles,
+  pricingOf,
+  transferRateFor,
+  tripsOffered,
+  vehiclesLeftAt,
+  holdsOfDetails,
+  zoneById,
+  type TransferHold,
+  type TransferRequest,
+} from '@/lib/transfers'
 import type {
   Activity,
   ActivityFeedItem,
@@ -59,6 +75,8 @@ import type {
   Tenant,
   TenantFeatures,
   TimeSeriesPoint,
+  TransferBookingDetails,
+  TransferTrip,
   TrendDirection,
   User,
   WeatherSnapshot,
@@ -199,6 +217,18 @@ const COUNTRY_POOLS: Record<string, [string, string, number][]> = {
     ['Italy', 'IT', 5],
     ['Canada', 'CA', 4],
   ],
+  tnt_caribe: [
+    ['United States', 'US', 42],
+    ['Canada', 'CA', 18],
+    ['Mexico', 'MX', 10],
+    ['United Kingdom', 'GB', 8],
+    ['Argentina', 'AR', 4],
+    ['Colombia', 'CO', 4],
+    ['Germany', 'DE', 4],
+    ['Spain', 'ES', 4],
+    ['France', 'FR', 3],
+    ['Brazil', 'BR', 3],
+  ],
   tnt_ridgeline: [
     ['New Zealand', 'NZ', 28],
     ['Australia', 'AU', 24],
@@ -215,7 +245,7 @@ const COUNTRY_POOLS: Record<string, [string, string, number][]> = {
 const PHONE_PREFIX: Record<string, string> = {
   US: '+1', CA: '+1', AU: '+61', NZ: '+64', GB: '+44', DE: '+49', FR: '+33', IT: '+39',
   ES: '+34', NL: '+31', SE: '+46', GR: '+30', JP: '+81', KR: '+82', CN: '+86', IN: '+91',
-  BR: '+55', MX: '+52', SG: '+65', PT: '+351',
+  BR: '+55', MX: '+52', SG: '+65', PT: '+351', AR: '+54', CO: '+57',
 }
 
 const EMAIL_DOMAINS = ['gmail.com', 'outlook.com', 'icloud.com', 'proton.me', 'hey.com', 'fastmail.com']
@@ -245,6 +275,7 @@ const TENANT_SHORT: Record<string, string> = {
   tnt_saltline: 'sl',
   tnt_ridgeline: 'rl',
   tnt_casavela: 'cv',
+  tnt_caribe: 'ct',
 }
 
 /** Weighted pick over [name, code, weight] triples. */
@@ -468,6 +499,7 @@ const TAX_LABEL: Record<string, string> = {
   tnt_saltline: 'VAT (13%)',
   tnt_ridgeline: 'GST (15%)',
   tnt_casavela: 'IVA (13%)',
+  tnt_caribe: 'IVA included',
 }
 
 const GUEST_NOTES = [
@@ -549,6 +581,388 @@ let bookingSeq = 0
 let paymentSeq = 0
 let departureSeq = 0
 
+/* ==========================================================================
+   TRANSFER RIDES — a private transfer or a driver by the hour holds vehicles,
+   not seats: each ride keeps its vehicles from pickup for its busy time, and
+   each leg sits in the half-hour time slot its pickup falls in (a slot's
+   `capacity` is the fleet, `booked` the vehicles whose ride starts in it).
+   A shared shuttle runs on the usual time slots, one way per booking.
+   Everything here draws from its own seeds, so nothing else moves.
+   ========================================================================== */
+
+/** How often each destination is booked; others 10. */
+const RIDE_ZONE_WEIGHTS: Record<string, number> = { tz_cancun_hz: 35, tz_playa: 25, tz_puerto_juarez: 15, tz_tulum_hz: 13, tz_puerto_morelos: 12 }
+const RIDE_TRIP_WEIGHTS: [TransferTrip, number][] = [['round_trip', 50], ['from_hub', 30], ['to_hub', 15], ['between', 5]]
+const AIRLINES_BY_COUNTRY: Record<string, string[]> = { US: ['AA', 'UA', 'DL', 'WN', 'B6'], CA: ['AC', 'WS'], MX: ['AM', 'Y4'], GB: ['BA'] }
+const ANY_AIRLINE = ['AA', 'UA', 'DL', 'WN', 'B6', 'AC', 'WS', 'AM', 'Y4', 'BA']
+const HOURLY_PICKUPS = ['Grand Hyatt Playa del Carmen', 'Hyatt Ziva Cancun', 'Riu Palace Las Americas', 'The Fives Beach Hotel', 'Live Aqua Beach Resort', 'Excellence Riviera Cancun']
+const HOURLY_PLANS = ['Chichén Itzá and a cenote swim', 'Tulum ruins and Gran Cenote', 'Shopping in Playa del Carmen', 'Cenotes on the Ruta de los Cenotes', 'Lunch and the market in Puerto Morelos', 'Coba ruins and the lagoon']
+const RIDE_NOTES = ['A stroller in the back, please.', 'Travelling with a folding wheelchair.', 'Two surfboard bags.', 'Celebrating our honeymoon.', 'Our flight is often early, please track it.']
+const RIDE_CANCEL_REASONS = ['Flight cancelled', 'Travel plans changed', 'Booked the hotel shuttle instead', 'Guest illness', 'Changed hotels']
+const RIDE_REVIEWS: Record<number, string[]> = {
+  5: ['Driver was waiting with a sign the moment we walked out. Spotless van.', 'Our flight was an hour late and the driver was still there. So easy.', 'Fast, friendly, and the cold water was a nice touch.'],
+  4: ['Good ride. Took a few minutes to find the driver outside Terminal 3.', 'Comfortable and on time. Booking was simple.'],
+  3: ['Fine, but we waited 20 minutes at the hotel for the pickup.'],
+  2: ['Driver was late for our departure pickup. We made the flight, just.'],
+  1: ['Driver was late for our departure pickup. We made the flight, just.'],
+}
+
+/** A flight number for a guest from this country: "AA 1234", with the airline when we know it. */
+function seedFlight(rng: () => number, country: string, at: string) {
+  const number = `${rngPick(rng, AIRLINES_BY_COUNTRY[country] ?? ANY_AIRLINE)} ${rngInt(rng, 100, 2999)}`
+  const airline = airlineOf(number)
+  return { number, ...(airline ? { airline } : {}), at }
+}
+
+/** A day at minutes past midnight, as a local ISO. */
+const atMinutes = (day: Date, minutes: number) => isoLocal(new Date(day.getFullYear(), day.getMonth(), day.getDate(), Math.floor(minutes / 60), minutes % 60, 0, 0))
+
+/** A shared shuttle seat: which way the run goes, where to, the hotel and the flight. Prices come from the table. */
+function sharedRideOf(activity: Activity, bookingId: string, departure: Departure, size: number, country: string) {
+  const config = activity.transfer!
+  const rng = createRng(hashSeed(`ride:${bookingId}`))
+  const time = departure.startsAt.slice(11, 16)
+  const out = config.shared ? config.shared.fromHubTimes.includes(time) : true
+  const back = config.shared ? config.shared.toHubTimes.includes(time) : true
+  const trip: TransferTrip = out && back ? (rng() < 0.5 ? 'from_hub' : 'to_hub') : out ? 'from_hub' : 'to_hub'
+  const zones = config.zones.filter((zone) => zone.active !== false).map((zone): [string, number] => [zone.id, RIDE_ZONE_WEIGHTS[zone.id] ?? 10])
+  const zoneId = rngWeighted(rng, zones)
+  const zone = zoneById(config, zoneId)!
+  const place = rngPick(rng, zone.places.length > 0 ? zone.places : [zone.name])
+  const run = new Date(departure.startsAt).getTime()
+  // Arrivals land at least half an hour before the run; departures fly at least the check-in time after it.
+  const flightMs = trip === 'from_hub' ? run - (30 + 5 * rngInt(rng, 0, 12)) * 60_000 : run + (config.checkInMinutes + 5 * rngInt(rng, 0, 24)) * 60_000
+  const request: TransferRequest = { trip, zoneId, passengers: size, bags: Math.max(0, size + rngInt(rng, -1, 1)), at: departure.startsAt, place }
+  const details = bookingDetailsOf(activity, request, {
+    vehicles: [],
+    departureIds: [departure.id],
+    flights: [seedFlight(rng, country, isoLocal(new Date(flightMs)))],
+    place,
+  })
+  return { details, pricing: pricingOf(request), zoneName: zone.name }
+}
+
+interface RideContext {
+  tenantId: string
+  currency: CurrencyCode
+  taxRate: number
+  taxLabel: string
+  staff: User[]
+  back: number
+  fwd: number
+  websiteHost: string
+}
+
+/**
+ * Private transfers and drivers by the hour, day by day: rides by
+ * popularity, season and weekday; a trip, destination, group and suitcases;
+ * flight times that keep pickups inside the hours driven; the cheapest
+ * vehicles still free for every leg (a busy time skips the ride); each leg in
+ * its half-hour slot. Prices from the engine at the table's rates.
+ */
+function seedTransferRides(activity: Activity, popularity: number, ctx: RideContext) {
+  const config = activity.transfer!
+  const rng = createRng(hashSeed(`gen:${activity.id}`))
+  const hourly = config.service === 'hourly'
+  const offered = tripsOffered(config)
+  const trips = RIDE_TRIP_WEIGHTS.filter(([trip]) => offered.includes(trip))
+  const zones = config.zones.filter((zone) => zone.active !== false).map((zone): [string, number] => [zone.id, RIDE_ZONE_WEIGHTS[zone.id] ?? 10])
+  if (!hourly && (trips.length === 0 || zones.length === 0)) return
+  const capacity = fleetSize(activity)
+  const holds: TransferHold[] = []
+  const slots = new Map<string, Departure>()
+  const todayMs = startOfDay(NOW).getTime()
+  const childSeat = activity.addOns.find((addOn) => /child seat/i.test(addOn.label))
+
+  /** The seeded time slot at a half hour, made the first time a ride needs it. */
+  const slotAt = (startsAt: string): Departure => {
+    const found = slots.get(startsAt)
+    if (found) return found
+    const start = new Date(startsAt)
+    const daysOut = Math.round((startOfDay(start).getTime() - todayMs) / DAY_MS)
+    const departure: Departure = {
+      id: `dep_${(departureSeq++).toString(36).padStart(5, '0')}`,
+      tenantId: ctx.tenantId,
+      activityId: activity.id,
+      locationId: activity.locations[0]?.locationId,
+      startsAt,
+      endsAt: isoLocal(new Date(start.getTime() + 30 * 60_000)),
+      capacity,
+      booked: 0,
+      held: 0,
+      status: start.getTime() < NOW_MS ? 'completed' : daysOut <= 3 ? 'confirmed' : 'scheduled',
+      assignedStaffIds: ctx.staff.length > 0 ? [rngPick(rng, ctx.staff).id] : [],
+      assignedResourceIds: activity.requiredResourceIds,
+    }
+    allDepartures.push(departure)
+    slots.set(startsAt, departure)
+    return departure
+  }
+
+  // Departures fly late enough that the pickup (flight, less check-in, less the drive) is at 06:00 or after.
+  const earliestFlight = (zoneId: string | undefined) => Math.max(420, Math.ceil((360 + config.checkInMinutes + (zoneById(config, zoneId)?.driveMinutes ?? 0)) / 5) * 5)
+  const flightOut = (day: Date, zoneId: string | undefined) => {
+    const first = earliestFlight(zoneId)
+    return atMinutes(day, first + 5 * rngInt(rng, 0, Math.max(0, Math.floor((1260 - first) / 5))))
+  }
+
+  for (let off = -ctx.back; off <= ctx.fwd; off++) {
+    const day = startOfDay(addDays(NOW, off))
+    const count = round(popularity * 14 * MONTH_FACTOR[day.getMonth()] * WEEKDAY_UPLIFT[mondayIndex(day)] * (0.8 + rng() * 0.4))
+    for (let n = 0; n < count; n++) {
+      const trip: TransferTrip = hourly ? 'hourly' : rngWeighted(rng, trips)
+      const zoneId = hourly ? undefined : rngWeighted(rng, zones)
+      const others = zones.filter(([id]) => id !== zoneId)
+      const toZoneId = trip === 'between' ? (others.length > 0 ? rngWeighted(rng, others) : zoneId) : undefined
+      const passengers = rng() < 0.05 ? rngInt(rng, 10, 14) : rngWeighted(rng, PARTY_WEIGHTS)
+      const bags = Math.max(0, passengers + rngInt(rng, -1, 1))
+      const zone = zoneById(config, zoneId)
+      const at =
+        trip === 'from_hub' || trip === 'round_trip'
+          ? atMinutes(day, 480 + 5 * rngInt(rng, 0, 174)) // lands 08:00–22:30
+          : trip === 'to_hub'
+            ? flightOut(day, zoneId) // takes off by 21:00
+            : trip === 'between'
+              ? atMinutes(day, 480 + 30 * rngInt(rng, 0, 24)) // pickup 08:00–20:00
+              : atMinutes(day, 420 + 30 * rngInt(rng, 0, 14)) // driver from 07:00–14:00
+      const returnAt = trip === 'round_trip' ? flightOut(addDays(day, rngInt(rng, 3, 10)), zoneId) : undefined
+      const hours = hourly ? rngInt(rng, 3, 8) : undefined
+      const place = hourly ? rngPick(rng, HOURLY_PICKUPS) : rngPick(rng, zone && zone.places.length > 0 ? zone.places : [zone?.name ?? ''])
+      const toZone = zoneById(config, toZoneId)
+      const dropOff = trip === 'between' && toZone ? rngPick(rng, toZone.places.length > 0 ? toZone.places : [toZone.name]) : hourly ? rngPick(rng, HOURLY_PLANS) : undefined
+      const request: TransferRequest = {
+        trip,
+        ...(zoneId ? { zoneId } : {}),
+        ...(toZoneId ? { toZoneId } : {}),
+        passengers,
+        bags,
+        at,
+        ...(returnAt ? { returnAt } : {}),
+        ...(hours ? { hours } : {}),
+        place,
+        ...(dropOff ? { dropOff } : {}),
+      }
+      const legs = legsFor(activity, request)
+      if (legs.length === 0) continue
+
+      // The vehicles free for every leg: the tighter of the legs.
+      const left: Record<string, number> = {}
+      for (const leg of legs) {
+        for (const [tierId, free] of Object.entries(vehiclesLeftAt(activity, holds, leg.pickupAt, leg.busyMinutes))) left[tierId] = Math.min(left[tierId] ?? free, free)
+      }
+      const plan = planVehicles(activity, { passengers, bags }, pricingOf(request), left).best
+      if (!plan) continue
+
+      const bookingId = `bkg_${(bookingSeq++).toString(36).padStart(5, '0')}`
+      const customer = pickCustomer(ctx.tenantId, rng)
+      const channel = rngWeighted(rng, CHANNEL_WEIGHTS)
+      const firstMs = new Date(legs[0].pickupAt).getTime()
+      const lastMs = new Date(legs[legs.length - 1].pickupAt).getTime()
+      const leadDays = rngWeighted(rng, LEAD_WEIGHTS)
+      let createdMs = firstMs - leadDays * DAY_MS - rngInt(rng, 0, 900) * 60_000
+      if (createdMs > NOW_MS) createdMs = NOW_MS - rngInt(rng, 5, 5760) * 60_000
+      const createdAt = new Date(createdMs)
+
+      /* ---- status: a ride is past once its last leg has been ---- */
+      const isPast = lastMs < NOW_MS
+      const roll = rng()
+      let bookingStatus: BookingStatus
+      if (isPast) bookingStatus = roll < 0.03 ? 'no_show' : roll < 0.06 ? 'cancelled' : 'completed'
+      else if (roll < 0.045) bookingStatus = 'cancelled'
+      else if (roll < 0.085) bookingStatus = 'pending'
+      else if (off === 0 && rng() < 0.45) bookingStatus = 'checked_in'
+      else bookingStatus = 'confirmed'
+      if (bookingStatus === 'completed' && rng() < 0.014) bookingStatus = 'refunded'
+      const holding = bookingStatus !== 'cancelled' && bookingStatus !== 'refunded'
+
+      // Each leg in its slot; a booking that still rides holds its vehicles there.
+      const departures = legs.map((leg) => slotAt(leg.slotStartsAt))
+      if (holding) {
+        for (const departure of departures) {
+          departure.booked += plan.vehicles
+          if (departure.status !== 'completed' && departure.booked >= departure.capacity) departure.status = 'sold_out'
+        }
+      }
+
+      /* ---- line items: one per vehicle size at the table's price ---- */
+      const lineItems: BookingLineItem[] = []
+      let li = 0
+      let subtotal = 0
+      const priced = priceBooking({ activity, lines: plan.lines, transfer: pricingOf(request), party: passengers })
+      for (const line of priced.ticketLines) {
+        lineItems.push({ id: `li_${bookingId}_${++li}`, label: line.label, tierId: line.tierId, kind: 'ticket', quantity: line.quantity, unitPrice: line.unitPrice, total: line.total })
+        subtotal += line.total
+      }
+      const children = passengers >= 3 && rng() < 0.45 ? rngInt(rng, 1, Math.min(2, passengers - 1)) : 0
+      if (activity.addOns.length > 0 && rng() < 0.15) {
+        const extra = children > 0 && childSeat ? childSeat : rngPick(rng, activity.addOns)
+        const qty = extra.per === 'each' ? Math.min(extra.maxQty ?? 9, extra === childSeat ? Math.max(1, children) : 1) : extra.per === 'booking' ? 1 : passengers
+        lineItems.push({ id: `li_${bookingId}_${++li}`, label: extra.label, kind: 'addon', quantity: qty, unitPrice: extra.price, total: qty * extra.price })
+        subtotal += qty * extra.price
+      }
+      let discountTotal = 0
+      let promoCode: string | undefined
+      if (rng() < 0.12) {
+        const [code, pct] = rngPick(rng, PROMO_CODES)
+        promoCode = code
+        discountTotal = round(subtotal * (pct / 100))
+        lineItems.push({ id: `li_${bookingId}_${++li}`, label: `Promo ${code} (-${pct}%)`, kind: 'discount', quantity: 1, unitPrice: -discountTotal, total: -discountTotal })
+      }
+      const net = subtotal - discountTotal
+      // The sheet's prices include every fee: no booking fee on top.
+      const taxTotal = round(net * ctx.taxRate)
+      if (taxTotal > 0) lineItems.push({ id: `li_${bookingId}_${++li}`, label: ctx.taxLabel, kind: 'tax', quantity: 1, unitPrice: taxTotal, total: taxTotal })
+      const total = net + taxTotal
+
+      /* ---- payment, as for every booking ---- */
+      let chargeAmount = 0
+      let refundAmount: number | undefined
+      let paymentStatus: PaymentStatus
+      if (bookingStatus === 'pending') paymentStatus = 'unpaid'
+      else if (bookingStatus === 'cancelled') {
+        chargeAmount = total
+        refundAmount = rng() < 0.78 ? total : round(total * 0.5)
+        paymentStatus = refundAmount >= total ? 'refunded' : 'partially_refunded'
+      } else if (bookingStatus === 'refunded') {
+        chargeAmount = total
+        refundAmount = total
+        paymentStatus = 'refunded'
+      } else {
+        const pr = rng()
+        if (pr < 0.9) {
+          chargeAmount = total
+          paymentStatus = 'paid'
+        } else if (pr < 0.97) {
+          chargeAmount = round(total * 0.3)
+          paymentStatus = 'deposit_paid'
+        } else paymentStatus = 'unpaid'
+      }
+      const amountPaid = chargeAmount - (refundAmount ?? 0)
+      let cancelledAt: string | undefined
+      let cancellationReason: string | undefined
+      if (bookingStatus === 'cancelled' || bookingStatus === 'refunded') {
+        const upper = Math.min(NOW_MS, firstMs)
+        cancelledAt = isoLocal(new Date(createdMs + Math.floor(rng() * Math.max(60_000, upper - createdMs))))
+        cancellationReason = rngPick(rng, RIDE_CANCEL_REASONS)
+      }
+
+      /* ---- the passengers ---- */
+      const participants: Participant[] = []
+      for (let pi = 0; pi < passengers; pi++) {
+        const isChild = pi >= passengers - children
+        participants.push({
+          id: `par_${bookingId}_${pi + 1}`,
+          firstName: pi === 0 ? customer.firstName : rngPick(rng, FIRST_NAMES),
+          lastName: pi === 0 || rng() < 0.7 ? customer.lastName : rngPick(rng, LAST_NAMES),
+          age: isChild ? rngInt(rng, 3, 11) : rngInt(rng, 21, 70),
+          waiverSigned: true,
+          tierLabel: 'Passenger',
+        })
+      }
+
+      let rating: number | undefined
+      let reviewText: string | undefined
+      if (bookingStatus === 'completed' && rng() < 0.35) {
+        rating = rngWeighted(rng, RATING_WEIGHTS)
+        if (rng() < 0.5) reviewText = rngPick(rng, RIDE_REVIEWS[rating] ?? RIDE_REVIEWS[5])
+      }
+      const source =
+        channel === 'ota'
+          ? rngPick(rng, OTA_SOURCES)
+          : channel === 'reseller'
+            ? rngPick(rng, RESELLER_SOURCES)
+            : channel === 'concierge'
+              ? rngPick(rng, CONCIERGE_SOURCES)
+              : channel === 'website_widget'
+                ? ctx.websiteHost
+                : channel === 'google'
+                  ? 'Google Things to do'
+                  : channel === 'phone'
+                    ? 'Inbound call'
+                    : channel === 'walk_in'
+                      ? 'Airport desk'
+                      : 'Direct'
+      const updatedMs = cancelledAt ? new Date(cancelledAt).getTime() : Math.min(NOW_MS, createdMs + rngInt(rng, 5, 2880) * 60_000)
+
+      const transfer: TransferBookingDetails = bookingDetailsOf(activity, request, {
+        vehicles: plan.lines,
+        departureIds: departures.map((departure) => departure.id),
+        flights: legs.map((leg) => (leg.flightAt ? seedFlight(rng, customer.country, leg.flightAt) : undefined)),
+        place,
+        ...(dropOff ? { dropOff } : {}),
+        ...(rng() < 0.1 ? { note: rngPick(rng, RIDE_NOTES) } : {}),
+      })
+      allBookings.push({
+        id: bookingId,
+        tenantId: ctx.tenantId,
+        reference: bookingReference(bookingId),
+        activityId: activity.id,
+        transfer,
+        departureId: departures[0].id,
+        customerId: customer.id,
+        status: bookingStatus,
+        paymentStatus,
+        channel,
+        partySize: passengers,
+        lineItems,
+        subtotal,
+        discountTotal,
+        taxTotal,
+        feeTotal: 0,
+        total,
+        amountPaid,
+        currency: ctx.currency,
+        participants,
+        createdAt: isoLocal(createdAt),
+        updatedAt: isoLocal(new Date(updatedMs)),
+        departureAt: legs[0].pickupAt,
+        source,
+        promoCode,
+        cancelledAt,
+        cancellationReason,
+        refundAmount,
+        rating,
+        reviewText,
+      })
+      if (holding) holds.push(...holdsOfDetails(activity, transfer, bookingReference(bookingId)))
+
+      if (chargeAmount > 0) {
+        const method = rngWeighted(rng, PAYMENT_METHODS)
+        const isCard = method === 'card' || method === 'apple_pay' || method === 'google_pay'
+        const processorFee = method === 'cash' || method === 'gift_card' ? 0 : round(chargeAmount * 0.029) + 30
+        allPayments.push({
+          id: `pay_${(paymentSeq++).toString(36).padStart(5, '0')}`,
+          tenantId: ctx.tenantId,
+          bookingId,
+          amount: chargeAmount,
+          currency: ctx.currency,
+          method,
+          status: 'succeeded',
+          processorFee,
+          netAmount: chargeAmount - processorFee,
+          createdAt: isoLocal(createdAt),
+          last4: isCard ? String(rngInt(rng, 1000, 9999)) : undefined,
+          brand: isCard ? rngPick(rng, CARD_BRANDS) : undefined,
+        })
+        if (refundAmount && refundAmount > 0) {
+          allPayments.push({
+            id: `pay_${(paymentSeq++).toString(36).padStart(5, '0')}`,
+            tenantId: ctx.tenantId,
+            bookingId,
+            amount: -refundAmount,
+            currency: ctx.currency,
+            method,
+            status: 'refunded',
+            processorFee: 0,
+            netAmount: -refundAmount,
+            createdAt: cancelledAt ?? isoLocal(createdAt),
+          })
+        }
+      }
+    }
+  }
+}
+
 for (const [tenantId, specs] of SPEC_BY_TENANT) {
   const tenant = tenantById.get(tenantId)!
   const currency: CurrencyCode = tenant.currency
@@ -565,6 +979,11 @@ for (const [tenantId, specs] of SPEC_BY_TENANT) {
     if (activity.status !== 'live') continue
     // Packages have no times of their own: their seats are the parts' seats.
     if (activity.kind === 'package') continue
+    // Private transfers and drivers by the hour hold vehicles, not seats (a shared shuttle runs on the usual slots below).
+    if (activity.kind === 'transfer' && activity.transfer && activity.transfer.service !== 'shared') {
+      seedTransferRides(activity, spec.popularity, { tenantId, currency, taxRate, taxLabel, staff, back, fwd, websiteHost })
+      continue
+    }
 
     const rng = createRng(hashSeed(`gen:${activity.id}`))
     const adultTier = activity.priceTiers[0]
@@ -801,11 +1220,25 @@ for (const [tenantId, specs] of SPEC_BY_TENANT) {
               })
             }
 
+            // A shared shuttle seat: its way, destination, hotel and flight, priced from the table.
+            let ride: TransferBookingDetails | undefined
+            if (activity.kind === 'transfer' && activity.transfer) {
+              const shared = sharedRideOf(activity, bookingId, departure, size, customer.country)
+              ride = shared.details
+              for (const line of lineItems) {
+                const tier = line.kind === 'ticket' ? activity.priceTiers.find((entry) => entry.label === line.label) : undefined
+                if (!tier) continue
+                const unit = transferRateFor(activity.transfer, tier.id, shared.pricing) ?? line.unitPrice
+                subtotal += unit * line.quantity - line.total
+                Object.assign(line, { label: `${tier.label} · ${shared.zoneName}`, tierId: tier.id, unitPrice: unit, total: unit * line.quantity })
+              }
+            }
+
             let addonPicks = 0
             for (const ad of activity.addOns) {
               if (addonPicks >= 2) break
               if (rng() < 0.19) {
-                const qty = ad.per === 'booking' ? 1 : Math.max(1, size)
+                const qty = ad.per === 'booking' || ad.per === 'each' ? 1 : Math.max(1, size)
                 const totalLine = qty * ad.price
                 lineItems.push({
                   id: `li_${bookingId}_${++li}`,
@@ -837,7 +1270,8 @@ for (const [tenantId, specs] of SPEC_BY_TENANT) {
             }
 
             const net = subtotal - discountTotal
-            const feeTotal = channel === 'walk_in' ? 0 : round(net * 0.06)
+            // Transfer prices include every fee.
+            const feeTotal = channel === 'walk_in' || ride ? 0 : round(net * 0.06)
             if (feeTotal > 0) {
               lineItems.push({
                 id: `li_${bookingId}_${++li}`,
@@ -1007,6 +1441,7 @@ for (const [tenantId, specs] of SPEC_BY_TENANT) {
               participants,
               ...(bookingQs.length > 0 ? { answers: seedAnswers(bookingQs, `bk_${bookingId}`, false) } : {}),
               ...(activity.pickup ? seedPickup(activity.pickup.zoneIds, bookingId, startsAt) : {}),
+              ...(ride ? { transfer: ride } : {}),
               createdAt: isoLocal(createdAt),
               updatedAt: isoLocal(new Date(updatedMs)),
               departureAt: departure.startsAt,
@@ -1250,6 +1685,23 @@ export function getBookingById(id: string): Booking | undefined {
 
 export function getBookingsByDeparture(departureId: string): Booking[] {
   return bookingsByDeparture.get(departureId) ?? []
+}
+
+/** Rides whose later leg (a round trip's return) is on this time slot; their first leg, and their money, sit on another. */
+let laterLegIndex: Map<string, Booking[]> | null = null
+export function getRideBookingsByLaterLeg(departureId: string): Booking[] {
+  if (!laterLegIndex) {
+    laterLegIndex = new Map()
+    for (const booking of allBookings) {
+      for (const leg of booking.transfer?.legs.slice(1) ?? []) {
+        if (!leg.departureId || leg.departureId === booking.departureId) continue
+        const list = laterLegIndex.get(leg.departureId)
+        if (list) list.push(booking)
+        else laterLegIndex.set(leg.departureId, [booking])
+      }
+    }
+  }
+  return laterLegIndex.get(departureId) ?? []
 }
 
 export function getBookingsByCustomer(customerId: string): Booking[] {

@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { REASON_LABEL, TIME_WINDOWS } from '@/lib/booking-method'
 import { cn, formatCurrency } from '@/lib/utils'
-import type { Activity, BookingSettings, CurrencyCode, RequestReason } from '@/types'
+import type { Activity, BookingSettings, CurrencyCode, RequestReason, TransferBookingDetails } from '@/types'
 
 /* ==========================================================================
    Requests from the storefront — one form for every reason a guest asks
@@ -35,6 +35,8 @@ export interface RequestContext {
   askParty?: boolean
   /** The earliest date they can ask for, yyyy-mm-dd. */
   minDate?: string
+  /** Transfers: the ride they asked for (trip, where, passengers, suitcases, times, vehicles), kept on the request. */
+  transfer?: TransferBookingDetails
 }
 
 const PROMPT: Record<RequestReason, string> = {
@@ -119,6 +121,7 @@ export function RequestForm({
             party: form.party,
             lines: context.lines,
             reason: context.reason,
+            ...(context.transfer ? { transfer: context.transfer } : {}),
             name: form.name.trim(),
             email: form.email.trim(),
             phone: form.phone.trim(),

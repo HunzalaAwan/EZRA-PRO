@@ -942,6 +942,7 @@ export const ACTIVITY_KIND_LOWER: Record<string, string> = {
   lesson: 'a lesson',
   pass: 'a pass',
   package: 'a package',
+  transfer: 'a transfer',
 } satisfies Record<ActivityKind, string>
 
 const KIND_OPTIONS: ConditionOption[] = ACTIVITY_KINDS.filter((kind) => kind !== 'activity').map((kind: ActivityKind) => ({ value: kind, label: ACTIVITY_KIND_META[kind].label }))

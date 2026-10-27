@@ -8,6 +8,7 @@ import {
   toDeskRow,
   type DeskRow,
   getBookingsByDeparture,
+  getRideBookingsByLaterLeg,
   getCalendarEvents,
   getCustomerById,
   getDepartureById,
@@ -78,6 +79,11 @@ export async function fetchDepartureDetail(departureId: string): Promise<Departu
     if (customer) guests.push({ booking, customer })
     if (booking.status !== 'cancelled') paid += booking.amountPaid
     if (booking.status !== 'cancelled' && booking.status !== 'refunded') gross += booking.total
+  }
+  // A round trip's return rides on its own time slot: listed here too, its money stays on the first leg's.
+  for (const booking of getRideBookingsByLaterLeg(departure.id)) {
+    const customer = getCustomerById(booking.customerId)
+    if (customer) guests.push({ booking, customer })
   }
 
   const staffIds = new Set(departure.assignedStaffIds)
