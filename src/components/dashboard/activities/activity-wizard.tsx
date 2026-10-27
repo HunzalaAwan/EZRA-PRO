@@ -115,7 +115,8 @@ import { KindFields, KindPicker, TimedFields, defaultKindSettings, emptyRoute, n
 import { DURATION_UNITS, unitFor, type DurationUnit } from './duration-field'
 import { useCustomCategories } from '@/hooks/use-custom-categories'
 import { GuestQuestionsEditor, type WaiverOption } from './guest-questions-editor'
-import { PickupEditor, type DraftPickup, type PickupZoneOption } from './pickup-editor'
+import { NO_PICKUP, PickupEditor, draftOfPickup, pickupOfDraft, type DraftPickup, type PickupZoneOption } from './pickup-editor'
+import { transportOf, transportSummary } from '@/lib/transport'
 import {
   ACTIVITY_KIND_META,
   ACTIVITY_THEMES,
@@ -162,7 +163,7 @@ export type ArrivalMode = 'meet' | 'venue' | 'pickup'
 export const ARRIVAL_OPTIONS: { value: ArrivalMode; label: string; description: string; icon: typeof MapPin }[] = [
   { value: 'meet', label: 'Meeting point', description: 'Someone from your team meets guests at a set place.', icon: MapPin },
   { value: 'venue', label: 'Guests come to you', description: 'They arrive at your shop, ranch, park or rental desk during opening hours.', icon: DoorOpen },
-  { value: 'pickup', label: 'Pick up', description: 'You collect guests from their hotel or a stop. Set the zones and prices below.', icon: Route },
+  { value: 'pickup', label: 'Pick up', description: 'You collect every guest from their hotel or a stop. Set the transport below.', icon: Route },
 ]
 
 const defaultArrival = (category: VerticalKey): ArrivalMode =>
@@ -947,9 +948,8 @@ export function draftFromActivity(source: Activity, nowIso: string): ActivityDra
     waiverId: activity.waiverId ?? null,
     waiverSigning: activity.waiverSigning ?? 'booker',
     guestDetails: guestDetailsOf(activity),
-    pickup: activity.pickup
-      ? { enabled: true, zoneIds: [...activity.pickup.zoneIds], required: activity.pickup.required, prices: { ...activity.pickup.prices } }
-      : { enabled: false, zoneIds: [], required: false },
+    // Transport: an older save opens with its zone prices in the price table.
+    pickup: draftOfPickup(activity.pickup),
     languages: [...(activity.languages ?? [])],
     theme: themeOf(activity),
     customRequests: Boolean(activity.customRequests),
@@ -2237,20 +2237,8 @@ export function ActivityWizard({
           waiverId: draft.waiverId ?? null,
           waiverSigning: draft.waiverSigning ?? 'booker',
           guestDetails: draft.guestDetails ?? { enabled: false, fields: DEFAULT_GUEST_FIELDS },
-          pickup:
-            (draft.pickup?.enabled || draft.arrivalMode === 'pickup') && draft.pickup.zoneIds.length > 0
-              ? {
-                  zoneIds: draft.pickup.zoneIds,
-                  required: draft.arrivalMode === 'pickup',
-                  // Every chosen zone gets a price on save, so a later change to the zone's own fee does not move it.
-                  prices: Object.fromEntries(
-                    draft.pickup.zoneIds.map((id) => {
-                      const zone = pickupZones.find((entry) => entry.id === id)
-                      return [id, draft.pickup.prices?.[id] ?? { fee: zone?.fee ?? 0, per: 'guest' as const }]
-                    }),
-                  ),
-                }
-              : null,
+          // Transport: included or optional, its pickup points, trips, drop-off and prices; null for none.
+          pickup: pickupOfDraft(draft.pickup, draft.arrivalMode),
           // Where it runs from and when: seasons, day-by-day changes, the booking window.
           ...scheduleOverride({ ...draft, scheduleChanges }, activity),
         })
@@ -2489,10 +2477,11 @@ export function ActivityWizard({
                       locationNames={locations.filter((site) => draft.schedule.locations.some((entry) => entry.locationId === site.id)).map((site) => site.name)}
                       pickupEditor={
                         <PickupEditor
-                          variant={draft.arrivalMode === 'pickup' ? 'only' : 'optional'}
-                          value={draft.pickup ?? { enabled: false, zoneIds: [], required: false }}
+                          arrivalMode={draft.arrivalMode}
+                          value={draft.pickup ?? NO_PICKUP}
                           onChange={(pickup) => patch({ pickup })}
                           zones={pickupZones}
+                          currency={currency}
                           currencySymbol={currencySymbol(currency)}
                         />
                       }
@@ -3362,13 +3351,13 @@ function DescriptionStep({
               value={draft.arrivalMode}
               onValueChange={(value) => {
                 const mode = value as ArrivalMode
-                const pickup = draft.pickup ?? { enabled: false, zoneIds: [], required: false }
+                const pickup = draft.pickup ?? NO_PICKUP
                 patch({
                   arrivalMode: mode,
-                  // Pick up turns the zones on; leaving it keeps pickup only if it was an extra already.
+                  // Pick up turns transport on (included unless it was set up already); leaving it keeps transport only if it was on before.
                   pickup:
                     mode === 'pickup'
-                      ? { ...pickup, enabled: true, required: true, zoneIds: pickup.zoneIds.length > 0 ? pickup.zoneIds : allZoneIds }
+                      ? { ...pickup, enabled: true, required: true, mode: pickup.enabled ? (pickup.mode ?? 'included') : 'included', zoneIds: pickup.zoneIds.length > 0 ? pickup.zoneIds : allZoneIds }
                       : { ...pickup, required: false, enabled: draft.arrivalMode === 'pickup' ? false : pickup.enabled },
                 })
               }}
@@ -3438,9 +3427,7 @@ function DescriptionStep({
               />
             </Field>
           )}
-          {pickupEditor ? (
-            <div className={cn(draft.arrivalMode === 'pickup' && 'rounded-xl border border-primary/30 bg-primary-soft/10 p-4')}>{pickupEditor}</div>
-          ) : null}
+          {pickupEditor ? <div className={cn('rounded-xl border p-4', draft.arrivalMode === 'pickup' ? 'border-primary/30 bg-primary-soft/10' : 'border-line')}>{pickupEditor}</div> : null}
         </>
       )}
       </>
@@ -3568,6 +3555,7 @@ function ReviewStep({
               value: draft.meetingPoint || 'No fixed place',
               step: TOUR_STEP_INDEX.guests,
             },
+        ...(draft.kind === 'transfer' ? [] : [{ label: 'Transport', value: transportSummary(transportOf(pickupOfDraft(draft.pickup, draft.arrivalMode)), currency), step: TOUR_STEP_INDEX.guests }]),
         { label: 'Photos', value: `${draft.media.length} ${pluralize(draft.media.length, 'image')}`, step: TOUR_STEP_INDEX.media },
         {
           label: 'Pricing',

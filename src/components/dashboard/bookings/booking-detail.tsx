@@ -11,6 +11,7 @@ import {
   ArrowUpRight,
   BadgeCheck,
   Ban,
+  Bus,
   CalendarDays,
   Check,
   ChevronRight,
@@ -41,7 +42,8 @@ import {
 } from 'lucide-react'
 
 import type { BookingLineItem, Payment, User } from '@/types'
-import { CHANNEL_LABELS, CURRENT_TENANT, NOW, getActivitiesByTenant, getUsersByTenant, tenantById } from '@/lib/demo-core'
+import { CHANNEL_LABELS, CURRENT_TENANT, NOW, getActivitiesByTenant, getPickupZonesByTenant, getUsersByTenant, tenantById } from '@/lib/demo-core'
+import { retimed, transportLines, transportOf } from '@/lib/transport'
 import { buildMessageLog, groupOf, manageLink } from '@/lib/messaging'
 import { useMessageTemplates } from '@/hooks/use-message-templates'
 import { useFlows } from '@/hooks/use-flows'
@@ -310,6 +312,9 @@ export function BookingDetailContent({
   /** A transfer is changed through its ride (new flight, time or hotel), not by picking another time slot. */
   const ride = activity.kind === 'transfer' && seeded.transfer ? seeded.transfer : undefined
   const byVehicle = Boolean(ride) && serviceOf(activity) !== 'shared'
+  /** Transport: the pickup and drop-off (as the guest changed them), at the booking's current time. */
+  const bookedPickup = change?.pickup ?? seeded.pickup
+  const transport = bookedPickup && !ride ? retimed(bookedPickup, transportOf(activity.pickup), getPickupZonesByTenant(seeded.tenantId), departure.startsAt, departure.endsAt) : undefined
 
   /* ----------------------------------------------------------------------
      Line items
@@ -648,10 +653,22 @@ export function BookingDetailContent({
                   </span>
                 </div>
 
-                <p className="mt-2 inline-flex items-start gap-1.5 text-[0.8125rem] text-muted">
-                  <MapPin aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-faint" />
-                  {activity.meetingPoint}
-                </p>
+                {transport ? (
+                  <ul className="mt-2 flex list-none flex-col gap-0.5 p-0 text-[0.8125rem]" aria-label="Pickup and drop-off">
+                    {transportLines(transport).map((line) => (
+                      <li key={line} className="inline-flex items-start gap-1.5 font-medium text-foreground tabular-nums">
+                        <Bus aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-faint" />
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {transport?.time ? null : (
+                  <p className="mt-2 inline-flex items-start gap-1.5 text-[0.8125rem] text-muted">
+                    <MapPin aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-faint" />
+                    {activity.meetingPoint}
+                  </p>
+                )}
               </div>
             </div>
 

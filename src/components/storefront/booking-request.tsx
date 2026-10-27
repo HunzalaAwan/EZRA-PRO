@@ -7,9 +7,13 @@ import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { TransportPicker } from '@/components/storefront/transport-picker'
+import { useTransport } from '@/hooks/use-transport'
 import { REASON_LABEL, TIME_WINDOWS } from '@/lib/booking-method'
+import { priceTransport } from '@/lib/price-engine'
+import { choiceErrors, cleanChoice, defaultChoice, requestTransportLine, requestTransportOf, type TransportChoice, type TransportSetup } from '@/lib/transport'
 import { cn, formatCurrency } from '@/lib/utils'
-import type { Activity, BookingSettings, CurrencyCode, RequestReason, TransferBookingDetails } from '@/types'
+import type { Activity, ActivityPickup, BookingSettings, CurrencyCode, PickupZone, RequestReason, TransferBookingDetails } from '@/types'
 
 /* ==========================================================================
    Requests from the storefront — one form for every reason a guest asks
@@ -39,6 +43,22 @@ export interface RequestContext {
   transfer?: TransferBookingDetails
 }
 
+/**
+ * Transport on the activity, for a request: the guest's choice from the
+ * Getting there step (the widget), or, without one, the form asks (the
+ * enquiry panel). Priced by the engine like a booking.
+ */
+export interface RequestFormTransport {
+  setup: TransportSetup
+  /** The pickup zones the activity serves, as the business has them now. */
+  zones: PickupZone[]
+  /** The activity's transport as saved, for the price. */
+  pickup: ActivityPickup
+  meetingPoint: string
+  /** Chosen on the Getting there step; absent: the form asks. */
+  choice?: TransportChoice
+}
+
 const PROMPT: Record<RequestReason, string> = {
   booking: 'Anything we should know? The occasion, who is coming, questions.',
   group: 'Tell us about your group: ages, the occasion, anything special.',
@@ -57,6 +77,7 @@ export function RequestForm({
   title,
   onCancel,
   className,
+  transport,
 }: {
   activity: Pick<Activity, 'slug' | 'name' | 'minParticipants' | 'maxCapacity'>
   tenantSlug: string
@@ -66,7 +87,9 @@ export function RequestForm({
   title?: string
   onCancel?: () => void
   className?: string
+  transport?: RequestFormTransport
 }) {
+  const transportId = React.useId()
   const [form, setForm] = React.useState({
     date: '',
     when: 'Any time' as string,
@@ -79,11 +102,30 @@ export function RequestForm({
   const [sent, setSent] = React.useState(false)
   const [tried, setTried] = React.useState(false)
   const set = (patch: Partial<typeof form>) => setForm((current) => ({ ...current, ...patch }))
-  const estimate = (context.lines ?? []).reduce((sum, line) => sum + line.qty * line.unit, 0)
+  /* ---------- transport: the widget's choice, or asked here ---------- */
+  const setup = transport?.setup
+  const zones = transport?.zones
+  const [asked, setAsked] = React.useState<TransportChoice>(() => defaultChoice(setup))
+  React.useEffect(() => {
+    if (!setup || !zones) return
+    setAsked((current) => {
+      const next = cleanChoice(setup, current, zones)
+      return JSON.stringify(next) === JSON.stringify(current) ? current : next
+    })
+  }, [setup, zones])
+  const choice = transport ? (transport.choice ?? asked) : undefined
+  const zoneName = choice ? zones?.find((zone) => zone.id === choice.zoneId)?.name : undefined
+  // What it adds at list prices, per guest or per booking, as a line of the request.
+  const ride = transport && choice ? priceTransport({ pickup: transport.pickup }, choice, form.party, zoneName) : null
+  const lines = [...(context.lines ?? []), ...(ride ? [{ label: ride.label, qty: ride.quantity, unit: ride.unitPrice }] : [])]
+  const asking = transport && choice ? requestTransportOf(transport.setup, choice, transport.zones) : undefined
+  const transportProblem = transport && choice ? Object.values(choiceErrors(transport.setup, choice))[0] : undefined
+  const estimate = lines.reduce((sum, line) => sum + line.qty * line.unit, 0)
   const problems = {
     name: form.name.trim().length < 2,
     email: !EMAIL.test(form.email.trim()),
     date: Boolean(context.askDate) && !form.date,
+    transport: Boolean(transportProblem),
   }
   const reply = replyHours <= 1 ? 'within the hour' : replyHours < 24 ? `within ${replyHours} hours` : replyHours === 24 ? 'within a day' : `within ${Math.round(replyHours / 24)} days`
 
@@ -108,7 +150,7 @@ export function RequestForm({
       onSubmit={(event) => {
         event.preventDefault()
         setTried(true)
-        if (problems.name || problems.email || problems.date) return
+        if (problems.name || problems.email || problems.date || problems.transport) return
         try {
           const key = `ezra:charter-requests:${tenantSlug}`
           const list = JSON.parse(window.localStorage.getItem(key) ?? '[]') as unknown[]
@@ -119,9 +161,10 @@ export function RequestForm({
             startsAt: context.slot?.startsAt ?? (form.date ? `${form.date}T12:00:00` : ''),
             ...(context.askDate ? { when: form.when } : {}),
             party: form.party,
-            lines: context.lines,
+            lines: lines.length > 0 ? lines : undefined,
             reason: context.reason,
             ...(context.transfer ? { transfer: context.transfer } : {}),
+            ...(asking ? { transport: asking } : {}),
             name: form.name.trim(),
             email: form.email.trim(),
             phone: form.phone.trim(),
@@ -143,9 +186,11 @@ export function RequestForm({
           </button>
         ) : null}
       </div>
-      {context.lines && context.lines.length > 0 ? (
+      {lines.length > 0 || (asking && transport?.choice) ? (
         <p className="rounded-lg bg-surface-sunken px-3 py-2 text-xs text-muted">
-          {context.lines.map((line) => `${line.qty} × ${line.label}`).join(', ')}
+          {lines.map((line) => `${line.qty} × ${line.label}`).join(', ')}
+          {/* Free or included transport adds no line: the choice still shows. */}
+          {asking && transport?.choice && !ride ? `${lines.length > 0 ? ', ' : ''}${requestTransportLine(asking)}` : null}
           {estimate > 0 ? <span className="text-subtle"> · about {formatCurrency(estimate, currency)} at list prices</span> : null}
         </p>
       ) : null}
@@ -178,15 +223,33 @@ export function RequestForm({
           </span>
         </div>
       ) : null}
+      {transport && !transport.choice ? (
+        <div className="flex flex-col gap-2 rounded-lg border border-line px-3 py-2.5">
+          <p className="text-[0.8125rem] font-semibold text-foreground">Getting there</p>
+          <TransportPicker
+            setup={transport.setup}
+            zones={transport.zones}
+            value={asked}
+            onChange={setAsked}
+            currency={currency}
+            guests={Math.max(1, form.party)}
+            meetingPoint={transport.meetingPoint}
+            errors={tried ? choiceErrors(transport.setup, asked) : {}}
+            idPrefix={`request${transportId.replace(/:/g, '')}`}
+          />
+        </div>
+      ) : null}
       <Input placeholder="Your name" aria-label="Your name" autoComplete="name" value={form.name} aria-invalid={tried && problems.name ? true : undefined} onChange={(e) => set({ name: e.target.value })} />
       <div className="grid grid-cols-2 gap-2">
         <Input type="email" placeholder="Email" aria-label="Email" autoComplete="email" value={form.email} aria-invalid={tried && problems.email ? true : undefined} onChange={(e) => set({ email: e.target.value })} />
         <Input type="tel" placeholder="Mobile (optional)" aria-label="Mobile" autoComplete="tel" value={form.phone} onChange={(e) => set({ phone: e.target.value })} />
       </div>
       <Textarea rows={3} placeholder={PROMPT[context.reason]} aria-label="Message" value={form.message} onChange={(e) => set({ message: e.target.value })} />
-      {tried && (problems.name || problems.email || problems.date) ? (
+      {tried && (problems.name || problems.email || problems.date || problems.transport) ? (
         <p className="text-xs font-medium text-danger">
           {problems.date ? 'Pick a date. ' : ''}
+          {/* Chosen on the Getting there step above: say where to fix it. */}
+          {transportProblem ? `${transportProblem}${transport?.choice ? ' under Getting there' : ''}. ` : ''}
           {problems.name ? 'Add your name. ' : ''}
           {problems.email ? 'Add a valid email.' : ''}
         </p>
@@ -213,8 +276,9 @@ export function EnquiryPanel({
   minDate,
   priceUnit,
   className,
+  pickupZones,
 }: {
-  activity: Pick<Activity, 'slug' | 'name' | 'minParticipants' | 'maxCapacity' | 'basePrice'>
+  activity: Pick<Activity, 'slug' | 'name' | 'minParticipants' | 'maxCapacity' | 'basePrice' | 'kind' | 'pickup' | 'tenantId' | 'meetingPoint'>
   tenantSlug: string
   currency: CurrencyCode
   settings: BookingSettings
@@ -222,8 +286,11 @@ export function EnquiryPanel({
   minDate: string
   priceUnit: string
   className?: string
+  /** The business's pickup zones, for transport on the activity. */
+  pickupZones?: PickupZone[]
 }) {
   const phone = settings.phone.trim() || businessPhone
+  const { setup, zones } = useTransport(activity, pickupZones)
   return (
     <section aria-label="How to book" className={cn('flex flex-col gap-4 rounded-2xl border border-line bg-surface p-5 shadow-lg', className)}>
       <div>
@@ -250,6 +317,7 @@ export function EnquiryPanel({
         context={{ reason: 'booking', askDate: true, askParty: true, minDate }}
         replyHours={settings.replyHours}
         title="Request a date"
+        transport={setup && activity.pickup ? { setup, zones, pickup: activity.pickup, meetingPoint: activity.meetingPoint } : undefined}
       />
 
       {phone ? (

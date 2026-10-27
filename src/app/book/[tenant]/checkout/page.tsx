@@ -8,6 +8,7 @@ import { buildDays, buildTransferAvailability, rentalItemsLeftFor } from '@/lib/
 import { decodeTransferQuery, encodeTransferQuery, legsFor, vehiclesLeftAt } from '@/lib/transfers'
 import { isGeneratedSlotId, slotFromDeparture } from '@/lib/activity-schedule'
 import { bookingReference, seatsRemaining } from '@/lib/utils'
+import { decodeChoice } from '@/lib/transport'
 import type { Activity, Departure } from '@/types'
 
 /**
@@ -261,12 +262,9 @@ export default async function CheckoutPage({
   return (
     <CheckoutFlow
       waiver={getWaiverById(activity.waiverId)}
-      pickupZones={getPickupZonesByTenant(tenant.id)
-        .filter((zone) => zone.active && (activity.pickup?.zoneIds ?? []).includes(zone.id))
-        .map((zone) => {
-          const price = activity.pickup?.prices?.[zone.id]
-          return price ? { ...zone, fee: price.fee, feePer: price.per } : zone
-        })}
+      // Transport: the business's zones (the flow keeps the ones the activity serves, with the owner's saved edits) and the widget's choice.
+      pickupZones={getPickupZonesByTenant(tenant.id)}
+      transport={decodeChoice(query)}
       tenant={tenant}
       activity={activity}
       departure={departure}

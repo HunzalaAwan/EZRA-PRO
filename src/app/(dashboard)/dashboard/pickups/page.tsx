@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic'
 
 export const metadata: Metadata = {
   title: 'Pickups',
-  description: 'Hotel pickups for today and the week ahead, by shuttle run: who to collect, where, when, and who is driving.',
+  description: 'Pickups and drop-offs for today and the week ahead, by shuttle run: who to collect, where, when, and who is driving.',
 }
 
 const DAYS = 7
@@ -48,8 +48,8 @@ export default async function PickupsPage() {
         title="Pickups"
         description={
           hasRides
-            ? 'Every ride and hotel pickup for today and the week ahead.'
-            : 'Every hotel pickup for today and the week ahead, grouped by shuttle run. Assign a driver, text the guests, tick each party on board.'
+            ? 'Every ride, pickup and drop-off for today and the week ahead.'
+            : 'Every pickup and drop-off for today and the week ahead, grouped by shuttle run. Assign a driver, text the guests, tick each party on board.'
         }
         actions={
           hasRuns ? (

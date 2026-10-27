@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 
-import { BOOKINGS, NOW, getBookingDetail, getLocationById, getStorefront, getWaiverById } from '@/lib/demo'
+import { BOOKINGS, NOW, getBookingDetail, getLocationById, getPickupZonesByTenant, getStorefront, getWaiverById } from '@/lib/demo'
 import { getSeedThreads } from '@/lib/inbox'
 import { buildDays, buildTransferAvailability } from '@/lib/storefront-availability'
 import { ManageBooking } from '@/components/storefront/manage-booking'
@@ -84,6 +84,8 @@ export default async function ManageBookingPage({ params }: { params: Promise<{ 
       nowIso={nowIso}
       // Transfers: the ride as booked, and the seeded rides' vehicle holds for checking a new flight time.
       transfer={activity.kind === 'transfer' && detail.booking.transfer ? { details: detail.booking.transfer, holds: buildTransferAvailability(activity).holds } : undefined}
+      // Transport: the business's pickup zones, so the guest can change their pickup point.
+      pickupZones={activity.pickup ? getPickupZonesByTenant(tenant.id) : undefined}
     />
   )
 }

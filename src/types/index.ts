@@ -523,12 +523,64 @@ export interface PickupPrice {
   per: 'guest' | 'booking'
 }
 
+/** A trip transport makes: to the activity, back after it, or both ways. */
+export type TransportTrip = 'pickup' | 'dropoff' | 'both'
+
+/** How transport is charged: free, per guest or per booking. */
+export type TransportCharge = 'free' | 'guest' | 'booking'
+
+/** What transport costs, minor units. `return` is both ways; empty: twice one way. */
+export interface TransportFare {
+  oneWay?: number
+  return?: number
+}
+
+/** A place guests can be dropped after the activity, instead of back at their pickup point. */
+export interface DropOffPoint {
+  id: string
+  name: string
+  /** Minutes after the end that guests get there. */
+  afterMinutes: number
+}
+
+/**
+ * Transport on an activity (read it through `transportOf` in `@/lib/transport`).
+ * Older saves have only `zoneIds`, `required` and `prices` (pickup only, one
+ * price per zone).
+ */
 export interface ActivityPickup {
+  /** Pickup points: the business's pickup zones served. */
   zoneIds: string[]
-  /** Every guest is collected; there is no meet-there option. */
+  /** No meet-there option: the activity collects every guest (Pick up on the Guests step). */
   required: boolean
-  /** Price per zone for this activity; a zone without one uses its own fee per guest. */
+  /** Older saves: price per zone (pickup only); a zone without one uses its own fee per guest. */
   prices?: Record<string, PickupPrice>
+  /** included: part of the price, every guest uses it. optional: guests can add it. */
+  mode?: 'included' | 'optional'
+  /** Optional: the trips guests can book. Included: the one trip included. Absent: pickup only. */
+  trips?: TransportTrip[]
+  /** Where guests are dropped. Empty: back to their pickup point. */
+  dropOffs?: DropOffPoint[]
+  /** Optional transport: free, per guest or per booking. */
+  charge?: TransportCharge
+  /** One way and both ways, for every pickup point. */
+  fare?: TransportFare
+  /** A pickup point's own prices, over `fare`. */
+  zoneFares?: Record<string, TransportFare>
+}
+
+/** Transport on a booking: where and when guests are collected and dropped. */
+export interface BookingPickup {
+  /** The pickup zone of the guest's hotel or stop; '' with a drop-off point only. */
+  zoneId: string
+  /** The hotel, stop or address; '' with a drop-off point only. */
+  stop: string
+  /** Local ISO pickup time; '' when there is no pickup (drop-off only). */
+  time: string
+  /** Absent: pickup only (older bookings). */
+  trip?: TransportTrip
+  /** After the activity: the drop-off point (or back at `stop`) and when. */
+  dropOff?: { stop: string; time: string; pointId?: string }
 }
 
 export type CharterRequestStatus = 'new' | 'quoted' | 'paid' | 'declined'
@@ -597,6 +649,20 @@ export interface CharterRequest {
   paidAt?: string
   /** A ride the guest asked about: the trip, where, when and who. */
   transfer?: TransferBookingDetails
+  /** Transport on the activity the guest asked for: the trip, their pickup point and drop-off point. */
+  transport?: RequestTransport
+}
+
+/** Transport asked for on a request: the times follow the time slot the business confirms. */
+export interface RequestTransport {
+  trip: TransportTrip
+  /** The pickup zone of their hotel or stop; '' with a drop-off point only. */
+  zoneId: string
+  zoneName?: string
+  /** The hotel, stop or address; '' with a drop-off point only. */
+  stop: string
+  /** A drop-off point by name; absent: back to their pickup point. */
+  dropOff?: string
 }
 
 /**
@@ -1257,8 +1323,8 @@ export interface Booking {
   activityId: string
   /** Answers to booking-level guest questions, keyed by question id. */
   answers?: Record<string, string>
-  /** Where the shuttle collects the party. */
-  pickup?: { zoneId: string; stop: string; time: string }
+  /** Transport: where the shuttle collects the party, and drops it after. */
+  pickup?: BookingPickup
   /** Transfers: the ride. `partySize` is passengers, `departureId` the first leg's slot, `departureAt` the first pickup. */
   transfer?: TransferBookingDetails
   departureId: string

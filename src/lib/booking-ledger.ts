@@ -1,5 +1,5 @@
 import { NOW } from '@/lib/data/constants'
-import type { CurrencyCode, TransferBookingDetails } from '@/types'
+import type { BookingPickup, CurrencyCode, TransferBookingDetails } from '@/types'
 
 /* ==========================================================================
    Booking ledger — what changed after the demo data was built: bookings
@@ -31,6 +31,8 @@ export interface LedgerEntry {
    * vehicles (a shared shuttle: its seats), and `peopleOfEntry` the passengers.
    */
   transfer?: TransferBookingDetails
+  /** Transport on the activity: where and when the guests are collected and dropped. On the first part only. */
+  pickup?: BookingPickup
   name: string
   email: string
   phone?: string
@@ -67,6 +69,12 @@ export interface BookingChange {
   fee?: number
   /** Transfers: the ride as changed (a new flight, time or hotel). Its first leg's slot moves with `movedTo`. */
   transfer?: TransferBookingDetails
+  /** Transport: the pickup point (and drop-off) as changed. Its times follow the booking's time slot. */
+  pickup?: BookingPickup
+  /** The start `pickup`'s times were worked out for: a later move shifts them as far as the start moved. */
+  pickupFor?: string
+  /** What a dearer pickup point added, minor units; paid with the balance. */
+  pickupExtra?: number
   history: ChangeEvent[]
 }
 

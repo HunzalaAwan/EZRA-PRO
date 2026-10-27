@@ -13,6 +13,7 @@ import { rentalCategoryMeta } from '@/lib/activity-kinds'
 import { privateMostOf } from '@/lib/extra-spots'
 import { hasItems, itemsInBooking, itemsSentence, rentalItemsOf, rentalSpan } from '@/lib/rental-items'
 import { ridesOf, type TransferRide } from '@/lib/transfer-rides'
+import { stopsOfPickup } from '@/lib/transport'
 import type { CharterRequest, WeatherSnapshot } from '@/types'
 
 /* ==========================================================================
@@ -290,6 +291,10 @@ export function getSeedCharterRequests(tenantId: string): CharterRequest[] {
    -------------------------------------------------------------------------- */
 
 export interface PickupStop {
+  /** The booking id and the stop's kind: "bkg_1:pickup". */
+  id: string
+  /** A pickup before the start, or a drop-off after the end. */
+  kind: 'pickup' | 'dropoff'
   bookingId: string
   reference: string
   time: string
@@ -310,6 +315,9 @@ export interface PickupRunSheet {
   stops: PickupStop[]
 }
 
+/** Stops in the order they happen; at the same time, by place. */
+export const byStopTime = (a: Pick<PickupStop, 'time' | 'stop'>, b: Pick<PickupStop, 'time' | 'stop'>) => (a.time < b.time ? -1 : a.time > b.time ? 1 : a.stop.localeCompare(b.stop))
+
 export function getPickupRunSheet(tenantId: string, day: Date = NOW): PickupRunSheet {
   const activities = new Map(getActivitiesByTenant(tenantId).map((activity) => [activity.id, activity]))
   const stops: PickupStop[] = []
@@ -318,23 +326,28 @@ export function getPickupRunSheet(tenantId: string, day: Date = NOW): PickupRunS
     for (const booking of getBookingsByDeparture(departure.id)) {
       if (!booking.pickup || booking.status === 'cancelled' || booking.status === 'refunded') continue
       const customer = getCustomerById(booking.customerId)
-      stops.push({
-        bookingId: booking.id,
-        reference: booking.reference,
-        time: booking.pickup.time,
-        zoneId: booking.pickup.zoneId,
-        stop: booking.pickup.stop,
-        guestName: customer ? `${customer.firstName} ${customer.lastName}` : 'Guest',
-        phone: customer?.phone ?? '',
-        party: booking.partySize,
-        activityName: activities.get(departure.activityId)?.name ?? 'Activity',
-        departureId: departure.id,
-        departureAt: departure.startsAt,
-        status: booking.status,
-      })
+      // Each booking: its pickup before the start and its drop-off after the end, when it has them.
+      for (const entry of stopsOfPickup(booking.pickup)) {
+        stops.push({
+          id: `${booking.id}:${entry.kind}`,
+          kind: entry.kind,
+          bookingId: booking.id,
+          reference: booking.reference,
+          time: entry.time,
+          zoneId: entry.zoneId,
+          stop: entry.stop,
+          guestName: customer ? `${customer.firstName} ${customer.lastName}` : 'Guest',
+          phone: customer?.phone ?? '',
+          party: booking.partySize,
+          activityName: activities.get(departure.activityId)?.name ?? 'Activity',
+          departureId: departure.id,
+          departureAt: departure.startsAt,
+          status: booking.status,
+        })
+      }
     }
   }
-  stops.sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : a.stop.localeCompare(b.stop)))
+  stops.sort(byStopTime)
   return {
     dayKey: toDateKey(day),
     zones: getPickupZonesByTenant(tenantId).map((zone) => ({ id: zone.id, name: zone.name, offsetMinutes: zone.offsetMinutes })),
@@ -496,7 +509,7 @@ export function getTicketList(tenantId: string): TicketRow[] {
           waiversSigned: booking.participants.filter((participant) => participant.waiverSigned).length,
           waiversTotal: booking.participants.length,
           balance: Math.max(0, booking.total - booking.amountPaid),
-          pickup: booking.pickup ? booking.pickup.stop : undefined,
+          pickup: booking.pickup?.time ? booking.pickup.stop : undefined,
           notes: booking.participants.filter((participant) => participant.notes).map((participant) => `${participant.firstName}: ${participant.notes}`),
         })
       }

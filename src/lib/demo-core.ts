@@ -497,31 +497,54 @@ export function getPickupZonesByTenant(tenantId: string): PickupZone[] {
 }
 
 const ALL_BH_ZONES = ['pz_bh_kaanapali', 'pz_bh_lahaina', 'pz_bh_kihei', 'pz_bh_maalaea']
+/**
+ * Transport on the tours. Three show each way it can be set up:
+ *   Turtle Town: pickup and drop-off included, back to the hotel.
+ *   Molokini Dawn Patrol: optional, per guest, one way or both ways, its own price from each zone (free close to the harbour).
+ *   Sunset Sail: optional, per booking, pickup, drop-off or both, dropped in town for dinner (its own drop-off points).
+ * The rest are pickup only at each zone's fee per guest, as before.
+ */
 const PICKUP_BY_SLUG: Record<string, ActivityPickup> = {
   'molokini-crater-dawn-patrol': {
     zoneIds: ALL_BH_ZONES,
     required: false,
-    prices: {
-      pz_bh_kaanapali: { fee: 2000, per: 'guest' },
-      pz_bh_lahaina: { fee: 1500, per: 'guest' },
-      pz_bh_kihei: { fee: 0, per: 'guest' },
-      pz_bh_maalaea: { fee: 0, per: 'guest' },
+    mode: 'optional',
+    trips: ['pickup', 'both'],
+    charge: 'guest',
+    fare: { oneWay: 1500, return: 2500 },
+    zoneFares: {
+      pz_bh_kaanapali: { oneWay: 2000, return: 3500 },
+      pz_bh_kihei: { oneWay: 0, return: 0 },
+      pz_bh_maalaea: { oneWay: 0, return: 0 },
     },
   },
   'family-reef-snorkel': { zoneIds: ALL_BH_ZONES, required: false },
-  'turtle-town-kayak-snorkel': { zoneIds: ['pz_bh_kihei', 'pz_bh_maalaea'], required: false },
+  'turtle-town-kayak-snorkel': { zoneIds: ['pz_bh_kihei', 'pz_bh_maalaea'], required: false, mode: 'included', trips: ['both'] },
   'whale-watch-eco-cruise': { zoneIds: ALL_BH_ZONES, required: false },
   'sunset-catamaran-sail-snorkel': {
     zoneIds: ALL_BH_ZONES,
     required: false,
-    prices: {
-      pz_bh_kaanapali: { fee: 0, per: 'guest' },
-      pz_bh_lahaina: { fee: 0, per: 'guest' },
-      pz_bh_kihei: { fee: 4500, per: 'booking' },
-      pz_bh_maalaea: { fee: 0, per: 'guest' },
-    },
+    mode: 'optional',
+    trips: ['pickup', 'dropoff', 'both'],
+    charge: 'booking',
+    fare: { oneWay: 2500, return: 4500 },
+    zoneFares: { pz_bh_maalaea: { oneWay: 0, return: 2500 } },
+    dropOffs: [
+      { id: 'dp_front_street', name: 'Front Street, Lahaina', afterMinutes: 40 },
+      { id: 'dp_kalama_village', name: 'Kalama Village, Kihei', afterMinutes: 30 },
+      { id: 'dp_wailea_shops', name: 'The Shops at Wailea', afterMinutes: 40 },
+    ],
   },
   'night-manta-ray-dive': { zoneIds: ['pz_bh_kihei'], required: false },
+}
+
+/** Pickup only, as before: a zone without a price of its own on the activity costs the zone's fee per guest. */
+function pickupOf(pickup: ActivityPickup): ActivityPickup {
+  if (pickup.mode) return pickup
+  const prices = Object.fromEntries(
+    pickup.zoneIds.map((id) => [id, pickup.prices?.[id] ?? { fee: PICKUP_ZONES.find((zone) => zone.id === id)?.fee ?? 0, per: 'guest' as const }]),
+  )
+  return { ...pickup, prices }
 }
 
 /* ==========================================================================
@@ -2202,7 +2225,6 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
         1,
         'Image',
       ],
-      ['Hotel transfer (Wailea / Kihei)', 3500, 'Round-trip shuttle from your resort lobby.', 12, 'Bus'],
       ['Premium raw bar upgrade', 5500, 'Oysters, poke flight and sparkling on the sunset leg.', 8, 'Utensils'],
     ],
     photos: [
@@ -2265,7 +2287,6 @@ const BLUE_HORIZON_SPECS: ActivitySpec[] = [
     addOns: [
       ['Underwater photos', 5900, 'Divemaster shoots the crater wall, 40+ edited images.', 1, 'Image'],
       ['Prescription mask', 1500, 'Corrective lenses from -2.0 to -8.0.', 4, 'Glasses'],
-      ['Hotel transfer (Kihei / Wailea)', 3500, 'Pre-dawn pickup from your resort.', 10, 'Bus'],
     ],
     photos: [
       'photo-1544551763-46a013bb70d5',
@@ -4106,7 +4127,7 @@ function buildActivity(tenant: Tenant, spec: ActivitySpec): Activity {
     meetingPoint: spec.meetingPoint,
     locations: activityLocations(tenant, spec),
     guestQuestions: GUEST_QUESTIONS[spec.slug] ?? [],
-    ...(PICKUP_BY_SLUG[spec.slug] ? { pickup: PICKUP_BY_SLUG[spec.slug] } : {}),
+    ...(PICKUP_BY_SLUG[spec.slug] ? { pickup: pickupOf(PICKUP_BY_SLUG[spec.slug]) } : {}),
     // Transfers ask for no waiver.
     ...(spec.kind === 'transfer' ? {} : { waiverId: MOTOR_ACTIVITIES.has(spec.slug) ? 'wvr_bluehorizon_motor' : `wvr_${tenant.id.replace(/^tnt_/, '')}_general` }),
     // Motorised and animal activities: every guest signs their own waiver.

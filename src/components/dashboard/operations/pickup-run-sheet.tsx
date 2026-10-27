@@ -9,15 +9,19 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Segmented } from '@/components/ui/segmented'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from '@/components/ui/toaster'
+import { useBookingLedger } from '@/hooks/use-booking-ledger'
 import type { PickupRunSheet as Sheet, PickupStop } from '@/lib/operations'
+import { liveRunSheets } from '@/lib/pickup-runs'
 import { cn, formatTime, pluralize } from '@/lib/utils'
 
 /* ==========================================================================
    PICKUPS — the shuttle's day, and the days after it
-   Pick a day. Stops are grouped by shuttle run (the trip they are going
-   to), in collection order. Each run gets a driver, a one-tap text with
-   everyone's pickup time and a running-late button. On the day, each party
-   is ticked on board or marked a no-show. Prints clean for the driver.
+   Pick a day. Stops are grouped by shuttle run (the time slot they are going
+   to): pickups in collection order before the start, then drop-offs after
+   the end. Each run gets a driver, a one-tap text with everyone's pickup
+   time and a running-late button. On the day, each party is ticked on board
+   (or dropped off) or marked a no-show. Prints clean for the driver.
+   Bookings made, moved or cancelled in this browser count too.
    ========================================================================== */
 
 type StopStatus = 'waiting' | 'onboard' | 'noshow'
@@ -33,8 +37,12 @@ function dayLabel(dayKey: string, index: number) {
 
 const shortDate = (dayKey: string) => new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(`${dayKey}T12:00:00`))
 const later = (iso: string, minutes: number) => new Date(new Date(iso).getTime() + minutes * 60_000)
+const pickupsOf = (stops: PickupStop[]) => stops.filter((stop) => stop.kind === 'pickup')
+const dropOffsOf = (stops: PickupStop[]) => stops.filter((stop) => stop.kind === 'dropoff')
 
-export function PickupRunSheet({ sheets, drivers, tenantSlug }: { sheets: Sheet[]; drivers: string[]; tenantSlug: string }) {
+export function PickupRunSheet({ sheets: seeded, drivers, tenantSlug }: { sheets: Sheet[]; drivers: string[]; tenantSlug: string }) {
+  const ledger = useBookingLedger(tenantSlug)
+  const sheets = React.useMemo(() => liveRunSheets(seeded, ledger), [seeded, ledger])
   const [dayIndex, setDayIndex] = React.useState(0)
   const [view, setView] = React.useState<View>('runs')
   const [zone, setZone] = React.useState<string>('all')
@@ -63,24 +71,30 @@ export function PickupRunSheet({ sheets, drivers, tenantSlug }: { sheets: Sheet[
 
   const sheet = sheets[dayIndex] ?? sheets[0]
   const today = dayIndex === 0
-  const zoneName = (id: string) => sheet.zones.find((entry) => entry.id === id)?.name ?? 'Zone'
+  const zoneName = (id: string) => sheet.zones.find((entry) => entry.id === id)?.name ?? ''
   const stops = sheet.stops.filter((stop) => zone === 'all' || stop.zoneId === zone)
-  const stateOf = (stop: PickupStop): StopStatus => status[stop.bookingId] ?? 'waiting'
+  const stateOf = (stop: PickupStop): StopStatus => status[stop.id] ?? 'waiting'
 
-  /* ---------- runs: one per departure, in the order the first pickup happens ---------- */
+  /* ---------- runs: one per time slot, in the order the first stop happens ---------- */
   const runs = React.useMemo(() => {
     const map = new Map<string, PickupStop[]>()
     for (const stop of stops) map.set(stop.departureId, [...(map.get(stop.departureId) ?? []), stop])
     return [...map.entries()]
-      .map(([departureId, list]) => ({ departureId, stops: list, activityName: list[0].activityName, departureAt: list[0].departureAt }))
-      .sort((a, b) => a.stops[0].time.localeCompare(b.stops[0].time))
+      .map(([departureId, list]) => ({ departureId, pickups: pickupsOf(list), dropOffs: dropOffsOf(list), activityName: list[0].activityName, departureAt: list[0].departureAt }))
+      .sort((a, b) => ((a.pickups[0] ?? a.dropOffs[0]).time < (b.pickups[0] ?? b.dropOffs[0]).time ? -1 : 1))
   }, [stops])
 
-  const guests = stops.reduce((sum, stop) => sum + stop.party, 0)
-  const aboard = stops.filter((stop) => stateOf(stop) === 'onboard').reduce((sum, stop) => sum + stop.party, 0)
-  const noShows = stops.filter((stop) => stateOf(stop) === 'noshow').length
+  const pickups = pickupsOf(stops)
+  const dropOffs = dropOffsOf(stops)
+  const guests = pickups.reduce((sum, stop) => sum + stop.party, 0)
+  const aboard = pickups.filter((stop) => stateOf(stop) === 'onboard').reduce((sum, stop) => sum + stop.party, 0)
+  const noShows = pickups.filter((stop) => stateOf(stop) === 'noshow').length
   const unassigned = runs.filter((run) => !assigned[run.departureId]).length
-  const first = stops[0]
+  const first = pickups[0]
+  // A day with only drop-offs: the tiles count those instead.
+  const onlyDropOffs = pickups.length === 0 && dropOffs.length > 0
+  const dropGuests = dropOffs.reduce((sum, stop) => sum + stop.party, 0)
+  const zonesUsed = new Set(pickups.map((stop) => stop.zoneId)).size
 
   const textRun = (runStops: PickupStop[], delay = 0) => {
     const waiting = runStops.filter((stop) => stateOf(stop) === 'waiting')
@@ -90,11 +104,29 @@ export function PickupRunSheet({ sheets, drivers, tenantSlug }: { sheets: Sheet[
   }
 
   const tiles = [
-    { label: 'Pickups', value: String(stops.length), note: `${new Set(stops.map((stop) => stop.zoneId)).size} ${pluralize(new Set(stops.map((stop) => stop.zoneId)).size, 'zone')}` },
-    { label: today ? 'Guests on board' : 'Guests to collect', value: today ? `${aboard} of ${guests}` : String(guests), note: today && noShows > 0 ? `${noShows} no-show` : `${stops.length} ${pluralize(stops.length, 'party', 'parties')}` },
-    { label: 'First pickup', value: first ? formatTime(first.time) : '—', note: first ? first.stop : 'Nothing booked' },
+    { label: 'Pickups', value: String(pickups.length), note: dropOffs.length > 0 ? `${dropOffs.length} ${pluralize(dropOffs.length, 'drop-off')} after` : `${zonesUsed} ${pluralize(zonesUsed, 'zone')}` },
+    onlyDropOffs
+      ? { label: 'Guests to drop off', value: String(dropGuests), note: `${dropOffs.length} ${pluralize(dropOffs.length, 'party', 'parties')}` }
+      : { label: today ? 'Guests on board' : 'Guests to collect', value: today ? `${aboard} of ${guests}` : String(guests), note: today && noShows > 0 ? `${noShows} no-show` : `${pickups.length} ${pluralize(pickups.length, 'party', 'parties')}` },
+    onlyDropOffs
+      ? { label: 'First drop-off', value: formatTime(dropOffs[0].time), note: dropOffs[0].stop }
+      : { label: 'First pickup', value: first ? formatTime(first.time) : '—', note: first ? first.stop : 'Nothing booked' },
     { label: 'Shuttle runs', value: String(runs.length), note: unassigned > 0 ? `${unassigned} without a driver` : runs.length > 0 ? 'All have a driver' : 'None' },
   ]
+
+  const row = (stop: PickupStop, order: number, showRun = false) => (
+    <StopRow
+      key={stop.id}
+      stop={stop}
+      order={order}
+      delay={delays[stop.departureId] ?? 0}
+      today={today}
+      state={stateOf(stop)}
+      zoneName={zoneName(stop.zoneId)}
+      showRun={showRun}
+      onState={(next) => setStatus((current) => ({ ...current, [stop.id]: next }))}
+    />
+  )
 
   return (
     <div className="flex flex-col gap-4">
@@ -102,8 +134,9 @@ export function PickupRunSheet({ sheets, drivers, tenantSlug }: { sheets: Sheet[
       <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 print:hidden" role="tablist" aria-label="Day">
         {sheets.map((entry, index) => {
           const on = index === dayIndex
-          const count = entry.stops.length
-          const people = entry.stops.reduce((sum, stop) => sum + stop.party, 0)
+          const count = pickupsOf(entry.stops).length
+          const drops = dropOffsOf(entry.stops).length
+          const people = pickupsOf(entry.stops).reduce((sum, stop) => sum + stop.party, 0)
           return (
             <button
               key={entry.dayKey}
@@ -122,8 +155,8 @@ export function PickupRunSheet({ sheets, drivers, tenantSlug }: { sheets: Sheet[
             >
               <span className="text-sm font-semibold">{dayLabel(entry.dayKey, index)}</span>
               <span className={cn('text-xs', on ? 'text-on-primary/80' : 'text-subtle')}>{shortDate(entry.dayKey)}</span>
-              <span className={cn('mt-1 text-xs font-medium tabular-nums', on ? 'text-on-primary' : count > 0 ? 'text-muted' : 'text-faint')}>
-                {count > 0 ? `${count} ${pluralize(count, 'pickup')} · ${people} guests` : 'No pickups'}
+              <span className={cn('mt-1 text-xs font-medium tabular-nums', on ? 'text-on-primary' : count + drops > 0 ? 'text-muted' : 'text-faint')}>
+                {count > 0 ? `${count} ${pluralize(count, 'pickup')} · ${people} guests` : drops > 0 ? `${drops} ${pluralize(drops, 'drop-off')}` : 'No pickups'}
               </span>
             </button>
           )
@@ -143,14 +176,14 @@ export function PickupRunSheet({ sheets, drivers, tenantSlug }: { sheets: Sheet[
 
       {/* ---------- print header ---------- */}
       <p className="hidden text-lg font-semibold print:block">
-        Pickups · {dayLabel(sheet.dayKey, dayIndex)} {shortDate(sheet.dayKey)} · {stops.length} stops · {guests} guests
+        Pickups · {dayLabel(sheet.dayKey, dayIndex)} {shortDate(sheet.dayKey)} · {pickups.length} pickups{dropOffs.length > 0 ? ` · ${dropOffs.length} drop-offs` : ''} · {guests} guests
       </p>
 
       {sheet.stops.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-line bg-surface px-6 py-12 text-center">
           <Bus className="size-6 text-faint" aria-hidden="true" />
           <p className="text-sm font-semibold">No pickups {today ? 'today' : `on ${dayLabel(sheet.dayKey, dayIndex)} ${shortDate(sheet.dayKey)}`}</p>
-          <p className="max-w-md text-sm text-muted">Guests who choose hotel pickup at checkout appear here in collection order, grouped by the time slot they are going to.</p>
+          <p className="max-w-md text-sm text-muted">Guests who book transport appear here: pickups in collection order before the start, drop-offs after the end, grouped by time slot.</p>
         </div>
       ) : (
         <>
@@ -189,15 +222,22 @@ export function PickupRunSheet({ sheets, drivers, tenantSlug }: { sheets: Sheet[
             <div className="flex flex-col gap-4">
               {runs.map((run) => {
                 const delay = delays[run.departureId] ?? 0
-                const people = run.stops.reduce((sum, stop) => sum + stop.party, 0)
-                const inRun = run.stops.filter((stop) => stateOf(stop) === 'onboard').reduce((sum, stop) => sum + stop.party, 0)
+                const people = run.pickups.reduce((sum, stop) => sum + stop.party, 0)
+                const inRun = run.pickups.filter((stop) => stateOf(stop) === 'onboard').reduce((sum, stop) => sum + stop.party, 0)
+                const facts = [
+                  `Starts ${formatTime(run.departureAt)}`,
+                  run.pickups.length > 0 ? `${run.pickups.length} ${pluralize(run.pickups.length, 'pickup')}` : null,
+                  run.dropOffs.length > 0 ? `${run.dropOffs.length} ${pluralize(run.dropOffs.length, 'drop-off')}` : null,
+                  people > 0 ? `${people} guests` : null,
+                  run.pickups[0] ? `first pickup ${formatTime(later(run.pickups[0].time, delay))}` : null,
+                ].filter(Boolean)
                 return (
                   <section key={run.departureId} className="overflow-hidden rounded-2xl border border-line bg-surface print:break-inside-avoid">
                     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line-subtle px-4 py-3 sm:px-5">
                       <div className="min-w-0">
                         <h3 className="truncate text-base font-semibold">{run.activityName}</h3>
                         <p className="text-xs text-muted">
-                          Starts {formatTime(run.departureAt)} · {run.stops.length} {pluralize(run.stops.length, 'stop')} · {people} guests · first pickup {formatTime(later(run.stops[0].time, delay))}
+                          {facts.join(' · ')}
                           {delay ? <span className="font-medium text-warning"> · running {delay} min late</span> : null}
                         </p>
                       </div>
@@ -214,16 +254,18 @@ export function PickupRunSheet({ sheets, drivers, tenantSlug }: { sheets: Sheet[
                             ))}
                           </SelectContent>
                         </Select>
-                        <Button variant="secondary" size="sm" leftIcon={<MessageSquareText />} onClick={() => textRun(run.stops, delay)}>
-                          Text pickup times
-                        </Button>
-                        {today ? (
+                        {run.pickups.length > 0 ? (
+                          <Button variant="secondary" size="sm" leftIcon={<MessageSquareText />} onClick={() => textRun(run.pickups, delay)}>
+                            Text pickup times
+                          </Button>
+                        ) : null}
+                        {today && run.pickups.length > 0 ? (
                           <Select
                             value=""
                             onValueChange={(value) => {
                               const minutes = Number(value)
                               setDelays((current) => ({ ...current, [run.departureId]: minutes }))
-                              if (minutes > 0) textRun(run.stops, minutes)
+                              if (minutes > 0) textRun(run.pickups, minutes)
                               else toast('Back on time')
                             }}
                           >
@@ -243,12 +285,14 @@ export function PickupRunSheet({ sheets, drivers, tenantSlug }: { sheets: Sheet[
                       </div>
                       <p className="hidden text-sm print:block">Driver: {assigned[run.departureId] ?? '________'}</p>
                     </header>
-                    <ol className="flex list-none flex-col divide-y divide-line-subtle p-0">
-                      {run.stops.map((stop, index) => (
-                        <StopRow key={stop.bookingId} stop={stop} order={index + 1} delay={delay} today={today} state={stateOf(stop)} zoneName={zoneName(stop.zoneId)} onState={(next) => setStatus((current) => ({ ...current, [stop.bookingId]: next }))} />
-                      ))}
-                    </ol>
-                    {today ? (
+                    {run.pickups.length > 0 ? <ol className="flex list-none flex-col divide-y divide-line-subtle p-0">{run.pickups.map((stop, index) => row(stop, index + 1))}</ol> : null}
+                    {run.dropOffs.length > 0 ? (
+                      <>
+                        <p className="border-y border-line-subtle bg-surface-sunken/40 px-4 py-2 text-xs font-semibold text-muted sm:px-5">After the end · drop-offs</p>
+                        <ol className="flex list-none flex-col divide-y divide-line-subtle p-0">{run.dropOffs.map((stop, index) => row(stop, run.pickups.length + index + 1))}</ol>
+                      </>
+                    ) : null}
+                    {today && run.pickups.length > 0 ? (
                       <footer className="border-t border-line-subtle bg-surface-sunken/40 px-4 py-2 text-xs text-muted sm:px-5 print:hidden">
                         {inRun === people ? (
                           <span className="inline-flex items-center gap-1.5 font-medium text-success"><CheckCircle2 className="size-3.5" aria-hidden="true" />Everyone on board</span>
@@ -263,9 +307,7 @@ export function PickupRunSheet({ sheets, drivers, tenantSlug }: { sheets: Sheet[
             </div>
           ) : (
             <ol className="flex list-none flex-col divide-y divide-line-subtle overflow-hidden rounded-2xl border border-line bg-surface p-0">
-              {stops.map((stop, index) => (
-                <StopRow key={stop.bookingId} stop={stop} order={index + 1} delay={delays[stop.departureId] ?? 0} today={today} state={stateOf(stop)} zoneName={zoneName(stop.zoneId)} showRun onState={(next) => setStatus((current) => ({ ...current, [stop.bookingId]: next }))} />
-              ))}
+              {stops.map((stop, index) => row(stop, index + 1, true))}
             </ol>
           )}
         </>
@@ -293,6 +335,7 @@ function StopRow({
   showRun?: boolean
   onState: (state: StopStatus) => void
 }) {
+  const dropOff = stop.kind === 'dropoff'
   return (
     <li
       className={cn(
@@ -304,7 +347,7 @@ function StopRow({
       <span className="grid size-7 shrink-0 place-items-center rounded-full bg-surface-sunken text-xs font-semibold text-muted tabular-nums">{order}</span>
       <div className="w-24 shrink-0">
         <p className="font-display text-lg font-semibold tabular-nums text-foreground">{formatTime(later(stop.time, delay))}</p>
-        {delay ? <p className="text-xs text-subtle line-through tabular-nums">{formatTime(stop.time)}</p> : <p className="truncate text-xs text-subtle">{zoneName}</p>}
+        {delay ? <p className="text-xs text-subtle line-through tabular-nums">{formatTime(stop.time)}</p> : <p className="truncate text-xs text-subtle">{dropOff ? 'Drop-off' : zoneName}</p>}
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-foreground">{stop.stop}</p>
@@ -332,23 +375,25 @@ function StopRow({
             ) : (
               <label className="inline-flex items-center gap-2 text-sm font-medium text-muted">
                 <Checkbox checked={state === 'onboard'} onCheckedChange={(checked) => onState(checked === true ? 'onboard' : 'waiting')} />
-                On board
+                {dropOff ? 'Dropped off' : 'On board'}
               </label>
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              leftIcon={<UserX />}
-              onClick={() => {
-                onState(state === 'noshow' ? 'waiting' : 'noshow')
-                if (state !== 'noshow') toast(`${stop.guestName} marked a no-show`, { description: 'The booking is flagged so the office can follow up.' })
-              }}
-            >
-              {state === 'noshow' ? 'Undo' : 'No-show'}
-            </Button>
+            {dropOff ? null : (
+              <Button
+                variant="ghost"
+                size="sm"
+                leftIcon={<UserX />}
+                onClick={() => {
+                  onState(state === 'noshow' ? 'waiting' : 'noshow')
+                  if (state !== 'noshow') toast(`${stop.guestName} marked a no-show`, { description: 'The booking is flagged so the office can follow up.' })
+                }}
+              >
+                {state === 'noshow' ? 'Undo' : 'No-show'}
+              </Button>
+            )}
           </>
         ) : (
-          <span className="text-xs text-subtle">Reminder goes out the evening before</span>
+          <span className="text-xs text-subtle">{dropOff ? 'Drop-off after the end' : 'Reminder goes out the evening before'}</span>
         )}
       </div>
       <span className="hidden w-16 shrink-0 text-center text-sm print:block">☐</span>

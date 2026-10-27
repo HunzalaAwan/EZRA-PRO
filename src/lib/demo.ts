@@ -22,6 +22,7 @@ import { rentalItemsOf, rentalSpan } from '@/lib/rental-items'
 import { departureFromSlotId, isGeneratedSlotId, parseSlotId } from '@/lib/activity-schedule'
 import { slotExtraSpotsOf } from '@/lib/extra-spots'
 import { priceBooking } from '@/lib/price-engine'
+import { bookingPickupOf, drops, transportOf } from '@/lib/transport'
 import {
   airlineOf,
   bookingDetailsOf,
@@ -563,14 +564,50 @@ function seedAnswers(questions: GuestQuestion[], key: string, child: boolean): R
   return out
 }
 
-/** About four in ten guests on a pickup trip ride the shuttle. */
-function seedPickup(zoneIds: string[], bookingId: string, startsAt: Date): { pickup?: { zoneId: string; stop: string; time: string } } {
+/**
+ * Extras taken off an activity after its history was seeded: the hotel
+ * transfers that transport on the activity now does (where they sat in the
+ * list). Seeded bookings still roll for them, so every other booking, here
+ * and on every other activity, stays exactly as it was; nobody buys them.
+ */
+const RETIRED_EXTRAS: Record<string, number[]> = {
+  'molokini-crater-dawn-patrol': [2],
+  'sunset-catamaran-sail-snorkel': [2],
+}
+
+/** The extras a seeded booking rolls for, in the order they were seeded: null for a retired one. */
+function extrasRolledFor(activity: Activity): (AddOn | null)[] {
+  const list: (AddOn | null)[] = [...activity.addOns]
+  for (const at of RETIRED_EXTRAS[activity.slug] ?? []) list.splice(at, 0, null)
+  return list
+}
+
+/**
+ * About four in ten guests on a trip with optional transport ride the
+ * shuttle; with it included, everyone. Pickup only (the older setup) keeps
+ * its seeded pickups exactly; the others also pick a trip and, for a
+ * drop-off, a drop-off point.
+ */
+function seedPickup(pickup: Activity['pickup'], bookingId: string, startsAt: Date, endsAt: Date): { pickup?: Booking['pickup'] } {
   const rng = createRng(hashSeed(`pickup:${bookingId}`))
-  if (rng() > 0.42 || zoneIds.length === 0) return {}
-  const zone = PICKUP_ZONES.find((entry) => entry.id === rngPick(rng, zoneIds))
+  const zoneIds = pickup?.zoneIds ?? []
+  const setup = transportOf(pickup)
+  if ((rng() > 0.42 && !(setup?.mode === 'included')) || zoneIds.length === 0 || !setup) return {}
+  if (!pickup?.mode) {
+    // Pickup only, exactly as seeded before (a fresh pick per zone, so some bookings find none).
+    const zone = PICKUP_ZONES.find((entry) => entry.id === rngPick(rng, zoneIds))
+    if (!zone) return {}
+    const time = new Date(startsAt.getTime() - zone.offsetMinutes * 60_000)
+    return { pickup: { zoneId: zone.id, stop: rngPick(rng, zone.stops), time: isoLocal(time) } }
+  }
+  const pickedId = rngPick(rng, zoneIds)
+  const zone = PICKUP_ZONES.find((entry) => entry.id === pickedId)
   if (!zone) return {}
-  const time = new Date(startsAt.getTime() - zone.offsetMinutes * 60_000)
-  return { pickup: { zoneId: zone.id, stop: rngPick(rng, zone.stops), time: isoLocal(time) } }
+  const stop = rngPick(rng, zone.stops)
+  const trip = setup.trips.length > 1 ? rngPick(rng, setup.trips) : setup.trips[0]
+  const dropOffId = drops(trip) && setup.dropOffs.length > 0 ? rngPick(rng, setup.dropOffs).id : ''
+  const booked = bookingPickupOf(setup, { trip, zoneId: zone.id, stop, dropOffId }, PICKUP_ZONES, isoLocal(startsAt), isoLocal(endsAt))
+  return booked ? { pickup: booked } : {}
 }
 
 const allDepartures: Departure[] = []
@@ -1235,9 +1272,14 @@ for (const [tenantId, specs] of SPEC_BY_TENANT) {
             }
 
             let addonPicks = 0
-            for (const ad of activity.addOns) {
+            for (const ad of extrasRolledFor(activity)) {
               if (addonPicks >= 2) break
               if (rng() < 0.19) {
+                // A retired extra: rolled and counted as before, but not sold.
+                if (!ad) {
+                  addonPicks++
+                  continue
+                }
                 const qty = ad.per === 'booking' || ad.per === 'each' ? 1 : Math.max(1, size)
                 const totalLine = qty * ad.price
                 lineItems.push({
@@ -1440,7 +1482,7 @@ for (const [tenantId, specs] of SPEC_BY_TENANT) {
               currency,
               participants,
               ...(bookingQs.length > 0 ? { answers: seedAnswers(bookingQs, `bk_${bookingId}`, false) } : {}),
-              ...(activity.pickup ? seedPickup(activity.pickup.zoneIds, bookingId, startsAt) : {}),
+              ...(activity.pickup ? seedPickup(activity.pickup, bookingId, startsAt, endsAt) : {}),
               ...(ride ? { transfer: ride } : {}),
               createdAt: isoLocal(createdAt),
               updatedAt: isoLocal(new Date(updatedMs)),

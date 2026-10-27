@@ -30,7 +30,7 @@ import {
   formatTime,
   pluralize,
 } from '@/lib/utils'
-import type { Activity, GuestQuestion, PickupZone, Tenant, TransferBookingDetails, WaiverTemplate } from '@/types'
+import type { Activity, BookingPickup, GuestQuestion, PickupZone, Tenant, TransferBookingDetails, WaiverTemplate } from '@/types'
 import { useIsHydrated, useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { useActivityWithDefaults, useBookingDefaults } from '@/hooks/use-booking-defaults'
 import type { CheckoutFields } from '@/lib/booking-defaults'
@@ -48,6 +48,9 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { toast } from '@/components/ui/toaster'
 import { buildQuote, type AvailabilityDay, type QuoteSelection } from '@/components/storefront/booking-widget'
+import { useTransport } from '@/hooks/use-transport'
+import { TransportPicker } from '@/components/storefront/transport-picker'
+import { bookingPickupOf, choiceErrors, cleanChoice, defaultChoice, transportLines, type TransportChoice } from '@/lib/transport'
 import { bookedOn, checkoutParty, resolveRental, resolveSelection, resolveTransferSelection, spotsBeyondStrip, transferCheckoutLegs, type RentalRequest } from '@/components/storefront/checkout-selection'
 import { CheckoutTransfer, EMPTY_TRANSFER_FORM, flightsOf, requestWithForm, transferFormFrom, validateTransfer, type TransferForm } from '@/components/storefront/checkout-transfer'
 import { useTransferHolds } from '@/hooks/use-transfer-holds'
@@ -76,7 +79,6 @@ import {
   type TravellerState,
   type WaiverState,
 } from '@/components/storefront/checkout-guest-details'
-import { CheckoutPickup, EMPTY_PICKUP, PICKUP_OTHER, validatePickup, type PickupChoice } from '@/components/storefront/checkout-pickup'
 import { TicketQr, ticketPayload } from '@/components/ui/ticket-qr'
 import { CheckoutDiscounts } from '@/components/storefront/checkout-discounts'
 import { findPromo, giftProblem, promoDiscount, promoProblem } from '@/lib/pricing'
@@ -164,8 +166,10 @@ export interface CheckoutFlowProps {
   nowIso?: string
   /** The activity's waiver, signed at checkout. */
   waiver?: WaiverTemplate
-  /** Pickup zones this activity serves; empty when it has no pickup. */
+  /** The business's pickup zones, for transport on the activity (pickup and drop-off). */
   pickupZones?: PickupZone[]
+  /** Transport as the guest chose it in the widget (the link's tr, pz, ps and dp), checked again here. */
+  transport?: TransportChoice
   tenant: Tenant
   activity: Activity
   departure: CheckoutDeparture
@@ -361,6 +365,7 @@ export function CheckoutFlow({
   waiver: waiverTemplate,
   nowIso,
   pickupZones = [],
+  transport: transportGiven,
   tenant,
   activity: given,
   departure: givenDeparture,
@@ -546,6 +551,21 @@ export function CheckoutFlow({
   const rideLine = rideRequest ? [partyLine(rideRequest), rideConfig?.service === 'shared' ? '' : vehiclesSentence(activity, rideVehicles)].filter(Boolean).join(' · ') : ''
   const [rideBooked, setRideBooked] = React.useState<TransferBookingDetails | null>(null)
 
+  /* ---------- transport: the widget's choice, kept to what is offered, priced by the engine ---------- */
+
+  const { setup: transport, zones: transportZones } = useTransport(activity, pickupZones)
+  const [getThere, setGetThere] = React.useState<TransportChoice>(() => cleanChoice(transport, transportGiven ?? defaultChoice(transport), transportZones))
+  // The saved setup and the business's live zones arrive after the first render.
+  React.useEffect(() => {
+    setGetThere((current) => {
+      const next = cleanChoice(transport, current, transportZones)
+      return JSON.stringify(next) === JSON.stringify(current) ? current : next
+    })
+  }, [transport, transportZones])
+  const transportZoneName = transportZones.find((zone) => zone.id === getThere.zoneId)?.name
+  /** The booking's transport with its times: pickup before the first start, drop-off after the last end. */
+  const bookedPickup: BookingPickup | undefined = transport && !rideRequest ? bookingPickupOf(transport, getThere, transportZones, departure.startsAt, departure.endsAt) : undefined
+
   const pricing = usePricing(tenant.slug)
   // The same engine and inputs as the widget: the slot's start, the clock, how full it is, its dynamic pricing and the business's rules.
   // Group rules count people (a charter: its party), worked out by the engine.
@@ -570,8 +590,10 @@ export function CheckoutFlow({
       capacity,
       booked,
       businessRules: pricing.rules,
+      // Transport: one way or both ways from the pickup point, per guest or per booking.
+      ...(transport ? { transport: { choice: getThere, zoneName: transportZoneName } } : {}),
     }),
-    [slotActivity, tenant.slug, selection, departure.priceMultiplier, departure.slotStartsAt, departure.startsAt, capacity, booked, nowIso, pricing.rules, rentalDays, party, rentalMode, rentalHours, rentalLength, privateBooking, rideRequest, rideSelection, serverSelection, rideLegs, activity],
+    [slotActivity, tenant.slug, selection, departure.priceMultiplier, departure.slotStartsAt, departure.startsAt, capacity, booked, nowIso, pricing.rules, rentalDays, party, rentalMode, rentalHours, rentalLength, privateBooking, rideRequest, rideSelection, serverSelection, rideLegs, activity, transport, getThere, transportZoneName],
   )
   /** A shared shuttle: a run with fewer seats left than the tickets, counting this browser's other bookings on it. */
   const runsFull =
@@ -636,30 +658,6 @@ export function CheckoutFlow({
     (travellers.length > 1 || questions.some((question) => question.scope === 'guest') || details.fields.some((field) => field.key === 'dateOfBirth' || field.key === 'country'))
   const needsDetails = questions.length > 0 || Boolean(waiverTemplate) || showGuests
 
-  /* ---------- pickup ---------- */
-
-  const pickupRequired = Boolean(activity.pickup?.required)
-  const [pickup, setPickup] = React.useState<PickupChoice>(() => ({ ...EMPTY_PICKUP, mode: pickupRequired ? 'pickup' : 'meet' }))
-  const pickupZone = pickupZones.find((zone) => zone.id === pickup.zoneId)
-  const pickupPerBooking = pickupZone?.feePer === 'booking'
-  const pickupFee = (pickup.mode === 'pickup' || pickupRequired) && pickupZone ? pickupZone.fee * (pickupPerBooking ? 1 : quote.party) : 0
-  /** The quote with the pickup fee on it, for the summary and the pay button. */
-  const withPickup = React.useMemo(
-    () =>
-      pickupFee > 0 && pickupZone
-        ? {
-            ...quote,
-            addOnLines: [
-              ...quote.addOnLines,
-              { id: 'pickup', label: `Hotel pickup · ${pickupZone.name}`, kind: 'addon' as const, quantity: pickupPerBooking ? 1 : quote.party, unitPrice: pickupZone.fee, total: pickupFee },
-            ],
-            subtotal: quote.subtotal + pickupFee,
-            total: quote.total + pickupFee,
-          }
-        : quote,
-    [quote, pickupFee, pickupZone, pickupPerBooking],
-  )
-
   /* ---------- promo code and gift card ---------- */
 
   const todayKey = (nowIso ?? departure.startsAt).slice(0, 10)
@@ -681,15 +679,15 @@ export function CheckoutFlow({
       : tipChoice === 'none'
         ? 0
         : Math.round((tipBase * Number(tipChoice)) / 100)
-  const giftOff = card && !giftProblem(card, todayKey) ? Math.min(card.balance, Math.max(0, withPickup.total + tip - promoOff)) : 0
+  const giftOff = card && !giftProblem(card, todayKey) ? Math.min(card.balance, Math.max(0, quote.total + tip - promoOff)) : 0
   const displayQuote = React.useMemo(() => {
-    if (promoOff === 0 && giftOff === 0 && tip === 0) return withPickup
-    const lines = [...withPickup.addOnLines]
+    if (promoOff === 0 && giftOff === 0 && tip === 0) return quote
+    const lines = [...quote.addOnLines]
     if (tip > 0) lines.push({ id: 'tip', label: tipChoice === 'custom' ? 'Tip for the team' : `Tip for the team · ${tipChoice}%`, kind: 'addon' as const, quantity: 1, unitPrice: tip, total: tip })
     if (promoOff > 0 && promo) lines.push({ id: 'promo', label: `Code ${promo.code}`, kind: 'addon' as const, quantity: 1, unitPrice: -promoOff, total: -promoOff })
     if (giftOff > 0 && card) lines.push({ id: 'gift', label: `Gift card …${card.code.slice(-4)}`, kind: 'addon' as const, quantity: 1, unitPrice: -giftOff, total: -giftOff })
-    return { ...withPickup, addOnLines: lines, subtotal: withPickup.subtotal + tip, total: Math.max(0, withPickup.total + tip - promoOff - giftOff) }
-  }, [withPickup, promoOff, giftOff, promo, card, tip, tipChoice])
+    return { ...quote, addOnLines: lines, subtotal: quote.subtotal + tip, total: Math.max(0, quote.total + tip - promoOff - giftOff) }
+  }, [quote, promoOff, giftOff, promo, card, tip, tipChoice])
   /* ---------- how they pay: in full, a deposit, or on the day ---------- */
   const offered = paymentOf(activity)
   // Booked after the balance would be due: everything is paid now.
@@ -763,6 +761,8 @@ export function CheckoutFlow({
         party: privateBooking ? Math.max(quote.party, seatsLeft) : Math.max(1, quote.party),
         source: 'storefront' as const,
         ...(departure.legs ? { packageSlug: activity.slug, packageName: activity.name } : {}),
+        // Transport: on the first part, with its pickup and drop-off times.
+        ...(index === 0 && bookedPickup ? { pickup: bookedPickup } : {}),
         name: `${guest.firstName} ${guest.lastName}`.trim(),
         email: guest.email,
         phone: guest.phone,
@@ -776,7 +776,6 @@ export function CheckoutFlow({
     pricing.recordRedemption(promoOff > 0 ? promo?.code : undefined, giftOff > 0 && card ? { code: card.code, amount: giftOff } : undefined)
     setConfirmed(true)
   }
-  void PICKUP_OTHER
 
   /* ---------- validation and payment, one page ---------- */
 
@@ -806,7 +805,7 @@ export function CheckoutFlow({
         signers,
       }),
     )
-    if (pickupZones.length > 0) Object.assign(next, validatePickup(pickup, pickupRequired))
+    if (transport && !rideRequest) Object.assign(next, choiceErrors(transport, getThere))
     if (transferRequest && rideConfig) Object.assign(next, validateTransfer(activity, transferRequest, rideForm, nowIso))
     if (scope === 'all' && displayQuote.total > 0) {
       const paymentResult = paymentSchema.safeParse(payment)
@@ -863,6 +862,7 @@ export function CheckoutFlow({
         activity={activity}
         departure={rideRequest ? rideDeparture : departure}
         ride={rideRequest && rideBooked ? { details: rideBooked, line: rideLine, trip: tripLabel(rideRequest.trip, rideConfig?.hub) } : undefined}
+        pickup={bookedPickup}
         quote={displayQuote}
         guest={guest}
         reference={reference}
@@ -964,6 +964,26 @@ export function CheckoutFlow({
                 />
               </div>
             ) : null}
+            {transport && !rideRequest ? (
+              <section aria-labelledby="step-transport" className="space-y-4 border-t border-line-subtle pt-10">
+                <h2 id="step-transport" className="font-display text-xl font-semibold tracking-tight">
+                  Getting there
+                </h2>
+                <TransportPicker
+                  setup={transport}
+                  zones={transportZones}
+                  value={getThere}
+                  onChange={setGetThere}
+                  currency={tenant.currency}
+                  startsAt={departure.startsAt}
+                  endsAt={departure.endsAt}
+                  guests={Math.max(1, quote.party)}
+                  meetingPoint={meetingPointFor(activity, departure)}
+                  errors={errors}
+                  wide
+                />
+              </section>
+            ) : null}
             <CheckoutDiscounts
               promos={pricing.promos}
               giftCards={pricing.giftCards}
@@ -979,21 +999,6 @@ export function CheckoutFlow({
               giftOff={giftOff}
               rules={pricing.rules.filter((rule) => quote.appliedChanges.some((change) => change.source === 'business' && change.id === rule.id))}
             />
-            {pickupZones.length > 0 ? (
-              <div className="border-t border-line-subtle pt-10">
-                <CheckoutPickup
-                  zones={pickupZones}
-                  required={pickupRequired}
-                  meetingPoint={departure.location?.meetingPoint ?? activity.meetingPoint}
-                  startsAt={departure.startsAt}
-                  guests={quote.party}
-                  currency={tenant.currency}
-                  choice={pickup}
-                  setChoice={setPickup}
-                  errors={errors}
-                />
-              </div>
-            ) : null}
             {needsDetails ? (
               <div className="space-y-10 border-t border-line-subtle pt-10">
                 <GuestDetailsStep
@@ -1103,6 +1108,7 @@ export function CheckoutFlow({
               split={split}
               balanceWhen={balanceWhen}
               ride={rideRequest ? { line: rideLine, trip: tripLabel(rideRequest.trip, rideConfig?.hub) } : undefined}
+              pickup={bookedPickup}
             />
             {activity.customRequests ? <CustomQuoteCard activity={activity} tenantSlug={tenant.slug} departure={shown} guest={guest} /> : null}
           </div>
@@ -1723,6 +1729,7 @@ function OrderSummary({
   split,
   balanceWhen = 'later',
   ride,
+  pickup,
 }: {
   activity: Activity
   tenant: Tenant
@@ -1733,6 +1740,8 @@ function OrderSummary({
   balanceWhen?: string
   /** A ride: its trip ("Round trip") and who and what ("4 passengers · 4 suitcases · Private van"). */
   ride?: { line: string; trip: string }
+  /** Transport: the pickup and drop-off, with their times. */
+  pickup?: BookingPickup
 }) {
   const media = activity.media.find((m) => m.isPrimary) ?? activity.media[0]
 
@@ -1792,7 +1801,13 @@ function OrderSummary({
         <div className="flex items-start gap-2.5">
           <MapPin className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
           <div className="min-w-0">
-            <dt className="sr-only">Meeting point</dt>
+            <dt className="sr-only">{pickup ? 'Pickup and drop-off' : 'Meeting point'}</dt>
+            {transportLines(pickup).map((line) => (
+              <dd key={line} className="text-xs leading-relaxed text-foreground tabular">
+                {line}
+              </dd>
+            ))}
+            {pickup?.time ? null : (
             <dd className="text-xs leading-relaxed text-muted">
               {departure.legs ? 'Each part meets at its own place, listed above.' : (
                 <>
@@ -1801,6 +1816,7 @@ function OrderSummary({
                 </>
               )}
             </dd>
+            )}
           </div>
         </div>
         )}
@@ -1967,11 +1983,14 @@ function Confirmation({
   onCopy,
   reducedMotion,
   ride,
+  pickup,
 }: {
   tenant: Tenant
   activity: Activity
   departure: CheckoutDeparture
   quote: QuoteShape
+  /** Transport: the pickup and drop-off, with their times. */
+  pickup?: BookingPickup
   guest: GuestState
   reference: string
   basePath: string
@@ -2027,7 +2046,7 @@ function Confirmation({
             `DTEND;TZID=${tenant.timezone}:${icsStamp(departure.endsAt)}`,
             `SUMMARY:${activity.name} — ${tenant.name}`,
             `LOCATION:${esc(tenant.contact.addressLine)}`,
-            `DESCRIPTION:Confirmation ${reference}. ${esc(meetingPointFor(activity, departure))}`,
+            `DESCRIPTION:Confirmation ${reference}. ${esc([...transportLines(pickup), meetingPointFor(activity, departure)].join('. '))}`,
             'END:VEVENT',
           ],
         ]
@@ -2062,6 +2081,7 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
 <div class="body"><h1>${activity.name}</h1>
 <p>${formatDateLong(departure.startsAt)} · ${formatTime(departure.startsAt)}–${formatTime(departure.endsAt)}</p>
 <p>${departure.location ? `${departure.location.name} — ` : ''}${meetingPointFor(activity, departure)}</p>
+${transportLines(pickup).map((line) => `<p>${line}</p>`).join('')}
 <p>${quote.countLabel} · Lead guest: ${guest.firstName} ${guest.lastName}</p>
 <table>${rows}</table>
 <div class="total"><span>Total paid</span><span>${formatCurrency(quote.total, tenant.currency, { decimals: true })}</span></div>
@@ -2206,8 +2226,18 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
           </div>
           <div className="sm:col-span-2">
             <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">
-              {ride ? (ride.details.legs.length > 1 ? 'Your rides' : 'Your ride') : 'Meeting point'}
+              {ride ? (ride.details.legs.length > 1 ? 'Your rides' : 'Your ride') : pickup ? 'Getting there' : 'Meeting point'}
             </dt>
+            {pickup && !ride ? (
+              <dd className="mt-1 text-sm leading-relaxed text-foreground tabular">
+                {transportLines(pickup).map((line) => (
+                  <span key={line} className="block">
+                    {line}
+                  </span>
+                ))}
+              </dd>
+            ) : null}
+            {pickup?.time && !ride ? null : (
             <dd className="mt-1 text-sm leading-relaxed text-muted">
               {ride ? (
                 <RideList legs={departure.legs ?? []} booked={ride.details} />
@@ -2221,6 +2251,7 @@ td{padding:7px 0;border-bottom:1px solid #e6ecef}
                 </>
               )}
             </dd>
+            )}
           </div>
         </dl>
 

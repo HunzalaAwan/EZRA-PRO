@@ -4,6 +4,7 @@ import { rateFor, rentalModes, type RentalMode } from '@/lib/activity-kinds'
 import { extraSpotsOf, privateMostOf, slotExtraSpotsOf, spotsPlanOf } from '@/lib/extra-spots'
 import { peopleOf, placesOf } from '@/lib/places'
 import { activeZones, transferOf, transferRateFor, tripsOffered, zoneById, type TransferPricing } from '@/lib/transfers'
+import { TRIP_WORDS, fareOf, transportOf, type TransportChoice } from '@/lib/transport'
 import { formatCurrency } from '@/lib/utils'
 
 /* ==========================================================================
@@ -39,6 +40,10 @@ import { formatCurrency } from '@/lib/utils'
    ticket) starts from its price in the table for the trip and destination;
    one not sold there counts as none. Driver by the hour multiplies by the
    hours. Without `ctx.transfer` (lists, the "from" check) a tier's own price.
+   Transport on an activity (`priceTransport`): the guest's trip (one way or
+   both ways) from their pickup point, at the activity's price for that
+   point, per guest or per booking. Price changes and rules never move it;
+   `buildQuote` adds it as a line with the extras.
    ========================================================================== */
 
 /** The parts of an activity the engine reads. A full `Activity` fits. */
@@ -999,4 +1004,40 @@ export function describePriceChange(change: PriceChange, currency: CurrencyCode 
   })()
   const only = (change.tierIds ?? []).length > 0 && tierLabels ? ` · ${change.tierIds!.map((id) => tierLabels[id] ?? id).join(', ')} only` : ''
   return `${when}: ${what}${only}`
+}
+
+/* ==========================================================================
+   Transport — pickup and drop-off added to an activity
+   ========================================================================== */
+
+export interface TransportLine {
+  id: 'transport'
+  /** "Pickup and drop-off · Kihei & Wailea". */
+  label: string
+  /** Guests (per guest) or 1 (per booking). */
+  quantity: number
+  unitPrice: number
+  total: number
+}
+
+/**
+ * What the guest's transport choice adds, or null when it adds nothing (meet
+ * there, included, free). One way for a pickup or a drop-off, both ways for
+ * both, at the pickup point's own price when it has one. A drop-off at one
+ * of the drop-off points has no pickup point: the standard price.
+ */
+export function priceTransport(activity: Pick<Activity, 'pickup'>, choice: TransportChoice | undefined, guests: number, zoneName?: string): TransportLine | null {
+  const setup = transportOf(activity.pickup)
+  if (!setup || !choice || choice.trip === 'meet' || !setup.trips.includes(choice.trip)) return null
+  const zoneId = choice.trip === 'dropoff' && setup.dropOffs.length > 0 ? undefined : choice.zoneId || undefined
+  const unitPrice = fareOf(setup, zoneId, choice.trip)
+  if (unitPrice <= 0) return null
+  const quantity = setup.charge === 'booking' ? 1 : Math.max(1, Math.floor(guests))
+  return {
+    id: 'transport',
+    label: `${TRIP_WORDS[choice.trip]}${zoneId && zoneName ? ` · ${zoneName}` : ''}`,
+    quantity,
+    unitPrice,
+    total: unitPrice * quantity,
+  }
 }

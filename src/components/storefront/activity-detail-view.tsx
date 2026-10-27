@@ -35,7 +35,7 @@ import {
   formatNumber,
   pluralize,
 } from '@/lib/utils'
-import type { Activity, DifficultyLevel, Location, Tenant } from '@/types'
+import type { Activity, DifficultyLevel, Location, PickupZone, Tenant } from '@/types'
 import { locationAddress } from '@/lib/locations'
 import { kindBadge, kindChipLabel, kindNote, priceUnit, rentalCategoryMeta, routeLabel, categoryLabel, themeLabel, themeOf } from '@/lib/activity-kinds'
 import { biggestVehicle, serviceOf } from '@/lib/transfers'
@@ -145,6 +145,8 @@ export interface ActivityDetailViewProps {
   packageParts?: PackagePartView[]
   /** Transfers: the seeded rides' vehicle holds, for the widget. */
   transferAvailability?: TransferAvailability
+  /** The business's pickup zones, for transport on the activity. */
+  pickupZones?: PickupZone[]
 }
 
 /* ==========================================================================
@@ -167,6 +169,7 @@ export function ActivityDetailView({
   recentBookings,
   packageParts,
   transferAvailability,
+  pickupZones,
 }: ActivityDetailViewProps) {
   // The prices saved in the editor, then its own payment and cancellation terms or the business defaults it follows.
   const priced = usePricingOverride(given)
@@ -736,6 +739,7 @@ export function ActivityDetailView({
                 initialGuests={initialGuests}
                 nowIso={nowIso}
                 transferAvailability={transferAvailability}
+                pickupZones={pickupZones}
               />
               <TrustBar
                 variant="inline"
@@ -841,6 +845,7 @@ export function ActivityDetailView({
               initialGuests={initialGuests}
               nowIso={nowIso}
               transferAvailability={transferAvailability}
+              pickupZones={pickupZones}
               variant="sheet"
             />
           </SheetBody>

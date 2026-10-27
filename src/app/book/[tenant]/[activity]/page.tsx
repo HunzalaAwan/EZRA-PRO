@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 
-import { NOW, getBookingRows, getStorefront, getLocationsByTenant } from '@/lib/demo'
+import { NOW, getBookingRows, getStorefront, getLocationsByTenant, getPickupZonesByTenant } from '@/lib/demo'
 import { buildDays, buildPackageParts, buildTransferAvailability } from '@/lib/storefront-availability'
 import { addDays, clamp, toDateKey } from '@/lib/utils'
 import {
@@ -190,6 +190,7 @@ export default async function ActivityPage({
       recentBookings={recentBookings}
       packageParts={activity.kind === 'package' ? buildPackageParts(activity) : undefined}
       transferAvailability={activity.kind === 'transfer' ? buildTransferAvailability(activity) : undefined}
+      pickupZones={activity.kind === 'transfer' ? undefined : getPickupZonesByTenant(tenant.id)}
       nowIso={`${NOW.getFullYear()}-${String(NOW.getMonth() + 1).padStart(2, '0')}-${String(NOW.getDate()).padStart(2, '0')}T${String(NOW.getHours()).padStart(2, '0')}:${String(NOW.getMinutes()).padStart(2, '0')}:00`}
     />
   )

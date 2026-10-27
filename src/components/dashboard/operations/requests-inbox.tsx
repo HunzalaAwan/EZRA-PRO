@@ -21,6 +21,7 @@ import { REASON_LABEL } from '@/lib/booking-method'
 import { cn, formatCurrency, formatDateLong, formatRelative, formatTime } from '@/lib/utils'
 import { directionLabel } from '@/lib/transfers'
 import { hhmm, partyLine } from '@/lib/transfer-changes'
+import { requestTransportLine } from '@/lib/transport'
 import type { ActivityKind, CharterRequest, CharterRequestStatus, CurrencyCode, TransferBookingDetails } from '@/types'
 
 /* ==========================================================================
@@ -288,6 +289,10 @@ export function RequestsInbox({
               <p className="mt-4 rounded-xl border border-line px-4 py-3 text-sm font-medium text-foreground">
                 {rideRequestLine(selected.transfer, activityOf(selected.activitySlug)?.tiers)}
               </p>
+            ) : null}
+
+            {selected.transport ? (
+              <p className="mt-4 rounded-xl border border-line px-4 py-3 text-sm font-medium text-foreground">{requestTransportLine(selected.transport)}</p>
             ) : null}
 
             {selected.message ? (

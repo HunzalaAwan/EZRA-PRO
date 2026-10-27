@@ -40,15 +40,18 @@ import type { TransferHold } from '@/lib/transfers'
 import { applyRules, findPromo, giftProblem, promoDiscount, promoProblem } from '@/lib/pricing'
 import { clamp, cn, formatCurrency, formatTime, pluralize } from '@/lib/utils'
 import { EMPTY_GUEST, WALK_IN_SOURCES, summarize, type WalkInGuest, type WalkInRecord } from '@/lib/walk-ins'
-import type { Activity, ActivityKind, CurrencyCode } from '@/types'
+import type { Activity, ActivityKind, CurrencyCode, PickupZone } from '@/types'
 import { applyActivityOverride, applyPricingOverride, type ActivityOverride } from '@/lib/activity-overrides'
-import { extraSpotPrice, groupPriced, groupTierOf, guestLimitOf, priceBooking, privatePerPerson, unitPrice, unitPriceDetail, usualSpotsLeft, type PriceContext } from '@/lib/price-engine'
+import { extraSpotPrice, groupPriced, groupTierOf, guestLimitOf, priceBooking, priceTransport, privatePerPerson, unitPrice, unitPriceDetail, usualSpotsLeft, type PriceContext } from '@/lib/price-engine'
 import { forSlot, usualSpotsOf } from '@/lib/extra-spots'
 import { placesOf } from '@/lib/places'
 import { useActivityOverrides } from '@/hooks/use-pricing-override'
 import { useBookingDefaults } from '@/hooks/use-booking-defaults'
 import { useBookingLedger } from '@/hooks/use-booking-ledger'
-import { withLedger } from '@/lib/booking-ledger'
+import { recordBooking, withLedger } from '@/lib/booking-ledger'
+import { useTransport } from '@/hooks/use-transport'
+import { NO_TRANSPORT, bookingPickupOf, choiceErrors, cleanChoice, defaultChoice, transportLines, type TransportChoice } from '@/lib/transport'
+import { TransportPicker } from '@/components/storefront/transport-picker'
 import { hasDayCapacity, rebuildAvailabilityDays, scheduleContextOf, type RebuildContext } from '@/lib/activity-schedule'
 import type { AvailabilityDay } from '@/components/storefront/booking-widget'
 import { bookedOn } from '@/components/storefront/checkout-selection'
@@ -72,7 +75,7 @@ export interface WalkInActivity {
   tiers: { id: string; label: string; price: number; min: number; max: number; seat: boolean }[]
   addOns: { id: string; label: string; price: number; per: 'guest' | 'booking' | 'each' }[]
   /** `booked`: real bookings (the server's and this browser's), for filling-up and quiet-time prices. */
-  slots: { id: string; startsAt: string; seatsLeft: number; itemsLeft?: Record<string, number>; capacity?: number; booked?: number; priceMultiplier?: number; extraSpots?: number; groupSize?: number }[]
+  slots: { id: string; startsAt: string; endsAt?: string; seatsLeft: number; itemsLeft?: Record<string, number>; capacity?: number; booked?: number; priceMultiplier?: number; extraSpots?: number; groupSize?: number }[]
   /** The full activity, so the desk prices with the same engine as the storefront and checkout. */
   source?: Activity
   /** Today and tomorrow as seeded, so the desk can lay the saved schedule over them. */
@@ -89,6 +92,7 @@ function deskSlots(days: AvailabilityDay[], nowIso: string, delta: Record<string
       .map((slot) => ({
         id: slot.departureId,
         startsAt: slot.startsAt,
+        endsAt: slot.endsAt,
         seatsLeft: slot.seatsLeft,
         capacity: slot.capacity,
         booked: bookedOn(slot, delta),
@@ -152,11 +156,13 @@ interface DeskProps {
   /** Every channel's revenue per day, for the walk-in share. */
   allRevenue: Record<string, number>
   staff: string[]
+  /** The business's pickup zones, for transport on an activity (pickup and drop-off). */
+  pickupZones?: PickupZone[]
 }
 
 type DeskTab = 'sale' | 'log' | 'revenue'
 
-export function WalkInDesk({ tenantSlug, tenantName, currency, activities: seeded, nowIso, seed, allRevenue, staff }: DeskProps) {
+export function WalkInDesk({ tenantSlug, tenantName, currency, activities: seeded, nowIso, seed, allRevenue, staff, pickupZones = NO_ZONES }: DeskProps) {
   const activities = useDeskActivities(seeded, tenantSlug, nowIso)
   const walkIns = useWalkIns(tenantSlug, seed)
   const [tab, setTab] = React.useState<DeskTab>('sale')
@@ -211,6 +217,7 @@ export function WalkInDesk({ tenantSlug, tenantName, currency, activities: seede
             activities={activities}
             nowIso={nowIso}
             staff={staff}
+            pickupZones={pickupZones}
             records={walkIns.records}
             onSold={walkIns.add}
             onOpenLog={() => setTab('log')}
@@ -240,6 +247,7 @@ export function WalkInDesk({ tenantSlug, tenantName, currency, activities: seede
 
 const NO_HOLDS: TransferHold[] = []
 const NO_DAYS: AvailabilityDay[] = []
+const NO_ZONES: PickupZone[] = []
 
 const COUNTRIES = ['United States', 'Canada', 'Australia', 'New Zealand', 'United Kingdom', 'Germany', 'France', 'Japan', 'China', 'South Korea', 'Mexico', 'Other']
 
@@ -250,6 +258,7 @@ function WalkInTill({
   activities,
   nowIso,
   staff,
+  pickupZones,
   records,
   onSold,
   onOpenLog,
@@ -260,6 +269,7 @@ function WalkInTill({
   activities: WalkInActivity[]
   nowIso: string
   staff: string[]
+  pickupZones: PickupZone[]
   records: WalkInRecord[]
   onSold: (record: WalkInRecord) => void
   onOpenLog: () => void
@@ -285,6 +295,8 @@ function WalkInTill({
   const [tendered, setTendered] = React.useState('')
   const [processing, setProcessing] = React.useState(false)
   const [receipt, setReceipt] = React.useState<WalkInRecord | null>(null)
+  /** Transport on the activity: meet there, or pickup and drop-off (only what it offers). */
+  const [getThere, setGetThere] = React.useState<TransportChoice>(NO_TRANSPORT)
 
   const activity = activities.find((entry) => entry.slug === slug)
   const slot = activity?.slots.find((entry) => entry.id === slotId) ?? activity?.slots[0]
@@ -333,6 +345,19 @@ function WalkInTill({
   const pricedSource = React.useMemo(() => (activity?.source ? applyPricingOverride(activity.source, overrides[activity.source.id]) : undefined), [activity, overrides])
   // As the picked time slot sells it: its day's extra spots and a private group's size.
   const engineActivity = React.useMemo(() => (pricedSource ? forSlot(pricedSource, slot) : undefined), [pricedSource, slot])
+  // Transport as the storefront sells it: the zones still served, the owner's saved setup. A transfer is the ride itself.
+  const { setup: transport, zones: transportZones } = useTransport(activity?.kind === 'transfer' ? undefined : pricedSource, pickupZones)
+  // A new activity starts from its own transport: meet there, or the trip it includes.
+  React.useEffect(() => {
+    setGetThere(defaultChoice(transport))
+  }, [slug]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Zones edited or the setup changed: the choice stays within what is offered.
+  React.useEffect(() => {
+    setGetThere((current) => {
+      const next = cleanChoice(transport, current, transportZones)
+      return JSON.stringify(next) === JSON.stringify(current) ? current : next
+    })
+  }, [transport, transportZones])
   // Per group: one price for the group and one count of guests, booked on the group's tier, as on the storefront.
   const groupPrice = engineActivity && groupPriced(engineActivity) ? engineActivity.groupPrice : undefined
   const groupTier = groupPrice && engineActivity ? groupTierOf(engineActivity) : undefined
@@ -389,6 +414,9 @@ function WalkInTill({
     ? priced.appliedChanges.filter((change) => change.source !== 'dynamic').map((change) => ({ id: change.id, label: change.label }))
     : rules.applied.map((rule) => ({ id: rule.id, label: `${rule.name} ${rule.percent > 0 ? '+' : ''}${rule.percent}%` }))
 
+  const ride = transport && pricedSource ? priceTransport(pricedSource, getThere, Math.max(1, guests), transportZones.find((zone) => zone.id === getThere.zoneId)?.name) : null
+  const transportErrors = transport ? choiceErrors(transport, getThere) : {}
+  const transportMissing = Object.keys(transportErrors).length > 0
   const lines = activity
     ? [
         ...(priced
@@ -403,6 +431,8 @@ function WalkInTill({
             const units = addOnUnits(addOn, guests)
             return { label: units > 1 ? `${units} × ${addOn.label}` : addOn.label, total: addOn.price * units }
           }),
+        // Transport, per guest or per booking, through the engine as at checkout.
+        ...(ride ? [{ label: ride.quantity > 1 ? `${ride.quantity} × ${ride.label}` : ride.label, total: ride.total }] : []),
       ]
     : []
   const subtotal = lines.reduce((sum, line) => sum + line.total, 0)
@@ -428,7 +458,7 @@ function WalkInTill({
   const picked = groupTier ? groupCount > 0 : headcount > 0
   // A private group per person needs its fewest guests (per group, the count can't go under them).
   const tooFew = privateTickets && headcount < privateFewest
-  const canPay = Boolean(activity && slot && guests > 0 && picked && !tooFew && !overSeats && !shortTier && !nameMissing && !emailBad && (method === 'card' || total === 0 || change >= 0))
+  const canPay = Boolean(activity && slot && guests > 0 && picked && !tooFew && !overSeats && !shortTier && !nameMissing && !emailBad && !transportMissing && (method === 'card' || total === 0 || change >= 0))
 
   const applyCode = () => {
     const value = code.trim().toUpperCase()
@@ -459,6 +489,8 @@ function WalkInTill({
         const pad = (n: number) => String(n).padStart(2, '0')
         // On the demo clock, so a new sale sits at the top of today in the log.
         const soldAt = `${nowIso.slice(0, 16)}:${pad(now.getSeconds())}`
+        // Transport: the pickup and drop-off with their times, from the time slot.
+        const booked = transport && slot.endsAt ? bookingPickupOf(transport, getThere, transportZones, slot.startsAt, slot.endsAt) : undefined
         const record: WalkInRecord = {
           reference,
           activitySlug: activity.slug,
@@ -475,8 +507,34 @@ function WalkInTill({
           guest: { ...guest, name: guest.name.trim(), phone: guest.phone.trim(), email: guest.email.trim() },
           status: 'paid',
           staff: seller,
+          ...(booked ? { pickup: booked } : {}),
         }
         onSold(record)
+        // With transport, the sale goes on the booking ledger too, so the driver sees it on Pickups and its spots are taken.
+        if (booked && slot.endsAt) {
+          const theirs = activity.kind === 'charter' || privateTickets
+          recordBooking(tenantSlug, [
+            {
+              id: reference,
+              reference,
+              activitySlug: activity.slug,
+              activityName: activity.name,
+              departureId: slot.id,
+              startsAt: slot.startsAt,
+              endsAt: slot.endsAt,
+              party: theirs ? Math.max(guests, slot.seatsLeft) : Math.max(1, seatsUsed),
+              source: 'dashboard',
+              pickup: booked,
+              name: record.guest.name,
+              email: record.guest.email,
+              phone: record.guest.phone,
+              total,
+              paidNow: total,
+              currency,
+              createdAt: soldAt,
+            },
+          ])
+        }
         pricing.recordRedemption(promoOff > 0 ? promo?.code : undefined, giftOff > 0 && card ? { code: card.code, amount: giftOff } : undefined)
         setReceipt(record)
         setProcessing(false)
@@ -499,6 +557,7 @@ function WalkInTill({
     setGroupCount(1)
     setParty(2)
     setExtras({})
+    setGetThere(defaultChoice(transport))
   }
 
   if (activities.length === 0) {
@@ -670,6 +729,27 @@ function WalkInTill({
                 </div>
               </div>
             ) : null}
+
+            {transport ? (
+              <div>
+                <p className="text-sm font-semibold">Getting there</p>
+                <div className="mt-2">
+                  <TransportPicker
+                    setup={transport}
+                    zones={transportZones}
+                    value={getThere}
+                    onChange={setGetThere}
+                    currency={currency}
+                    startsAt={slot?.startsAt}
+                    endsAt={slot?.endsAt}
+                    guests={Math.max(1, guests)}
+                    meetingPoint={pricedSource?.meetingPoint ?? ''}
+                    errors={touched ? transportErrors : {}}
+                    idPrefix="walkin-transport"
+                  />
+                </div>
+              </div>
+            ) : null}
           </div>
 
           {/* guest */}
@@ -836,7 +916,7 @@ function WalkInTill({
           </Button>
           {touched && !canPay ? (
             <p className="mt-2 text-xs font-medium text-danger">
-              {shortTier ? `Every booking needs at least ${shortTier.min} ${shortTier.label}.` : nameMissing ? 'Add the lead guest name first.' : emailBad ? 'Fix the email, or leave it empty.' : overSeats ? 'Too many for the spots left.' : method === 'cash' && change < 0 ? 'Not enough cash handed over.' : 'Pick a time and at least one guest.'}
+              {shortTier ? `Every booking needs at least ${shortTier.min} ${shortTier.label}.` : nameMissing ? 'Add the lead guest name first.' : transportMissing ? (transportErrors['transport.dropOff'] && !transportErrors['transport.place'] ? 'Choose a drop-off point under Getting there.' : 'Add the hotel or address under Getting there.') : emailBad ? 'Fix the email, or leave it empty.' : overSeats ? 'Too many for the spots left.' : method === 'cash' && change < 0 ? 'Not enough cash handed over.' : 'Pick a time and at least one guest.'}
             </p>
           ) : null}
         </div>
@@ -878,6 +958,11 @@ export function WalkInTicket({
             {record.transfer.legs[0].from} → {record.transfer.legs[0].to}
           </p>
         ) : null}
+        {transportLines(record.pickup).map((line) => (
+          <p key={line} className="text-sm text-muted">
+            {line}
+          </p>
+        ))}
         <div className="mt-4 flex justify-center">
           <TicketQr value={ticketPayload(record.reference)} size={148} className="border border-line" />
         </div>

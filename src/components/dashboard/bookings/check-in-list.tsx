@@ -19,6 +19,7 @@ import {
 import type { Booking, Customer, CurrencyCode } from '@/types'
 import type { ManifestRow } from '@/lib/demo'
 import { formatAnswer, shortOption } from '@/lib/guest-requirements'
+import { transportLines } from '@/lib/transport'
 import {
   Dialog,
   DialogBody,
@@ -29,7 +30,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { toast } from '@/components/ui/toaster'
-import { cn, formatCurrency, formatTime } from '@/lib/utils'
+import { cn, formatCurrency } from '@/lib/utils'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -356,11 +357,12 @@ export function CheckInList({
                   {party.tiers ? <span> · {party.tiers}</span> : null}
                 </p>
                 {party.gear ? <p className="mt-0.5 truncate text-xs font-medium text-muted">{party.gear}</p> : null}
-                {party.booking.pickup ? (
-                  <p className="mt-0.5 truncate text-xs font-medium text-info">
-                    Pickup {formatTime(party.booking.pickup.time)} · {party.booking.pickup.stop}
+                {/* Transport: the pickup before the start and the drop-off after the end, when booked. */}
+                {transportLines(party.booking.pickup).map((line) => (
+                  <p key={line} className="mt-0.5 truncate text-xs font-medium text-info">
+                    {line}
                   </p>
-                ) : null}
+                ))}
 
                 {party.notes.length > 0 ? (
                   <ul className="mt-1.5 flex flex-col gap-1">

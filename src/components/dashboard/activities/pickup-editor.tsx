@@ -2,19 +2,25 @@
 
 import * as React from 'react'
 import Link from 'next/link'
+import { Plus, X } from 'lucide-react'
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { IconButton } from '@/components/ui/icon-button'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Segmented } from '@/components/ui/segmented'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
-import type { PickupPrice } from '@/types'
+import { TRANSPORT_TRIPS, TRIP_WORDS, cleanDropOffs, transportOf, transportSummary } from '@/lib/transport'
+import type { ActivityPickup, CurrencyCode, DropOffPoint, PickupPrice, TransportCharge, TransportFare, TransportTrip } from '@/types'
 
 /* ==========================================================================
-   Hotel pickup for one activity: on or off, which zones, what pickup from
-   each zone costs (free, per guest or per booking), and whether every
-   guest is collected.
+   Transport for one activity, on the Guests step: none, included (every
+   guest is collected) or optional (guests add it). The pickup points (the
+   business's pickup zones), the trips (pickup, drop-off, both ways), where
+   guests are dropped (back at the pickup point, or the activity's own
+   drop-off points) and, when optional, the price: free, per guest or per
+   booking, one way and both ways, optionally different per pickup point.
    ========================================================================== */
 
 export interface PickupZoneOption {
@@ -26,179 +32,418 @@ export interface PickupZoneOption {
 }
 
 export interface DraftPickup {
+  /** Transport is on. Pick up (on Where guests go) turns it on too. */
   enabled: boolean
   zoneIds: string[]
   required: boolean
-  /** Price per zone; a zone missing here starts at its own fee per guest. */
+  /** Older drafts: price per zone, pickup only. Read once into `zoneFares`. */
   prices?: Record<string, PickupPrice>
+  mode?: 'included' | 'optional'
+  trips?: TransportTrip[]
+  /** Drop guests at these points, not back at their pickup point. */
+  ownDropOffs?: boolean
+  dropOffs?: DropOffPoint[]
+  charge?: TransportCharge
+  fare?: TransportFare
+  /** The price table by pickup point is open. */
+  perZone?: boolean
+  zoneFares?: Record<string, TransportFare>
 }
 
-/** The price a zone has on this activity, falling back to the zone's own fee. */
-export const priceFor = (value: DraftPickup, zone: PickupZoneOption): PickupPrice => value.prices?.[zone.id] ?? { fee: zone.fee, per: 'guest' }
+export const NO_PICKUP: DraftPickup = { enabled: false, zoneIds: [], required: false }
 
-const money = (minor: number, symbol: string) => `${symbol}${(minor / 100).toFixed(minor % 100 === 0 ? 0 : 2)}`
+/** The editor's draft of an activity's transport (an older save opens with its zone prices in the table). */
+export function draftOfPickup(pickup: ActivityPickup | undefined): DraftPickup {
+  if (!pickup) return NO_PICKUP
+  const setup = transportOf(pickup)
+  if (!setup) return { ...NO_PICKUP, enabled: true, zoneIds: [...pickup.zoneIds], required: pickup.required, mode: pickup.mode ?? 'optional', trips: pickup.trips ?? ['pickup'] }
+  return {
+    enabled: true,
+    zoneIds: [...pickup.zoneIds],
+    required: pickup.required,
+    mode: setup.mode,
+    trips: [...setup.trips],
+    ownDropOffs: setup.dropOffs.length > 0,
+    dropOffs: setup.dropOffs.map((point) => ({ ...point })),
+    charge: setup.charge,
+    fare: { ...setup.fare },
+    perZone: Object.keys(setup.zoneFares).length > 0,
+    zoneFares: Object.fromEntries(Object.entries(setup.zoneFares).map(([id, fare]) => [id, { ...fare }])),
+  }
+}
+
+/**
+ * The one trip included, from the trips ticked: both ways when both ways (or
+ * pickup and drop-off) are ticked, else the first in the order guests see them.
+ */
+export function includedTrip(trips: TransportTrip[] | undefined): TransportTrip {
+  const ticked = trips ?? []
+  if (ticked.includes('both') || (ticked.includes('pickup') && ticked.includes('dropoff'))) return 'both'
+  return TRANSPORT_TRIPS.find((trip) => ticked.includes(trip)) ?? 'pickup'
+}
+
+/** True when the draft has transport: switched on, or Pick up on Where guests go. */
+export const transportOn = (value: DraftPickup | undefined, arrivalMode: string) => Boolean(value?.enabled) || arrivalMode === 'pickup'
+
+/** What is saved on the activity, or null for no transport. Pick up on Where guests go means no meet-there option. */
+export function pickupOfDraft(value: DraftPickup | undefined, arrivalMode: string): ActivityPickup | null {
+  if (!value || !transportOn(value, arrivalMode)) return null
+  const mode = value.mode ?? 'optional'
+  // Saved in one order (pickup, drop-off, both), however they were ticked.
+  const offered = TRANSPORT_TRIPS.filter((trip) => (value.trips ?? ['pickup']).includes(trip))
+  const trips: TransportTrip[] = mode === 'included' ? [includedTrip(offered)] : offered.length > 0 ? offered : ['pickup']
+  const dropping = trips.some((trip) => trip !== 'pickup')
+  const dropOffs = dropping && value.ownDropOffs ? cleanDropOffs(value.dropOffs) : []
+  const zoneIds = [...new Set(value.zoneIds)]
+  const charge: TransportCharge = mode === 'included' ? 'free' : (value.charge ?? 'free')
+  const fare = charge === 'free' ? undefined : cleanFare(value.fare)
+  const zoneFares =
+    charge === 'free' || !value.perZone
+      ? undefined
+      : Object.fromEntries(zoneIds.flatMap((id) => {
+          const own = cleanFare(value.zoneFares?.[id])
+          return own.oneWay !== undefined || own.return !== undefined ? [[id, own]] : []
+        }))
+  const saved: ActivityPickup = {
+    zoneIds,
+    required: arrivalMode === 'pickup',
+    mode,
+    trips,
+    ...(dropOffs.length > 0 ? { dropOffs } : {}),
+    ...(mode === 'optional' ? { charge } : {}),
+    ...(fare && (fare.oneWay !== undefined || fare.return !== undefined) ? { fare } : {}),
+    ...(zoneFares && Object.keys(zoneFares).length > 0 ? { zoneFares } : {}),
+  }
+  // Nothing to run (no pickup points, and no drop-off points for a drop-off): no transport.
+  return transportOf(saved) ? saved : null
+}
+
+function cleanFare(fare: TransportFare | undefined): TransportFare {
+  const keep = (value: number | undefined) => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.round(value) : undefined)
+  const oneWay = keep(fare?.oneWay)
+  const back = keep(fare?.return)
+  return { ...(oneWay !== undefined ? { oneWay } : {}), ...(back !== undefined ? { return: back } : {}) }
+}
+
+const major = (minor: number | undefined) => (minor === undefined ? '' : String(minor / 100))
+const minor = (typed: string): number | undefined => {
+  if (typed.trim() === '') return undefined
+  const value = Number(typed)
+  return Number.isFinite(value) && value >= 0 ? Math.round(value * 100) : undefined
+}
+
+type TransportMode = 'none' | 'included' | 'optional'
+
+function MoneyInput({ value, onChange, label, placeholder, symbol }: { value: number | undefined; onChange: (value: number | undefined) => void; label: string; placeholder?: string; symbol: string }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-sm text-muted" aria-hidden="true">
+        {symbol}
+      </span>
+      <Input type="number" size="sm" min={0} step={1} inputMode="decimal" className="w-full min-w-0" aria-label={label} placeholder={placeholder} value={major(value)} onChange={(event) => onChange(minor(event.target.value))} />
+    </div>
+  )
+}
 
 export function PickupEditor({
   value,
   onChange,
   zones,
+  currency = 'USD',
   currencySymbol = '$',
-  variant = 'card',
+  arrivalMode,
 }: {
   value: DraftPickup
   onChange: (value: DraftPickup) => void
   zones: PickupZoneOption[]
+  currency?: CurrencyCode
   currencySymbol?: string
-  /**
-   * card: the standalone card. only: pickup is how guests join, so the zones
-   * show straight away. optional: guests meet you, with pickup as an extra.
-   */
-  variant?: 'card' | 'only' | 'optional'
+  /** Pick up on Where guests go: every guest is collected, so there is always transport. */
+  arrivalMode: string
 }) {
-  const inline = variant !== 'card'
-  const Shell = inline ? 'div' : Card
-  const Body = inline ? 'div' : CardContent
-  const setPrice = (zone: PickupZoneOption, patch: Partial<PickupPrice>) =>
-    onChange({ ...value, prices: { ...value.prices, [zone.id]: { ...priceFor(value, zone), ...patch } } })
+  const collectsEveryone = arrivalMode === 'pickup'
+  const on = transportOn(value, arrivalMode)
+  const mode: TransportMode = on ? (value.mode ?? 'optional') : 'none'
+  const trips = value.trips ?? ['pickup']
+  const included = mode === 'included'
+  const charge = included ? 'free' : (value.charge ?? 'free')
+  const dropping = trips.some((trip) => trip !== 'pickup')
   const chosen = zones.filter((zone) => value.zoneIds.includes(zone.id))
-  const summary = chosen.map((zone) => {
-    const price = priceFor(value, zone)
-    return `${zone.name} ${price.fee > 0 ? `${money(price.fee, currencySymbol)} per ${price.per}` : 'free'}`
-  })
+  const set = (patch: Partial<DraftPickup>) => onChange({ ...value, ...patch })
+  const fare = value.fare ?? {}
+  const twice = (oneWay: number | undefined) => (oneWay === undefined ? undefined : `${(oneWay * 2) / 100}`)
+
+  const setMode = (next: TransportMode) => {
+    if (next === 'none') return set({ enabled: false })
+    set({
+      enabled: true,
+      mode: next,
+      // Turning it on starts with every pickup point, so there is something to choose from.
+      zoneIds: value.zoneIds.length > 0 ? value.zoneIds : zones.map((zone) => zone.id),
+      trips: next === 'included' ? [includedTrip(trips)] : trips,
+    })
+  }
+  const toggleTrip = (trip: TransportTrip) => {
+    if (included) return set({ trips: [trip] })
+    const next = trips.includes(trip) ? trips.filter((entry) => entry !== trip) : [...trips, trip]
+    if (next.length > 0) set({ trips: next })
+  }
+  const setCharge = (next: TransportCharge) =>
+    set({
+      charge: next,
+      // A first price to start from: the first pickup point's own fee, both ways twice that.
+      fare: next !== 'free' && fare.oneWay === undefined ? { oneWay: chosen.find((zone) => zone.fee > 0)?.fee ?? 1500 } : fare,
+    })
+  const setDropOff = (index: number, patch: Partial<DropOffPoint>) =>
+    set({ dropOffs: (value.dropOffs ?? []).map((point, at) => (at === index ? { ...point, ...patch } : point)) })
+  const addDropOff = () => {
+    const list = value.dropOffs ?? []
+    let n = list.length + 1
+    while (list.some((point) => point.id === `dp_${n}`)) n++
+    set({ ownDropOffs: true, dropOffs: [...list, { id: `dp_${n}`, name: '', afterMinutes: 20 }] })
+  }
+  const setZoneFare = (id: string, patch: TransportFare) =>
+    set({ zoneFares: { ...value.zoneFares, [id]: { ...value.zoneFares?.[id], ...patch } } })
+
+  const saved = pickupOfDraft(value, arrivalMode)
+  const summary = transportSummary(transportOf(saved), currency)
+  const oneWayShown = trips.includes('pickup') || trips.includes('dropoff')
+  const bothShown = trips.includes('both')
+  const noPoints = on && value.zoneIds.length === 0 && !(trips.includes('dropoff') && value.ownDropOffs && (value.dropOffs ?? []).some((point) => point.name.trim()))
+
   return (
-    <Shell>
-      {inline ? null : (
-        <CardHeader className="flex flex-col items-start gap-1">
-          <CardTitle>Hotel pickup</CardTitle>
-          <CardDescription>Guests pick their hotel at checkout and get a pickup time; the driver gets a pickup list.</CardDescription>
-        </CardHeader>
-      )}
-      <Body className="flex flex-col gap-4">
-        {variant === 'only' ? (
+    <div role="group" aria-labelledby="transport-title" className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p id="transport-title" className="text-[0.8125rem] font-medium">
+          Transport
+        </p>
+        <Segmented
+          label="Transport"
+          value={mode}
+          onValueChange={setMode}
+          className="max-w-full"
+          options={[
+            { value: 'none', label: 'No transport', disabled: collectsEveryone },
+            { value: 'included', label: 'Included' },
+            { value: 'optional', label: 'Optional' },
+          ]}
+        />
+      </div>
+      {on ? (
+        <p className="-mt-2 text-xs text-muted">
+          {included
+            ? `Part of the price. Guests pick where to be ${includedTrip(trips) === 'dropoff' ? 'dropped' : 'collected'}.`
+            : collectsEveryone
+              ? trips.some((trip) => trip !== 'dropoff')
+                ? 'Every guest is collected. They pick a trip and pay for it.'
+                : 'Every guest books a trip and pays for it.'
+              : 'Guests can meet you there, or add a ride.'}
+        </p>
+      ) : null}
+
+      {on ? (
+        <>
+          {/* ---------- trips ---------- */}
           <div>
-            <p className="text-[0.8125rem] font-medium">Pickup zones</p>
-            <p className="mt-0.5 text-xs text-muted">Guests pick their hotel at checkout and get a pickup time; the driver gets a pickup list. Set a price for each zone, or keep it free.</p>
+            <p className="text-xs font-medium text-muted">{included ? 'What is included' : 'Trips guests can book'}</p>
+            <div className="mt-1.5 flex flex-wrap gap-1.5" role={included ? 'radiogroup' : 'group'} aria-label={included ? 'What is included' : 'Trips guests can book'}>
+              {(['pickup', 'dropoff', 'both'] as const).map((trip) => {
+                const picked = included ? includedTrip(trips) === trip : trips.includes(trip)
+                return (
+                  <button
+                    key={trip}
+                    type="button"
+                    role={included ? 'radio' : 'checkbox'}
+                    aria-checked={picked}
+                    onClick={() => toggleTrip(trip)}
+                    className={cn(
+                      'rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
+                      'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+                      picked ? 'border-primary bg-primary-soft/40 text-foreground' : 'border-line text-muted hover:text-foreground',
+                    )}
+                  >
+                    {trip === 'pickup' ? 'Pickup only' : trip === 'dropoff' ? 'Drop-off only' : 'Both ways'}
+                  </button>
+                )
+              })}
+            </div>
           </div>
-        ) : (
-        <label className="flex items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-3">
-          <span>
-            <span className="block text-sm font-medium">{variant === 'optional' ? 'Also offer hotel pickup' : 'Offer pickup'}</span>
-            <span className="block text-xs text-subtle">{variant === 'optional' ? 'Guests choose at checkout: meet you there, or be collected.' : 'Guests can still meet you there unless pickup is the only way.'}</span>
-          </span>
-          <Switch
-            checked={value.enabled}
-            onCheckedChange={(checked) => onChange({ ...value, enabled: checked, zoneIds: checked && value.zoneIds.length === 0 ? zones.map((zone) => zone.id) : value.zoneIds })}
-            aria-label="Offer pickup"
-          />
-        </label>
-        )}
-        {value.enabled || variant === 'only' ? (
-          <>
+
+          {/* ---------- pickup points ---------- */}
+          <div>
+            <p className="text-xs font-medium text-muted">Pickup points</p>
             {zones.length === 0 ? (
-              <p className="text-sm text-subtle">
-                No zones yet. <Link href="/dashboard/settings/pickup" className="font-medium text-primary hover:underline">Set up pickup zones</Link>
+              <p className="mt-1.5 text-sm text-subtle">
+                No pickup zones yet.{' '}
+                <Link href="/dashboard/settings/pickup" className="font-medium text-primary hover:underline">
+                  Add pickup zones
+                </Link>
               </p>
             ) : (
-              <>
-              <ul className="grid list-none gap-2 p-0 sm:grid-cols-2">
+              <ul className="mt-1.5 grid list-none gap-2 p-0 sm:grid-cols-2">
                 {zones.map((zone) => {
-                  const on = value.zoneIds.includes(zone.id)
-                  const price = priceFor(value, zone)
-                  const paid = price.fee > 0
+                  const picked = value.zoneIds.includes(zone.id)
                   return (
-                    <li key={zone.id} className={cn('rounded-xl border px-3.5 py-3 transition-colors', on ? 'border-primary/40 bg-primary-soft/20' : 'border-line')}>
-                      <label className="flex cursor-pointer items-start gap-3">
+                    <li key={zone.id}>
+                      <label className={cn('flex cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-3 transition-colors', picked ? 'border-primary/40 bg-primary-soft/20' : 'border-line')}>
                         <Checkbox
-                          checked={on}
+                          checked={picked}
                           className="mt-0.5"
-                          onCheckedChange={(checked) =>
-                            onChange({ ...value, zoneIds: checked === true ? [...value.zoneIds, zone.id] : value.zoneIds.filter((id) => id !== zone.id) })
-                          }
+                          onCheckedChange={(checked) => set({ zoneIds: checked === true ? [...value.zoneIds, zone.id] : value.zoneIds.filter((id) => id !== zone.id) })}
                         />
-                        <span className="min-w-0 flex-1">
-                          <span className="flex items-baseline justify-between gap-2">
-                            <span className="text-sm font-medium">{zone.name}</span>
-                            {on ? (
-                              <span className={cn('shrink-0 text-xs font-semibold tabular-nums', paid ? 'text-foreground' : 'text-success')}>
-                                {paid ? `${money(price.fee, currencySymbol)} / ${price.per}` : 'Free'}
-                              </span>
-                            ) : null}
-                          </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium">{zone.name}</span>
                           <span className="block text-xs text-subtle">{zone.detail}</span>
                         </span>
                       </label>
-                      {on ? (
-                        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line-subtle pt-3 pl-7">
-                          <div className="inline-flex rounded-lg border border-line bg-surface p-0.5" role="radiogroup" aria-label={`Pickup price for ${zone.name}`}>
-                            {[false, true].map((charge) => (
-                              <button
-                                key={String(charge)}
-                                type="button"
-                                role="radio"
-                                aria-checked={paid === charge}
-                                onClick={() => setPrice(zone, { fee: charge ? (price.fee > 0 ? price.fee : zone.fee > 0 ? zone.fee : 1500) : 0 })}
-                                className={cn(
-                                  'rounded-md px-2.5 py-1 text-xs font-semibold transition-colors',
-                                  paid === charge ? 'bg-primary text-on-primary' : 'text-muted hover:text-foreground',
-                                )}
-                              >
-                                {charge ? 'Charge' : 'Free'}
-                              </button>
-                            ))}
-                          </div>
-                          {paid ? (
-                            <>
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-sm text-muted">{currencySymbol}</span>
-                                <Input
-                                  type="number"
-                                  size="sm"
-                                  min={0}
-                                  step={1}
-                                  className="w-20"
-                                  aria-label={`Pickup price from ${zone.name}`}
-                                  value={price.fee / 100 || ''}
-                                  onChange={(event) => setPrice(zone, { fee: Math.max(0, Math.round(Number(event.target.value) * 100) || 0) })}
-                                />
-                              </div>
-                              <Select value={price.per} onValueChange={(per) => setPrice(zone, { per: per as PickupPrice['per'] })}>
-                                <SelectTrigger size="sm" className="w-32" aria-label={`How the ${zone.name} price is counted`}>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="guest">per guest</SelectItem>
-                                  <SelectItem value="booking">per booking</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </>
-                          ) : (
-                            <span className="text-xs text-subtle">Included in the price</span>
-                          )}
-                        </div>
-                      ) : null}
                     </li>
                   )
                 })}
               </ul>
-              {summary.length > 0 ? (
-                <p className="text-xs text-muted">
-                  <span className="font-medium text-foreground">Guests see at checkout:</span> {summary.join(' · ')}
-                </p>
-              ) : null}
-              </>
             )}
-            {variant === 'card' ? (
-              <label className="inline-flex items-center gap-2 text-sm text-muted">
-                <Switch size="sm" checked={value.required} onCheckedChange={(checked) => onChange({ ...value, required: checked })} />
-                Pickup is the only way to join
-              </label>
-            ) : null}
-            <Link href="/dashboard/settings/pickup" className="text-xs font-medium text-primary hover:underline">
+            {noPoints ? <p className="mt-1.5 text-xs font-medium text-warning">Choose at least one pickup point.</p> : null}
+            <Link href="/dashboard/settings/pickup" className="mt-1.5 inline-block text-xs font-medium text-primary hover:underline">
               Manage pickup zones
             </Link>
-          </>
-        ) : null}
-      </Body>
-    </Shell>
+          </div>
+
+          {/* ---------- drop-off ---------- */}
+          {dropping ? (
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-medium text-muted">Drop-off</p>
+                <Segmented
+                  label="Drop-off"
+                  size="sm"
+                  className="max-w-full overflow-x-auto"
+                  value={value.ownDropOffs ? 'own' : 'back'}
+                  onValueChange={(next) => (next === 'own' && (value.dropOffs ?? []).length === 0 ? addDropOff() : set({ ownDropOffs: next === 'own' }))}
+                  options={[
+                    { value: 'back', label: 'Back to the pickup point' },
+                    { value: 'own', label: 'Drop-off points' },
+                  ]}
+                />
+              </div>
+              {value.ownDropOffs ? (
+                <div className="mt-2 flex flex-col gap-2">
+                  {(value.dropOffs ?? []).map((point, index) => (
+                    <div key={point.id} className="grid grid-cols-[minmax(0,1fr)_6.5rem_auto] items-center gap-2">
+                      <Input size="sm" aria-label={`Drop-off point ${index + 1}`} placeholder="Front Street, Lahaina" value={point.name} onChange={(event) => setDropOff(index, { name: event.target.value })} />
+                      <div className="flex items-center gap-1.5">
+                        <Input
+                          type="number"
+                          size="sm"
+                          min={0}
+                          step={5}
+                          className="w-full min-w-0"
+                          aria-label={`Minutes after the end, drop-off point ${index + 1}`}
+                          value={point.afterMinutes}
+                          onChange={(event) => setDropOff(index, { afterMinutes: Math.max(0, Math.round(Number(event.target.value) || 0)) })}
+                        />
+                        <span className="text-xs text-subtle">min</span>
+                      </div>
+                      <IconButton aria-label={`Remove drop-off point ${index + 1}`} size="sm" variant="ghost" onClick={() => set({ dropOffs: (value.dropOffs ?? []).filter((_, at) => at !== index) })}>
+                        <X aria-hidden="true" />
+                      </IconButton>
+                    </div>
+                  ))}
+                  <p className="text-xs text-subtle">Minutes after the end that guests get there.</p>
+                  <Button type="button" variant="ghost" size="sm" className="self-start" leftIcon={<Plus />} onClick={addDropOff}>
+                    Add drop-off point
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* ---------- price ---------- */}
+          {included ? null : (
+            <div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-medium text-muted">Price</p>
+                <Segmented
+                  label="Transport price"
+                  size="sm"
+                  value={charge}
+                  onValueChange={setCharge}
+                  options={[
+                    { value: 'free', label: 'Free' },
+                    { value: 'guest', label: 'Per guest' },
+                    { value: 'booking', label: 'Per booking' },
+                  ]}
+                />
+              </div>
+              {charge !== 'free' ? (
+                <div className="mt-2 flex flex-col gap-3">
+                  <div className="grid grid-cols-2 gap-3 sm:max-w-sm">
+                    {oneWayShown ? (
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs text-subtle">One way</span>
+                        <MoneyInput symbol={currencySymbol} label="One way price" value={fare.oneWay} onChange={(oneWay) => set({ fare: { ...fare, oneWay } })} />
+                      </label>
+                    ) : null}
+                    {bothShown ? (
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs text-subtle">Both ways</span>
+                        <MoneyInput symbol={currencySymbol} label="Both ways price" placeholder={twice(fare.oneWay)} value={fare.return} onChange={(back) => set({ fare: { ...fare, return: back } })} />
+                      </label>
+                    ) : null}
+                  </div>
+                  {chosen.length > 1 || (chosen.length === 1 && value.perZone) ? (
+                    <label className="inline-flex items-center gap-2 text-sm text-muted">
+                      <Switch size="sm" checked={Boolean(value.perZone)} onCheckedChange={(checked) => set({ perZone: checked })} />
+                      Different price per pickup point
+                    </label>
+                  ) : null}
+                  {value.perZone && chosen.length > 0 ? (
+                    <div className="overflow-hidden rounded-xl border border-line">
+                      <div className="grid grid-cols-[minmax(0,1fr)_5.5rem_5.5rem] gap-2 border-b border-line-subtle bg-surface-sunken/50 px-3 py-2 text-xs font-medium text-muted sm:grid-cols-[minmax(0,1fr)_7rem_7rem]">
+                        <span>Pickup point</span>
+                        <span>{oneWayShown ? 'One way' : ''}</span>
+                        <span>{bothShown ? 'Both ways' : ''}</span>
+                      </div>
+                      <ul className="list-none divide-y divide-line-subtle p-0">
+                        {chosen.map((zone) => {
+                          const own = value.zoneFares?.[zone.id] ?? {}
+                          return (
+                            <li key={zone.id} className="grid grid-cols-[minmax(0,1fr)_5.5rem_5.5rem] items-center gap-2 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_7rem_7rem]">
+                              <span className="truncate text-sm">{zone.name}</span>
+                              {oneWayShown ? (
+                                <MoneyInput symbol={currencySymbol} label={`One way from ${zone.name}`} placeholder={major(fare.oneWay)} value={own.oneWay} onChange={(oneWay) => setZoneFare(zone.id, { oneWay })} />
+                              ) : (
+                                <span />
+                              )}
+                              {bothShown ? (
+                                <MoneyInput
+                                  symbol={currencySymbol}
+                                  label={`Both ways from ${zone.name}`}
+                                  placeholder={own.oneWay !== undefined ? twice(own.oneWay) : fare.return !== undefined ? major(fare.return) : twice(fare.oneWay)}
+                                  value={own.return}
+                                  onChange={(back) => setZoneFare(zone.id, { return: back })}
+                                />
+                              ) : (
+                                <span />
+                              )}
+                            </li>
+                          )
+                        })}
+                      </ul>
+                      <p className="border-t border-line-subtle px-3 py-2 text-xs text-subtle">Empty uses the price above. 0 is free.</p>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          )}
+
+          {saved ? (
+            <p className="text-xs text-muted">
+              <span className="font-medium text-foreground">Guests see:</span> {summary}
+              {collectsEveryone || included ? null : ` · or ${TRIP_WORDS.meet.toLowerCase()}`}
+            </p>
+          ) : null}
+        </>
+      ) : null}
+    </div>
   )
 }

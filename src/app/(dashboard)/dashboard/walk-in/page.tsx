@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { requireWorkspaceRoute } from '@/lib/workspace'
 
 import { NOW_ISO } from '@/components/dashboard/activities/activity-data'
-import { getActivitiesByTenant, getBookingRows, getPaymentsByBooking, getUsersByTenant } from '@/lib/demo'
+import { getActivitiesByTenant, getBookingRows, getPaymentsByBooking, getPickupZonesByTenant, getUsersByTenant } from '@/lib/demo'
 import { buildDays, buildTransferAvailability } from '@/lib/storefront-availability'
 import { createRng, hashSeed } from '@/lib/utils'
 import { WALK_IN_SOURCES, dayKeys, type WalkInRecord } from '@/lib/walk-ins'
@@ -55,7 +55,7 @@ export default async function WalkInPage() {
         slots: days.flatMap((day) =>
           day.slots
             .filter((slot) => slot.startsAt >= NOW_ISO.slice(0, 13) && !slot.soldOut)
-            .map((slot) => ({ id: slot.departureId, startsAt: slot.startsAt, seatsLeft: slot.seatsLeft, capacity: slot.capacity, priceMultiplier: slot.priceMultiplier, ...(slot.itemsLeft ? { itemsLeft: slot.itemsLeft } : {}) })),
+            .map((slot) => ({ id: slot.departureId, startsAt: slot.startsAt, endsAt: slot.endsAt, seatsLeft: slot.seatsLeft, capacity: slot.capacity, priceMultiplier: slot.priceMultiplier, ...(slot.itemsLeft ? { itemsLeft: slot.itemsLeft } : {}) })),
         ),
         days,
         // The desk prices with the same engine as the storefront and checkout.
@@ -128,6 +128,7 @@ export default async function WalkInPage() {
         seed={seed}
         allRevenue={allRevenue}
         staff={staff}
+        pickupZones={getPickupZonesByTenant(tenant.id)}
       />
     </div>
   )

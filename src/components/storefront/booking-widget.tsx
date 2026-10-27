@@ -32,7 +32,7 @@ import {
   fromDateKey,
   pluralize,
 } from '@/lib/utils'
-import type { Activity, CurrencyCode, DepartureStatus, Location, PriceTier, VerticalKey } from '@/types'
+import type { Activity, CurrencyCode, DepartureStatus, Location, PickupZone, PriceTier, VerticalKey } from '@/types'
 import { Switch } from '@/components/ui/switch'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { useBookingDefaults } from '@/hooks/use-booking-defaults'
@@ -60,6 +60,7 @@ import {
   groupTierOf,
   leadPrice,
   priceBooking,
+  priceTransport,
   privatePerPerson,
   unitPriceDetail,
   usualSpotsLeft,
@@ -86,6 +87,9 @@ import { PackageWidget } from '@/components/storefront/package-widget'
 import { SoldOutPanel, dayLabel, useSuggestedActivities, type OtherActivity } from '@/components/storefront/sold-out-panel'
 import { SUGGEST_LIMIT, cleanSoldOut, isFullDay, isOpenDay, nextOpenDays } from '@/lib/sold-out'
 import type { TransferPricing } from '@/lib/transfers'
+import { cleanChoice, defaultChoice, encodeChoice, type TransportChoice } from '@/lib/transport'
+import { useTransport } from '@/hooks/use-transport'
+import { TransportPicker } from '@/components/storefront/transport-picker'
 import type { TransferAvailability } from '@/lib/storefront-availability'
 import { TransferWidget } from '@/components/storefront/transfer-widget'
 
@@ -232,6 +236,8 @@ export interface QuoteOptions {
   businessRules?: PricingRule[]
   /** Transfers: the trip, destination and hours the ride is priced by (the price table). */
   transfer?: TransferPricing
+  /** Transport on the activity: the guest's trip and pickup point (and its name, for the line). */
+  transport?: { choice: TransportChoice; zoneName?: string }
 }
 
 /**
@@ -304,6 +310,12 @@ export function buildQuote(
       total,
     })
     subtotal += total
+  }
+  // Transport (pickup, drop-off or both ways), per guest or per booking: a line with the extras.
+  const ride = options.transport ? priceTransport(activity, options.transport.choice, priced.guests, options.transport.zoneName) : null
+  if (ride) {
+    addOnLines.push({ id: ride.id, label: ride.label, kind: 'addon', quantity: ride.quantity, unitPrice: ride.unitPrice, total: ride.total })
+    subtotal += ride.total
   }
 
   // Transfers are sold at the owner's table prices, which include every fee: nothing is added on top.
@@ -455,7 +467,6 @@ export function fromUnitLabel(activity: Activity, rentalMode?: RentalMode, lengt
 }
 
 const NO_LOCATIONS: Location[] = []
-
 /**
  * The places an activity runs from as the owner saved them, each with its
  * business location (Settings → Locations edits included). Only places with
@@ -504,6 +515,8 @@ export interface BookingWidgetProps {
   basePath?: string
   /** Transfers: the seeded rides' vehicle holds, so the widget counts free vehicles. */
   transferAvailability?: TransferAvailability
+  /** The business's pickup zones, for transport on the activity (pickup and drop-off). */
+  pickupZones?: PickupZone[]
 }
 
 /**
@@ -551,6 +564,7 @@ export function BookingWidget(rawProps: BookingWidgetProps) {
         minDate={today}
         priceUnit={priceUnit(props.activity)}
         className={props.className}
+        pickupZones={props.pickupZones}
       />
     )
   }
@@ -573,10 +587,12 @@ function BookingWidgetInner({
   businessPhone,
   others,
   basePath,
+  pickupZones,
 }: BookingWidgetProps & { settings: BookingSettings }) {
   const router = useRouter()
   const reducedMotion = useReducedMotionSafe()
   const stripRef = React.useRef<HTMLDivElement>(null)
+  const transportId = React.useId()
 
   /* ---------- location ---------- */
 
@@ -623,7 +639,17 @@ function BookingWidgetInner({
     setRentDays((current) => clamp(current, minDays, maxDays))
   }, [minDays, maxDays])
   const showTime = kind !== 'pass' && !dayRental
-  const stepList = [multiSite ? 'location' : null, 'date', showTime ? 'time' : null, 'guests', 'extras'].filter(
+  /* ---------- transport: meet there, or pickup and drop-off (only what is offered) ---------- */
+  const { setup: transport, zones: transportZones } = useTransport(activity, pickupZones)
+  const [getThere, setGetThere] = React.useState<TransportChoice>(() => defaultChoice(transport))
+  // The saved setup and the live zones arrive after the first render: the choice stays within what is offered.
+  React.useEffect(() => {
+    setGetThere((current) => {
+      const next = cleanChoice(transport, current, transportZones)
+      return JSON.stringify(next) === JSON.stringify(current) ? current : next
+    })
+  }, [transport, transportZones])
+  const stepList = [multiSite ? 'location' : null, 'date', showTime ? 'time' : null, 'guests', transport ? 'transport' : null, 'extras'].filter(
     (step): step is string => Boolean(step),
   )
   const stepOf = (id: string) => stepList.indexOf(id) + 1
@@ -955,8 +981,9 @@ function BookingWidgetInner({
         capacity: slot?.capacity,
         booked: slotBooked,
         businessRules: rules,
+        ...(transport ? { transport: { choice: getThere, zoneName: transportZones.find((zone) => zone.id === getThere.zoneId)?.name } } : {}),
       }),
-    [slotActivity, tenantSlug, selection, slot, slotBooked, nowIso, rules, dayRental, rentDays, party, rated, rentalMode, rentHours, byLength, length, goPrivate],
+    [slotActivity, tenantSlug, selection, slot, slotBooked, nowIso, rules, dayRental, rentDays, party, rated, rentalMode, rentHours, byLength, length, goPrivate, transport, getThere, transportZones],
   )
   /** What moved the price, as chips under the total; dynamic pricing shows as "Peak time" instead. */
   const priceChips = quote.appliedChanges.filter((change) => change.source !== 'dynamic')
@@ -992,6 +1019,8 @@ function BookingWidgetInner({
         l: byLength ? length?.id : undefined,
         g: kind === 'charter' ? party : undefined,
         p: goPrivate ? 1 : undefined,
+        // Transport: the trip, the pickup point and the drop-off point; checkout prices it again.
+        ...(transport ? encodeChoice(getThere) : {}),
       }),
     )
   }
@@ -1819,6 +1848,27 @@ function BookingWidgetInner({
         </div>
         )}
 
+        {/* ---------- transport ---------- */}
+        {transport ? (
+          <div>
+            <h3 className="text-[0.8125rem] font-semibold tracking-tight text-foreground">{stepOf('transport')} · Getting there</h3>
+            <div className="mt-3">
+              <TransportPicker
+                setup={transport}
+                zones={transportZones}
+                value={getThere}
+                onChange={setGetThere}
+                currency={currency}
+                startsAt={slot?.startsAt}
+                endsAt={slot?.endsAt}
+                guests={Math.max(1, quote.party)}
+                meetingPoint={activity.meetingPoint}
+                idPrefix={`transport${transportId.replace(/:/g, '')}`}
+              />
+            </div>
+          </div>
+        ) : null}
+
         {/* ---------- add-ons ---------- */}
         {activity.addOns.length > 0 ? (
           <div>
@@ -1962,6 +2012,8 @@ function BookingWidgetInner({
               currency={currency}
               replyHours={settings.replyHours}
               onCancel={() => setAsking(null)}
+              // The Getting there choice goes with the request, priced like a booking.
+              transport={transport && activity.pickup ? { setup: transport, zones: transportZones, pickup: activity.pickup, meetingPoint: activity.meetingPoint, choice: getThere } : undefined}
               context={
                 asking === 'date' || asking === 'sooner'
                   ? { reason: asking, askDate: true, askParty: true, party: headcount, minDate: (nowIso ?? new Date().toISOString()).slice(0, 10) }

@@ -496,6 +496,8 @@ export function applyPricingOverride<T extends Activity>(activity: T, override?:
     priceCap: override.priceCap === undefined ? activity.priceCap : override.priceCap || undefined,
     tips: override.tips ?? activity.tips,
     payment: override.payment ?? activity.payment,
+    // Transport (pickup points, trips and their prices) is priced with the booking, so it follows the edit too.
+    ...(override.pickup !== undefined || activity.pickup ? { pickup: override.pickup === undefined ? activity.pickup : (override.pickup ?? undefined) } : {}),
     ...fields,
   }
   const spotted = withExtraSpots(merged)

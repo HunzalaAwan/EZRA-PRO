@@ -7,6 +7,7 @@ import { CalendarDays, CheckCircle2, Lock, MapPin, Users } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { useCharterRequests } from '@/hooks/use-charter-requests'
+import { requestTransportLine } from '@/lib/transport'
 import { formatCurrency, formatDateLong, formatTime } from '@/lib/utils'
 import type { CharterRequest, CurrencyCode } from '@/types'
 
@@ -88,8 +89,9 @@ export function QuoteView({
           <div className="flex items-start gap-2">
             <MapPin className="mt-0.5 size-4 text-primary" aria-hidden="true" />
             <div>
-              <dt className="text-xs text-subtle">Meet</dt>
-              <dd className="font-medium">{charter?.meetingPoint ? charter.meetingPoint.split(' — ')[0] : 'Confirmed by email'}</dd>
+              {/* Transport asked for on the request: the trip and the pickup point, instead of where to meet. */}
+              <dt className="text-xs text-subtle">{request.transport ? 'Getting there' : 'Meet'}</dt>
+              <dd className="font-medium">{request.transport ? requestTransportLine(request.transport) : charter?.meetingPoint ? charter.meetingPoint.split(' — ')[0] : 'Confirmed by email'}</dd>
             </div>
           </div>
         </dl>

@@ -10,6 +10,7 @@ import {
   ClipboardList,
   CreditCard,
   FileSignature,
+  Bus,
   MapPin,
   MessageCircle,
   Minus,
@@ -29,6 +30,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
 import { TicketQr, ticketPayload } from '@/components/ui/ticket-qr'
 import type { AvailabilityDay } from '@/components/storefront/booking-widget'
+import { useTransport } from '@/hooks/use-transport'
+import { TransportPicker } from '@/components/storefront/transport-picker'
+import { bookingPickupOf, choiceErrors, choiceOfBooking, cleanChoice, collects, needsDropOffPoint, needsPlace, plusMinutes, retimed, transportLines, type TransportChoice } from '@/lib/transport'
 import { bookedOn } from '@/components/storefront/checkout-selection'
 import {
   EMPTY_WAIVER,
@@ -49,13 +53,13 @@ import { useScheduledDays } from '@/hooks/use-scheduled-days'
 import { forSlot } from '@/lib/extra-spots'
 import { usePricingOverride } from '@/hooks/use-pricing-override'
 import { usePricing } from '@/hooks/use-pricing'
-import { extraSpotPrice, groupPriced, guestLimitOf, privatePerPerson, unitPrice, usualSpotsLeft, type PriceContext } from '@/lib/price-engine'
+import { extraSpotPrice, groupPriced, guestLimitOf, priceTransport, privatePerPerson, unitPrice, usualSpotsLeft, type PriceContext } from '@/lib/price-engine'
 import { changeBooking, changeStartOf, withLedger } from '@/lib/booking-ledger'
 import { changesSummary, hoursLabel, refundFor, splitPayment } from '@/lib/booking-policy'
 import { useTransferHolds } from '@/hooks/use-transfer-holds'
 import { FLIGHT_NUMBER, airlineOf, directionLabel, timeFieldLabels, transferOf, type TransferHold } from '@/lib/transfers'
 import { applyRideEdit, askedTimeOf, flightLine, hhmm, isHubLeg, movedToOf, partyLine, returnTooSoon, rideFits, rideHeadline, type RideEdit } from '@/lib/transfer-changes'
-import type { Activity, ActivityKind, BookingStatus, CancellationPolicy, ChangeRules, CurrencyCode, GuestQuestion, PaymentTerms, TransferBookingDetails, WaiverTemplate } from '@/types'
+import type { Activity, ActivityKind, BookingPickup, BookingStatus, CancellationPolicy, ChangeRules, CurrencyCode, GuestQuestion, PaymentTerms, PickupZone, TransferBookingDetails, WaiverTemplate } from '@/types'
 
 /* ==========================================================================
    MANAGE BOOKING — the guest's own page, from the link in every message.
@@ -121,7 +125,7 @@ export function ManageBooking(
           total: number
           amountPaid: number
           answers: Record<string, string>
-          pickup?: { zoneId: string; stop: string; time: string }
+          pickup?: BookingPickup
           participants: { id: string; firstName: string; lastName: string; waiverSigned: boolean; answers: Record<string, string> }[]
         }
         guest: { firstName: string; lastName: string; email: string; phone: string; avatarUrl?: string }
@@ -147,6 +151,8 @@ export function ManageBooking(
         nowIso: string
         /** Transfers: the ride as booked, and the seeded rides' vehicle holds. */
         transfer?: { details: TransferBookingDetails; holds: TransferHold[] }
+        /** The business's pickup zones, so the pickup point can be changed here. */
+        pickupZones?: PickupZone[]
       },
 ) {
   const shell = 'mx-auto w-full max-w-3xl px-4 pb-24 pt-28 sm:px-6'
@@ -209,12 +215,12 @@ interface RideLegForm {
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/
 
-function ManageBookingInner({ tenant, booking, guest, activity: given, departure, source, waiver, days: rawDays, thread, nowIso, transfer }: InnerProps) {
+function ManageBookingInner({ tenant, booking, guest, activity: given, departure, source, waiver, days: rawDays, thread, nowIso, transfer, pickupZones }: InnerProps) {
   // Its own cancellation and payment terms, or the business defaults it follows.
   const { defaults: bookingDefaults } = useBookingDefaults(tenant.slug)
   const activity = React.useMemo(() => ({ ...given, ...resolveTerms({ policy: given.policy, payment: given.payment }, bookingDefaults) }), [given, bookingDefaults])
   const [state, update] = useManageState(tenant.slug, booking.reference)
-  const [open, setOpen] = React.useState<'waiver' | 'details' | 'move' | 'guests' | 'cancel' | 'ride' | null>(null)
+  const [open, setOpen] = React.useState<'waiver' | 'details' | 'move' | 'guests' | 'cancel' | 'ride' | 'pickup' | null>(null)
   const now = React.useMemo(() => new Date(nowIso), [nowIso])
   const currency = tenant.currency
   const money = (minor: number) => formatCurrency(minor, currency)
@@ -316,6 +322,52 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
     toast.success('Ride updated', { description: next.legs.map((leg) => `${directionLabel(leg.direction, rideConfig?.hub)}: pickup ${formatDateLong(new Date(leg.pickupAt))} at ${hhmm(leg.pickupAt)}`).join('. ') })
   }
 
+  /* ---------- transport: the pickup point as booked or changed here, at the booking's current time ---------- */
+  const { setup: pickupSetup, zones: pickupZonesLive } = useTransport(priced, pickupZones)
+  const lengthMinutes = Math.round((new Date(departure.endsAt).getTime() - new Date(departure.startsAt).getTime()) / 60_000)
+  const endsAtNow = change?.movedTo ? plusMinutes(change.movedTo.startsAt, lengthMinutes) : departure.endsAt
+  const bookedPickup = change?.pickup ?? booking.pickup
+  const shownPickup = bookedPickup && !ride ? retimed(bookedPickup, pickupSetup, pickupZonesLive, startsAt, endsAtNow) : undefined
+  const [pickupChoice, setPickupChoice] = React.useState<TransportChoice>(() => choiceOfBooking(bookedPickup))
+  const [pickupErrors, setPickupErrors] = React.useState<Record<string, string>>({})
+  /** The pickup point (or drop-off point) can change until the change cutoff; the trip stays as booked. */
+  const pickupTrip = bookedPickup?.trip ?? 'pickup'
+  const pickupChangeable = Boolean(shownPickup && pickupSetup && (needsPlace(pickupSetup, pickupTrip) || needsDropOffPoint(pickupSetup, pickupTrip)))
+  /** What the transport costs from one choice for some guests (0: free or included). */
+  const fareFor = (choice: TransportChoice, party: number) => priceTransport(priced, choice, Math.max(1, party))?.total ?? 0
+  const bookedChoice = choiceOfBooking(booking.pickup)
+  const currentChoice = choiceOfBooking(bookedPickup)
+  /**
+   * What transport adds since the booking was made: a dearer pickup point,
+   * and the fares of guests added (per guest). Nothing changed: nothing,
+   * whatever the prices are now.
+   */
+  const rideExtra = (choice: TransportChoice, party: number) =>
+    bookedPickup && !ride ? Math.max(0, fareFor(choice, party) - fareFor(bookedChoice, booking.partySize)) : 0
+  /** The point being picked against the one the booking has now, for this booking's guests. */
+  const pickupExtraNow = pickupChangeable ? Math.max(0, fareFor(pickupChoice, partySize) - fareFor(currentChoice, partySize)) : 0
+  /** A pickup trip changes the pickup point; a drop-off trip the drop-off point. */
+  const placeWord = collects(pickupTrip) ? 'pickup point' : 'drop-off point'
+  const PlaceWord = placeWord.charAt(0).toUpperCase() + placeWord.slice(1)
+  const savePickup = () => {
+    if (!pickupSetup) return
+    const found = choiceErrors(pickupSetup, pickupChoice)
+    const next = Object.keys(found).length > 0 ? undefined : bookingPickupOf(pickupSetup, pickupChoice, pickupZonesLive, startsAt, endsAtNow)
+    // A pickup zone the business no longer serves: ask again rather than doing nothing.
+    if (!next && Object.keys(found).length === 0) found['transport.place'] = collects(pickupTrip) ? 'Choose where we collect you' : 'Choose where we drop you'
+    setPickupErrors(found)
+    if (!next) return
+    changeBooking(
+      tenant.slug,
+      booking.reference,
+      start,
+      { pickup: next, pickupFor: startsAt, pickupExtra: rideExtra(pickupChoice, partySize) },
+      { by: 'guest', what: `${PlaceWord} changed: ${transportLines(next).join('. ')}` },
+    )
+    setOpen(null)
+    toast.success(`${PlaceWord} changed`, { description: transportLines(next).join(' · ') })
+  }
+
   const hoursToGo = (new Date(startsAt).getTime() - now.getTime()) / 3_600_000
   const past = hoursToGo < 0
   const cancelled = Boolean(change?.cancelled) || booking.status === 'cancelled' || booking.status === 'refunded'
@@ -323,7 +375,8 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
   const moves = change?.moves ?? 0
   const canMove = rules.reschedule && hoursToGo >= rules.rescheduleHours && (rules.maxReschedules === 0 || moves < rules.maxReschedules)
   const freeWindow = activity.policy.freeCancellationHours > 0 && hoursToGo >= activity.policy.freeCancellationHours
-  const extra = addCost(booking.partySize, partySize)
+  // Added guests, and a dearer pickup point chosen here.
+  const extra = addCost(booking.partySize, partySize) + rideExtra(currentChoice, partySize)
   const deposit = activity.payment.collect === 'deposit' ? splitPayment(activity.payment, booking.total, booking.partySize).now : 0
   const balance = state.balancePaid ? 0 : Math.max(0, booking.total + extra - booking.amountPaid)
   const unsigned = state.waiversSigned ? 0 : booking.participants.filter((participant) => !participant.waiverSigned).length
@@ -352,7 +405,7 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
   /* add guests */
   const [adding, setAdding] = React.useState(1)
   /** What the guests being added cost. */
-  const addingCost = addCost(partySize, partySize + adding)
+  const addingCost = addCost(partySize, partySize + adding) + Math.max(0, rideExtra(currentChoice, partySize + adding) - rideExtra(currentChoice, partySize))
 
   /* messages */
   const threadMeta = React.useMemo(
@@ -426,13 +479,18 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
               </div>
             ) : (
             <div className="flex items-start gap-2 sm:col-span-2">
-              <MapPin className="mt-0.5 size-4 text-primary" aria-hidden="true" />
+              {shownPickup ? <Bus className="mt-0.5 size-4 text-primary" aria-hidden="true" /> : <MapPin className="mt-0.5 size-4 text-primary" aria-hidden="true" />}
               <div>
-                <dt className="text-xs text-subtle">{booking.pickup ? 'Pickup' : 'Meet'}</dt>
-                <dd className="font-medium">
-                  {booking.pickup ? `${formatTime(booking.pickup.time)} from ${booking.pickup.stop}` : activity.meetingPoint}
-                </dd>
-                {activity.locationName && !booking.pickup ? <dd className="text-xs text-subtle">{activity.locationName}</dd> : null}
+                <dt className="text-xs text-subtle">{shownPickup ? 'Getting there' : 'Meet'}</dt>
+                {shownPickup
+                  ? transportLines(shownPickup).map((line) => (
+                      <dd key={line} className="font-medium tabular">
+                        {line}
+                      </dd>
+                    ))
+                  : null}
+                {shownPickup?.time ? null : <dd className={cn(shownPickup ? 'text-xs text-subtle' : 'font-medium')}>{activity.meetingPoint}</dd>}
+                {activity.locationName && !shownPickup?.time ? <dd className="text-xs text-subtle">{activity.locationName}</dd> : null}
               </div>
             </div>
             )}
@@ -590,10 +648,49 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
             {rules.addGuests && !ride ? (
               <Button variant="secondary" leftIcon={<Users />} disabled={roomNow <= 0} onClick={() => setOpen(open === 'guests' ? null : 'guests')}>Add guests</Button>
             ) : null}
+            {pickupChangeable ? (
+              <Button
+                variant="secondary"
+                leftIcon={<Bus />}
+                disabled={hoursToGo < rules.rescheduleHours}
+                onClick={() => {
+                  // A pickup zone the business stopped serving is cleared, so the guest picks again.
+                  setPickupChoice(pickupSetup ? { ...cleanChoice({ ...pickupSetup, required: true, trips: [pickupTrip] }, currentChoice, pickupZonesLive), trip: pickupTrip } : currentChoice)
+                  setPickupErrors({})
+                  setOpen(open === 'pickup' ? null : 'pickup')
+                }}
+              >
+                Change {placeWord}
+              </Button>
+            ) : null}
             {rules.cancelOnline ? (
               <Button variant="ghost" leftIcon={<XCircle />} onClick={() => setOpen(open === 'cancel' ? null : 'cancel')}>Cancel booking</Button>
             ) : null}
           </div>
+          {pickupChangeable && hoursToGo < rules.rescheduleHours ? <p className="mt-2 text-xs text-muted">{PlaceWord} changes close {hoursLabel(rules.rescheduleHours)} before the start. Message us below.</p> : null}
+
+          {open === 'pickup' && pickupSetup && shownPickup ? (
+            <div className="mt-4 flex flex-col gap-4 border-t border-line-subtle pt-4">
+              <TransportPicker
+                setup={{ ...pickupSetup, required: true, trips: [pickupTrip] }}
+                zones={pickupZonesLive}
+                value={pickupChoice}
+                onChange={setPickupChoice}
+                currency={currency}
+                startsAt={startsAt}
+                endsAt={endsAtNow}
+                guests={Math.max(1, partySize)}
+                meetingPoint={activity.meetingPoint}
+                errors={pickupErrors}
+                idPrefix="manage-pickup"
+              />
+              {pickupExtraNow > 0 ? <p className="text-sm text-muted">This point costs {money(pickupExtraNow)} more, added to your balance.</p> : null}
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setOpen(null)}>Keep it</Button>
+                <Button onClick={savePickup}>Save {placeWord}</Button>
+              </div>
+            </div>
+          ) : null}
           {ride && !rideChangeable ? <p className="mt-2 text-xs text-muted">Message us to change it.</p> : null}
           {rules.reschedule && !canMove && !ride ? (
             <p className="mt-2 text-xs text-muted">
