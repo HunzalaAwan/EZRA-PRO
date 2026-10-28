@@ -2941,7 +2941,7 @@ function transferSchedule(draft: Pick<ActivityDraft, 'schedules' | 'schedule'>, 
 }
 
 /**
- * Picking "Transfer or transport": the rows become vehicles (a car and a
+ * Picking Rental, "With a driver": the rows become vehicles (a car and a
  * van; the ones there are set aside), guests are collected, it is filed
  * under Transfers, books 12 hours ahead, offers tips and has no waiver.
  */
@@ -2959,7 +2959,17 @@ export function transferPick(draft: ActivityDraft): Partial<ActivityDraft> {
     otherTiers: draft.tiers,
     chargeBy: null,
     privateOption: { ...draft.privateOption, enabled: false },
-    kindSettings: { ...settings, transfer: { ...t, vehicles: { ...t.vehicles, ...rows.vehicles }, setAside: t.kept && t.kept.length > 0 ? (t.setAside ?? null) : null, kept: null, keptSchedule: null } },
+    kindSettings: {
+      ...settings,
+      transfer: {
+        ...t,
+        vehicles: { ...t.vehicles, ...rows.vehicles },
+        setAside: t.kept && t.kept.length > 0 ? (t.setAside ?? null) : null,
+        kept: null,
+        keptSchedule: null,
+        keptOther: { kind: draft.kind ?? 'trip', arrivalMode: draft.arrivalMode, theme: draft.theme },
+      },
+    },
     arrivalMode: 'pickup',
     theme: 'transfers',
     noticeHours: draft.noticeHours > 0 ? draft.noticeHours : 12,
@@ -2972,13 +2982,15 @@ export function transferPick(draft: ActivityDraft): Partial<ActivityDraft> {
 /** Leaving a transfer for another kind: the rows set aside come back (or one first ticket), the arrival and schedule follow the new kind. */
 export function transferLeave(draft: ActivityDraft, next: ActivityKind): Partial<ActivityDraft> {
   const back = draft.otherTiers && draft.otherTiers.length > 0 ? draft.otherTiers : [{ ...blankTier(STARTER_LABEL[next], 14900, draft.tiers), minQuantity: next === 'rental' ? 0 : 1 }]
-  const arrival: ArrivalMode = next === 'pass' || next === 'rental' || next === 'activity' || next === 'package' ? 'venue' : 'meet'
+  const settings = normalizeKindSettings(draft.kindSettings)
+  // Back to the kind it was (Self-drive after With a driver): its own arrival and category too.
+  const other = settings.transfer.keptOther
+  const arrival: ArrivalMode = other && other.kind === next ? other.arrivalMode : next === 'pass' || next === 'rental' || next === 'activity' || next === 'package' ? 'venue' : 'meet'
   const schedule = isStarterSchedule(draft.schedules)
     ? (({ scheduleMode, schedules }) => ({ scheduleMode, schedules }))(defaultScheduleDraft(next))
     : draft.scheduleMode === 'dates' || draft.scheduleMode === modeForKind(next)
       ? {}
       : withMode(draft, modeForKind(next), 30, closingGapOf({ kind: next, durationMinutes: draft.durationMinutes }))
-  const settings = normalizeKindSettings(draft.kindSettings)
   const nextMode = ACTIVITY_KIND_META[next].defaultFormat === 'open' ? 'hours' : 'times'
   const left = scheduleOfDraft({ ...draft, ...schedule, schedule: { ...draft.schedule, mode: nextMode } })
   return {
@@ -2987,8 +2999,8 @@ export function transferLeave(draft: ActivityDraft, next: ActivityKind): Partial
     chargeBy: null,
     arrivalMode: arrival,
     // The vehicles (or tickets) and the schedule are kept, so picking a transfer again brings them back with their prices and times.
-    kindSettings: { ...settings, transfer: { ...settings.transfer, kept: draft.tiers, keptSchedule: { before: scheduleOfDraft(draft), left } } },
-    ...(draft.theme === 'transfers' ? { theme: defaultTheme(draft.category) } : {}),
+    kindSettings: { ...settings, transfer: { ...settings.transfer, kept: draft.tiers, keptSchedule: { before: scheduleOfDraft(draft), left }, keptOther: null } },
+    ...(draft.theme === 'transfers' ? { theme: other && other.theme !== 'transfers' ? other.theme : defaultTheme(draft.category) } : {}),
     ...schedule,
   }
 }
@@ -3137,6 +3149,7 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
           tiers={draft.tiers}
           onChange={(transfer, tiers) => patch({ kindSettings: { ...settings, transfer }, ...(tiers ? { tiers } : {}) })}
           onService={(service) => patch(transferService(draft, service))}
+          onSelfDrive={() => pickKind('rental')}
           errors={errors}
         />
       ) : null}
@@ -3150,6 +3163,7 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
           errors={errors}
           shared={shared}
           onShared={(changes) => patch(changes)}
+          onDriver={kind === 'rental' ? (driver) => (driver ? patch(transferPick(draft)) : undefined) : undefined}
           tenantSlug={tenantSlug}
         />
       )}

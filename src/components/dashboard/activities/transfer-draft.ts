@@ -1,4 +1,4 @@
-import type { Activity, TransferConfig, TransferHub, TransferPairRate, TransferService, TransferTrip, TransferZone } from '@/types'
+import type { Activity, ActivityKind, ActivityTheme, TransferConfig, TransferHub, TransferPairRate, TransferService, TransferTrip, TransferZone } from '@/types'
 import { TRANSFER_SERVICES, defaultCheckIn, fleetSize, serviceOf, transferConfigErrors } from '@/lib/transfers'
 import { blankTier, type DraftTier } from './pricing-tier-editor'
 
@@ -56,6 +56,8 @@ export interface DraftTransfer {
    * the run times or hours come back. Never saved.
    */
   keptSchedule?: { before: unknown; left: unknown } | null
+  /** The kind, arrival and category it had before With a driver was picked, so Self-drive gives them back. Never saved. */
+  keptOther?: { kind: ActivityKind; arrivalMode: 'meet' | 'venue' | 'pickup'; theme: ActivityTheme } | null
 }
 
 export const TRIP_ORDER: DraftTrip[] = ['from_hub', 'to_hub', 'round_trip', 'between']
@@ -342,9 +344,9 @@ export function transferDraftErrors(transfer: DraftTransfer, tiers: Pick<DraftTi
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
-/** "Private transfer · 5 destinations · 2 vehicles (10 in all)": the Review step's setup line. */
+/** "With a driver, by trip · 5 destinations · 2 vehicles (10 in all)": the Review step's setup line. */
 export function transferFacts(transfer: DraftTransfer, tiers: Pick<DraftTier, 'id' | 'label'>[]): string[] {
-  const service = TRANSFER_SERVICES.find((entry) => entry.value === transfer.service)?.label ?? 'Transfer'
+  const service = `With a driver, ${(TRANSFER_SERVICES.find((entry) => entry.value === transfer.service)?.label ?? 'By trip').toLowerCase()}`
   const zones = transfer.zones.filter((zone) => zone.name.trim()).length
   const fleet = fleetOfDraft(transfer, tiers)
   if (transfer.service === 'hourly') return [service, `${plural(tiers.length, 'vehicle')} (${fleet} in all)`, `${transfer.minHours}–${transfer.maxHours} hours`]

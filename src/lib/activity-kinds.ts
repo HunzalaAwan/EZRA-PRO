@@ -37,8 +37,16 @@ export const ACTIVITY_KINDS: ActivityKind[] = ['trip', 'activity', 'charter', 'r
 export const TIMED_KINDS: ActivityKind[] = ['trip', 'activity', 'charter']
 export const isTimedKind = (kind: ActivityKind | undefined) => TIMED_KINDS.includes(kind ?? 'trip')
 
-/** The kind as one type: an older "activity" reads as an activity or tour (trip). */
-export const sharedKindOf = (kind: ActivityKind | undefined): ActivityKind => (kind === 'activity' ? 'trip' : (kind ?? 'trip'))
+/**
+ * A rental with a driver (pickup and drop-off, by the hour, shared seats) is
+ * set up under Rental and saves as a 'transfer'; owners and guests see one
+ * Rental type, shelf and filter.
+ */
+export const RENTAL_KINDS: ActivityKind[] = ['rental', 'transfer']
+export const isRentalKind = (kind: ActivityKind | undefined) => RENTAL_KINDS.includes(kind ?? 'trip')
+
+/** The kind as one type: an older "activity" reads as an activity or tour (trip), a rental with a driver as a rental. */
+export const sharedKindOf = (kind: ActivityKind | undefined): ActivityKind => (kind === 'activity' ? 'trip' : kind === 'transfer' ? 'rental' : (kind ?? 'trip'))
 
 export const ACTIVITY_KIND_META: Record<ActivityKind, ActivityKindMeta> = {
   trip: {
@@ -77,8 +85,8 @@ export const ACTIVITY_KIND_META: Record<ActivityKind, ActivityKindMeta> = {
   rental: {
     label: 'Rental',
     short: 'Rental',
-    hint: 'By the hour, or by the day for cars and multi-day hire.',
-    examples: 'Jet skis, cars and jeeps, e-bikes, kayaks, SUPs, gear',
+    hint: 'Gear, vehicles, or vehicles with a driver.',
+    examples: 'Jet skis, cars, e-bikes, kayaks, airport transfers, private drivers',
     icon: 'KeyRound',
     unit: 'time slot',
     units: 'time slots',
@@ -119,10 +127,10 @@ export const ACTIVITY_KIND_META: Record<ActivityKind, ActivityKindMeta> = {
     defaultFormat: 'departures',
   },
   transfer: {
-    label: 'Transfer or transport',
-    short: 'Transfer',
-    hint: 'Rides from one place to another, priced per vehicle or per seat.',
-    examples: 'Airport transfers, shuttles, private drivers, port runs',
+    label: 'Rental with a driver',
+    short: 'Rental',
+    hint: 'A vehicle and driver: pickup and drop-off, by the hour or shared seats.',
+    examples: 'Airport transfers, private drivers, shuttles',
     icon: 'Car',
     unit: 'ride',
     units: 'rides',
@@ -216,9 +224,9 @@ export function kindChipLabel(
   switch (activity.kind ?? 'trip') {
     case 'transfer': {
       const service = serviceOf(activity)
-      if (service === 'shared') return 'Shared shuttle'
-      if (service === 'hourly') return `Driver · from ${activity.transfer?.minHours ?? 1}h`
-      return 'Private · per vehicle'
+      if (service === 'shared') return 'Rental · shared seats'
+      if (service === 'hourly') return `Rental · driver from ${activity.transfer?.minHours ?? 1}h`
+      return 'Rental · with a driver'
     }
     case 'rental': {
       const modes = activity.rental?.modes
@@ -258,7 +266,6 @@ const DIFFICULTY_WORD: Record<Activity['difficulty'], string> = {
 export function kindBadge(activity: Pick<Activity, 'kind' | 'difficulty' | 'rental' | 'lesson' | 'pass'>): string {
   switch (activity.kind ?? 'trip') {
     case 'transfer':
-      return 'Transfer'
     case 'rental':
       return 'Rental'
     case 'activity':
@@ -390,7 +397,16 @@ export const STOREFRONT_GROUPS: Record<ActivityKind, { label: string; blurb: str
   lesson: { label: 'Lessons & courses', blurb: 'Coached, with a level and a small class.' },
   pass: { label: 'Passes & tickets', blurb: 'Entry for the day. Come and go.' },
   package: { label: 'Packages & combos', blurb: 'More than one activity, one booking, a better price.' },
-  transfer: { label: 'Transfers & transport', blurb: 'Rides to and from the airport, and drivers by the hour.' },
+  transfer: { label: 'Rentals', blurb: 'With a driver: pickup and drop-off, or by the hour.' },
+}
+
+/** A shelf's heading and line: the Rentals shelf says so when some of it comes with a driver. */
+export function storefrontGroup(kind: ActivityKind, items: Pick<Activity, 'kind'>[]): { label: string; blurb: string } {
+  if (kind !== 'rental') return STOREFRONT_GROUPS[kind]
+  const driven = items.filter((activity) => activity.kind === 'transfer').length
+  if (driven === 0) return STOREFRONT_GROUPS.rental
+  if (driven === items.length) return STOREFRONT_GROUPS.transfer
+  return { label: 'Rentals', blurb: 'Take it out yourself, or with a driver.' }
 }
 
 /**

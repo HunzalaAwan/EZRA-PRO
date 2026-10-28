@@ -942,10 +942,11 @@ export const ACTIVITY_KIND_LOWER: Record<string, string> = {
   lesson: 'a lesson',
   pass: 'a pass',
   package: 'a package',
-  transfer: 'a transfer',
+  transfer: 'a rental with a driver',
 } satisfies Record<ActivityKind, string>
 
-const KIND_OPTIONS: ConditionOption[] = ACTIVITY_KINDS.filter((kind) => kind !== 'activity').map((kind: ActivityKind) => ({ value: kind, label: ACTIVITY_KIND_META[kind].label }))
+// A rental with a driver counts as a rental, as an older "activity" counts as an activity or tour.
+const KIND_OPTIONS: ConditionOption[] = ACTIVITY_KINDS.filter((kind) => kind !== 'activity' && kind !== 'transfer').map((kind: ActivityKind) => ({ value: kind, label: ACTIVITY_KIND_META[kind].label }))
 
 /** The fixed choices; activities, tags, countries, locations and extras come from the business. */
 export const STATIC_OPTIONS: Record<'channels' | 'segments' | 'kinds', ConditionOption[]> = {

@@ -169,8 +169,8 @@ export interface SharedBasics {
   difficulty: DifficultyLevel
 }
 
-/** The wizard's choices: group activity, activity and private charter are one card. */
-const PICKER_KINDS: ActivityKind[] = ['trip', 'rental', 'transfer', 'lesson', 'pass', 'package']
+/** The wizard's choices: group activity, activity and private charter are one card; a rental with a driver is under Rental. */
+const PICKER_KINDS: ActivityKind[] = ['trip', 'rental', 'lesson', 'pass', 'package']
 
 const TIMED_CARD = {
   label: 'Activity or tour',
@@ -179,7 +179,7 @@ const TIMED_CARD = {
 }
 
 export function KindPicker({ value, onChange }: { value: ActivityKind; onChange: (kind: ActivityKind) => void }) {
-  const picked = isTimedKind(value) ? 'trip' : value
+  const picked = isTimedKind(value) ? 'trip' : value === 'transfer' ? 'rental' : value
   return (
     <fieldset>
       <legend className="text-[0.8125rem] font-medium">What are you selling?</legend>
@@ -213,6 +213,47 @@ export function KindPicker({ value, onChange }: { value: ActivityKind; onChange:
         })}
       </RadioGroup>
     </fieldset>
+  )
+}
+
+/* ---------- rental: self-drive or gear, or with a driver ---------- */
+
+const DRIVER_CHOICES = [
+  { value: false, label: 'Self-drive or gear', hint: 'Guests take it out themselves', icon: KeyRound },
+  { value: true, label: 'With a driver', hint: 'You drive them: pickup and drop-off or by the hour', icon: Car },
+] as const
+
+/** The first choice in Rental settings. With a driver saves as a 'transfer' (vehicles, a price table, ride details). */
+export function DriverChoice({ driver, onChange }: { driver: boolean; onChange: (driver: boolean) => void }) {
+  return (
+    <div role="radiogroup" aria-label="Self-drive or with a driver" className="grid gap-2 sm:grid-cols-2">
+      {DRIVER_CHOICES.map((choice) => {
+        const on = choice.value === driver
+        const Icon = choice.icon
+        return (
+          <button
+            key={choice.label}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            onClick={() => (on ? undefined : onChange(choice.value))}
+            className={cn(
+              'flex items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors duration-200',
+              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+              on ? 'border-primary bg-primary-soft/30' : 'border-line bg-surface hover:border-line-strong',
+            )}
+          >
+            <span className={cn('grid size-8 shrink-0 place-items-center rounded-lg', on ? 'bg-primary-soft text-primary' : 'bg-surface-sunken text-faint')} aria-hidden="true">
+              <Icon className="size-4" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-foreground">{choice.label}</span>
+              <span className="block text-xs text-subtle">{choice.hint}</span>
+            </span>
+          </button>
+        )
+      })}
+    </div>
   )
 }
 
@@ -478,6 +519,7 @@ export function KindFields({
   errors,
   shared,
   onShared,
+  onDriver,
 }: {
   /** Not read here any more; kept so callers need not change. */
   tenantSlug?: string
@@ -491,6 +533,8 @@ export function KindFields({
   errors: Record<string, string>
   shared: SharedBasics
   onShared: (patch: Partial<SharedBasics>) => void
+  /** A rental's "With a driver": the wizard turns it into a rental with a driver. */
+  onDriver?: (driver: boolean) => void
 }) {
   const settings = normalizeKindSettings(raw)
   const set = <K extends keyof DraftKindSettings>(key: K, patch: Partial<DraftKindSettings[K]>) =>
@@ -511,13 +555,16 @@ export function KindFields({
     // No "what do you rent?" choice: a new rental keeps the default category, a seeded one its own.
     const rental = settings.rental
     return shell(
-      <Section title="Between rentals" hint="Items, how they are charged and prices are on the Pricing step.">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Gap between rentals" optional description="To clean, check or get it ready.">
-            {(control) => <Input {...control} type="number" min={0} step={5} suffix="min" placeholder="None" value={rental.bufferMinutes || ''} onChange={(e) => set('rental', { bufferMinutes: num(e.target.value) })} />}
-          </Field>
-        </div>
-      </Section>,
+      <>
+        {onDriver ? <DriverChoice driver={false} onChange={onDriver} /> : null}
+        <Section title="Between rentals" hint="Items, how they are charged and prices are on the Pricing step.">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Gap between rentals" optional description="To clean, check or get it ready.">
+              {(control) => <Input {...control} type="number" min={0} step={5} suffix="min" placeholder="None" value={rental.bufferMinutes || ''} onChange={(e) => set('rental', { bufferMinutes: num(e.target.value) })} />}
+            </Field>
+          </div>
+        </Section>
+      </>,
     )
   }
 

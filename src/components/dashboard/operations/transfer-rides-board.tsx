@@ -231,7 +231,7 @@ export function TransferRidesBoard({
         <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-line bg-surface px-6 py-12 text-center print:hidden">
           <Car className="size-6 text-faint" aria-hidden="true" />
           <p className="text-sm font-semibold">No rides {dayIndex === 0 ? 'today' : `on ${dayLabel(day.dayKey, dayIndex)} ${shortDate(day.dayKey)}`}</p>
-          <p className="max-w-md text-sm text-muted">Transfer bookings show here on the day of each pickup.</p>
+          <p className="max-w-md text-sm text-muted">Bookings with a driver show here on the day of each pickup.</p>
         </div>
       ) : (
         <>

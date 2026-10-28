@@ -36,9 +36,9 @@ export type TransferSource = Pick<Activity, 'id' | 'kind' | 'transfer' | 'priceT
 /* ---------- words ---------- */
 
 export const TRANSFER_SERVICES: { value: TransferService; label: string; hint: string }[] = [
-  { value: 'private', label: 'Private transfer', hint: 'One group per vehicle, priced per vehicle' },
-  { value: 'shared', label: 'Shared shuttle', hint: 'Guests share set runs, priced per seat' },
-  { value: 'hourly', label: 'Driver by the hour', hint: 'A vehicle and driver for as long as they need' },
+  { value: 'private', label: 'By trip', hint: 'Pickup and drop-off, priced per vehicle' },
+  { value: 'hourly', label: 'By the hour', hint: 'A vehicle and driver for as long as they need' },
+  { value: 'shared', label: 'Shared seats', hint: 'Guests share set runs, priced per seat' },
 ]
 
 export const HUB_KINDS: { value: TransferHubKind; label: string; word: string }[] = [

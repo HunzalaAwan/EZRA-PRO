@@ -21,7 +21,7 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react'
-import { ACTIVITY_KINDS, STOREFRONT_GROUPS, kindCardFacts, kindChipLabel, priceUnit, sharedKindOf } from '@/lib/activity-kinds'
+import { ACTIVITY_KINDS, STOREFRONT_GROUPS, kindCardFacts, kindChipLabel, priceUnit, sharedKindOf, storefrontGroup } from '@/lib/activity-kinds'
 
 import { cn, formatCurrency, formatDuration, formatNumber, pluralize } from '@/lib/utils'
 import type { Activity, ActivityKind, CurrencyCode, DifficultyLevel } from '@/types'
@@ -182,18 +182,22 @@ export function ActivityShowcase({
     return sorted
   }, [activities, sort])
 
-  /* ---------- shelves: one per kind that has something on sale ---------- */
+  /* ---------- shelves: one per kind that has something on sale (rentals with a driver sit on Rentals) ---------- */
 
   const groups = React.useMemo(
     () =>
-      ACTIVITY_KINDS.filter((kind) => kind !== 'activity').map((kind) => ({ kind, items: filtered.filter((activity) => sharedKindOf(activity.kind) === kind) })).filter(
-        (entry) => entry.items.length > 0,
-      ),
+      ACTIVITY_KINDS.filter((kind) => sharedKindOf(kind) === kind)
+        .map((kind) => {
+          const items = filtered.filter((activity) => sharedKindOf(activity.kind) === kind)
+          return { kind, items, meta: storefrontGroup(kind, items) }
+        })
+        .filter((entry) => entry.items.length > 0),
     [filtered],
   )
   const grouped = groups.length > 1
   const active: GroupKey = group !== 'all' && groups.some((entry) => entry.kind === group) ? group : 'all'
-  const activeItems = active === 'all' ? filtered : (groups.find((entry) => entry.kind === active)?.items ?? [])
+  const activeGroup = active === 'all' ? undefined : groups.find((entry) => entry.kind === active)
+  const activeItems = activeGroup ? activeGroup.items : active === 'all' ? filtered : []
 
   const showFeatured =
     active === 'all' &&
@@ -239,7 +243,7 @@ export function ActivityShowcase({
             <p className="mt-3 text-base leading-relaxed text-muted">
               {active === 'all'
                 ? `${formatNumber(activities.length)} ${pluralize(activities.length, 'activity', 'activities')}${grouped ? ` in ${groups.length} categories` : ''}, all with live availability.`
-                : `${formatNumber(activeItems.length)} in ${STOREFRONT_GROUPS[active].label.toLowerCase()}. ${STOREFRONT_GROUPS[active].blurb}`}{' '}
+                : `${formatNumber(activeItems.length)} in ${(activeGroup?.meta ?? STOREFRONT_GROUPS[active]).label.toLowerCase()}. ${(activeGroup?.meta ?? STOREFRONT_GROUPS[active]).blurb}`}{' '}
               Pick a date and your spot is held the moment you book.
             </p>
           </div>
@@ -325,7 +329,7 @@ export function ActivityShowcase({
                 const heroes = entry.items.filter((activity) => heroIds.has(activity.id))
                 const items = entry.items.filter((activity) => !heroIds.has(activity.id))
                 const Icon = GROUP_ICONS[entry.kind]
-                const meta = STOREFRONT_GROUPS[entry.kind]
+                const meta = entry.meta
                 return (
                   <section key={entry.kind} aria-labelledby={`shelf-${entry.kind}`}>
                     <div className="mb-5 flex flex-wrap items-end justify-between gap-x-6 gap-y-2 border-b border-line-subtle pb-4">

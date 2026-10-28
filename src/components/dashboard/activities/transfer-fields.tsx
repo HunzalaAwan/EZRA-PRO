@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 
+import { DriverChoice } from './kind-fields'
 import { KIND_TIER_PRESETS, blankTier, type DraftTier } from './pricing-tier-editor'
 import {
   TRANSFER_VEHICLE_PRESETS,
@@ -73,7 +74,7 @@ function AddChip({ label, onClick }: { label: string; onClick: () => void }) {
   )
 }
 
-/* ---------- Basics: Transfer settings ---------- */
+/* ---------- Basics: Rental settings, with a driver ---------- */
 
 export interface TransferFieldsProps {
   value: DraftTransfer
@@ -83,10 +84,12 @@ export interface TransferFieldsProps {
   onChange: (value: DraftTransfer, tiers?: DraftTier[]) => void
   /** What is run changed: the wizard swaps the rows and the schedule with it. */
   onService: (service: TransferService) => void
+  /** "Self-drive or gear": the wizard turns it back into a plain rental. */
+  onSelfDrive?: () => void
   errors: Record<string, string>
 }
 
-export function TransferFields({ value, tiers, onChange, onService, errors }: TransferFieldsProps) {
+export function TransferFields({ value, tiers, onChange, onService, onSelfDrive, errors }: TransferFieldsProps) {
   const service = value.service
   const hub = value.noHub ? undefined : value.hub
   const set = (patch: Partial<DraftTransfer>) => onChange({ ...value, ...patch })
@@ -95,10 +98,11 @@ export function TransferFields({ value, tiers, onChange, onService, errors }: Tr
 
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-line bg-surface-sunken/40 p-4">
-      <p className="text-[0.8125rem] font-medium">Transfer settings</p>
+      <p className="text-[0.8125rem] font-medium">Rental settings</p>
+      {onSelfDrive ? <DriverChoice driver onChange={(driver) => (driver ? undefined : onSelfDrive())} /> : null}
 
-      <Section title="What do you run?">
-        <div role="radiogroup" aria-label="What do you run?" className="grid gap-2 lg:grid-cols-3">
+      <Section title="How it’s charged">
+        <div role="radiogroup" aria-label="How it’s charged" className="grid gap-2 lg:grid-cols-3">
           {TRANSFER_SERVICES.map((choice) => {
             const on = choice.value === service
             const Icon = SERVICE_ICONS[choice.value]

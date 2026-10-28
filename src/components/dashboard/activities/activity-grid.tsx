@@ -6,7 +6,7 @@ import { ArrowDownWideNarrow, LayoutGrid, Plus, Rows3, SlidersHorizontal } from 
 
 import type { ActivityKind, ActivityStatus, DifficultyLevel, VerticalKey } from '@/types'
 import { categoryLabel } from '@/lib/activity-kinds'
-import { ACTIVITY_KINDS, ACTIVITY_KIND_META, isTimedKind } from '@/lib/activity-kinds'
+import { ACTIVITY_KINDS, ACTIVITY_KIND_META, isRentalKind, isTimedKind } from '@/lib/activity-kinds'
 import { cn, formatNumber, titleCase } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Segmented, type SegmentedOption } from '@/components/ui/segmented'
@@ -128,7 +128,7 @@ export function ActivityCatalog({ summaries, tenantSlug }: ActivityCatalogProps)
       if (status !== 'all' && activity.status !== status) return false
       if (category !== 'all' && categoryLabel(activity) !== category) return false
       if (difficulty !== 'all' && activity.difficulty !== difficulty) return false
-      if (format !== 'all' && (format === 'trip' ? !isTimedKind(activity.kind) : (activity.kind ?? 'trip') !== format)) return false
+      if (format !== 'all' && (format === 'trip' ? !isTimedKind(activity.kind) : format === 'rental' ? !isRentalKind(activity.kind) : (activity.kind ?? 'trip') !== format)) return false
       if (!needle) return true
       return (
         activity.name.toLowerCase().includes(needle) ||
@@ -223,7 +223,7 @@ export function ActivityCatalog({ summaries, tenantSlug }: ActivityCatalogProps)
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Any type</SelectItem>
-              {ACTIVITY_KINDS.filter((value) => value === 'trip' || !isTimedKind(value)).map((value) => (
+              {ACTIVITY_KINDS.filter((value) => value === 'trip' || (!isTimedKind(value) && value !== 'transfer')).map((value) => (
                 <SelectItem key={value} value={value} description={ACTIVITY_KIND_META[value].hint}>
                   {ACTIVITY_KIND_META[value].label}
                 </SelectItem>
