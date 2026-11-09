@@ -117,7 +117,7 @@ export function RestaurantHome({ tenant, menu, settings, tastings, reviews, stor
       </StorefrontSection>
 
       <StorefrontSection key="menu" id="menu">
-        <MenuBrowser menu={menu} ordering={settings.ordering} periods={settings.periods} currency={tenant.currency} slug={tenant.slug} taxRate={taxRate} nowTime={nowTime} weekday={weekday} phone={tenant.contact.phone} />
+        <MenuBrowser menu={menu} tenantId={tenant.id} ordering={settings.ordering} periods={settings.periods} currency={tenant.currency} slug={tenant.slug} taxRate={taxRate} nowTime={nowTime} weekday={weekday} phone={tenant.contact.phone} />
       </StorefrontSection>
 
       {tastings.length > 0 ? (

@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { OrderCheckout } from '@/components/storefront/restaurant/order-checkout'
 import { NOW, TAX_RATE, getStorefront } from '@/lib/demo'
 import { getDiningSettings } from '@/lib/hospitality'
+import { getMenu } from '@/lib/hospitality/menu'
 import { getWorkspaceProfile } from '@/lib/workspace-profile'
 
 const NOW_TIME = `${String(NOW.getHours()).padStart(2, '0')}:${String(NOW.getMinutes()).padStart(2, '0')}`
@@ -32,6 +33,9 @@ export default async function OrderPage({ params }: { params: Promise<{ tenant: 
       taxRate={TAX_RATE[tenant.id] ?? 0}
       taxLabel={TAX_LABEL[tenant.id] ?? 'Tax'}
       nowTime={NOW_TIME}
+      weekday={NOW.getDay()}
+      menu={getMenu(tenant.id)}
+      tenantId={tenant.id}
     />
   )
 }

@@ -4,7 +4,20 @@ import type { Customer, Tenant } from '@/types'
 
 import { getDiningSettings, hm, mh } from './hours'
 import { getMenu } from './menu'
-import type { DiningData, MenuItem, Order, OrderLine, OrderSource, OrderStatus, OrderType } from './types'
+import {
+  defaultSelection,
+  isAvailableAt,
+  optionView,
+  priceSelection,
+  resolveGroups,
+  resolveMealGroups,
+  setMeal,
+  setPick,
+  setVariant,
+  toOrderLine,
+  type ResolvedGroup,
+} from './menu-pricing'
+import type { DiningData, DishSelection, Menu, MenuItem, Order, OrderLine, OrderSource, OrderStatus, OrderType } from './types'
 
 /* ==========================================================================
    Dining — the orders a kitchen has taken, generated deterministically per
@@ -35,8 +48,69 @@ function sourceFor(type: OrderType, rng: () => number): OrderSource {
   return rngWeighted(rng, [['storefront', 6], ['wolt', 2], ['uber_eats', 1], ['deliveroo', 1]])
 }
 
-function pickLines(items: MenuItem[], type: OrderType, rng: () => number, serial: number): OrderLine[] {
-  const sellable = items.filter((item) => item.status === 'available' && item.channels.includes(type))
+/** Adds random picks to one group, within its rules, skipping sold-out options. */
+function fillGroup(
+  menu: Menu,
+  selection: DishSelection,
+  rg: ResolvedGroup,
+  rng: () => number,
+  parent?: { groupKey: string; optionId: string },
+): DishSelection {
+  const g = rg.group
+  const open = g.options.filter((o) => !optionView(menu, o).soldOut)
+  if (!open.length) return selection
+  const current = () => {
+    if (!parent) return selection.picks.filter((p) => p.groupKey === rg.key)
+    const holder = selection.picks.find((p) => p.groupKey === parent.groupKey && p.optionId === parent.optionId)
+    return (holder?.picks ?? []).filter((p) => p.groupKey === rg.key)
+  }
+  const units = () => current().reduce((sum, p) => sum + p.qty, 0)
+
+  if (g.kind === 'remove') {
+    if (rng() < 0.18) selection = setPick(menu, selection, rg.key, rngPick(rng, open).id, 1, parent)
+    return selection
+  }
+  if (g.max === 1) {
+    if (units() === 0 ? g.min > 0 || rng() < 0.35 : rng() < 0.3) selection = setPick(menu, selection, rg.key, rngPick(rng, open).id, 1, parent)
+    return selection
+  }
+  const ceiling = g.max ?? g.min + 2
+  const target = Math.max(g.min, units() + (rng() < 0.45 ? rngInt(rng, 1, 2) : 0))
+  for (let tries = 0; units() < Math.min(target, ceiling) && tries < 12; tries++) {
+    const option = rngPick(rng, open)
+    const have = current().find((p) => p.optionId === option.id)?.qty ?? 0
+    selection = setPick(menu, selection, rg.key, option.id, have + 1, parent)
+  }
+  return selection
+}
+
+/** A realistic set of picks for one dish, priced through the one pricing path. */
+function pickSelection(menu: Menu, item: MenuItem, rng: () => number): DishSelection {
+  let selection = defaultSelection(menu, item)
+  const open = (item.variants ?? []).filter((v) => !v.soldOut)
+  if (open.length > 1 && rng() < 0.35) selection = setVariant(menu, selection, rngPick(rng, open).id)
+  const fill = (groups: ResolvedGroup[]) => {
+    for (const rg of groups) {
+      selection = fillGroup(menu, selection, rg, rng)
+      if (!rg.group.askItemChoices) continue
+      for (const pick of selection.picks.filter((p) => p.groupKey === rg.key)) {
+        const option = rg.group.options.find((o) => o.id === pick.optionId)
+        const linked = option ? optionView(menu, option).item : null
+        if (!linked) continue
+        for (const nested of resolveGroups(menu, linked)) selection = fillGroup(menu, selection, nested, rng, { groupKey: rg.key, optionId: pick.optionId })
+      }
+    }
+  }
+  fill(resolveGroups(menu, item))
+  if (item.meal && item.kind !== 'set' && rng() < 0.3) {
+    selection = setMeal(menu, selection, true)
+    fill(resolveMealGroups(menu, item))
+  }
+  return selection
+}
+
+function pickLines(menu: Menu, type: OrderType, rng: () => number, serial: number, weekday: number, time: string): OrderLine[] {
+  const sellable = menu.items.filter((item) => item.status === 'available' && item.channels.includes(type) && isAvailableAt(menu, item, weekday, time).ok)
   const count = rngWeighted(rng, [[1, 2], [2, 5], [3, 4], [4, 2], [5, 1]])
   const lines: OrderLine[] = []
   const used = new Set<string>()
@@ -46,26 +120,10 @@ function pickLines(items: MenuItem[], type: OrderType, rng: () => number, serial
     if (used.has(item.id)) continue
     used.add(item.id)
     const qty = rngWeighted(rng, [[1, 7], [2, 3], [3, 1]])
-    const modifiers: string[] = []
-    let delta = 0
-    for (const modifier of item.modifiers) {
-      if (modifier.required || rng() < 0.4) {
-        const option = rngPick(rng, modifier.options)
-        modifiers.push(option.label)
-        delta += option.priceDelta
-      }
-    }
-    const unitPrice = item.price + delta
-    lines.push({
-      id: `ol_${serial}_${i}`,
-      itemId: item.id,
-      name: item.name,
-      qty,
-      unitPrice,
-      modifiers,
-      note: rng() < 0.12 ? rngPick(rng, ['No onion', 'Extra lemon', 'Sauce on the side', 'Well done', 'Allergy: nuts — please check']) : null,
-      total: unitPrice * qty,
-    })
+    const selection = pickSelection(menu, item, rng)
+    const note = rng() < 0.12 ? rngPick(rng, ['No onion', 'Extra lemon', 'Sauce on the side', 'Well done', 'Allergy: nuts — please check']) : null
+    if (!priceSelection(menu, selection).valid) continue
+    lines.push(toOrderLine(menu, selection, qty, note, `ol_${serial}_${i}`))
   }
   return lines
 }
@@ -87,7 +145,8 @@ function generateOrders(tenant: Tenant, customers: Customer[]): Order[] {
     const day = addDays(NOW, params.dayOffset)
     const dateKey = toDateKey(day)
     const number = `#${serial++}`
-    const lines = pickLines(menu.items, params.type, rng, serial)
+    const atMin = params.scheduledMin ?? params.placedMin
+    const lines = pickLines(menu, params.type, rng, serial, day.getDay(), mh(atMin))
     if (lines.length === 0) return
     const subtotal = lines.reduce((sum, line) => sum + line.total, 0)
     const zone = params.type === 'delivery' ? rngPick(rng, settings.ordering.delivery.zones) : null

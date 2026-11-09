@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { ArrowLeft, BedDouble, Bike, Check, ChefHat, Clock, Lock, MapPin, ShoppingBag } from 'lucide-react'
+import { ArrowLeft, BedDouble, Bike, Check, ChefHat, Clock, Lock, MapPin, ShoppingBag, X } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Field } from '@/components/ui/field'
@@ -10,11 +10,16 @@ import { Input } from '@/components/ui/input'
 import { Segmented } from '@/components/ui/segmented'
 import { Textarea } from '@/components/ui/textarea'
 import { useCart } from '@/hooks/use-cart'
-import { cartTotals, type CartMode } from '@/lib/cart'
+import { useMenu } from '@/hooks/use-menu'
+import { cartLineFrom, cartLineIssues, cartTotals, channelFor, choiceLines, orderLinesFromCart, type CartLine, type CartMode } from '@/lib/cart'
 import { hm, mh } from '@/lib/hospitality/hours'
-import type { OrderingHours } from '@/lib/hospitality/types'
-import { cn, formatCurrency } from '@/lib/utils'
+import type { Menu, OrderLine, OrderingHours } from '@/lib/hospitality/types'
+import { cn } from '@/lib/utils'
 import type { CurrencyCode } from '@/types'
+
+import { DishSheet, type DishSheetResult } from './dish-sheet'
+import { money } from './dish-sheet-model'
+import { CartLineDetails, choosingFor, type Choosing } from './menu-browser'
 
 /* ==========================================================================
    <OrderCheckout> — one page: how it arrives, when, who, how to pay, place
@@ -32,6 +37,11 @@ export interface OrderCheckoutProps {
   taxRate: number
   taxLabel: string
   nowTime: string
+  /** 0 = Sunday, for which dishes are served at the chosen time. */
+  weekday: number
+  /** The seeded menu; the owner's saved edits are laid over it. */
+  menu: Menu
+  tenantId: string
 }
 
 interface Details {
@@ -49,12 +59,15 @@ interface Details {
 const TIPS = [0, 5, 10, 15]
 const MODE_LABEL: Record<CartMode, string> = { pickup: 'Pickup', delivery: 'Delivery', room: 'Room service' }
 
-export function OrderCheckout({ slug, tenantName, tenantPhone, ordering, currency, taxRate, taxLabel, nowTime }: OrderCheckoutProps) {
-  const { cart, setMode, setZone, setWhen, setTip, setQty, clear } = useCart(slug)
+export function OrderCheckout({ slug, tenantName, tenantPhone, ordering, currency, taxRate, taxLabel, nowTime, weekday, menu: seed, tenantId }: OrderCheckoutProps) {
+  const { menu } = useMenu(tenantId, seed)
+  const { cart, setMode, setZone, setWhen, setTip, setQty, clear, replaceLine, reprice } = useCart(slug)
+  const [choosing, setChoosing] = React.useState<Choosing | null>(null)
   const [details, setDetails] = React.useState<Details>({ name: '', email: '', phone: '', room: '', address: '', instructions: '', card: '', expiry: '', cvc: '' })
   const [errors, setErrors] = React.useState<Partial<Record<keyof Details, string>>>({})
   const [payRoom, setPayRoom] = React.useState(true)
-  const [placed, setPlaced] = React.useState<{ number: string; promised: string; total: number; mode: CartMode; lines: number; room: string } | null>(null)
+  const [placed, setPlaced] = React.useState<{ number: string; promised: string; total: number; mode: CartMode; lines: number; room: string; items: OrderLine[] } | null>(null)
+  const [blockedTried, setBlockedTried] = React.useState(false)
   const [mounted, setMounted] = React.useState(false)
   React.useEffect(() => setMounted(true), [])
 
@@ -72,6 +85,25 @@ export function OrderCheckout({ slug, tenantName, tenantPhone, ordering, currenc
   const asapReady = mh(now + lead)
   const openNow = hours.enabled && now >= hm(hours.startTime) && now + lead <= hm(hours.endTime)
   const roomCharge = mode === 'room' && payRoom
+  const promisedTime = cart.when === 'asap' ? asapReady : cart.when
+  const lineIssues = new Map<string, string | null>(cart.lines.map((line) => [line.key, cartLineIssues(menu, line, { weekday, time: promisedTime })[0] ?? null]))
+  const blocked = [...lineIssues.values()].some(Boolean)
+
+  /* ---------- lines with picks follow the live menu's prices ---------- */
+
+  React.useEffect(() => {
+    reprice(menu)
+  }, [menu, cart, reprice])
+
+  const edit = (line: CartLine) => {
+    const next = choosingFor(menu, line)
+    if (next) setChoosing(next)
+  }
+
+  const submitEdit = ({ selection, qty, note, priced }: DishSheetResult) => {
+    if (choosing?.edit) replaceLine(choosing.edit.key, cartLineFrom(menu, selection, note, priced), qty)
+    setChoosing(null)
+  }
 
   const set = (key: keyof Details, value: string) => {
     setDetails((d) => ({ ...d, [key]: value }))
@@ -98,12 +130,17 @@ export function OrderCheckout({ slug, tenantName, tenantPhone, ordering, currenc
   }
 
   const place = () => {
+    if (blocked) {
+      setBlockedTried(true)
+      document.getElementById('order-summary')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
     if (!validate()) {
       document.querySelector<HTMLElement>('[aria-invalid="true"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
     const promised = cart.when === 'asap' ? asapReady : cart.when
-    setPlaced({ number: `#${1000 + Math.floor(Math.random() * 900)}`, promised, total: totals.total, mode, lines: totals.count, room: details.room.trim() })
+    setPlaced({ number: `#${1000 + Math.floor(Math.random() * 900)}`, promised, total: totals.total, mode, lines: totals.count, room: details.room.trim(), items: orderLinesFromCart(menu, cart.lines) })
     clear()
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -122,7 +159,7 @@ export function OrderCheckout({ slug, tenantName, tenantPhone, ordering, currenc
           </span>
           <h1 className="mt-5 font-display text-3xl font-semibold tracking-tight text-foreground">Order {placed.number} is in</h1>
           <p className="mt-2 text-base text-muted">
-            {placed.mode === 'delivery' ? `Arriving around ${placed.promised}` : placed.mode === 'room' ? `Coming up to room ${placed.room} around ${placed.promised}` : `Ready for pickup around ${placed.promised}`} · {placed.lines} {placed.lines === 1 ? 'item' : 'items'} · {formatCurrency(placed.total, currency)} {placed.mode === 'room' ? 'charged to the room' : 'paid'}.
+            {placed.mode === 'delivery' ? `Arriving around ${placed.promised}` : placed.mode === 'room' ? `Coming up to room ${placed.room} around ${placed.promised}` : `Ready for pickup around ${placed.promised}`} · {placed.lines} {placed.lines === 1 ? 'item' : 'items'} · {money(placed.total, currency)} {placed.mode === 'room' ? 'charged to the room' : 'paid'}.
           </p>
           <ol className="mt-8 grid grid-cols-4 gap-2">
             {steps.map((s, i) => (
@@ -132,6 +169,29 @@ export function OrderCheckout({ slug, tenantName, tenantPhone, ordering, currenc
               </li>
             ))}
           </ol>
+          <ul className="mt-8 divide-y divide-line-subtle border-y border-line-subtle">
+            {placed.items.map((line) => {
+              const { lines, more } = choiceLines(line)
+              return (
+                <li key={line.id} className="flex items-start gap-3 py-2.5 text-sm">
+                  <span className="w-6 shrink-0 text-subtle tabular-nums">{line.qty}×</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-foreground">
+                      {line.name}
+                      {line.variant ? <span className="text-muted"> · {line.variant}</span> : null}
+                    </span>
+                    {lines.map((text, index) => (
+                      <span key={index} className="block text-xs text-subtle">
+                        {text}
+                      </span>
+                    ))}
+                    {more ? <span className="block text-xs text-subtle">+{more} more</span> : null}
+                  </span>
+                  <span className="shrink-0 text-foreground tabular-nums">{money(line.total, currency)}</span>
+                </li>
+              )
+            })}
+          </ul>
           <p className="mt-6 text-sm text-muted">{placed.mode === 'room' ? 'Leave the tray outside the door when you are done.' : 'We text you at each step.'} If anything changes, call {tenantName} on {tenantPhone}.</p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Button asChild size="lg">
@@ -196,7 +256,7 @@ export function OrderCheckout({ slug, tenantName, tenantPhone, ordering, currenc
                     <button key={z.id} type="button" aria-pressed={zone?.id === z.id} onClick={() => setZone(z.id)} className={cn('rounded-lg border px-3 py-2 text-left text-sm transition-colors', zone?.id === z.id ? 'border-primary bg-primary-soft/40 text-foreground' : 'border-line text-muted hover:border-line-strong')}>
                       <span className="block">{z.name}</span>
                       <span className="block text-xs text-subtle">
-                        {formatCurrency(z.fee, currency)} · about {z.minutes} min
+                        {money(z.fee, currency)} · about {z.minutes} min
                       </span>
                     </button>
                   ))}
@@ -248,7 +308,7 @@ export function OrderCheckout({ slug, tenantName, tenantPhone, ordering, currenc
               <div className="mt-4 flex flex-wrap gap-1.5">
                 {TIPS.map((t) => (
                   <button key={t} type="button" aria-pressed={cart.tipPercent === t} onClick={() => setTip(t)} className={cn('rounded-lg border px-4 py-2 text-sm tabular-nums transition-colors', cart.tipPercent === t ? 'border-primary bg-primary-soft/40 text-foreground' : 'border-line text-muted hover:border-line-strong')}>
-                    {t === 0 ? 'No tip' : `${t}% · ${formatCurrency(Math.round(totals.subtotal * (t / 100)), currency)}`}
+                    {t === 0 ? 'No tip' : `${t}% · ${money(Math.round(totals.subtotal * (t / 100)), currency)}`}
                   </button>
                 ))}
               </div>
@@ -294,17 +354,14 @@ export function OrderCheckout({ slug, tenantName, tenantPhone, ordering, currenc
               <Clock className="size-3.5" aria-hidden="true" />
               {mode === 'room' ? 'Up' : mode === 'pickup' ? 'Ready' : 'Arrives'} {cart.when === 'asap' ? `around ${asapReady}` : `at ${cart.when}`}
             </p>
-            <ul className="mt-4 divide-y divide-line-subtle">
+            <ul id="order-summary" className="mt-4 scroll-mt-28 divide-y divide-line-subtle">
               {cart.lines.map((line) => (
                 <li key={line.key} className="flex items-start gap-3 py-2.5 text-sm">
                   <span className="w-6 shrink-0 text-subtle tabular-nums">{line.qty}×</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-foreground">{line.name}</span>
-                    {line.modifiers.length ? <span className="block truncate text-xs text-subtle">{line.modifiers.join(' · ')}</span> : null}
-                  </span>
-                  <span className="shrink-0 text-foreground tabular-nums">{formatCurrency(line.unitPrice * line.qty, currency)}</span>
-                  <button type="button" aria-label={`Remove ${line.name}`} className="shrink-0 text-xs text-subtle hover:text-foreground" onClick={() => setQty(line.key, 0)}>
-                    ×
+                  <CartLineDetails line={line} issue={lineIssues.get(line.key)} onEdit={choosingFor(menu, line) ? () => edit(line) : undefined} />
+                  <span className="shrink-0 text-foreground tabular-nums">{money(line.unitPrice * line.qty, currency)}</span>
+                  <button type="button" aria-label={`Remove ${line.name}`} className="-mt-1.5 -mr-2 grid size-8 shrink-0 place-items-center rounded-md text-subtle hover:text-foreground" onClick={() => setQty(line.key, 0)}>
+                    <X className="size-3.5" aria-hidden="true" />
                   </button>
                 </li>
               ))}
@@ -312,43 +369,60 @@ export function OrderCheckout({ slug, tenantName, tenantPhone, ordering, currenc
             <dl className="mt-3 flex flex-col gap-1 border-t border-line-subtle pt-3 text-sm text-muted">
               <div className="flex justify-between">
                 <dt>Subtotal</dt>
-                <dd className="tabular-nums">{formatCurrency(totals.subtotal, currency)}</dd>
+                <dd className="tabular-nums">{money(totals.subtotal, currency)}</dd>
               </div>
               {totals.deliveryFee ? (
                 <div className="flex justify-between">
                   <dt>Delivery · {zone?.name}</dt>
-                  <dd className="tabular-nums">{formatCurrency(totals.deliveryFee, currency)}</dd>
+                  <dd className="tabular-nums">{money(totals.deliveryFee, currency)}</dd>
                 </div>
               ) : null}
               {totals.serviceFee ? (
                 <div className="flex justify-between">
                   <dt>{mode === 'room' ? 'Tray charge' : 'Service fee'}</dt>
-                  <dd className="tabular-nums">{formatCurrency(totals.serviceFee, currency)}</dd>
+                  <dd className="tabular-nums">{money(totals.serviceFee, currency)}</dd>
                 </div>
               ) : null}
               <div className="flex justify-between">
                 <dt>{taxLabel}</dt>
-                <dd className="tabular-nums">{formatCurrency(totals.tax, currency)}</dd>
+                <dd className="tabular-nums">{money(totals.tax, currency)}</dd>
               </div>
               {totals.tip && mode !== 'room' ? (
                 <div className="flex justify-between">
                   <dt>Tip</dt>
-                  <dd className="tabular-nums">{formatCurrency(totals.tip, currency)}</dd>
+                  <dd className="tabular-nums">{money(totals.tip, currency)}</dd>
                 </div>
               ) : null}
               <div className="flex justify-between pt-1 text-base font-medium text-foreground">
                 <dt>Total</dt>
-                <dd className="tabular-nums">{formatCurrency(mode === 'room' ? totals.total - totals.tip : totals.total, currency)}</dd>
+                <dd className="tabular-nums">{money(mode === 'room' ? totals.total - totals.tip : totals.total, currency)}</dd>
               </div>
             </dl>
-            {totals.belowMinimum ? <p className="mt-3 text-xs text-warning">Minimum order for {zone?.name} is {formatCurrency(totals.minOrder, currency)}.</p> : null}
-            <Button size="lg" fullWidth className="mt-5" disabled={totals.belowMinimum} onClick={place}>
-              {roomCharge ? 'Send to my room' : 'Place order'} · {formatCurrency(mode === 'room' ? totals.total - totals.tip : totals.total, currency)}
+            {totals.belowMinimum ? <p className="mt-3 text-xs text-warning">Minimum order for {zone?.name} is {money(totals.minOrder, currency)}.</p> : null}
+            {blocked ? <p className={cn('mt-3 text-xs', blockedTried ? 'font-medium text-danger' : 'text-muted')}>Change or remove the dishes marked in red to place the order.</p> : null}
+            <Button size="lg" fullWidth className="mt-5" disabled={totals.belowMinimum} aria-disabled={blocked || undefined} onClick={place}>
+              {roomCharge ? 'Send to my room' : 'Place order'} · {money(mode === 'room' ? totals.total - totals.tip : totals.total, currency)}
             </Button>
             <p className="mt-3 text-center text-xs text-subtle">By ordering you agree to the order terms. Allergies: call {tenantPhone} before you order.</p>
           </div>
         </aside>
       </div>
+
+      <DishSheet
+        menu={menu}
+        item={choosing?.item ?? null}
+        currency={currency}
+        channel={channelFor(mode)}
+        weekday={weekday}
+        when={cart.when === 'asap' ? asapReady : cart.when}
+        nowTime={nowTime}
+        phone={tenantPhone}
+        initial={choosing?.edit}
+        submitLabel="update"
+        onClose={() => setChoosing(null)}
+        onSubmit={submitEdit}
+        onOrderForLater={(at) => setWhen(slots.includes(at) ? at : slots.find((t) => hm(t) >= hm(at)) ?? at)}
+      />
     </div>
   )
 }

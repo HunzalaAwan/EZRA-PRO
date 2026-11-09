@@ -12,10 +12,15 @@ import { SearchInput } from '@/components/ui/search-input'
 import { Segmented } from '@/components/ui/segmented'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { cartTotals, channelFor, type CartLine, type CartMode } from '@/lib/cart'
+import { DishSheet, type DishSheetResult } from '@/components/storefront/restaurant/dish-sheet'
+import { cardInfo, money } from '@/components/storefront/restaurant/dish-sheet-model'
+import { choosingFor, type Choosing } from '@/components/storefront/restaurant/menu-browser'
+import { useMenu } from '@/hooks/use-menu'
+import { addLine, cartLineFrom, cartLineIssues, cartTotals, channelFor, choiceLines, orderLinesFromCart, replaceLine, type CartLine, type CartMode } from '@/lib/cart'
 import { hm, mh } from '@/lib/hospitality/hours'
+import { defaultSelection, priceSelection } from '@/lib/hospitality/menu-pricing'
 import type { Menu, MenuItem, Order, OrderingHours } from '@/lib/hospitality/types'
-import { cn, formatCurrency } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import type { CurrencyCode, Customer } from '@/types'
 
 import { guestName } from './format'
@@ -23,9 +28,10 @@ import { guestName } from './format'
 /* ==========================================================================
    <NewOrderDialog> — an order taken over the phone, or from a room.
 
-   Who, how (pickup, delivery, or up to a room), when, what. Prices, fees
-   and tax come from the same maths as the storefront cart, so a phone
-   order costs the guest exactly what the website would have charged.
+   Who, how (pickup, delivery, or up to a room), when, what. A dish with
+   choices opens the same dish sheet guests use online. Prices, fees and
+   tax come from the same maths as the storefront cart, so a phone order
+   costs the guest exactly what the website would have charged.
    ========================================================================== */
 
 export interface NewOrderDialogProps {
@@ -43,7 +49,9 @@ export interface NewOrderDialogProps {
   onCreate: (order: Order) => void
 }
 
-export function NewOrderDialog({ open, onOpenChange, menu, ordering, currency, taxRate, nextNumber, guests, todayKey, nowIso, tenantId, onCreate }: NewOrderDialogProps) {
+export function NewOrderDialog({ open, onOpenChange, menu: seedMenu, ordering, currency, taxRate, nextNumber, guests, todayKey, nowIso, tenantId, onCreate }: NewOrderDialogProps) {
+  const { menu } = useMenu(tenantId, seedMenu)
+  const [choosing, setChoosing] = React.useState<Choosing | null>(null)
   const roomService = ordering.roomService.enabled
   const [mode, setMode] = React.useState<CartMode>(roomService ? 'room' : 'pickup')
   const [name, setName] = React.useState('')
@@ -72,19 +80,30 @@ export function NewOrderDialog({ open, onOpenChange, menu, ordering, currency, t
   const sellable = menu.items.filter((i) => i.status === 'available' && i.channels.includes(channel)).filter((i) => (needle ? i.name.toLowerCase().includes(needle) : true))
   const suggestions = name.trim().length >= 2 && !pick ? guests.filter((g) => guestName(g).toLowerCase().includes(name.trim().toLowerCase())).slice(0, 4) : []
 
+  const weekday = new Date(`${todayKey}T12:00:00`).getDay()
+  const nowTime = nowIso.slice(11, 16)
+  const infos = React.useMemo(() => new Map(menu.items.map((i) => [i.id, cardInfo(menu, i)])), [menu])
+
+  /** A dish with choices opens the dish sheet; anything else goes straight on the ticket. */
   const addItem = (item: MenuItem) => {
-    const required = item.modifiers.filter((m) => m.required).map((m) => m.options[0])
-    const modifiers = required.map((o) => o.label)
-    const unitPrice = item.price + required.reduce((s, o) => s + o.priceDelta, 0)
-    const key = `${item.id}::${modifiers.join('|')}`
-    setLines((current) => {
-      const existing = current.find((l) => l.key === key)
-      return existing ? current.map((l) => (l.key === key ? { ...l, qty: l.qty + 1 } : l)) : [...current, { key, itemId: item.id, name: item.name, unitPrice, qty: 1, modifiers, note: null }]
-    })
+    if (infos.get(item.id)?.choices) {
+      setChoosing({ item })
+      return
+    }
+    const selection = defaultSelection(menu, item)
+    setLines((current) => addLine(current, cartLineFrom(menu, selection, null, priceSelection(menu, selection)), 1))
+  }
+
+  const submitDish = ({ selection, qty, note, priced }: DishSheetResult) => {
+    const line = cartLineFrom(menu, selection, note, priced)
+    const edit = choosing?.edit
+    setLines((current) => (edit ? replaceLine(current, edit.key, line, qty) : addLine(current, line, qty)))
+    setChoosing(null)
   }
   const setQty = (key: string, qty: number) => setLines((current) => (qty <= 0 ? current.filter((l) => l.key !== key) : current.map((l) => (l.key === key ? { ...l, qty } : l))))
 
-  const canSubmit = name.trim().length >= 2 && (mode === 'room' ? roomNumber.trim().length >= 2 : phone.replace(/\D/g, '').length >= 6) && lines.length > 0 && (mode !== 'delivery' || address.trim().length >= 4) && !totals.belowMinimum
+  const lineProblem = new Map(lines.map((l) => [l.key, cartLineIssues(menu, l)[0] ?? null]))
+  const canSubmit = ![...lineProblem.values()].some(Boolean) && name.trim().length >= 2 && (mode === 'room' ? roomNumber.trim().length >= 2 : phone.replace(/\D/g, '').length >= 6) && lines.length > 0 && (mode !== 'delivery' || address.trim().length >= 4) && !totals.belowMinimum
 
   const reset = () => {
     setName('')
@@ -126,7 +145,7 @@ export function NewOrderDialog({ open, onOpenChange, menu, ordering, currency, t
       type: channel,
       status: 'accepted',
       customer,
-      lines: lines.map((l, i) => ({ id: `ol_phone_${i}`, itemId: l.itemId, name: l.name, qty: l.qty, unitPrice: l.unitPrice, modifiers: l.modifiers, note: null, total: l.unitPrice * l.qty })),
+      lines: orderLinesFromCart(menu, lines, `ol_phone_${Date.now().toString(36)}`),
       subtotal: totals.subtotal,
       deliveryFee: totals.deliveryFee,
       serviceFee: totals.serviceFee,
@@ -220,7 +239,7 @@ export function NewOrderDialog({ open, onOpenChange, menu, ordering, currency, t
                       <SelectContent>
                         {ordering.delivery.zones.map((z) => (
                           <SelectItem key={z.id} value={z.id}>
-                            {z.name} · {formatCurrency(z.fee, currency)} · {z.minutes} min
+                            {z.name} · {money(z.fee, currency)} · {z.minutes} min
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -240,12 +259,15 @@ export function NewOrderDialog({ open, onOpenChange, menu, ordering, currency, t
                         <span className="block truncate text-foreground">{item.name}</span>
                         <span className="block truncate text-xs text-subtle">
                           {categoryById.get(item.categoryId)?.name}
-                          {item.modifiers.some((m) => m.required) ? ` · ${item.modifiers.filter((m) => m.required).map((m) => m.options[0].label).join(', ')} unless noted` : ''}
+                          {infos.get(item.id)?.choices ? ' · choices' : ''}
                         </span>
                       </span>
-                      <span className="shrink-0 text-muted tabular-nums">{formatCurrency(item.price, currency)}</span>
-                      <Button size="xs" variant="secondary" leftIcon={<Plus />} onClick={() => addItem(item)}>
-                        Add
+                      <span className="shrink-0 text-muted tabular-nums">
+                        {infos.get(item.id)?.from ? <span className="text-xs text-subtle">from </span> : null}
+                        {money(infos.get(item.id)?.price ?? item.price, currency)}
+                      </span>
+                      <Button size="xs" variant="secondary" leftIcon={<Plus />} onClick={() => addItem(item)} aria-label={infos.get(item.id)?.choices ? `Choose and add ${item.name}` : `Add ${item.name}`}>
+                        {infos.get(item.id)?.choices ? 'Choose' : 'Add'}
                       </Button>
                     </li>
                   ))}
@@ -264,8 +286,8 @@ export function NewOrderDialog({ open, onOpenChange, menu, ordering, currency, t
             ) : (
               <ul className="divide-y divide-line-subtle">
                 {lines.map((l) => (
-                  <li key={l.key} className="flex items-center gap-2 py-2 first:pt-0">
-                    <span className="inline-flex shrink-0 items-center rounded-full border border-line bg-surface">
+                  <li key={l.key} className="flex items-start gap-2 py-2 first:pt-0">
+                    <span className="inline-flex shrink-0 items-center self-start rounded-full border border-line bg-surface">
                       <button type="button" aria-label={`Fewer ${l.name}`} className="grid size-6 place-items-center text-muted" onClick={() => setQty(l.key, l.qty - 1)}>
                         <Minus className="size-3" />
                       </button>
@@ -275,10 +297,25 @@ export function NewOrderDialog({ open, onOpenChange, menu, ordering, currency, t
                       </button>
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-foreground">{l.name}</span>
-                      {l.modifiers.length ? <span className="block truncate text-xs text-subtle">{l.modifiers.join(' · ')}</span> : null}
+                      <span className="block truncate text-foreground">
+                        {l.name}
+                        {l.variant ? <span className="text-muted"> · {l.variant}</span> : null}
+                      </span>
+                      {choiceLines(l).lines.map((text, index) => (
+                        <span key={index} className="block text-xs text-subtle">
+                          {text}
+                        </span>
+                      ))}
+                      {choiceLines(l).more ? <span className="block text-xs text-subtle">+{choiceLines(l).more} more</span> : null}
+                      {l.note ? <span className="block truncate text-xs text-subtle">“{l.note}”</span> : null}
+                      {lineProblem.get(l.key) ? <span className="block text-xs font-medium text-danger">{lineProblem.get(l.key)}</span> : null}
+                      {choosingFor(menu, l) && infos.get(l.itemId)?.choices ? (
+                        <button type="button" onClick={() => setChoosing(choosingFor(menu, l))} className="text-xs font-medium text-primary hover:underline">
+                          Edit
+                        </button>
+                      ) : null}
                     </span>
-                    <span className="shrink-0 text-muted tabular-nums">{formatCurrency(l.unitPrice * l.qty, currency)}</span>
+                    <span className="shrink-0 text-muted tabular-nums">{money(l.unitPrice * l.qty, currency)}</span>
                   </li>
                 ))}
               </ul>
@@ -286,30 +323,30 @@ export function NewOrderDialog({ open, onOpenChange, menu, ordering, currency, t
             <dl className="flex flex-col gap-1 border-t border-line pt-3 text-muted">
               <div className="flex justify-between">
                 <dt>Subtotal</dt>
-                <dd className="tabular-nums">{formatCurrency(totals.subtotal, currency)}</dd>
+                <dd className="tabular-nums">{money(totals.subtotal, currency)}</dd>
               </div>
               {totals.deliveryFee ? (
                 <div className="flex justify-between">
                   <dt>Delivery</dt>
-                  <dd className="tabular-nums">{formatCurrency(totals.deliveryFee, currency)}</dd>
+                  <dd className="tabular-nums">{money(totals.deliveryFee, currency)}</dd>
                 </div>
               ) : null}
               {mode === 'room' && totals.serviceFee ? (
                 <div className="flex justify-between">
                   <dt>Tray charge</dt>
-                  <dd className="tabular-nums">{formatCurrency(totals.serviceFee, currency)}</dd>
+                  <dd className="tabular-nums">{money(totals.serviceFee, currency)}</dd>
                 </div>
               ) : null}
               <div className="flex justify-between">
                 <dt>Tax</dt>
-                <dd className="tabular-nums">{formatCurrency(totals.tax, currency)}</dd>
+                <dd className="tabular-nums">{money(totals.tax, currency)}</dd>
               </div>
               <div className="flex justify-between pt-1 text-foreground">
                 <dt>Total</dt>
-                <dd className="tabular-nums">{formatCurrency(totals.subtotal + totals.deliveryFee + (mode === 'room' ? totals.serviceFee : 0) + totals.tax, currency)}</dd>
+                <dd className="tabular-nums">{money(totals.subtotal + totals.deliveryFee + (mode === 'room' ? totals.serviceFee : 0) + totals.tax, currency)}</dd>
               </div>
             </dl>
-            {totals.belowMinimum ? <p className="text-xs text-warning">Minimum for {zone?.name} is {formatCurrency(totals.minOrder, currency)}.</p> : null}
+            {totals.belowMinimum ? <p className="text-xs text-warning">Minimum for {zone?.name} is {money(totals.minOrder, currency)}.</p> : null}
             <Field label="Payment">
               <div className="flex gap-1.5">
                 {mode === 'room' ? (
@@ -333,6 +370,20 @@ export function NewOrderDialog({ open, onOpenChange, menu, ordering, currency, t
             Send to the kitchen
           </Button>
         </DialogFooter>
+        <DishSheet
+        menu={menu}
+        item={choosing?.item ?? null}
+        currency={currency}
+        channel={channel}
+        weekday={weekday}
+        when={when}
+        nowTime={nowTime}
+        initial={choosing?.edit}
+        submitLabel={choosing?.edit ? 'update' : 'add'}
+        onClose={() => setChoosing(null)}
+        onSubmit={submitDish}
+        onOrderForLater={(at) => setWhen(slots.includes(at) ? at : slots.find((t) => hm(t) >= hm(at)) ?? when)}
+        />
       </DialogContent>
     </Dialog>
   )

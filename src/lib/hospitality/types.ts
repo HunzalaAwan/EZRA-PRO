@@ -55,6 +55,144 @@ export interface MenuModifier {
 
 export type MenuItemStatus = 'available' | 'sold_out' | 'hidden'
 
+/* ---------- facts a guest reads on a dish ---------- */
+
+/** The EU's 14 allergens. */
+export type Allergen =
+  | 'gluten'
+  | 'crustaceans'
+  | 'eggs'
+  | 'fish'
+  | 'peanuts'
+  | 'soy'
+  | 'milk'
+  | 'nuts'
+  | 'celery'
+  | 'mustard'
+  | 'sesame'
+  | 'sulphites'
+  | 'lupin'
+  | 'molluscs'
+
+export const ALLERGEN_LABEL: Record<Allergen, string> = {
+  gluten: 'Gluten',
+  crustaceans: 'Crustaceans',
+  eggs: 'Eggs',
+  fish: 'Fish',
+  peanuts: 'Peanuts',
+  soy: 'Soy',
+  milk: 'Milk',
+  nuts: 'Nuts',
+  celery: 'Celery',
+  mustard: 'Mustard',
+  sesame: 'Sesame',
+  sulphites: 'Sulphites',
+  lupin: 'Lupin',
+  molluscs: 'Molluscs',
+}
+
+/** Display order for allergen lists. */
+export const ALLERGENS = Object.keys(ALLERGEN_LABEL) as Allergen[]
+
+export type SpiceLevel = 0 | 1 | 2 | 3
+
+export const SPICE_LABEL: Record<SpiceLevel, string> = { 0: 'Not spicy', 1: 'Mild', 2: 'Medium', 3: 'Hot' }
+
+export interface MenuFaq {
+  id: string
+  question: string
+  answer: string
+}
+
+export interface MenuPhoto {
+  url: string
+  alt: string
+}
+
+/** Days (0 = Sunday … 6) and a same-day local "HH:MM" window (from < to). */
+export interface TimeWindow {
+  days: number[]
+  from: string
+  to: string
+}
+
+/* ---------- sizes ---------- */
+
+export interface MenuVariant {
+  id: string
+  /** "Large", "For two", "Half" */
+  label: string
+  /** The full dish price at this size, not a difference. */
+  price: number
+  isDefault?: boolean
+  soldOut?: boolean
+  /** "LG" */
+  kitchenLabel?: string
+}
+
+/* ---------- choice groups ---------- */
+
+export type GroupKind = 'choice' | 'extras' | 'remove' | 'course'
+
+export const GROUP_KIND_META: Record<GroupKind, { label: string; hint: string; min: number; max: number | null }> = {
+  choice: { label: 'Choice', hint: 'Guests pick one, like a bread or a sauce.', min: 1, max: 1 },
+  extras: { label: 'Extras', hint: 'Toppings and add-ons, free or paid.', min: 0, max: null },
+  remove: { label: 'Leave out', hint: 'Free removals, like no onion.', min: 0, max: null },
+  course: { label: 'Course', hint: 'For meals and set menus: pick from your dishes.', min: 1, max: 1 },
+}
+
+export interface MenuOption {
+  id: string
+  /** Shown to guests. For a linked dish, may be '' to use the dish name. For `remove` groups it is the ingredient ("Onion"); guests see "No onion". */
+  label: string
+  /** Added per unit picked; 0 = free. For a linked dish in a course, this is the supplement (+€5), not the dish price. */
+  price: number
+  /** Price at a given size, by variant id; falls back to `price`. */
+  priceByVariant?: Record<string, number>
+  isDefault?: boolean
+  /** How many of this one a guest may take (2× cheese). Default 1. */
+  maxQty?: number
+  soldOut?: boolean
+  /** Points at another menu item (meals, set menus, side and drink pickers). Name, photo, allergens and sold out come from it. */
+  itemId?: string
+  kitchenLabel?: string
+}
+
+export interface MenuOptionGroup {
+  id: string
+  /** Guest-facing heading: "Choose your bread", "Add toppings". */
+  name: string
+  kind: GroupKind
+  /** 0 = optional. */
+  min: number
+  /** null = no limit. min === max means "pick exactly N". Counts units (2× feta = 2). */
+  max: number | null
+  /** The first N units are free (cheapest first), then each unit costs its option price. */
+  freeQty?: number
+  options: MenuOption[]
+  /** Course groups: also ask the picked dish's own choices (one level deep). */
+  askItemChoices?: boolean
+  /** Short line under the heading for guests. */
+  note?: string
+  /** Ticket heading, e.g. "SAUCE". */
+  kitchenName?: string
+}
+
+/** How a dish uses a group: its own copy, or a saved group from the library. */
+export type MenuGroupRef =
+  | { type: 'own'; group: MenuOptionGroup }
+  | { type: 'shared'; groupId: string; rules?: Partial<Pick<MenuOptionGroup, 'min' | 'max' | 'freeQty'>> }
+
+export interface MenuMeal {
+  /** Button text: "Make it a meal". */
+  label: string
+  /** Added to the dish when the guest takes the meal. */
+  price: number
+  /** One line: "With a side and a drink". */
+  description?: string
+  groups: MenuGroupRef[]
+}
+
 export interface MenuCategory {
   id: string
   tenantId: string
@@ -63,6 +201,8 @@ export interface MenuCategory {
   sortOrder: number
   /** Which service the category belongs to; 'all' shows on every menu. */
   service: 'all' | 'breakfast' | 'lunch' | 'dinner' | 'drinks'
+  /** When the section can be ordered. null or absent = whenever ordering is open. */
+  hours?: TimeWindow[] | null
 }
 
 export interface MenuItem {
@@ -84,11 +224,78 @@ export interface MenuItem {
   sold30d: number
   /** Revenue in the trailing 30 days. */
   revenue30d: number
+  /** 'set' = a set menu built from course groups. Default 'dish'. */
+  kind?: 'dish' | 'set'
+  /** Two or more sizes. When present, `price` equals the lowest size price (kept by normaliseItem). */
+  variants?: MenuVariant[]
+  /** Heading for the sizes: "Size", "Portion". Default "Size". */
+  variantLabel?: string
+  /** The choices. When present, `modifiers` is ignored (legacy). */
+  groups?: MenuGroupRef[]
+  meal?: MenuMeal | null
+  /** Narrows the section's hours. null or absent = the section's hours. */
+  availability?: TimeWindow[] | null
+  allergens?: Allergen[]
+  spice?: SpiceLevel
+  calories?: number
+  serves?: number
+  /** Short name printed on the kitchen ticket: "SOUVL PL". */
+  kitchenName?: string
+  /** Only staff see this. */
+  kitchenNote?: string
+  /** "Grill", "Fryer", "Cold", "Bar", "Pastry" */
+  station?: string
+  faq?: MenuFaq[]
+  /** Gallery; `imageUrl` stays the cover and equals photos[0].url. */
+  photos?: MenuPhoto[]
 }
 
 export interface Menu {
   categories: MenuCategory[]
   items: MenuItem[]
+  /** The saved-groups library. */
+  sharedGroups?: MenuOptionGroup[]
+}
+
+/* ---------- what a guest picked ---------- */
+
+export interface OptionPick {
+  /** ResolvedGroup.key, e.g. "dish:g_sauce" or "meal:sg_side". */
+  groupKey: string
+  optionId: string
+  qty: number
+  /** Only for a linked dish in a group with askItemChoices: that dish's own picks (keys of ITS dish groups). */
+  picks?: OptionPick[]
+}
+
+export interface DishSelection {
+  itemId: string
+  variantId: string | null
+  /** In pick order. */
+  picks: OptionPick[]
+  meal: boolean
+}
+
+/* ---------- order lines, grouped ---------- */
+
+export interface OrderLinePick {
+  /** Already worded: "No onion", "Feta", "Coca-Cola". */
+  label: string
+  kitchenLabel?: string
+  qty: number
+  /** What this pick added to one dish, after free units. */
+  price: number
+  remove?: boolean
+  nested?: OrderLineGroup[]
+}
+
+export interface OrderLineGroup {
+  name: string
+  kitchenName?: string
+  kind: GroupKind
+  /** Belongs to the meal part. */
+  meal?: boolean
+  picks: OrderLinePick[]
 }
 
 /* --------------------------------------------------------------------------
@@ -200,10 +407,17 @@ export interface OrderLine {
   name: string
   qty: number
   unitPrice: number
-  /** Chosen modifier option labels. */
+  /** Chosen options as flat labels, for views that don't read `choices`. */
   modifiers: string[]
   note: string | null
   total: number
+  /** The size label: "Large". */
+  variant?: string | null
+  meal?: boolean
+  /** The choices grouped the way the dish asks them. */
+  choices?: OrderLineGroup[]
+  kitchenName?: string
+  selection?: DishSelection
 }
 
 export interface Order {

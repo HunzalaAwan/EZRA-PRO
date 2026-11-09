@@ -16,12 +16,15 @@ import { SearchInput } from '@/components/ui/search-input'
 import { Segmented } from '@/components/ui/segmented'
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { toast } from '@/components/ui/toaster'
+import { useMenu } from '@/hooks/use-menu'
 import { hm } from '@/lib/hospitality/hours'
 import { LIVE_ORDER_STATUSES, ORDER_SOURCE_LABEL, ORDER_STATUS_META, ORDER_TYPE_LABEL, type Menu, type Order, type OrderStatus, type OrderType, type OrderingHours } from '@/lib/hospitality/types'
 import { cn, formatCurrency, formatDateShort, formatNumber } from '@/lib/utils'
 import type { CurrencyCode, Customer } from '@/types'
 
 import { NewOrderDialog } from './new-order-dialog'
+import { OrderLineChoices } from './order-line-choices'
+import { kitchenNoteFor, ticketTitle } from './order-line-text'
 import { StatTile, StatusWord, clock, guestName, minutesBetween, shortDuration } from './shared'
 
 /* ==========================================================================
@@ -102,8 +105,10 @@ export interface OrdersBoardProps {
   openNew?: boolean
 }
 
-export function OrdersBoard({ orders: initial, menu, ordering, taxRate, nextNumber, recentGuests, currency, todayKey, nowIso, openNew = false }: OrdersBoardProps) {
+export function OrdersBoard({ orders: initial, menu: seedMenu, ordering, taxRate, nextNumber, recentGuests, currency, todayKey, nowIso, openNew = false }: OrdersBoardProps) {
   const router = useRouter()
+  const tenantId = initial[0]?.tenantId ?? seedMenu.items[0]?.tenantId ?? ''
+  const { menu } = useMenu(tenantId, seedMenu)
   const [orders, setOrders] = React.useState(initial)
   const [newOpen, setNewOpen] = React.useState(openNew)
   const roomService = ordering.roomService.enabled
@@ -413,14 +418,14 @@ export function OrdersBoard({ orders: initial, menu, ordering, taxRate, nextNumb
         )}
       </Card>
 
-      <OrderSheet order={selected} currency={currency} onClose={() => setSelectedId(null)} onAdvance={advance} onMove={moveTo} />
+      <OrderSheet order={selected} menu={menu} currency={currency} onClose={() => setSelectedId(null)} onAdvance={advance} onMove={moveTo} />
       <NewOrderDialog
         open={newOpen}
         onOpenChange={(open) => {
           setNewOpen(open)
           if (!open && openNew) router.replace('/dashboard/orders')
         }}
-        menu={menu}
+        menu={seedMenu}
         ordering={ordering}
         currency={currency}
         taxRate={taxRate}
@@ -428,7 +433,7 @@ export function OrdersBoard({ orders: initial, menu, ordering, taxRate, nextNumb
         guests={recentGuests}
         todayKey={todayKey}
         nowIso={nowIso}
-        tenantId={orders[0]?.tenantId ?? menu.items[0]?.tenantId ?? ''}
+        tenantId={tenantId}
         onCreate={create}
       />
     </div>
@@ -511,7 +516,10 @@ function OrderCard({ order: o, currency, nowMin, dragging, onDragStart, onDragEn
             {o.lines.slice(0, 3).map((l) => (
               <li key={l.id} className="flex gap-2">
                 <span className="w-5 shrink-0 text-subtle tabular-nums">{l.qty}×</span>
-                <span className="truncate">{l.name}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate">{ticketTitle(l)}</span>
+                  <OrderLineChoices line={l} compact maxLines={2} />
+                </span>
               </li>
             ))}
             {o.lines.length > 3 ? <li className="pl-7 text-xs text-subtle">+{o.lines.length - 3} more</li> : null}
@@ -540,7 +548,8 @@ function OrderCard({ order: o, currency, nowMin, dragging, onDragStart, onDragEn
    Ticket
    -------------------------------------------------------------------------- */
 
-function OrderSheet({ order: o, currency, onClose, onAdvance, onMove }: { order: Order | null; currency: CurrencyCode; onClose: () => void; onAdvance: (order: Order, status: OrderStatus) => void; onMove: (order: Order, key: StageKey) => void }) {
+function OrderSheet({ order: o, menu, currency, onClose, onAdvance, onMove }: { order: Order | null; menu: Menu; currency: CurrencyCode; onClose: () => void; onAdvance: (order: Order, status: OrderStatus) => void; onMove: (order: Order, key: StageKey) => void }) {
+  const [kitchen, setKitchen] = React.useState(false)
   const step = o ? nextStep(o) : null
   const isLive = o ? LIVE_ORDER_STATUSES.includes(o.status) : false
   return (
@@ -598,19 +607,44 @@ function OrderSheet({ order: o, currency, onClose, onAdvance, onMove }: { order:
                 </div>
               ) : null}
 
-              <ul className="divide-y divide-line-subtle rounded-lg border border-line">
-                {o.lines.map((l) => (
-                  <li key={l.id} className="flex items-start gap-3 px-3 py-2.5 text-[0.8125rem]">
-                    <span className="w-6 shrink-0 text-subtle tabular-nums">{l.qty}×</span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-foreground">{l.name}</p>
-                      {l.modifiers.length ? <p className="text-xs text-muted">{l.modifiers.join(' · ')}</p> : null}
-                      {l.note ? <p className="text-xs text-warning">{l.note}</p> : null}
-                    </div>
-                    <span className="shrink-0 text-muted tabular-nums">{formatCurrency(l.total, currency)}</span>
-                  </li>
-                ))}
-              </ul>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-medium text-muted">
+                    {o.lines.reduce((sum, l) => sum + l.qty, 0)} {o.lines.reduce((sum, l) => sum + l.qty, 0) === 1 ? 'item' : 'items'}
+                  </p>
+                  <button
+                    type="button"
+                    aria-pressed={kitchen}
+                    onClick={() => setKitchen((k) => !k)}
+                    className={cn('inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs transition-colors', kitchen ? 'border-foreground bg-foreground text-background' : 'border-line text-muted hover:border-line-strong')}
+                  >
+                    <ChefHat className="size-3.5" aria-hidden="true" />
+                    Kitchen names
+                  </button>
+                </div>
+                <ul className="divide-y divide-line-subtle rounded-lg border border-line">
+                  {o.lines.map((l) => {
+                    const kitchenNote = kitchenNoteFor(menu, l)
+                    return (
+                      <li key={l.id} className="flex items-start gap-3 px-3 py-2.5 text-[0.8125rem]">
+                        <span className="w-6 shrink-0 text-subtle tabular-nums">{l.qty}×</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-foreground">{ticketTitle(l, kitchen, menu)}</p>
+                          <OrderLineChoices line={l} kitchen={kitchen} className="mt-1.5" />
+                          {l.note ? <p className="mt-1.5 text-xs text-warning">“{l.note}”</p> : null}
+                          {kitchenNote ? (
+                            <p className="mt-1.5 flex items-start gap-1.5 rounded-md bg-warning-soft/50 px-2 py-1 text-xs text-foreground">
+                              <ChefHat className="mt-0.5 size-3.5 shrink-0 text-warning" aria-hidden="true" />
+                              {kitchenNote}
+                            </p>
+                          ) : null}
+                        </div>
+                        <span className="shrink-0 text-muted tabular-nums">{formatCurrency(l.total, currency, { decimals: l.total % 100 !== 0 })}</span>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
 
               <dl className="flex flex-col gap-1 text-[0.8125rem] text-muted">
                 <Line term="Subtotal" value={formatCurrency(o.subtotal, currency)} />

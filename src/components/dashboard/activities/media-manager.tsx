@@ -73,9 +73,15 @@ export interface MediaManagerProps {
   /** Keyed by `media.<index>.alt` so the wizard can surface zod messages inline. */
   errors?: Record<string, string>
   className?: string
+  /** Shown when there are no photos yet. Defaults to the activity wording. */
+  emptyText?: string
+  /** Photos offered by "Use stock frames". Defaults to the activity library. */
+  samples?: { url: string; alt: string }[]
 }
 
-export function MediaManager({ media, onChange, errors, className }: MediaManagerProps) {
+export function MediaManager({ media, onChange, errors, className, emptyText, samples }: MediaManagerProps) {
+  const library = samples?.length ? samples.map((s) => s.url) : SAMPLE_LIBRARY
+  const libraryAlt = samples?.length ? samples.map((s) => s.alt) : SAMPLE_ALT
   const [dragActive, setDragActive] = React.useState(false)
   const [dragIndex, setDragIndex] = React.useState<number | null>(null)
   const [overIndex, setOverIndex] = React.useState<number | null>(null)
@@ -87,14 +93,14 @@ export function MediaManager({ media, onChange, errors, className }: MediaManage
   const addSamples = (count = 1) => {
     const used = new Set(media.map((item) => item.url))
     const additions: DraftMedia[] = []
-    for (const url of SAMPLE_LIBRARY) {
+    for (const url of library) {
       if (additions.length >= count) break
       if (used.has(url)) continue
-      const index = SAMPLE_LIBRARY.indexOf(url)
+      const index = library.indexOf(url)
       additions.push({
         id: nextMediaId(),
         url,
-        alt: SAMPLE_ALT[index] ?? '',
+        alt: libraryAlt[index] ?? '',
         isPrimary: media.length === 0 && additions.length === 0,
       })
     }
@@ -255,7 +261,7 @@ export function MediaManager({ media, onChange, errors, className }: MediaManage
       {/* ---------- gallery ---------- */}
       {media.length === 0 ? (
         <p className="rounded-xl border border-line bg-surface px-4 py-3 text-xs text-muted">
-          No images yet. An activity needs at least one before it can go live.
+          {emptyText ?? 'No images yet. An activity needs at least one before it can go live.'}
         </p>
       ) : (
         <ul className="flex list-none flex-col gap-2.5 p-0">

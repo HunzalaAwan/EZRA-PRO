@@ -115,7 +115,7 @@ export function HotelHome({ tenant, menu, dining, experiences, reviews, story, c
 
       <StorefrontSection key="dining" id="dining">
         <div className="border-t border-line-subtle">
-          <MenuBrowser menu={menu} ordering={dining.ordering} periods={dining.periods} currency={tenant.currency} slug={tenant.slug} taxRate={TAX_RATE[tenant.id] ?? 0} nowTime={nowTime} weekday={weekday} phone={tenant.contact.phone} eyebrow="The kitchen" title="Breakfast on the roof, dinner in the kitchen room, anything to your room" defaultMode="room" />
+          <MenuBrowser menu={menu} tenantId={tenant.id} ordering={dining.ordering} periods={dining.periods} currency={tenant.currency} slug={tenant.slug} taxRate={TAX_RATE[tenant.id] ?? 0} nowTime={nowTime} weekday={weekday} phone={tenant.contact.phone} eyebrow="The kitchen" title="Breakfast on the roof, dinner in the kitchen room, anything to your room" defaultMode="room" />
         </div>
       </StorefrontSection>
 
