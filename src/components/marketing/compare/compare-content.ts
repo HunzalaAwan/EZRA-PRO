@@ -87,7 +87,7 @@ export const VS_CONTENT: Record<VsSlug, VsContent> = {
     costValue: 10_000,
     faqs: [
       { q: 'How much does Peek Pro cost?', a: 'Peek prices by quote. One report puts it at up to 6–8% of each online booking.', source: S.bokunOnPeek, reported: true },
-      { q: 'Who pays Peek’s booking fee?', a: 'Reports conflict. Ask Peek for your terms in writing.', source: S.g2Peek, reported: true },
+      { q: 'Who pays Peek’s booking fee?', a: 'It varies. Ask Peek for your terms in writing.', source: S.g2Peek, reported: true },
       { q: 'Does EZRA Pro do card holds?', a: 'No. It takes a refundable deposit per rental item instead.' },
     ],
   },

@@ -158,7 +158,7 @@ export const VENDORS: Record<VendorId, Vendor> = {
     cells: {
       monthly: cell('value', official('By quote', S.peek)),
       fee: cell('value', reported('Up to 6–8%', S.bokunOnPeek)),
-      whoPays: cell('value', reported('Reports conflict', S.g2Peek)),
+      whoPays: cell('value', reported('Varies', S.g2Peek)),
       published: cell('no', official('No, by quote', S.peek)),
       rentals: cell('partly', official('Rentals only', S.peek)),
       venues: cell('no', official('Not shown', S.peek)),

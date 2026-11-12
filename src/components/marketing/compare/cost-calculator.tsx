@@ -85,14 +85,6 @@ export function CostCheck({ ezra, them, defaultValue = 10_000, checkedOn }: { ez
               <p className="min-w-0 text-[0.9375rem] text-foreground">
                 <span className="font-medium">{row.label}</span>
                 <span className="text-muted"> · {formula(row.rate)}</span>
-                {row.rate.status === 'reported' ? (
-                  <span
-                    title="From a third party, not the vendor."
-                    className="ml-1.5 inline-flex rounded-full bg-cal-sunbeam px-2 py-px align-middle text-xs font-medium ring-1 ring-cal-peach"
-                  >
-                    Reported
-                  </span>
-                ) : null}
               </p>
               <p className={cn('shrink-0 font-display text-[1.375rem] font-medium tracking-[-0.02em] tabular-nums text-foreground')}>{money(row.amount)}</p>
             </div>

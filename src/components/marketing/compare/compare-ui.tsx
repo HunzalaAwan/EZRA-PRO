@@ -130,30 +130,17 @@ export function createNotes() {
 
 export type Notes = ReturnType<typeof createNotes>
 
-export function Ref({ n }: { n: number }) {
-  return (
-    <sup className="relative -top-[0.5em] ml-px align-baseline text-xs leading-none font-normal">
-      <a
-        href={`#source-${n}`}
-        aria-label={`Source ${n}`}
-        className="rounded px-0.5 text-subtle no-underline transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-primary"
-      >
-        {n}
-      </a>
-    </sup>
-  )
+/**
+ * Footnote numbers and "Reported" badges are not shown (the owner wants a
+ * clean table). Sources stay listed at the end of each page, and the note
+ * under the table says which figures are third-party estimates.
+ */
+export function Ref(_props: { n: number }) {
+  return null
 }
 
 export function ReportedBadge() {
-  return (
-    <span
-      title="From a third party, not the vendor. Confirm with the vendor."
-      className="ml-1.5 inline-flex translate-y-[-1px] items-center rounded-full bg-cal-sunbeam px-2 py-px align-middle text-xs font-medium text-foreground ring-1 ring-cal-peach"
-    >
-      Reported
-      <span className="sr-only"> (a third-party figure, not published by the vendor)</span>
-    </span>
-  )
+  return null
 }
 
 /* ------------------------------------------------------- Comparison card */
@@ -192,12 +179,6 @@ function CellValue({ cell, n }: { cell: Cell; n?: number }) {
       {icon}
       <span className={cn(cell.tone === 'value' ? 'font-medium text-foreground' : cell.tone === 'no' ? 'text-muted' : 'text-foreground')}>
         {cell.text}
-        {cell.status === 'reported' || n ? (
-          <span className="whitespace-nowrap">
-            {cell.status === 'reported' ? <ReportedBadge /> : null}
-            {n ? <Ref n={n} /> : null}
-          </span>
-        ) : null}
       </span>
     </span>
   )
@@ -301,7 +282,7 @@ export function CardNote({ fair }: { fair?: string }) {
   return (
     <div className="mt-4 space-y-1.5 px-1 text-sm leading-relaxed text-muted">
       {fair ? <p className="font-medium text-foreground">{fair}</p> : null}
-      <p>“Not shown” means we couldn’t find it on the vendor’s pages, not that it’s missing. Reported figures come from third parties.</p>
+      <p>“Not shown” means we couldn’t find it on the vendor’s pages, not that it’s missing. FareHarbor and Peek Pro don’t publish their fees, so their figures are third-party estimates.</p>
     </div>
   )
 }
