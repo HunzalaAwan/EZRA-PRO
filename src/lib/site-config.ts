@@ -91,6 +91,7 @@ export const MARKETING_NAV: NavGroup[] = [
     ],
   },
   { label: 'Pricing', href: '/pricing' },
+  { label: 'Compare', href: '/compare' },
 ]
 
 export const FOOTER_NAV: { heading: string; links: NavLink[] }[] = [
@@ -114,6 +115,18 @@ export const FOOTER_NAV: { heading: string; links: NavLink[] }[] = [
       { label: 'Adventure', href: '/solutions/adventure' },
       { label: 'Restaurants', href: '/solutions/restaurants' },
       { label: 'Wellness', href: '/solutions/wellness' },
+    ],
+  },
+  {
+    heading: 'Compare',
+    links: [
+      { label: 'All comparisons', href: '/compare' },
+      { label: 'vs FareHarbor', href: '/compare/fareharbor' },
+      { label: 'vs Peek Pro', href: '/compare/peek-pro' },
+      { label: 'vs Bókun', href: '/compare/bokun' },
+      { label: 'vs Rezdy', href: '/compare/rezdy' },
+      { label: 'vs Checkfront', href: '/compare/checkfront' },
+      { label: 'vs Xola', href: '/compare/xola' },
     ],
   },
   {

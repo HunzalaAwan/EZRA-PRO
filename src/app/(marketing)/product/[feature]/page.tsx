@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 
 import { ClosingCta } from '@/components/marketing/land/closing-cta'
+import { CompareLinks } from '@/components/marketing/compare/compare-links'
 import { PricingSection } from '@/components/marketing/pricing-section'
 import { PRODUCT_CONTENT, PRODUCT_KEYS, type ProductKey } from '@/components/marketing/product/product-content'
 import { FieldPanel, KeyPoints, ProductHero, ProductRows } from '@/components/marketing/product/product-sections'
@@ -57,6 +58,7 @@ export default async function ProductPage({ params }: { params: Promise<{ featur
       </ProductRows>
       <FieldPanel field={content.field} />
       <PricingSection className="scroll-mt-4 border-t border-line bg-background-subtle py-20 sm:py-24" />
+      <CompareLinks pageKey={key} />
       <ClosingCta />
     </>
   )

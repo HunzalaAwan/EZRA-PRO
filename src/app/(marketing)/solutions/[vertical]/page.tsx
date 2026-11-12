@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 
 import { ClosingCta } from '@/components/marketing/land/closing-cta'
+import { CompareLinks } from '@/components/marketing/compare/compare-links'
 import { PricingSection } from '@/components/marketing/pricing-section'
 import { SOLUTION_CONTENT, SOLUTION_POINTS } from '@/components/marketing/solutions/solution-content'
 import { SolutionHero } from '@/components/marketing/solutions/solution-hero'
@@ -149,6 +150,7 @@ export default async function VerticalSolutionPage({ params }: { params: Promise
       {/* ---------- the other five ---------- */}
       <OtherTrades siblings={siblings.map((item) => ({ ...item, tagline: decodeEntities(item.tagline) }))} />
 
+      <CompareLinks pageKey={key} />
       <ClosingCta />
     </>
   )

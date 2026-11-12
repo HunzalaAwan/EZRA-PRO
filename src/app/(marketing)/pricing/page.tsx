@@ -310,6 +310,14 @@ export default function PricingPage() {
               <Link href="/contact">Talk to sales</Link>
             </Button>
           </Reveal>
+
+          <p className="mt-6 text-center text-sm leading-relaxed text-muted">
+            Weighing us against another system? See{' '}
+            <Link href="/compare" className="font-medium text-foreground underline underline-offset-4 hover:text-primary">
+              how EZRA Pro compares
+            </Link>{' '}
+            with FareHarbor, Peek Pro, Bókun, Rezdy, Checkfront and Xola, with sources, dates and a fee calculator.
+          </p>
         </div>
       </section>
 
