@@ -1,14 +1,16 @@
 import {
   blankGroup,
-  dishFromPrice,
   groupFromModifier,
   groupRule,
+  mealFromPrice,
+  mealUpgradePrice,
   newMenuId,
   optionPrice,
   optionView,
   resolveGroups,
   resolveMealGroups,
   sharedGroupUsage,
+  upgradeKey,
 } from '@/lib/hospitality/menu-pricing'
 import type {
   GroupKind,
@@ -462,8 +464,31 @@ export function updateSize(item: MenuItem, variantId: string, patch: Partial<Men
    Meal, set menu, times
    -------------------------------------------------------------------------- */
 
-export function startMeal(): MenuMeal {
-  return { label: 'Make it a meal', price: 0, description: 'With a side and a drink', groups: [] }
+/** The dish alone at its lowest price, for the meal price hint. */
+export function dishAlonePrice(item: MenuItem): number {
+  const prices = item.variants && item.variants.length >= 2 ? item.variants.map((v) => v.price) : [item.price]
+  return Math.max(0, Math.min(...prices))
+}
+
+/** A new meal starts at the dish's own price; the owner sets the meal price from there. */
+export function startMeal(item: MenuItem): MenuMeal {
+  return { label: 'Make it a meal', fullPrice: dishAlonePrice(item), description: 'With a side and a drink', groups: [] }
+}
+
+/** A meal option's upgrade price, or 0 when it is included. */
+export function upgradeOf(meal: MenuMeal | null | undefined, groupId: string, optionId: string): number {
+  return mealUpgradePrice(meal, groupId, optionId)
+}
+
+/** Sets one option's upgrade price inside the meal; 0 makes it included again. */
+export function withUpgrade(meal: MenuMeal, groupId: string, optionId: string, price: number): MenuMeal {
+  const key = upgradeKey(groupId, optionId)
+  const upgrades = { ...(meal.upgrades ?? {}) }
+  if (price > 0) upgrades[key] = Math.round(price)
+  else delete upgrades[key]
+  const next: MenuMeal = { ...meal, upgrades }
+  if (!Object.keys(upgrades).length) delete next.upgrades
+  return next
 }
 
 export function setKind(item: MenuItem, kind: 'dish' | 'set'): MenuItem {
@@ -473,9 +498,8 @@ export function setKind(item: MenuItem, kind: 'dish' | 'set'): MenuItem {
 /** "Gyros pita meal · €11" — the lowest a guest pays for the meal. */
 export function mealPreview(menu: Menu, item: MenuItem, currency: CurrencyCode): string | null {
   if (!item.meal || item.kind === 'set') return null
-  const probe: MenuItem = { ...item, meal: null, groups: [...(item.groups ?? []), ...item.meal.groups] }
-  const from = dishFromPrice(menu, probe).price + Math.max(0, item.meal.price)
-  return `${item.name.trim() || 'Dish'} meal · ${money(from, currency)}`
+  const from = mealFromPrice(menu, item)
+  return from === null ? null : `${item.name.trim() || 'Dish'} meal · ${money(from, currency)}`
 }
 
 /** "Section" times, or set times starting from the section's (or lunch 12:00–15:00). */

@@ -75,7 +75,7 @@ export function choosingFor(menu: Menu, line: CartLine): Choosing | null {
 
 export function MenuBrowser({ menu: seed, tenantId, ordering, periods, currency, slug, taxRate, nowTime, weekday, phone, eyebrow = 'The menu', title, defaultMode }: MenuBrowserProps) {
   const { menu } = useMenu(tenantId, seed)
-  const { cart, add, replaceLine, setQty, setMode, setZone, setWhen, reprice } = useCart(slug)
+  const { cart, add, put, setQty, setMode, setZone, setWhen, reprice } = useCart(slug)
   const [query, setQuery] = React.useState('')
   const [activeCategory, setActiveCategory] = React.useState('popular')
   const [choosing, setChoosing] = React.useState<Choosing | null>(null)
@@ -158,17 +158,14 @@ export function MenuBrowser({ menu: seed, tenantId, ordering, periods, currency,
     if (next) setChoosing(next)
   }
 
-  const submit = ({ selection, qty, note, priced }: DishSheetResult) => {
-    if (!choosing) return
+  const submit = ({ lines }: DishSheetResult) => {
+    if (!choosing || !lines.length) return
     if (cart.mode !== mode) setMode(mode)
-    const line = cartLineFrom(menu, selection, note, priced)
-    if (choosing.edit) {
-      replaceLine(choosing.edit.key, line, qty)
-      toast.success(`${line.name} updated`)
-    } else {
-      add(line, qty)
-      toast.success(`${line.name} added`, { description: priced.summary.join(' · ') || undefined })
-    }
+    put(menu, lines, choosing.edit?.key)
+    const name = choosing.item.name
+    if (choosing.edit) toast.success(`${name} updated`)
+    else if (lines.length > 1) toast.success(`${lines.reduce((n, l) => n + l.qty, 0)} × ${name} added`, { description: `${lines.length} different ways` })
+    else toast.success(`${name} added`, { description: lines[0].priced.summary.join(' · ') || undefined })
     setChoosing(null)
   }
 

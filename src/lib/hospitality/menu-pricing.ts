@@ -55,7 +55,7 @@ export interface PricedSelection {
   unitPrice: number
   base: number
   variant: MenuVariant | null
-  /** meal.price + meal groups; 0 when no meal. */
+  /** What the meal adds to the dish: its full price less the dish, plus paid upgrades; 0 when no meal. */
   mealPrice: number
   /** Dish groups, nested picks included. */
   choicesPrice: number
@@ -84,13 +84,19 @@ function findItem(menu: Menu, itemId: string | undefined): MenuItem | null {
   return menu.items.find((item) => item.id === itemId) ?? null
 }
 
-function mealOf(item: MenuItem): MenuMeal | null {
+function rawMeal(item: MenuItem): MenuMeal | null {
   if (item.kind === 'set') return null
   return item.meal ?? null
 }
 
 function variantsOf(item: MenuItem): MenuVariant[] {
   return item.variants?.length ? item.variants : []
+}
+
+/** The dish's lowest price: its cheapest size, or its one price. */
+function lowestBase(item: MenuItem): number {
+  const variants = variantsOf(item)
+  return variants.length ? Math.min(...variants.map((v) => cents(v.price))) : cents(item.price)
 }
 
 function applyRules(group: MenuOptionGroup, rules: Partial<Pick<MenuOptionGroup, 'min' | 'max' | 'freeQty'>> | undefined): MenuOptionGroup {
@@ -152,8 +158,86 @@ export function resolveGroups(menu: Menu, item: MenuItem): ResolvedGroup[] {
 
 /** The meal's groups; [] when the dish has no meal (set menus never do). */
 export function resolveMealGroups(menu: Menu, item: MenuItem): ResolvedGroup[] {
-  const meal = mealOf(item)
-  return meal ? resolveRefs(menu, meal.groups, 'meal') : []
+  const meal = rawMeal(item)
+  return meal ? resolveRefs(menu, meal.groups ?? [], 'meal') : []
+}
+
+/* --------------------------------------------------------------------------
+   Meals: one full price, everything in it included, paid upgrades marked
+   -------------------------------------------------------------------------- */
+
+export function upgradeKey(groupId: string, optionId: string): string {
+  return `${groupId}/${optionId}`
+}
+
+/** Saved before meals had a full price: `price` was added to the dish and options charged their own price. */
+export function isLegacyMeal(meal: MenuMeal): boolean {
+  return !Number.isFinite(meal.fullPrice)
+}
+
+/**
+ * A meal in today's shape. An old one (an add-on price) becomes: full price = the dish's lowest price
+ * plus the add-on, and each meal option that cost something becomes a paid upgrade at that price, so
+ * every total stays the same. Own meal groups drop their option prices (the upgrade holds it now).
+ */
+export function migrateMeal(menu: Menu, item: MenuItem): MenuMeal | null {
+  const meal = rawMeal(item)
+  if (!meal) return null
+  if (!isLegacyMeal(meal)) return meal
+  const upgrades: Record<string, number> = { ...(meal.upgrades ?? {}) }
+  for (const rg of resolveRefs(menu, meal.groups ?? [], 'meal')) {
+    if (rg.group.kind === 'remove') continue
+    for (const option of rg.group.options) {
+      const price = Math.max(0, optionPrice(option, null))
+      if (price > 0) upgrades[upgradeKey(rg.group.id, option.id)] = price
+    }
+  }
+  const groups = (meal.groups ?? []).map((ref): MenuGroupRef => {
+    if (ref.type !== 'own') return ref
+    const options = ref.group.options.map((o) => {
+      const next: MenuOption = { ...o, price: 0 }
+      delete next.priceByVariant
+      return next
+    })
+    return { type: 'own', group: { ...ref.group, options } }
+  })
+  const next: MenuMeal = { label: meal.label, fullPrice: lowestBase(item) + Math.max(0, cents(meal.price ?? 0)), groups }
+  if (meal.description !== undefined) next.description = meal.description
+  if (Object.keys(upgrades).length) next.upgrades = upgrades
+  return next
+}
+
+/** Every dish's meal in today's shape. The same menu back when nothing was old. */
+export function migrateMenu(menu: Menu): Menu {
+  let changed = false
+  const items = menu.items.map((item) => {
+    if (!item.meal || item.kind === 'set' || !isLegacyMeal(item.meal)) return item
+    changed = true
+    return { ...item, meal: migrateMeal(menu, item) }
+  })
+  return changed ? { ...menu, items } : menu
+}
+
+/** The meal as pricing reads it: migrated on the fly when it is still old. */
+function mealOf(menu: Menu, item: MenuItem): MenuMeal | null {
+  const meal = rawMeal(item)
+  if (!meal) return null
+  return isLegacyMeal(meal) ? migrateMeal(menu, item) : meal
+}
+
+/** The whole meal at a size: its full price plus how much more this size is than the lowest. null without a meal. */
+export function mealFullPrice(menu: Menu, item: MenuItem, variantId: string | null): number | null {
+  const meal = mealOf(menu, item)
+  if (!meal) return null
+  const variant = variantsOf(item).find((v) => v.id === variantId)
+  const step = variant ? Math.max(0, cents(variant.price) - lowestBase(item)) : 0
+  return Math.max(0, cents(meal.fullPrice)) + step
+}
+
+/** What one of a meal option costs on top of the meal: its upgrade price, else 0 (included). */
+export function mealUpgradePrice(meal: MenuMeal | null | undefined, groupId: string, optionId: string): number {
+  const value = meal?.upgrades?.[upgradeKey(groupId, optionId)]
+  return value !== undefined && Number.isFinite(value) ? Math.max(0, cents(value)) : 0
 }
 
 export function optionPrice(option: MenuOption, variantId: string | null): number {
@@ -166,6 +250,20 @@ export function optionPrice(option: MenuOption, variantId: string | null): numbe
 
 function unitPriceIn(group: MenuOptionGroup, option: MenuOption, variantId: string | null): number {
   return group.kind === 'remove' ? 0 : Math.max(0, optionPrice(option, variantId))
+}
+
+type UnitOf = (group: MenuOptionGroup, option: MenuOption) => number
+
+/** How a scope prices one option: the dish's groups at its size; the meal's groups by upgrade, else included. */
+function unitPricer(menu: Menu, item: MenuItem, scope: 'dish' | 'meal', variantId: string | null): UnitOf {
+  if (scope === 'dish') return (group, option) => unitPriceIn(group, option, variantId)
+  const meal = mealOf(menu, item)
+  return (group, option) => (group.kind === 'remove' ? 0 : mealUpgradePrice(meal, group.id, option.id))
+}
+
+/** One of this option where its group sits, at the chosen size. 0 = free or included in the meal. */
+export function optionUnitPrice(menu: Menu, item: MenuItem, rg: ResolvedGroup, option: MenuOption, variantId: string | null): number {
+  return unitPricer(menu, item, rg.scope, variantId)(rg.group, option)
 }
 
 export function optionView(
@@ -345,7 +443,7 @@ export function setVariant(menu: Menu, selection: DishSelection, variantId: stri
 /** Off drops the meal picks; on adds the meal's defaults. */
 export function setMeal(menu: Menu, selection: DishSelection, on: boolean): DishSelection {
   const item = findItem(menu, selection.itemId)
-  if (!item || !mealOf(item)) return selection.meal ? { ...selection, meal: false, picks: selection.picks.filter((p) => !p.groupKey.startsWith('meal:')) } : selection
+  if (!item || !rawMeal(item)) return selection.meal ? { ...selection, meal: false, picks: selection.picks.filter((p) => !p.groupKey.startsWith('meal:')) } : selection
   if (!on) {
     if (!selection.meal && !selection.picks.some((p) => p.groupKey.startsWith('meal:'))) return selection
     return { ...selection, meal: false, picks: selection.picks.filter((p) => !p.groupKey.startsWith('meal:')) }
@@ -386,7 +484,7 @@ function priceScope(
   menu: Menu,
   groups: ResolvedGroup[],
   picks: OptionPick[],
-  variantId: string | null,
+  unitOf: UnitOf,
   ctx: { meal: boolean; nestedAllowed: boolean; parent?: { groupKey: string; optionId: string; name: string } },
 ): ScopeResult {
   const result: ScopeResult = { total: 0, lines: [], issues: [], summary: [] }
@@ -422,7 +520,7 @@ function priceScope(
         continue
       }
       const view = optionView(menu, option)
-      kept.push({ option, label: view.label, linked: view.item, qty, unit: unitPriceIn(g, option, variantId), pick })
+      kept.push({ option, label: view.label, linked: view.item, qty, unit: unitOf(g, option), pick })
     }
 
     /* rules */
@@ -458,7 +556,7 @@ function priceScope(
       let nestedSummary: string[] = []
       if (ctx.nestedAllowed && g.askItemChoices && k.linked) {
         const nestedGroups = resolveGroups(menu, k.linked)
-        const nested = priceScope(menu, nestedGroups, k.pick.picks ?? [], null, {
+        const nested = priceScope(menu, nestedGroups, k.pick.picks ?? [], (ng, no) => unitPriceIn(ng, no, null), {
           meal: ctx.meal,
           nestedAllowed: false,
           parent: { groupKey: rg.key, optionId: k.option.id, name: k.label },
@@ -519,30 +617,31 @@ export function priceSelection(menu: Menu, selection: DishSelection): PricedSele
   const variantId = variant?.id ?? null
   const base = cents(variant?.price ?? item.price)
 
-  const meal = mealOf(item)
+  const meal = mealOf(menu, item)
   const mealOn = selection.meal && meal !== null
   const dishGroups = resolveGroups(menu, item)
-  const mealGroups = meal ? resolveMealGroups(menu, item) : []
+  const mealGroups = meal ? resolveRefs(menu, meal.groups ?? [], 'meal') : []
   const mealKeys = new Set(mealGroups.map((g) => g.key))
 
   const dishPicks = selection.picks.filter((p) => !mealKeys.has(p.groupKey) && !p.groupKey.startsWith('meal:'))
   const mealPicks = mealOn ? selection.picks.filter((p) => p.groupKey.startsWith('meal:')) : []
 
-  const dish = priceScope(menu, dishGroups, dishPicks, variantId, { meal: false, nestedAllowed: true })
-  const mealPart = mealOn ? priceScope(menu, mealGroups, mealPicks, variantId, { meal: true, nestedAllowed: true }) : null
+  const dish = priceScope(menu, dishGroups, dishPicks, unitPricer(menu, item, 'dish', variantId), { meal: false, nestedAllowed: true })
+  const mealPart = mealOn ? priceScope(menu, mealGroups, mealPicks, unitPricer(menu, item, 'meal', variantId), { meal: true, nestedAllowed: true }) : null
 
   issues.push(...dish.issues)
   if (mealPart) issues.push(...mealPart.issues)
 
   const choicesPrice = dish.total
-  const mealPrice = mealPart && meal ? cents(meal.price) + mealPart.total : 0
+  /* the meal's full price stands in for the dish's own price; paid upgrades go on top */
+  const mealPrice = mealPart && meal ? (mealFullPrice(menu, item, variantId) ?? base) - base + mealPart.total : 0
   const summary: string[] = []
   if (variant) summary.push(variant.label)
   summary.push(...dish.summary)
   if (mealPart) summary.push(mealPart.summary.length ? `Meal: ${mealPart.summary.join(', ')}` : 'Meal')
 
   return {
-    unitPrice: base + choicesPrice + mealPrice,
+    unitPrice: Math.max(0, base + choicesPrice + mealPrice),
     base,
     variant,
     mealPrice,
@@ -565,6 +664,27 @@ export function selectionKey(selection: DishSelection, note: string | null): str
   return `${selection.itemId}|${selection.variantId ?? ''}|${selection.meal ? 'meal' : ''}|${encode(selection.picks)}|${(note ?? '').trim()}`
 }
 
+/**
+ * One dish ordered several times, each made its own way: identical ones (same picks, same note)
+ * become one line with a quantity, in the order they were first made.
+ */
+export function mergeUnits<T extends { selection: DishSelection; note: string | null }>(units: T[]): (Omit<T, 'note' | 'qty'> & { note: string | null; qty: number })[] {
+  const out: (Omit<T, 'note' | 'qty'> & { note: string | null; qty: number })[] = []
+  const at = new Map<string, number>()
+  for (const unit of units) {
+    const note = unit.note?.trim() || null
+    const key = selectionKey(unit.selection, note)
+    const index = at.get(key)
+    if (index === undefined) {
+      at.set(key, out.length)
+      out.push({ ...unit, note, qty: 1 })
+    } else {
+      out[index] = { ...out[index], qty: out[index].qty + 1 }
+    }
+  }
+  return out
+}
+
 export function toOrderLine(menu: Menu, selection: DishSelection, qty: number, note: string | null, id: string): OrderLine {
   const item = findItem(menu, selection.itemId)
   const priced = priceSelection(menu, selection)
@@ -579,7 +699,7 @@ export function toOrderLine(menu: Menu, selection: DishSelection, qty: number, n
     note: note?.trim() || null,
     total: priced.unitPrice * count,
     variant: priced.variant?.label ?? null,
-    meal: Boolean(selection.meal && item && mealOf(item)),
+    meal: Boolean(selection.meal && item && rawMeal(item)),
     choices: priced.choices,
     selection,
   }
@@ -597,7 +717,7 @@ function hasPricedOption(group: MenuOptionGroup): boolean {
 }
 
 /** The cheapest way through one required group. */
-function minGroupCost(menu: Menu, group: MenuOptionGroup, variantId: string | null, nestedAllowed: boolean): number {
+function minGroupCost(menu: Menu, group: MenuOptionGroup, unitOf: UnitOf, nestedAllowed: boolean): number {
   const min = Math.max(0, group.min)
   if (min === 0) return 0
   const units: { option: number; extra: number }[] = []
@@ -606,9 +726,9 @@ function minGroupCost(menu: Menu, group: MenuOptionGroup, variantId: string | nu
     let extra = 0
     if (nestedAllowed && group.askItemChoices) {
       const linked = findItem(menu, option.itemId)
-      if (linked) extra = resolveGroups(menu, linked).reduce((sum, rg) => sum + minGroupCost(menu, rg.group, null, false), 0)
+      if (linked) extra = resolveGroups(menu, linked).reduce((sum, rg) => sum + minGroupCost(menu, rg.group, (g, o) => unitPriceIn(g, o, null), false), 0)
     }
-    const price = unitPriceIn(group, option, variantId)
+    const price = unitOf(group, option)
     for (let n = 0; n < optionCap(option); n++) units.push({ option: price, extra })
   }
   units.sort((a, b) => a.option + a.extra - (b.option + b.extra))
@@ -636,15 +756,30 @@ export function dishFromPrice(menu: Menu, item: MenuItem): { price: number; from
         if (linked && resolveGroups(menu, linked).some((n) => hasPricedOption(n.group))) from = true
       }
     }
-    extra += minGroupCost(menu, rg.group, variantId, true)
+    extra += minGroupCost(menu, rg.group, (g, o) => unitPriceIn(g, o, variantId), true)
   }
-  if (mealOf(item)) from = true
+  if (rawMeal(item)) from = true
   return { price: base + extra, from }
+}
+
+/** The least a guest pays for the meal: its full price at the cheapest size, the cheapest way through required choices, and any required upgrade. null without a meal. */
+export function mealFromPrice(menu: Menu, item: MenuItem): number | null {
+  const meal = mealOf(menu, item)
+  if (!meal) return null
+  const variants = variantsOf(item)
+  const open = variants.filter((v) => !v.soldOut)
+  const pool = open.length ? open : variants
+  const cheapest = pool.reduce<MenuVariant | null>((low, v) => (low === null || v.price < low.price ? v : low), null)
+  const variantId = cheapest?.id ?? null
+  let total = mealFullPrice(menu, item, variantId) ?? 0
+  for (const rg of resolveGroups(menu, item)) total += minGroupCost(menu, rg.group, unitPricer(menu, item, 'dish', variantId), true)
+  for (const rg of resolveRefs(menu, meal.groups ?? [], 'meal')) total += minGroupCost(menu, rg.group, unitPricer(menu, item, 'meal', variantId), true)
+  return total
 }
 
 /** Sizes, choices or a meal: open the dish sheet rather than adding straight away. */
 export function hasChoices(menu: Menu, item: MenuItem): boolean {
-  return variantsOf(item).length > 1 || resolveGroups(menu, item).length > 0 || mealOf(item) !== null
+  return variantsOf(item).length > 1 || resolveGroups(menu, item).length > 0 || rawMeal(item) !== null
 }
 
 /**
@@ -851,8 +986,11 @@ export function checkDish(menu: Menu, item: MenuItem): Record<'basics' | 'choice
 
   const meal: string[] = []
   if (item.meal && item.kind !== 'set') {
+    const live = mealOf(menu, item)
     if (!item.meal.label.trim()) meal.push('Give the meal button a name')
-    if (!Number.isFinite(item.meal.price) || item.meal.price < 0) meal.push("The meal price can't be below zero")
+    if (!live || !Number.isFinite(live.fullPrice) || live.fullPrice < 0) meal.push("The meal price can't be below zero")
+    else if (cents(live.fullPrice) < lowestBase(item)) meal.push("The meal price can't be less than the dish alone")
+    if (Object.values(live?.upgrades ?? {}).some((p) => !Number.isFinite(p) || p < 0)) meal.push("Upgrade prices can't be below zero")
     if (!item.meal.groups.length) meal.push('Add what comes with the meal')
     meal.push(...checkRefs(menu, item, item.meal.groups))
   }
@@ -882,11 +1020,13 @@ export function sharedGroupUsage(menu: Menu, groupId: string): MenuItem[] {
 export function detachSharedGroup(menu: Menu, groupId: string): Menu {
   const saved = menu.sharedGroups?.find((g) => g.id === groupId)
   if (!saved) return menu
-  const detach = (refs: MenuGroupRef[]): MenuGroupRef[] =>
+  const detach = (refs: MenuGroupRef[], onNewId?: (id: string) => void): MenuGroupRef[] =>
     refs.map((ref) => {
       if (ref.type !== 'shared' || ref.groupId !== groupId) return ref
       const group = applyRules(saved, ref.rules)
-      return { type: 'own', group: { ...group, id: newMenuId('g'), options: group.options.map((o) => ({ ...o })) } }
+      const id = newMenuId('g')
+      onNewId?.(id)
+      return { type: 'own', group: { ...group, id, options: group.options.map((o) => ({ ...o })) } }
     })
   return {
     ...menu,
@@ -895,10 +1035,24 @@ export function detachSharedGroup(menu: Menu, groupId: string): Menu {
       if (!usesShared(item.groups, groupId) && !usesShared(item.meal?.groups, groupId)) return item
       const next: MenuItem = { ...item }
       if (item.groups) next.groups = detach(item.groups)
-      if (item.meal) next.meal = { ...item.meal, groups: detach(item.meal.groups) }
+      if (item.meal) {
+        const ids: string[] = []
+        let meal: MenuMeal = { ...item.meal, groups: detach(item.meal.groups ?? [], (id) => ids.push(id)) }
+        for (const id of ids) meal = moveUpgrades(meal, groupId, id)
+        next.meal = meal
+      }
       return next
     }),
   }
+}
+
+/** A meal group got a new id (made a dish's own copy, or saved to the library): its upgrades follow it. */
+export function moveUpgrades(meal: MenuMeal, fromGroupId: string, toGroupId: string): MenuMeal {
+  if (!meal.upgrades || fromGroupId === toGroupId) return meal
+  const prefix = `${fromGroupId}/`
+  const entries = Object.entries(meal.upgrades)
+  if (!entries.some(([key]) => key.startsWith(prefix))) return meal
+  return { ...meal, upgrades: Object.fromEntries(entries.map(([key, p]) => [key.startsWith(prefix) ? `${toGroupId}/${key.slice(prefix.length)}` : key, p])) }
 }
 
 const whole = (value: number, low = 0) => Math.max(low, cents(value))
@@ -972,7 +1126,16 @@ export function normaliseItem(item: MenuItem): MenuItem {
     next.modifiers = []
   }
   if (item.meal) {
-    next.meal = { ...item.meal, label: item.meal.label.trim() || 'Make it a meal', price: whole(item.meal.price), groups: normaliseRefs(item.meal.groups) }
+    const meal = item.meal
+    /* an old add-on price that reaches here unmigrated keeps its total: lowest dish price + add-on */
+    const fullPrice = isLegacyMeal(meal) ? lowestBase(next) + whole(meal.price ?? 0) : whole(meal.fullPrice)
+    next.meal = { ...meal, label: meal.label.trim() || 'Make it a meal', fullPrice, groups: normaliseRefs(meal.groups ?? []) }
+    delete next.meal.price
+    /* drop upgrades for groups the meal no longer has */
+    const groupIds = new Set(next.meal.groups.map((ref) => (ref.type === 'own' ? ref.group.id : ref.groupId)))
+    const upgrades = Object.entries(meal.upgrades ?? {}).filter(([key, p]) => Number.isFinite(p) && p > 0 && groupIds.has(key.split('/')[0]))
+    if (upgrades.length) next.meal.upgrades = Object.fromEntries(upgrades.map(([key, p]) => [key, whole(p)]))
+    else delete next.meal.upgrades
     if (next.meal.description !== undefined && !next.meal.description.trim()) delete next.meal.description
   }
   if (item.kind === 'set') next.meal = null

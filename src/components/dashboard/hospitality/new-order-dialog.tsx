@@ -16,7 +16,7 @@ import { DishSheet, type DishSheetResult } from '@/components/storefront/restaur
 import { cardInfo, money } from '@/components/storefront/restaurant/dish-sheet-model'
 import { choosingFor, type Choosing } from '@/components/storefront/restaurant/menu-browser'
 import { useMenu } from '@/hooks/use-menu'
-import { addLine, cartLineFrom, cartLineIssues, cartTotals, channelFor, choiceLines, orderLinesFromCart, replaceLine, type CartLine, type CartMode } from '@/lib/cart'
+import { addLine, cartLineFrom, cartLineIssues, cartTotals, channelFor, choiceLines, orderLinesFromCart, putLines, type CartLine, type CartMode } from '@/lib/cart'
 import { hm, mh } from '@/lib/hospitality/hours'
 import { defaultSelection, priceSelection } from '@/lib/hospitality/menu-pricing'
 import type { Menu, MenuItem, Order, OrderingHours } from '@/lib/hospitality/types'
@@ -94,10 +94,9 @@ export function NewOrderDialog({ open, onOpenChange, menu: seedMenu, ordering, c
     setLines((current) => addLine(current, cartLineFrom(menu, selection, null, priceSelection(menu, selection)), 1))
   }
 
-  const submitDish = ({ selection, qty, note, priced }: DishSheetResult) => {
-    const line = cartLineFrom(menu, selection, note, priced)
+  const submitDish = ({ lines: made }: DishSheetResult) => {
     const edit = choosing?.edit
-    setLines((current) => (edit ? replaceLine(current, edit.key, line, qty) : addLine(current, line, qty)))
+    setLines((current) => putLines(menu, current, made, edit?.key))
     setChoosing(null)
   }
   const setQty = (key: string, qty: number) => setLines((current) => (qty <= 0 ? current.filter((l) => l.key !== key) : current.map((l) => (l.key === key ? { ...l, qty } : l))))

@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import Image from 'next/image'
-import { Check, Clock, Minus, Phone, Plus, UtensilsCrossed } from 'lucide-react'
+import { Check, Clock, Copy, Minus, Phone, Plus, Trash2, UtensilsCrossed } from 'lucide-react'
 
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,7 @@ import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { MEDIA, useMediaQuery } from '@/hooks/use-media-query'
-import { allergensOf, defaultSelection, priceSelection, setMeal, setPick, setVariant, type PricedSelection } from '@/lib/hospitality/menu-pricing'
+import { allergensOf, defaultSelection, mealFullPrice, priceSelection, setMeal, setPick, setVariant } from '@/lib/hospitality/menu-pricing'
 import { ALLERGEN_LABEL, ORDER_CHANNEL_LABEL, type DishSelection, type Menu, type MenuItem, type OrderChannel } from '@/lib/hospitality/types'
 import { cn } from '@/lib/utils'
 import type { CurrencyCode } from '@/types'
@@ -23,15 +23,23 @@ import {
   availabilityNote,
   cleanSelection,
   factPills,
+  firstInvalidUnit,
   firstIssueAnchor,
   money,
   orderTime,
   plusMoney,
+  removeUnit,
+  resizeUnits,
+  sameAsFirst,
   sheetGroups,
+  sheetLines,
+  sheetTotal,
   stepLabel,
   submitText,
   type GroupView,
   type OptionRowView,
+  type SheetLine,
+  type SheetUnit,
 } from './dish-sheet-model'
 
 /* ==========================================================================
@@ -44,13 +52,14 @@ import {
    carries the live price; tapping it with something missing takes the
    guest straight to that group. A bottom sheet on a phone, a dialog
    from tablet up.
+
+   Ordering more than one, the guest can make each one different: a tab
+   per dish (1 · 2 · 3), each with its own picks, meal and note.
    ========================================================================== */
 
 export interface DishSheetResult {
-  selection: DishSelection
-  qty: number
-  note: string | null
-  priced: PricedSelection
+  /** One line when every dish is the same; when they differ, a line per different dish with the same ones merged. */
+  lines: SheetLine[]
 }
 
 export interface DishSheetProps {
@@ -102,20 +111,37 @@ export function DishSheet(props: DishSheetProps) {
    Body
    -------------------------------------------------------------------------- */
 
+const clampQty = (n: number) => Math.min(QTY_MAX, Math.max(QTY_MIN, Math.floor(Number.isFinite(n) ? n : 1)))
+
 function DishSheetBody({ menu, item, currency, channel, weekday, when, nowTime, initial, submitLabel = 'add', phone, onSubmit, onOrderForLater }: DishSheetProps & { item: MenuItem }) {
-  const [selection, setSelection] = React.useState<DishSelection>(() => (initial ? cleanSelection(menu, initial.selection) : defaultSelection(menu, item)))
-  const [qty, setQty] = React.useState(() => Math.min(QTY_MAX, Math.max(QTY_MIN, initial?.qty ?? 1)))
-  const [note, setNote] = React.useState(initial?.note ?? '')
+  const [units, setUnits] = React.useState<SheetUnit[]>(() => [{ selection: initial ? cleanSelection(menu, initial.selection) : defaultSelection(menu, item), note: initial?.note ?? '' }])
+  const [qty, setQtyValue] = React.useState(() => clampQty(initial?.qty ?? 1))
+  /** Make each one different. Only counts with more than one. */
+  const [split, setSplit] = React.useState(false)
+  const [active, setActive] = React.useState(0)
   const [attempted, setAttempted] = React.useState(false)
+  /** Where to take the guest once the right tab has rendered. */
+  const [jump, setJump] = React.useState<{ anchor: string; n: number } | null>(null)
   const anchors = React.useRef(new Map<string, HTMLElement>())
+  const tablist = React.useRef<HTMLDivElement>(null)
+  const uid = React.useId()
   const noteId = React.useId()
   const sizesId = React.useId()
 
-  const priced = React.useMemo(() => priceSelection(menu, selection), [menu, selection])
+  const splitOn = split && qty > 1
+  const current = splitOn ? Math.min(active, qty - 1) : 0
+  const sized = React.useMemo(() => (splitOn ? resizeUnits(units, qty) : [units[0]]), [splitOn, units, qty])
+  const pricedAll = React.useMemo(() => sized.map((u) => priceSelection(menu, u.selection)), [menu, sized])
+  const unit = sized[current]
+  const selection = unit.selection
+  const note = unit.note
+  const priced = pricedAll[current]
+
   const groups = React.useMemo(() => sheetGroups(menu, item, selection, priced, currency), [menu, item, selection, priced, currency])
   const dishGroups = groups.filter((g) => g.scope === 'dish')
   const mealGroups = groups.filter((g) => g.scope === 'meal')
   const meal = item.kind !== 'set' ? item.meal ?? null : null
+  const mealPrice = meal ? mealFullPrice(menu, item, selection.variantId) : null
   const variants = item.variants && item.variants.length > 1 ? item.variants : []
   const time = orderTime(when, nowTime)
   const available = availabilityNote(menu, item, weekday, time)
@@ -124,6 +150,8 @@ function DishSheetBody({ menu, item, currency, channel, weekday, when, nowTime, 
   const faq = (item.faq ?? []).filter((f) => f.question.trim())
   const pills = factPills(item)
   const sizeIssue = attempted ? priced.issues.find((i) => i.groupKey === null) ?? null : null
+  const tabId = (i: number) => `${uid}-tab-${i}`
+  const panelId = `${uid}-panel`
 
   const register = React.useCallback(
     (anchor: string) => (el: HTMLElement | null) => {
@@ -132,6 +160,32 @@ function DishSheetBody({ menu, item, currency, channel, weekday, when, nowTime, 
     },
     [],
   )
+
+  React.useEffect(() => {
+    if (!jump) return
+    const frame = requestAnimationFrame(() => {
+      const el = anchors.current.get(jump.anchor)
+      if (!el) return
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      el.focus({ preventScroll: true })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [jump])
+
+  /* the tab in view stays in view when the row scrolls sideways */
+  React.useEffect(() => {
+    if (!splitOn) return
+    tablist.current?.querySelector<HTMLElement>(`[data-unit="${current}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+  }, [splitOn, current])
+
+  /** Changes the dish in view (all of them when they're the same). */
+  const editUnit = (change: (u: SheetUnit) => SheetUnit) =>
+    setUnits((list) => {
+      const base = splitOn ? resizeUnits(list, qty) : list
+      return base.map((u, i) => (i === current ? change(u) : u))
+    })
+  const setSelection = (change: (s: DishSelection) => DishSelection) => editUnit((u) => ({ ...u, selection: change(u.selection) }))
+  const setNote = (value: string) => editUnit((u) => ({ ...u, note: value }))
 
   const pick = (view: GroupView, row: OptionRowView, nextQty: number) => setSelection((s) => setPick(menu, s, view.key, row.option.id, nextQty, view.parent))
 
@@ -144,22 +198,52 @@ function DishSheetBody({ menu, item, currency, channel, weekday, when, nowTime, 
     }
   }
 
-  const submit = () => {
-    if (!priced.valid) {
-      setAttempted(true)
-      const anchor = firstIssueAnchor(item, priced, groups)
-      requestAnimationFrame(() => {
-        const el = anchor ? anchors.current.get(anchor) : null
-        if (!el) return
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        el.focus({ preventScroll: true })
-      })
-      return
-    }
-    onSubmit({ selection, qty, note: note.trim() || null, priced })
+  const setQty = (next: number) => {
+    const q = clampQty(next)
+    setQtyValue(q)
+    if (split) setUnits((list) => resizeUnits(list, q))
+    setActive((a) => Math.min(a, q - 1))
   }
 
-  const total = priced.unitPrice * qty
+  const setSplitOn = (on: boolean) => {
+    setSplit(on)
+    if (on) {
+      setUnits((list) => resizeUnits(list, qty))
+      setActive(0)
+    }
+  }
+
+  const copyFirst = () => setUnits((list) => sameAsFirst(resizeUnits(list, qty), current))
+
+  const removeCurrent = () => {
+    setUnits((list) => removeUnit(resizeUnits(list, qty), current))
+    setQtyValue((q) => clampQty(q - 1))
+    setActive(Math.max(0, Math.min(current, qty - 2)))
+  }
+
+  const onTabKey = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    const last = qty - 1
+    const to = event.key === 'ArrowRight' ? Math.min(last, current + 1) : event.key === 'ArrowLeft' ? Math.max(0, current - 1) : event.key === 'Home' ? 0 : event.key === 'End' ? last : null
+    if (to === null) return
+    event.preventDefault()
+    setActive(to)
+    tablist.current?.querySelector<HTMLElement>(`[data-unit="${to}"]`)?.focus()
+  }
+
+  const submit = () => {
+    const bad = firstInvalidUnit(pricedAll)
+    if (bad !== -1) {
+      setAttempted(true)
+      if (splitOn) setActive(bad)
+      const badGroups = bad === current ? groups : sheetGroups(menu, item, sized[bad].selection, pricedAll[bad], currency)
+      const anchor = firstIssueAnchor(item, pricedAll[bad], badGroups) ?? 'top'
+      setJump((j) => ({ anchor, n: (j?.n ?? 0) + 1 }))
+      return
+    }
+    onSubmit({ lines: sheetLines(sized, pricedAll, qty, splitOn) })
+  }
+
+  const total = sheetTotal(pricedAll, qty, splitOn)
 
   return (
     <>
@@ -195,10 +279,69 @@ function DishSheetBody({ menu, item, currency, channel, weekday, when, nowTime, 
           {offChannel ? <p className="mt-3 rounded-xl bg-surface-sunken px-3 py-2.5 text-sm text-muted">Not on {ORDER_CHANNEL_LABEL[channel].toLowerCase()}</p> : null}
         </div>
 
-        <div className="flex flex-col gap-7 px-5 pt-6 pb-6 sm:px-6">
+        {/* ---------- one tab per dish, when each one is different ---------- */}
+        {splitOn ? (
+          <div className="sticky top-0 z-10 mt-5 border-b border-line-subtle bg-surface-raised px-5 pt-2.5 pb-2 sm:px-6">
+            {/* mr-9 keeps the row clear of the close button once the bar sticks */}
+            <div ref={tablist} role="tablist" aria-label={`Each ${item.name}`} className="no-scrollbar mr-9 -ml-1 flex gap-1.5 overflow-x-auto py-0.5 pl-1">
+              {sized.map((_, i) => {
+                const ready = pricedAll[i].valid
+                const selected = i === current
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    role="tab"
+                    id={tabId(i)}
+                    data-unit={i}
+                    aria-selected={selected}
+                    aria-controls={panelId}
+                    tabIndex={selected ? 0 : -1}
+                    onClick={() => setActive(i)}
+                    onKeyDown={onTabKey}
+                    className={cn(
+                      'inline-flex h-10 min-w-12 shrink-0 items-center justify-center gap-1.5 rounded-full border px-3.5 text-sm font-medium tabular-nums transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+                      selected ? 'border-foreground bg-foreground text-background' : 'border-line text-foreground hover:border-line-strong',
+                    )}
+                  >
+                    {i + 1}
+                    {ready ? (
+                      <Check className={cn('size-3.5', selected ? 'text-background' : 'text-success')} aria-hidden="true" />
+                    ) : (
+                      <span aria-hidden="true" className={cn('size-2 rounded-full', attempted ? 'bg-danger' : 'bg-warning')} />
+                    )}
+                    <span className="sr-only">{ready ? ', ready' : ', needs picks'}</span>
+                  </button>
+                )
+              })}
+            </div>
+            <div className="mt-2 flex min-h-8 flex-wrap items-center justify-between gap-x-3 gap-y-1">
+              <span className="text-xs text-muted tabular-nums">
+                {current + 1} of {qty} · {money(priced.unitPrice, currency)}
+              </span>
+              <span className="flex items-center gap-1">
+                {current > 0 ? (
+                  <Button size="xs" variant="ghost" leftIcon={<Copy />} onClick={copyFirst}>
+                    Same as 1
+                  </Button>
+                ) : null}
+                <Button size="xs" variant="ghost" leftIcon={<Trash2 />} onClick={removeCurrent} aria-label={`Remove ${item.name} ${current + 1}`}>
+                  Remove
+                </Button>
+              </span>
+            </div>
+          </div>
+        ) : null}
+
+        <div
+          role={splitOn ? 'tabpanel' : undefined}
+          id={splitOn ? panelId : undefined}
+          aria-labelledby={splitOn ? tabId(current) : undefined}
+          className="flex flex-col gap-7 px-5 pt-6 pb-6 sm:px-6"
+        >
           {/* ---------- sizes ---------- */}
           {variants.length ? (
-            <section ref={register('sizes')} tabIndex={-1} aria-labelledby={sizesId} aria-invalid={sizeIssue ? true : undefined} className="scroll-mt-4 outline-none">
+            <section ref={register('sizes')} tabIndex={-1} aria-labelledby={sizesId} aria-invalid={sizeIssue ? true : undefined} className="scroll-mt-28 outline-none">
               <h3 id={sizesId} className="text-[0.9375rem] font-semibold text-foreground">
                 {item.variantLabel || 'Size'}
               </h3>
@@ -238,7 +381,7 @@ function DishSheetBody({ menu, item, currency, channel, weekday, when, nowTime, 
               <label className={cn('flex cursor-pointer items-center gap-3 rounded-2xl border p-4 transition-colors', selection.meal ? 'border-primary bg-primary-soft/30' : 'border-line hover:border-line-strong')}>
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-semibold text-foreground">
-                    {meal.label} <span className="font-normal text-muted tabular-nums">· {plusMoney(meal.price, currency)}</span>
+                    {meal.label} {mealPrice !== null ? <span className="font-normal text-muted tabular-nums">· {money(mealPrice, currency)}</span> : null}
                   </span>
                   {meal.description ? <span className="mt-0.5 block text-xs text-muted">{meal.description}</span> : null}
                 </span>
@@ -302,21 +445,32 @@ function DishSheetBody({ menu, item, currency, channel, weekday, when, nowTime, 
       </div>
 
       {/* ---------- footer ---------- */}
-      <div className="flex shrink-0 items-center gap-3 border-t border-line-subtle bg-surface-raised px-5 py-3.5 sm:px-6 sm:py-4">
-        <span className="inline-flex shrink-0 items-center rounded-full border border-line">
-          <button type="button" aria-label={stepLabel('fewer', item.name)} disabled={qty <= QTY_MIN} className="grid size-10 place-items-center text-muted disabled:opacity-40" onClick={() => setQty((q) => Math.max(QTY_MIN, q - 1))}>
-            <Minus className="size-4" aria-hidden="true" />
-          </button>
-          <span className="min-w-[1.75rem] text-center text-sm tabular-nums" aria-live="polite">
-            {qty}
+      <div className="flex shrink-0 flex-col gap-2.5 border-t border-line-subtle bg-surface-raised px-5 py-3.5 sm:px-6 sm:py-4">
+        {qty > 1 ? (
+          <label className="flex min-h-10 cursor-pointer items-center justify-between gap-3">
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-foreground">Make each one different</span>
+              <span className="block text-xs text-muted">{splitOn ? 'Pick for each one in its tab' : `All ${qty} the same`}</span>
+            </span>
+            <Switch checked={split} onCheckedChange={setSplitOn} aria-label="Make each one different" />
+          </label>
+        ) : null}
+        <div className="flex items-center gap-3">
+          <span className="inline-flex shrink-0 items-center rounded-full border border-line">
+            <button type="button" aria-label={stepLabel('fewer', item.name)} disabled={qty <= QTY_MIN} className="grid size-10 place-items-center text-muted disabled:opacity-40" onClick={() => setQty(qty - 1)}>
+              <Minus className="size-4" aria-hidden="true" />
+            </button>
+            <span className="min-w-[1.75rem] text-center text-sm tabular-nums" aria-live="polite">
+              {qty}
+            </span>
+            <button type="button" aria-label={stepLabel('more', item.name)} disabled={qty >= QTY_MAX} className="grid size-10 place-items-center text-muted disabled:opacity-40" onClick={() => setQty(qty + 1)}>
+              <Plus className="size-4" aria-hidden="true" />
+            </button>
           </span>
-          <button type="button" aria-label={stepLabel('more', item.name)} disabled={qty >= QTY_MAX} className="grid size-10 place-items-center text-muted disabled:opacity-40" onClick={() => setQty((q) => Math.min(QTY_MAX, q + 1))}>
-            <Plus className="size-4" aria-hidden="true" />
-          </button>
-        </span>
-        <Button size="lg" className="flex-1 tabular-nums" disabled={offChannel || item.status !== 'available'} onClick={submit}>
-          {submitText(submitLabel, qty, total, currency)}
-        </Button>
+          <Button size="lg" className="flex-1 tabular-nums" disabled={offChannel || item.status !== 'available'} onClick={submit}>
+            {submitText(submitLabel, qty, total, currency)}
+          </Button>
+        </div>
       </div>
     </>
   )
@@ -339,6 +493,8 @@ function GroupFieldset({ view, attempted, currency, register, onToggle, onPick }
   const nameId = React.useId()
   const issueId = React.useId()
   const issue = attempted ? view.issue : null
+  /** An optional pick-one with something picked: guests can take it back to nothing. */
+  const clearable = view.radio && !view.rule.required ? view.rows.find((r) => r.picked) ?? null : null
 
   const rowBody = (row: OptionRowView) => (
     <>
@@ -365,7 +521,21 @@ function GroupFieldset({ view, attempted, currency, register, onToggle, onPick }
           <span id={nameId} className="min-w-0 text-[0.9375rem] font-semibold text-foreground">
             {view.group.name}
           </span>
-          <RuleChip view={view} />
+          {clearable ? (
+            <span className="flex shrink-0 items-center gap-1">
+              <RuleChip view={view} />
+              <button
+                type="button"
+                onClick={() => clearable && onPick(view, clearable, 0)}
+                aria-label={`Clear ${view.group.name}`}
+                className="-my-2.5 inline-flex min-h-10 items-center rounded-md px-2 text-xs font-medium text-foreground underline underline-offset-2 hover:text-primary focus-visible:outline-2 focus-visible:outline-primary"
+              >
+                Clear
+              </button>
+            </span>
+          ) : (
+            <RuleChip view={view} />
+          )}
         </span>
       </legend>
       {view.hint ? <p className="mt-0.5 text-xs text-subtle">{view.hint}</p> : null}

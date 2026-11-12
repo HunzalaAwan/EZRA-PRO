@@ -11,7 +11,7 @@ import { Segmented } from '@/components/ui/segmented'
 import { Textarea } from '@/components/ui/textarea'
 import { useCart } from '@/hooks/use-cart'
 import { useMenu } from '@/hooks/use-menu'
-import { cartLineFrom, cartLineIssues, cartTotals, channelFor, choiceLines, orderLinesFromCart, type CartLine, type CartMode } from '@/lib/cart'
+import { cartLineIssues, cartTotals, channelFor, choiceLines, orderLinesFromCart, type CartLine, type CartMode } from '@/lib/cart'
 import { hm, mh } from '@/lib/hospitality/hours'
 import type { Menu, OrderLine, OrderingHours } from '@/lib/hospitality/types'
 import { cn } from '@/lib/utils'
@@ -61,7 +61,7 @@ const MODE_LABEL: Record<CartMode, string> = { pickup: 'Pickup', delivery: 'Deli
 
 export function OrderCheckout({ slug, tenantName, tenantPhone, ordering, currency, taxRate, taxLabel, nowTime, weekday, menu: seed, tenantId }: OrderCheckoutProps) {
   const { menu } = useMenu(tenantId, seed)
-  const { cart, setMode, setZone, setWhen, setTip, setQty, clear, replaceLine, reprice } = useCart(slug)
+  const { cart, setMode, setZone, setWhen, setTip, setQty, clear, put, reprice } = useCart(slug)
   const [choosing, setChoosing] = React.useState<Choosing | null>(null)
   const [details, setDetails] = React.useState<Details>({ name: '', email: '', phone: '', room: '', address: '', instructions: '', card: '', expiry: '', cvc: '' })
   const [errors, setErrors] = React.useState<Partial<Record<keyof Details, string>>>({})
@@ -100,8 +100,8 @@ export function OrderCheckout({ slug, tenantName, tenantPhone, ordering, currenc
     if (next) setChoosing(next)
   }
 
-  const submitEdit = ({ selection, qty, note, priced }: DishSheetResult) => {
-    if (choosing?.edit) replaceLine(choosing.edit.key, cartLineFrom(menu, selection, note, priced), qty)
+  const submitEdit = ({ lines }: DishSheetResult) => {
+    if (choosing?.edit) put(menu, lines, choosing.edit.key)
     setChoosing(null)
   }
 

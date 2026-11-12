@@ -165,6 +165,25 @@ export function replaceLine(lines: CartLine[], key: string, line: CartLineInput,
   return lines.map((l, index) => (index === at ? { ...line, key: nextKey, qty } : l))
 }
 
+/**
+ * What the dish sheet made, into the lines. Each different dish is its own line and the same ones
+ * add up (one croissant with American cheese, two with Cheddar = two lines). `editKey` is the line
+ * that was opened: the first dish takes its place, the rest are added after.
+ */
+export function putLines(
+  menu: Menu,
+  lines: CartLine[],
+  made: { selection: DishSelection; qty: number; note: string | null; priced?: PricedSelection }[],
+  editKey?: string,
+): CartLine[] {
+  let next = lines
+  made.forEach((m, index) => {
+    const line = cartLineFrom(menu, m.selection, m.note, m.priced)
+    next = index === 0 && editKey ? replaceLine(next, editKey, line, m.qty) : addLine(next, line, m.qty)
+  })
+  return next
+}
+
 /* --------------------------------------------------------------------------
    Showing a line's picks
    -------------------------------------------------------------------------- */

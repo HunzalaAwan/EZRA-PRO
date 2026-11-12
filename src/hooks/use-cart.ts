@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 
-import { CART_EVENT, addLine, cartKey, emptyCart, parseCart, readCartRaw, repriceLines, replaceLine as swapLine, writeCart, type Cart, type CartLineInput, type CartMode } from '@/lib/cart'
+import { CART_EVENT, addLine, cartKey, emptyCart, parseCart, putLines, readCartRaw, repriceLines, replaceLine as swapLine, writeCart, type Cart, type CartLineInput, type CartMode } from '@/lib/cart'
 import type { Menu } from '@/lib/hospitality/types'
 
 /* ==========================================================================
@@ -37,6 +37,8 @@ export function useCart(slug: string) {
   const add = React.useCallback((line: CartLineInput, qty = 1) => commit((c) => ({ ...c, lines: addLine(c.lines, line, qty) })), [commit])
   /** An edited line takes the old one's place; it merges into a line that is now the same. */
   const replaceLine = React.useCallback((key: string, line: CartLineInput, qty: number) => commit((c) => ({ ...c, lines: swapLine(c.lines, key, line, qty) })), [commit])
+  /** What the dish sheet made: each different dish its own line, the same ones merged; `editKey` is the line it opened. */
+  const put = React.useCallback((menu: Menu, made: Parameters<typeof putLines>[2], editKey?: string) => commit((c) => ({ ...c, lines: putLines(menu, c.lines, made, editKey) })), [commit])
   const setQty = React.useCallback((key: string, qty: number) => commit((c) => ({ ...c, lines: qty <= 0 ? c.lines.filter((l) => l.key !== key) : c.lines.map((l) => (l.key === key ? { ...l, qty } : l)) })), [commit])
   const setMode = React.useCallback((mode: CartMode) => commit((c) => ({ ...c, mode })), [commit])
   const setZone = React.useCallback((zoneId: string | null) => commit((c) => ({ ...c, zoneId })), [commit])
@@ -54,5 +56,5 @@ export function useCart(slug: string) {
     [slug],
   )
 
-  return { cart, add, replaceLine, setQty, setMode, setZone, setWhen, setTip, clear, reprice }
+  return { cart, add, replaceLine, put, setQty, setMode, setZone, setWhen, setTip, clear, reprice }
 }

@@ -1,5 +1,7 @@
 import { createRng, hashSeed, rngInt } from '@/lib/utils'
 
+import { migrateMenu } from './menu-pricing'
+
 import {
   GROUP_KIND_META,
   type Allergen,
@@ -39,6 +41,8 @@ const NO_DELIVERY: OrderChannel[] = ['dine_in', 'pickup']
 const WEEKDAYS = [1, 2, 3, 4, 5]
 const EVERY_DAY = [0, 1, 2, 3, 4, 5, 6]
 
+type SeedMeal = Omit<MenuMeal, 'fullPrice' | 'upgrades'> & { price: number }
+
 interface ItemOptions {
   /** Overrides the id made from the name. */
   id?: string
@@ -53,7 +57,8 @@ interface ItemOptions {
   variants?: MenuVariant[]
   variantLabel?: string
   groups?: MenuGroupRef[]
-  meal?: MenuMeal
+  /** Written the old way, as an add-on price; build() runs it through migrateMenu like an old save. */
+  meal?: SeedMeal
   availability?: TimeWindow[]
   allergens?: Allergen[]
   spice?: SpiceLevel
@@ -649,7 +654,7 @@ function build(tenantId: string, specs: CategorySpec[]): Menu {
       }
       if (options.variantLabel) item.variantLabel = options.variantLabel
       if (options.groups) item.groups = options.groups
-      if (options.meal) item.meal = options.meal
+      if (options.meal) item.meal = { ...options.meal, fullPrice: Number.NaN }
       if (options.availability) item.availability = options.availability
       if (options.allergens) item.allergens = options.allergens
       if (options.spice !== undefined) item.spice = options.spice
@@ -662,7 +667,7 @@ function build(tenantId: string, specs: CategorySpec[]): Menu {
       items.push(item)
     }
   }
-  return { categories, items, sharedGroups: SHARED[tenantId] ?? [] }
+  return migrateMenu({ categories, items, sharedGroups: SHARED[tenantId] ?? [] })
 }
 
 const cache = new Map<string, Menu>()

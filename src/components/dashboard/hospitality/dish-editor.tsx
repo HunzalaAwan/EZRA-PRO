@@ -18,7 +18,7 @@ import { Sheet, SheetBody, SheetContent, SheetDescription, SheetFooter, SheetHea
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import { availabilityText, checkDish, checkGroup, dishFromPrice, groupFreeNote, newMenuId, normaliseItem, sharedGroupUsage } from '@/lib/hospitality/menu-pricing'
+import { availabilityText, checkDish, checkGroup, dishFromPrice, groupFreeNote, moveUpgrades, newMenuId, normaliseItem, sharedGroupUsage } from '@/lib/hospitality/menu-pricing'
 import {
   ALLERGEN_LABEL,
   ALLERGENS,
@@ -46,6 +46,7 @@ import { SharedGroupSheet } from './choice-groups-library'
 import {
   addSize,
   blankDish,
+  dishAlonePrice,
   draftFromItem,
   duplicateRef,
   itemFromDraft,
@@ -66,12 +67,16 @@ import {
   toLibrary,
   toggleDay,
   updateSize,
+  requiredLocked,
+  upgradeOf,
+  withRequired,
   withSharedRules,
+  withUpgrade,
   withTimesMode,
   withoutBlankRows,
   type PhotoDraft,
 } from './menu-editor-model'
-import { CountInput, MoneyInput, OptionGroupEditor, OptionsReadOnly, RulesFields, SettingRow } from './option-group-editor'
+import { CountInput, MealUpgradesList, MoneyInput, OptionGroupEditor, OptionsReadOnly, RulesFields, SettingRow, type MealUpgrades } from './option-group-editor'
 
 /* ==========================================================================
    <DishEditor> — add or edit one dish, in five tabs.
@@ -235,10 +240,12 @@ interface GroupsEditorProps {
   onEditShared: (group: MenuOptionGroup) => void
   onSaveToLibrary: (group: MenuOptionGroup) => void
   highlightSaved?: boolean
+  /** Meal groups only: what each option costs on top of the meal. */
+  upgrades?: MealUpgrades
   empty: (add: (kind: GroupKind, name?: string) => void) => React.ReactNode
 }
 
-function GroupsEditor({ refs, onChange, menu, currency, variants, itemId, context, showProblems, onEditShared, onSaveToLibrary, highlightSaved, empty }: GroupsEditorProps) {
+function GroupsEditor({ refs, onChange, menu, currency, variants, itemId, context, showProblems, onEditShared, onSaveToLibrary, highlightSaved, upgrades, empty }: GroupsEditorProps) {
   const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set())
   const [fresh, setFresh] = React.useState<string | null>(null)
   const [dragIndex, setDragIndex] = React.useState<number | null>(null)
@@ -285,6 +292,13 @@ function GroupsEditor({ refs, onChange, menu, currency, variants, itemId, contex
           const usage = shared ? sharedGroupUsage(menu, shared.id).length : 0
           const bad = showProblems && ref.type === 'own' && checkGroup(withoutBlankRows(group), variants).length > 0
           const title = group.name.trim() || 'New group'
+          const locked = requiredLocked(group)
+          const setRequired = (on: boolean) => {
+            const rules = withRequired(group, on)
+            if (ref.type === 'own') replaceAt(index, { type: 'own', group: { ...ref.group, min: rules.min } })
+            else if (shared) replaceAt(index, withSharedRules(shared, ref, { min: rules.min, max: group.max, freeQty: group.freeQty }))
+          }
+          const paid = upgrades ? group.options.filter((o) => upgrades.get(group.id, o.id) > 0).length : 0
           return (
             <li
               key={key}
@@ -347,10 +361,17 @@ function GroupsEditor({ refs, onChange, menu, currency, variants, itemId, contex
                     <span className="block truncate text-xs text-subtle">
                       {GROUP_KIND_META[group.kind].label} · {ruleLine(group, groupFreeNote(group))}
                       {shared ? ` · on ${dishCount(usage)}` : ` · ${group.options.length} ${group.options.length === 1 ? 'option' : 'options'}`}
+                      {upgrades ? (paid ? ` · ${paid} cost${paid === 1 ? 's' : ''} extra` : ' · all included') : ''}
                     </span>
                   </span>
                   <ChevronDown aria-hidden="true" className={cn('size-4 shrink-0 text-faint transition-transform', open && 'rotate-180')} />
                 </button>
+                {group.kind !== 'remove' ? (
+                  <label className="flex min-h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-1 text-xs text-muted" title={locked ? 'Always required when guests pick 2 or more' : undefined}>
+                    <Switch size="sm" checked={group.min > 0} disabled={locked} onCheckedChange={setRequired} aria-label={`${title} required`} />
+                    Required
+                  </label>
+                ) : null}
                 <IconButton size="xs" variant="ghost" aria-label={`Move ${title} up`} disabled={index === 0} onClick={() => move(index, index - 1)}>
                   <ArrowUp />
                 </IconButton>
@@ -382,6 +403,7 @@ function GroupsEditor({ refs, onChange, menu, currency, variants, itemId, contex
                           if (!moved) return
                           onSaveToLibrary(moved.group)
                           replaceAt(index, moved.ref)
+                          upgrades?.move(ref.group.id, moved.group.id)
                         }}
                       >
                         Save as a saved group
@@ -394,7 +416,10 @@ function GroupsEditor({ refs, onChange, menu, currency, variants, itemId, contex
                             const copy = ownCopyOf(menu, ref)
                             if (!copy) return
                             replaceAt(index, copy)
-                            if (copy.type === 'own') toggle(copy.group.id, true)
+                            if (copy.type === 'own') {
+                              upgrades?.move(ref.groupId, copy.group.id)
+                              toggle(copy.group.id, true)
+                            }
                           }}
                         >
                           Make it this dish&apos;s own copy
@@ -423,10 +448,16 @@ function GroupsEditor({ refs, onChange, menu, currency, variants, itemId, contex
                       context={context}
                       autoFocus={fresh === ref.group.id}
                       showProblems={showProblems}
+                      requiredInHeader
+                      upgrade={upgrades ? { get: (optionId) => upgrades.get(ref.group.id, optionId), set: (optionId, price) => upgrades.set(ref.group.id, optionId, price) } : undefined}
                     />
                   ) : shared ? (
                     <div className="flex flex-col gap-3">
-                      <OptionsReadOnly group={group} menu={menu} currency={currency} priceText={plus} />
+                      {upgrades ? (
+                        <MealUpgradesList group={group} menu={menu} currency={currency} get={(optionId) => upgrades.get(shared.id, optionId)} set={(optionId, price) => upgrades.set(shared.id, optionId, price)} />
+                      ) : (
+                        <OptionsReadOnly group={group} menu={menu} currency={currency} priceText={plus} />
+                      )}
                       <div>
                         <Button size="sm" variant="outline" onClick={() => onEditShared(shared)}>
                           Edit for every dish
@@ -443,7 +474,7 @@ function GroupsEditor({ refs, onChange, menu, currency, variants, itemId, contex
                             <span className="text-xs text-subtle">Same as saved</span>
                           )}
                         </div>
-                        <RulesFields rules={group} kind={group.kind} idPrefix={`${key}-rules`} onChange={(rules) => replaceAt(index, withSharedRules(shared, ref, rules))} />
+                        <RulesFields rules={group} kind={group.kind} idPrefix={`${key}-rules`} showRequired={false} onChange={(rules) => replaceAt(index, withSharedRules(shared, ref, rules))} />
                       </div>
                     </div>
                   ) : null}
@@ -602,7 +633,7 @@ export function DishEditor({ open, item, menu, currency, tenantId, defaultCatego
   const keepInLibrary = (group: MenuOptionGroup) => setLibrary((l) => ({ ...l, [group.id]: group }))
 
   const setMealOn = (on: boolean) => {
-    if (on) set('meal', mealBackup ?? startMeal())
+    if (on) set('meal', mealBackup ?? startMeal(draft))
     else {
       setMealBackup(draft.meal ?? null)
       set('meal', null)
@@ -840,18 +871,18 @@ export function DishEditor({ open, item, menu, currency, tenantId, defaultCatego
               <TabsContent value="meal" className="flex flex-col gap-4">
                 {showProblems ? <Problems items={tabProblems('meal')} /> : null}
                 <div className="rounded-lg border border-line-subtle px-3">
-                  <SettingRow title="Offer it as a meal" hint="Guests add a side and a drink for one price on top.">
+                  <SettingRow title="Offer it as a meal" hint="The dish with a side and a drink, for one price.">
                     <Switch size="sm" checked={Boolean(draft.meal)} onCheckedChange={setMealOn} aria-label="Offer it as a meal" />
                   </SettingRow>
                 </div>
                 {draft.meal ? (
                   <>
-                    <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_9rem]">
+                    <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_11rem]">
                       <Field label="Button text">
                         {(control) => <Input {...control} size="sm" value={draft.meal?.label ?? ''} onChange={(e) => setMeal({ label: e.target.value })} placeholder="Make it a meal" />}
                       </Field>
-                      <Field label="Meal price" description="On top of the dish.">
-                        {(control) => <MoneyInput id={control.id} value={draft.meal?.price ?? 0} onChange={(price) => setMeal({ price })} currency={currency} label="Meal price" freeHint={false} className="w-full" />}
+                      <Field label="Meal price" description={`Everything in. Dish alone ${money(dishAlonePrice(draft), currency)}${variants ? ', bigger sizes add the difference' : ''}`}>
+                        {(control) => <MoneyInput id={control.id} value={draft.meal?.fullPrice ?? 0} onChange={(fullPrice) => setMeal({ fullPrice })} currency={currency} label="Meal price" freeHint={false} className="w-full" />}
                       </Field>
                     </div>
                     <Field label="One line for guests" optional>
@@ -868,6 +899,11 @@ export function DishEditor({ open, item, menu, currency, tenantId, defaultCatego
                       showProblems={showProblems}
                       onEditShared={setSharedEdit}
                       onSaveToLibrary={keepInLibrary}
+                      upgrades={{
+                        get: (groupId, optionId) => upgradeOf(draft.meal, groupId, optionId),
+                        set: (groupId, optionId, price) => setDraft((d) => (d.meal ? { ...d, meal: withUpgrade(d.meal, groupId, optionId, price) } : d)),
+                        move: (from, to) => setDraft((d) => (d.meal ? { ...d, meal: moveUpgrades(d.meal, from, to) } : d)),
+                      }}
                       highlightSaved
                       empty={(add) => (
                         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-line px-4 py-6 text-center">

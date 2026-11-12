@@ -186,11 +186,21 @@ export type MenuGroupRef =
 export interface MenuMeal {
   /** Button text: "Make it a meal". */
   label: string
-  /** Added to the dish when the guest takes the meal. */
-  price: number
+  /**
+   * The whole meal price: the dish and everything in the meal, at the dish's lowest size.
+   * A bigger size adds its own difference (Large meal = fullPrice + Large − lowest).
+   */
+  fullPrice: number
+  /** Saves from before fullPrice: added on top of the dish. migrateMeal turns it into fullPrice. */
+  price?: number
   /** One line: "With a side and a drink". */
   description?: string
   groups: MenuGroupRef[]
+  /**
+   * Everything in the meal is included. These options cost extra inside the meal,
+   * keyed "<groupId>/<optionId>" (the saved group's id for a saved group).
+   */
+  upgrades?: Record<string, number>
 }
 
 export interface MenuCategory {

@@ -68,6 +68,7 @@ export function MoneyInput({
   freeHint = true,
   autoFocus,
   id,
+  placeholder,
 }: {
   value: number
   onChange: (value: number) => void
@@ -77,6 +78,8 @@ export function MoneyInput({
   freeHint?: boolean
   autoFocus?: boolean
   id?: string
+  /** Shown when empty; "Free" by default. */
+  placeholder?: string
 }) {
   const [text, setText] = React.useState(() => moneyText(value))
   React.useEffect(() => {
@@ -97,7 +100,7 @@ export function MoneyInput({
       }}
       onBlur={() => setText(moneyText(value))}
       aria-label={label}
-      placeholder={freeHint ? 'Free' : '0'}
+      placeholder={placeholder ?? (freeHint ? 'Free' : '0')}
       suffix={<span className="text-xs text-subtle">{value === 0 && freeHint ? '' : currencySymbol(currency)}</span>}
       className={cn('w-24', className)}
       inputClassName="tabular-nums"
@@ -164,7 +167,7 @@ export function DishThumb({ url, className }: { url?: string; className?: string
    Rules: required, how many, first N free
    -------------------------------------------------------------------------- */
 
-export function RulesFields({ rules, kind, onChange, idPrefix }: { rules: Rules; kind: GroupKind; onChange: (rules: Rules) => void; idPrefix: string }) {
+export function RulesFields({ rules, kind, onChange, idPrefix, showRequired = true }: { rules: Rules; kind: GroupKind; onChange: (rules: Rules) => void; idPrefix: string; showRequired?: boolean }) {
   const { mode, n } = howManyOf(rules)
   const locked = requiredLocked(rules)
   const showFree = kind === 'extras' || kind === 'choice'
@@ -172,9 +175,11 @@ export function RulesFields({ rules, kind, onChange, idPrefix }: { rules: Rules;
   if (kind === 'remove') return <p className="text-xs text-subtle">Guests can leave out as many as they like. Always free.</p>
   return (
     <div className="divide-y divide-line-subtle">
-      <SettingRow title="Required" hint={locked ? 'Always required when guests pick 2 or more' : undefined}>
-        <Switch size="sm" checked={rules.min > 0} disabled={locked} onCheckedChange={(on) => onChange(withRequired(rules, on))} aria-label="Required" />
-      </SettingRow>
+      {showRequired ? (
+        <SettingRow title="Required" hint={locked ? 'Always required when guests pick 2 or more' : rules.min > 0 ? 'Guests must pick before adding' : 'Guests can skip it'}>
+          <Switch size="sm" checked={rules.min > 0} disabled={locked} onCheckedChange={(on) => onChange(withRequired(rules, on))} aria-label="Required" />
+        </SettingRow>
+      ) : null}
       <SettingRow title="How many">
         <Select value={mode} onValueChange={(v) => onChange(withHowMany(rules, v as HowMany))}>
           <SelectTrigger size="sm" className="w-36" aria-label="How many" id={`${idPrefix}-how`}>
@@ -292,9 +297,13 @@ export interface OptionGroupEditorProps {
   context?: 'dish' | 'meal' | 'set'
   autoFocus?: boolean
   showProblems?: boolean
+  /** The card's header already has the Required switch. */
+  requiredInHeader?: boolean
+  /** Inside a meal: options are included; this is what one costs extra (an upgrade). Replaces the price column. */
+  upgrade?: { get: (optionId: string) => number; set: (optionId: string, price: number) => void }
 }
 
-export function OptionGroupEditor({ group, onChange, variants, menu, mode, currency, excludeItemId, context = 'dish', autoFocus, showProblems }: OptionGroupEditorProps) {
+export function OptionGroupEditor({ group, onChange, variants, menu, mode, currency, excludeItemId, context = 'dish', autoFocus, showProblems, requiredInHeader, upgrade }: OptionGroupEditorProps) {
   const uid = React.useId()
   const [focusId, setFocusId] = React.useState<string | null>(null)
   const [openRow, setOpenRow] = React.useState<string | null>(null)
@@ -304,12 +313,18 @@ export function OptionGroupEditor({ group, onChange, variants, menu, mode, curre
 
   const remove = group.kind === 'remove'
   const course = group.kind === 'course'
-  const sizes = mode === 'own' && variants && variants.length >= 2 ? variants : null
+  const sizes = mode === 'own' && !upgrade && variants && variants.length >= 2 ? variants : null
   const bySize = sizes ? sizePricesOn(group, sizes) : false
   const eachMax = eachMaxOf(group)
   const problems = showProblems ? checkGroup(withoutBlankRows(group), variants) : []
-  const priceLabel = course ? 'Extra' : 'Price'
-  const priceHint = course ? (context === 'set' ? 'Extra is on top of the set price.' : context === 'meal' ? 'Extra is on top of the meal price.' : 'Extra is on top of the dish price.') : null
+  const priceLabel = upgrade || course ? 'Extra' : 'Price'
+  const priceHint = upgrade
+    ? 'All included in the meal price. Add a price only for an upgrade.'
+    : course
+      ? context === 'set'
+        ? 'Extra is on top of the set price.'
+        : 'Extra is on top of the dish price.'
+      : null
   const linkedIds = group.options.map((o) => o.itemId).filter((id): id is string => Boolean(id))
   const otherDishes = menu.items.filter((i) => i.id !== excludeItemId && i.kind !== 'set')
 
@@ -359,7 +374,7 @@ export function OptionGroupEditor({ group, onChange, variants, menu, mode, curre
       <p className="-mt-2 text-xs text-subtle">{GROUP_KIND_META[group.kind].hint}</p>
 
       <div className="rounded-lg border border-line-subtle px-3">
-        <RulesFields rules={group} kind={group.kind} idPrefix={uid} onChange={(r) => onChange({ ...group, min: r.min, max: r.max, freeQty: r.freeQty })} />
+        <RulesFields rules={group} kind={group.kind} idPrefix={uid} showRequired={!requiredInHeader} onChange={(r) => onChange({ ...group, min: r.min, max: r.max, freeQty: r.freeQty })} />
         {!remove ? (
           <SettingRow title="More than one of each" hint={eachMax ? `Like 2× extra cheese` : undefined} className="border-t border-line-subtle">
             {eachMax ? <CountInput value={eachMax} min={2} onChange={(n) => onChange(withEachMax(group, n))} label="Up to how many of each" suffix="each" /> : null}
@@ -451,7 +466,11 @@ export function OptionGroupEditor({ group, onChange, variants, menu, mode, curre
                     />
                   </span>
                   <span className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
-                    {!remove && !bySize ? <MoneyInput value={o.price} onChange={(price) => setOption(o.id, (x) => ({ ...x, price }))} currency={currency} label={`${priceLabel} for ${name}`} /> : null}
+                    {!remove && upgrade ? (
+                      <MoneyInput value={upgrade.get(o.id)} onChange={(price) => upgrade.set(o.id, price)} currency={currency} label={`Extra for ${name} in the meal`} placeholder="Included" />
+                    ) : !remove && !bySize ? (
+                      <MoneyInput value={o.price} onChange={(price) => setOption(o.id, (x) => ({ ...x, price }))} currency={currency} label={`${priceLabel} for ${name}`} />
+                    ) : null}
                     {!remove ? (
                       <label className="flex min-h-9 items-center gap-1.5 text-xs text-muted">
                         <Checkbox size="sm" checked={Boolean(o.isDefault)} onCheckedChange={(on) => onChange(withDefault(group, o.id, on === true))} aria-label={`${name} picked to start with`} />
@@ -570,6 +589,37 @@ export function OptionGroupEditor({ group, onChange, variants, menu, mode, curre
           Rows linked to a dish follow that dish&apos;s name, photo and sold out.
         </p>
       ) : null}
+    </div>
+  )
+}
+
+/** A meal's say over its groups' prices: an option's upgrade price by group and option, 0 = included. */
+export interface MealUpgrades {
+  get: (groupId: string, optionId: string) => number
+  set: (groupId: string, optionId: string, price: number) => void
+  /** The group got a new id; its upgrades follow. */
+  move: (fromGroupId: string, toGroupId: string) => void
+}
+
+/** A saved group inside a meal: its options, each included or an upgrade with its own price. */
+export function MealUpgradesList({ group, menu, currency, get, set }: { group: MenuOptionGroup; menu: Menu; currency: CurrencyCode; get: (optionId: string) => number; set: (optionId: string, price: number) => void }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-xs text-subtle">All included in the meal price. Add a price only for an upgrade.</span>
+      <ul className="flex flex-col divide-y divide-line-subtle rounded-lg border border-line-subtle">
+        {group.options.map((o) => {
+          const view = optionView(menu, o)
+          const name = group.kind === 'remove' ? `No ${view.label.toLowerCase()}` : view.label || 'Untitled'
+          return (
+            <li key={o.id} className={cn('flex min-h-11 items-center gap-2.5 px-3 py-1.5', view.soldOut && 'opacity-60')}>
+              {o.itemId ? <DishThumb url={view.imageUrl} className="size-7" /> : null}
+              <span className="min-w-0 flex-1 truncate text-[0.8125rem] text-foreground">{name}</span>
+              {view.soldOut ? <span className="text-xs text-danger">Sold out</span> : null}
+              {group.kind !== 'remove' ? <MoneyInput value={get(o.id)} onChange={(price) => set(o.id, price)} currency={currency} label={`Extra for ${name} in the meal`} placeholder="Included" /> : null}
+            </li>
+          )
+        })}
+      </ul>
     </div>
   )
 }

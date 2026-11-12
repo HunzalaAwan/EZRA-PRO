@@ -1,3 +1,4 @@
+import { migrateMenu } from './menu-pricing'
 import type { Menu } from './types'
 
 /* ==========================================================================
@@ -41,7 +42,10 @@ export function writeMenu(tenantId: string, menu: Menu | null): void {
   window.dispatchEvent(new Event(MENU_EVENT))
 }
 
-/** The saved menu wins; 30-day sales come from the seed for dishes it knows. Anything unreadable gives the seed. */
+/**
+ * The saved menu wins; 30-day sales come from the seed for dishes it knows. Anything unreadable gives the seed.
+ * Meals saved with an add-on price come back with a full price (migrateMenu), totals unchanged.
+ */
 export function mergeMenu(seed: Menu, raw: string): Menu {
   if (!raw) return seed
   try {
@@ -49,7 +53,7 @@ export function mergeMenu(seed: Menu, raw: string): Menu {
     const saved = parsed?.menu
     if (!parsed || parsed.version !== 1 || !saved || !Array.isArray(saved.items) || !Array.isArray(saved.categories)) return seed
     const sales = new Map(seed.items.map((item) => [item.id, item]))
-    return {
+    return migrateMenu({
       categories: saved.categories,
       items: saved.items.map((item) => {
         const known = sales.get(item.id)
@@ -57,7 +61,7 @@ export function mergeMenu(seed: Menu, raw: string): Menu {
         return known ? { ...withDefaults, sold30d: known.sold30d, revenue30d: known.revenue30d } : { ...withDefaults, sold30d: item.sold30d ?? 0, revenue30d: item.revenue30d ?? 0 }
       }),
       sharedGroups: Array.isArray(saved.sharedGroups) ? saved.sharedGroups : seed.sharedGroups ?? [],
-    }
+    })
   } catch {
     return seed
   }
