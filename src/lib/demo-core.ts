@@ -60,7 +60,6 @@ import type {
   Payment,
   PaymentStatus,
   PickupZone,
-  PlanTier,
   PriceTier,
   PricingModel,
   RangePreset,
@@ -148,23 +147,32 @@ export function round(n: number): number {
    TENANTS
    ========================================================================== */
 
-const PLAN_RANK: Record<PlanTier, number> = { starter: 0, growth: 1, scale: 2, enterprise: 3 }
-
-function featuresFor(plan: PlanTier): TenantFeatures {
-  const t = PLAN_RANK[plan]
-  return {
-    advancedAnalytics: t >= 1,
-    resourceScheduling: t >= 1,
-    multiLocation: t >= 2,
-    apiAccess: t >= 2,
-    customBranding: t >= 1,
-    waitlists: t >= 1,
-    dynamicPricing: t >= 2,
-    channelManager: t >= 2,
-    giftCards: t >= 1,
-    memberships: t >= 3,
-  }
+/**
+ * What each business has switched on. Every feature is open to every
+ * business — EZRA Pro has one price and no plans — so these only describe how
+ * each demo business runs (dynamic pricing shapes its seeded prices).
+ */
+const NO_FEATURES: TenantFeatures = {
+  advancedAnalytics: false,
+  resourceScheduling: false,
+  multiLocation: false,
+  apiAccess: false,
+  customBranding: false,
+  waitlists: false,
+  dynamicPricing: false,
+  channelManager: false,
+  giftCards: false,
+  memberships: false,
 }
+
+function inUse(...on: (keyof TenantFeatures)[]): TenantFeatures {
+  return { ...NO_FEATURES, ...Object.fromEntries(on.map((key) => [key, true])) }
+}
+
+/** The everyday set most of the demo businesses run with. */
+const EVERYDAY: (keyof TenantFeatures)[] = ['advancedAnalytics', 'resourceScheduling', 'customBranding', 'waitlists', 'giftCards']
+/** Everyday, plus several sites, the API, dynamic pricing and marketplaces. */
+const BIGGER: (keyof TenantFeatures)[] = [...EVERYDAY, 'multiLocation', 'apiAccess', 'dynamicPricing', 'channelManager']
 
 export const TENANTS: Tenant[] = [
   {
@@ -173,7 +181,6 @@ export const TENANTS: Tenant[] = [
     name: 'Blue Horizon Watersports',
     legalName: 'Blue Horizon Watersports LLC',
     vertical: 'watersports',
-    plan: 'growth',
     status: 'active',
     currency: 'USD',
     timezone: 'Pacific/Honolulu',
@@ -188,7 +195,7 @@ export const TENANTS: Tenant[] = [
       coverImage:
         'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=2000&q=80',
     },
-    features: featuresFor('growth'),
+    features: inUse(...EVERYDAY),
     stats: {
       monthlyBookings: 0,
       monthlyRevenue: 0,
@@ -210,7 +217,6 @@ export const TENANTS: Tenant[] = [
     name: 'Coral Cay Expeditions',
     legalName: 'Coral Cay Expeditions Pty Ltd',
     vertical: 'island',
-    plan: 'scale',
     status: 'active',
     currency: 'AUD',
     timezone: 'Australia/Brisbane',
@@ -225,7 +231,7 @@ export const TENANTS: Tenant[] = [
       coverImage:
         'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=2000&q=80',
     },
-    features: featuresFor('scale'),
+    features: inUse(...BIGGER),
     stats: {
       monthlyBookings: 0,
       monthlyRevenue: 0,
@@ -247,8 +253,7 @@ export const TENANTS: Tenant[] = [
     name: 'Saltline Kitchen & Terrace',
     legalName: 'Saltline Hospitality Single Member P.C.',
     vertical: 'restaurants',
-    plan: 'starter',
-    status: 'trialing',
+    status: 'active',
     currency: 'EUR',
     timezone: 'Europe/Athens',
     locale: 'el-GR',
@@ -262,7 +267,7 @@ export const TENANTS: Tenant[] = [
       coverImage:
         'https://images.unsplash.com/photo-1552566626-52f8b828add9?auto=format&fit=crop&w=2000&q=80',
     },
-    features: featuresFor('starter'),
+    features: inUse(),
     stats: {
       monthlyBookings: 0,
       monthlyRevenue: 0,
@@ -284,7 +289,6 @@ export const TENANTS: Tenant[] = [
     name: 'Ridgeline Adventure Co.',
     legalName: 'Ridgeline Adventure Company Limited',
     vertical: 'adventure',
-    plan: 'enterprise',
     status: 'active',
     currency: 'NZD',
     timezone: 'Pacific/Auckland',
@@ -299,7 +303,7 @@ export const TENANTS: Tenant[] = [
       coverImage:
         'https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=2000&q=80',
     },
-    features: featuresFor('enterprise'),
+    features: inUse(...BIGGER, 'memberships'),
     stats: {
       monthlyBookings: 0,
       monthlyRevenue: 0,
@@ -321,7 +325,6 @@ export const TENANTS: Tenant[] = [
     name: 'Casa Vela Hotel & Kitchen',
     legalName: 'Casa Vela Hospitalidade, Lda.',
     vertical: 'hotels',
-    plan: 'growth',
     status: 'active',
     currency: 'EUR',
     timezone: 'Europe/Lisbon',
@@ -336,7 +339,7 @@ export const TENANTS: Tenant[] = [
       coverImage:
         'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=2000&q=80',
     },
-    features: featuresFor('growth'),
+    features: inUse(...EVERYDAY),
     stats: {
       monthlyBookings: 0,
       monthlyRevenue: 0,
@@ -358,7 +361,6 @@ export const TENANTS: Tenant[] = [
     name: 'Caribe Transfers & Tours',
     legalName: 'Transportadora Caribe Riviera S.A. de C.V.',
     vertical: 'tours',
-    plan: 'growth',
     status: 'active',
     currency: 'USD',
     timezone: 'America/Cancun',
@@ -373,7 +375,7 @@ export const TENANTS: Tenant[] = [
       coverImage:
         'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=2000&q=80',
     },
-    features: featuresFor('growth'),
+    features: inUse(...EVERYDAY),
     stats: {
       monthlyBookings: 0,
       monthlyRevenue: 0,
@@ -1269,7 +1271,6 @@ export const SESSION: Session = {
     slug: t.slug,
     name: t.name,
     vertical: t.vertical,
-    plan: t.plan,
   })),
 }
 

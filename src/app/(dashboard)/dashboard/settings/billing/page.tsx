@@ -6,7 +6,7 @@ import { BillingSettingsClient } from '@/components/dashboard/settings/billing-s
 
 export const metadata: Metadata = {
   title: 'Billing',
-  description: 'Your plan, usage and invoice history.',
+  description: 'The 4% fee, what it came to, and monthly statements.',
 }
 
 export default async function BillingSettingsPage() {

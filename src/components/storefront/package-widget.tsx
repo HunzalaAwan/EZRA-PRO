@@ -213,7 +213,7 @@ export function PackageWidget({
       addOns: activity.addOns.map((addOn) => ({ addOnId: addOn.id, qty: addOn.required ? addOnUnits(addOn, headcount) : 0 })),
     },
     1,
-    { startsAt: chosen[0]?.startsAt, nowIso: now, businessRules: rules },
+    { startsAt: chosen[0]?.startsAt, nowIso: now, businessRules: rules, feePayer: defaults.feePayer },
   )
   const total = quote.total
   const priceChips = quote.appliedChanges.filter((change) => change.source !== 'dynamic')
@@ -405,7 +405,10 @@ export function PackageWidget({
       ) : null}
 
       <div className="flex items-center justify-between gap-3 border-t border-line-subtle pt-4">
-        <span className="text-sm text-muted">{party} {party === 1 ? 'person' : 'people'} · all taxes included</span>
+        <span className="text-sm text-muted">
+          {party} {party === 1 ? 'person' : 'people'}
+          {quote.feeTotal > 0 ? ` · with a ${formatCurrency(quote.feeTotal, currency)} ${quote.feeLabel.toLowerCase()}` : ' · all taxes included'}
+        </span>
         <span className="font-display text-2xl font-semibold tabular tracking-tight text-foreground">{formatCurrency(total, currency, { decimals: true })}</span>
       </div>
       <Button size="lg" fullWidth disabled={!complete || clash || party < 1} onClick={reserve} className="h-12 text-[0.9375rem]">

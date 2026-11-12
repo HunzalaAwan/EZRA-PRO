@@ -4,7 +4,6 @@ import * as React from 'react'
 import Link from 'next/link'
 import { ArrowRight, CalendarClock, CreditCard, FormInput, Lock, Plus, RotateCcw, Save, ShieldCheck, Trash2 } from 'lucide-react'
 
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Field } from '@/components/ui/field'
@@ -267,16 +266,14 @@ export function BookingFlowSettingsClient({ tenant }: BookingFlowSettingsClientP
           <ToggleRow
             title="Waitlist on sold-out times"
             body="Guests join a list instead of leaving. You keep the demand."
-            checked={draft.waitlists && tenant.features.waitlists}
-            disabled={!tenant.features.waitlists}
+            checked={draft.waitlists}
             onCheckedChange={(value) => set('waitlists', value)}
-            badge={tenant.features.waitlists ? undefined : <Badge variant="warning" size="sm">Growth plan</Badge>}
           />
           <ToggleRow
             title="Offer freed spots to the waitlist"
             body="When someone cancels or moves, the next guest on the list gets 30 minutes to take the spot."
             checked={draft.waitlistAutoPromote}
-            disabled={!draft.waitlists || !tenant.features.waitlists}
+            disabled={!draft.waitlists}
             onCheckedChange={(value) => set('waitlistAutoPromote', value)}
           />
         </CardContent>

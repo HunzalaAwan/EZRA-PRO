@@ -80,9 +80,7 @@ const VOLUME_OPTIONS = [
 const TOPIC_PREFILL: Record<string, string> = {
   migration:
     'We are on another booking platform and want to understand what moving would involve.',
-  enterprise:
-    'We run multiple locations or brands and need to talk about a custom commission and an SLA.',
-  pricing: 'We would like someone to run our real numbers against Starter, Growth and Scale.',
+  pricing: 'We would like to see what 4% of each booking comes to against what we pay today.',
   careers: 'I would like to apply for a role. Here is what I would do at EZRA Pro, and a link to my work.',
 }
 

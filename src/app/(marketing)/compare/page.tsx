@@ -5,28 +5,27 @@ import { ArrowRight } from 'lucide-react'
 import { ClosingCta } from '@/components/marketing/land/closing-cta'
 import { ALT_CONTENT, HUB, VS_CONTENT } from '@/components/marketing/compare/compare-content'
 import {
-  CompareHero,
-  FactBrief,
+  ArticleBody,
+  ArticleHero,
+  Block,
+  Bullets,
+  FactInline,
+  GlanceTable,
   JsonLd,
   LinkCards,
-  OnThisPage,
-  ReportError,
-  ScrollHint,
-  ScrollTable,
-  Section,
-  SourceLink,
-  TD,
-  TH,
-  ToneLegend,
-  ToneMark,
+  Ref,
+  SourceAnchor,
+  SourcesList,
+  createNotes,
+  type GlanceRow,
 } from '@/components/marketing/compare/compare-ui'
 import { articleSchema, breadcrumbSchema, compareMetadata, ezraSoftwareSchema } from '@/components/marketing/compare/compare-schema'
 import { CostCalculator } from '@/components/marketing/compare/cost-calculator'
+import { Button } from '@/components/ui/button'
 import {
   ALTERNATIVES_SLUGS,
-  CHECKED_ON,
   EZRA,
-  EZRA_CALC_NOTE,
+  EZRA_PLAN,
   MATRIX_COLUMNS,
   PLAN_RATES,
   SOURCES,
@@ -34,92 +33,76 @@ import {
   VENDOR_ORDER,
   VS_SLUGS,
   formatCheckedDate,
-  type Fact,
-  type MatrixCell,
-  type MatrixKey,
-  type Source,
+  type CellTone,
 } from '@/lib/data/competitors'
 import { cn } from '@/lib/utils'
 
 /* ==========================================================================
-   /compare — the hub: who each system suits, a dated and sourced matrix,
-   the cost calculator, every comparison page, and the method.
+   /compare — the hub.
+
+     our price      EZRA Pro's one plan, in one card
+     at a glance    pricing, who pays, best for: every system
+     how they charge three models, in three cards
+     features       six features that differ, as name chips by status
+     calculator     one input, a bar list
+     comparisons    every vs and alternatives page
+     how we check   four lines
+     sources        every footnote, numbered
    ========================================================================== */
 
 const PATH = '/compare'
 
 export const metadata: Metadata = compareMetadata({ title: HUB.title, description: HUB.description, path: PATH })
 
-/** Distinct sources behind one row, in order of first use. */
-function rowSources(facts: Fact[]): Source[] {
-  const seen = new Map<string, Source>()
-  for (const fact of facts) if (!seen.has(fact.source.url)) seen.set(fact.source.url, fact.source)
-  return [...seen.values()]
-}
-
-interface HubRow {
-  key: string
-  name: string
-  href?: string
-  ours?: boolean
-  monthly: Fact
-  fee: Fact
-  whoPays: Fact
-  processing: Fact
-  owner?: Fact
-  matrix: Record<MatrixKey, MatrixCell>
-}
-
-const ROWS: HubRow[] = [
-  {
-    key: 'ezra',
-    name: 'EZRA Pro',
-    href: '/pricing',
-    ours: true,
-    monthly: EZRA.monthly,
-    fee: EZRA.fee,
-    whoPays: EZRA.whoPays,
-    processing: EZRA.processing,
-    matrix: EZRA.matrix,
-  },
-  ...VENDOR_ORDER.map((id) => {
-    const v = VENDORS[id]
-    return {
-      key: id,
-      name: v.name,
-      href: v.hasVsPage ? `/compare/${id}` : undefined,
-      monthly: v.monthly,
-      fee: v.fee,
-      whoPays: v.whoPays,
-      processing: v.processing,
-      owner: v.owner,
-      matrix: v.matrix,
-    }
-  }),
+const TONES: { tone: CellTone; label: string }[] = [
+  { tone: 'yes', label: 'Built in' },
+  { tone: 'limited', label: 'Partly, or as an add-on' },
+  { tone: 'not-shown', label: 'Not shown on their pages' },
 ]
-
-function RowHead({ row, facts }: { row: HubRow; facts: Fact[] }) {
-  return (
-    <th scope="row" className={`${TD} w-[13rem] font-medium text-foreground`}>
-      {row.href ? (
-        <Link href={row.href} className="underline decoration-line-strong underline-offset-4 hover:text-primary">
-          {row.name}
-        </Link>
-      ) : (
-        row.name
-      )}
-      {row.ours ? <span className="mt-1 block text-xs font-normal text-subtle">Our product</span> : null}
-      <span className="mt-2 flex flex-col gap-1">
-        {rowSources(facts).map((source, i) => (
-          <SourceLink key={source.url} source={source} prefix={i === 0 ? 'Sources:' : ''} />
-        ))}
-      </span>
-    </th>
-  )
-}
 
 export default function CompareHubPage() {
   const checked = formatCheckedDate()
+
+  /* Footnotes are numbered here, in reading order. */
+  const notes = createNotes()
+
+  const ezraPriceRef = notes.fact(EZRA.pricing)
+
+  const glance: GlanceRow[] = [
+    {
+      key: 'ezra',
+      name: 'EZRA Pro',
+      href: '/pricing',
+      ours: true,
+      pricing: <FactInline fact={EZRA.pricing} n={notes.fact(EZRA.pricing)} />,
+      whoPays: <FactInline fact={EZRA.whoPays} n={notes.fact(EZRA.whoPays)} />,
+      bestFor: EZRA.bestFor,
+    },
+    ...VENDOR_ORDER.map((id) => {
+      const v = VENDORS[id]
+      return {
+        key: id,
+        name: v.name,
+        href: v.hasVsPage ? `/compare/${id}` : undefined,
+        pricing: <FactInline fact={v.pricing} n={notes.fact(v.pricing)} />,
+        whoPays: <FactInline fact={v.whoPays} n={notes.fact(v.whoPays)} />,
+        bestFor: v.bestFor,
+      }
+    }),
+  ]
+
+  const features = MATRIX_COLUMNS.map((col) => {
+    const entries = [
+      { key: 'ezra', name: 'EZRA Pro', ours: true, cell: EZRA.matrix[col.key] },
+      ...VENDOR_ORDER.map((id) => ({ key: id, name: VENDORS[id].name, ours: false, cell: VENDORS[id].matrix[col.key] })),
+    ].map((entry) => ({ ...entry, n: notes.fact(entry.cell) }))
+    return {
+      ...col,
+      groups: TONES.map((t) => ({ ...t, entries: entries.filter((e) => e.cell.tone === t.tone) })).filter((g) => g.entries.length > 0),
+    }
+  })
+
+  const calcRefs = [...new Set(PLAN_RATES.map((r) => notes.ref(r.source, r.status === 'reported')))]
 
   return (
     <>
@@ -134,212 +117,162 @@ export default function CompareHubPage() {
         ]}
       />
 
-      <CompareHero crumbs={[{ label: 'Home', href: '/' }, { label: 'Compare' }]} title={HUB.h1} lede={HUB.lede}>
-        <OnThisPage
-          items={[
-            { href: '#who-it-suits', label: 'Who each suits' },
-            { href: '#pricing', label: 'Pricing' },
-            { href: '#features', label: 'Features' },
-            { href: '#calculator', label: 'Cost calculator' },
-            { href: '#pages', label: 'All comparisons' },
-            { href: '#method', label: 'Method' },
-          ]}
-        />
-      </CompareHero>
+      <ArticleHero crumbs={[{ label: 'Home', href: '/' }, { label: 'Compare' }]} title={HUB.h1} lede={HUB.lede} photo={HUB.photo} />
 
-      {/* ---------- who each suits ---------- */}
-      <Section
-        id="who-it-suits"
-        eyebrow="Fit first"
-        title="Who each system suits"
-        intro={<p>Core booking is much the same everywhere. The real differences are how each one charges and the day-of work it’s built for.</p>}
+      <ArticleBody
+        toc={[
+          { id: 'our-price', label: 'Our price' },
+          { id: 'at-a-glance', label: 'At a glance' },
+          { id: 'how-they-charge', label: 'How they charge' },
+          { id: 'features', label: 'Features that differ' },
+          { id: 'calculator', label: 'Cost calculator' },
+          { id: 'comparisons', label: 'Comparisons' },
+          { id: 'method', label: 'How we check' },
+          { id: 'sources', label: 'Sources' },
+        ]}
       >
-        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {ROWS.map((row) => {
-            const suits = row.ours ? HUB.ezraSuits : VENDORS[row.key as keyof typeof VENDORS].suits
-            return (
-              <li
-                key={row.key}
-                className={cn(
-                  'flex flex-col rounded-[1.25rem] bg-surface p-6 shadow-[var(--shadow-sm)] ring-1 ring-black/[0.04]',
-                  row.ours && 'ring-2 ring-cal-iris',
-                )}
-              >
-                <h3 className="font-display text-[1.25rem] font-medium tracking-[-0.015em] text-foreground">{row.name}</h3>
-                <p className="mt-2 text-[0.9375rem] leading-[1.55] text-muted">{suits}</p>
-                {row.owner ? <p className="mt-3 text-sm text-subtle">Owner: {row.owner.text}</p> : null}
-                {row.href ? (
-                  <Link
-                    href={row.href}
-                    className="mt-auto inline-flex items-center gap-1.5 pt-4 text-[0.9375rem] font-medium text-foreground underline underline-offset-4 hover:text-primary"
-                  >
-                    {row.ours ? 'EZRA Pro pricing' : `EZRA Pro vs ${row.name}`}
-                    <ArrowRight aria-hidden="true" className="size-4" />
-                  </Link>
-                ) : null}
-              </li>
-            )
-          })}
-        </ul>
-      </Section>
-
-      {/* ---------- pricing table ---------- */}
-      <Section
-        id="pricing"
-        tone="subtle"
-        eyebrow="Pricing"
-        title="How each system charges"
-        intro={
-          <p>
-            Three models cover the field: no subscription and a fee of around 6% per online booking, often paid by the guest; a subscription plus a published
-            1–3%; or contract and enterprise pricing. List prices, checked {checked}.
-          </p>
-        }
-      >
-        <ScrollTable label="Booking software pricing compared" minWidth="64rem">
-          <table className="w-full border-collapse text-left">
-            <caption className="px-4 pt-4 pb-2 text-left text-sm text-muted">
-              Pricing for EZRA Pro and eleven tour and activity booking systems. Last checked {checked}.
-            </caption>
-            <thead>
-              <tr className="border-b border-line">
-                <th scope="col" className={TH}>System</th>
-                <th scope="col" className={TH}>Monthly</th>
-                <th scope="col" className={TH}>Fee on online bookings</th>
-                <th scope="col" className={TH}>Who pays the fee</th>
-                <th scope="col" className={TH}>Card processing</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ROWS.map((row) => (
-                <tr key={row.key} className={cn('border-b border-line-subtle last:border-b-0', row.ours && 'bg-cal-haze')}>
-                  <RowHead row={row} facts={[row.monthly, row.fee, row.whoPays, row.processing]} />
-                  <td className={TD}><FactBrief fact={row.monthly} /></td>
-                  <td className={TD}><FactBrief fact={row.fee} /></td>
-                  <td className={TD}><FactBrief fact={row.whoPays} /></td>
-                  <td className={TD}><FactBrief fact={row.processing} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </ScrollTable>
-        <ScrollHint />
-      </Section>
-
-      {/* ---------- feature matrix ---------- */}
-      <Section
-        id="features"
-        eyebrow="Features"
-        title="The day-of features that differ"
-        intro={
-          <p>
-            Online booking, payments, promo codes and OTA connections are standard, so they’re left out. These are the features where the
-            systems actually differ. “Not shown” means not on the vendor’s own pages on {checked}, not that it’s missing.
-          </p>
-        }
-      >
-        <div className="mb-5">
-          <ToneLegend />
-        </div>
-        <ScrollTable label="Booking software features compared" minWidth="70rem">
-          <table className="w-full border-collapse text-left">
-            <caption className="px-4 pt-4 pb-2 text-left text-sm text-muted">
-              Features shown on each vendor’s own pages, and EZRA Pro’s. Last checked {checked}.
-            </caption>
-            <thead>
-              <tr className="border-b border-line">
-                <th scope="col" className={TH}>System</th>
-                {MATRIX_COLUMNS.map((col) => (
-                  <th key={col.key} scope="col" className={TH}>{col.label}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {ROWS.map((row) => (
-                <tr key={row.key} className={cn('border-b border-line-subtle last:border-b-0', row.ours && 'bg-cal-haze')}>
-                  <RowHead row={row} facts={MATRIX_COLUMNS.map((col) => row.matrix[col.key])} />
-                  {MATRIX_COLUMNS.map((col) => {
-                    const cell = row.matrix[col.key]
-                    return (
-                      <td key={col.key} className={TD}>
-                        <span className="flex gap-2">
-                          <ToneMark tone={cell.tone} />
-                          <FactBrief fact={cell} />
-                        </span>
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </ScrollTable>
-        <ScrollHint />
-        <p className="mt-5 max-w-3xl text-sm leading-relaxed text-muted">
-          On EZRA Pro, gift cards, promotions, dynamic pricing and multi-location are on the Scale plan, per our pricing page. Waivers are
-          included from Starter.
-        </p>
-      </Section>
-
-      {/* ---------- calculator ---------- */}
-      <Section
-        id="calculator"
-        tone="cloud"
-        eyebrow="Cost calculator"
-        title="What would you pay each month?"
-        intro={
-          <p>
-            Enter a month of online bookings. We add each plan’s subscription to its percentage, using published rates or clearly labelled
-            reported ones. It’s arithmetic on list prices, not a quote.
-          </p>
-        }
-      >
-        <CostCalculator rates={PLAN_RATES} defaultValue={10_000} checkedOn={checked} ezraNote={EZRA_CALC_NOTE} />
-      </Section>
-
-      {/* ---------- every page ---------- */}
-      <Section id="pages" eyebrow="Go deeper" title="Every comparison">
-        <h3 className="font-display text-[1.25rem] font-medium text-foreground">EZRA Pro against one system</h3>
-        <div className="mt-5">
-          <LinkCards
-            links={VS_SLUGS.map((slug) => ({
-              href: `/compare/${slug}`,
-              label: VS_CONTENT[slug].h1,
-              note: VENDORS[VS_CONTENT[slug].vendor].model.text,
-            }))}
-          />
-        </div>
-        <h3 className="mt-12 font-display text-[1.25rem] font-medium text-foreground">Alternatives lists</h3>
-        <div className="mt-5">
-          <LinkCards
-            links={ALTERNATIVES_SLUGS.map((slug) => ({
-              href: `/alternatives/${slug}`,
-              label: `${VENDORS[slug].name} alternatives`,
-              note: ALT_CONTENT[slug].h1,
-            }))}
-          />
-        </div>
-      </Section>
-
-      {/* ---------- method ---------- */}
-      <Section id="method" tone="subtle" eyebrow="Method" title="How we checked">
-        <div className="grid gap-8 lg:grid-cols-2">
-          <div>
-            <p className="text-[0.9375rem] text-muted">
-              Last checked <time dateTime={CHECKED_ON}>{checked}</time>.
+        {/* ---------- our price ---------- */}
+        <section id="our-price" aria-labelledby="our-price-title" className="scroll-mt-32">
+          <div className="rounded-[1.75rem] bg-cal-lavender p-7 sm:p-9">
+            <h2 id="our-price-title" className="text-sm font-medium text-foreground">
+              EZRA Pro has one plan
+            </h2>
+            <p className="mt-3 flex flex-wrap items-baseline gap-x-3">
+              <span className="font-display text-[4rem] leading-none font-medium tracking-[-0.04em] text-foreground sm:text-[5rem]">{EZRA_PLAN.percent}%</span>
+              <span className="text-[1.125rem] text-foreground">
+                of each booking
+                <Ref n={ezraPriceRef} />
+              </span>
             </p>
-            <ul className="mt-4 list-disc space-y-2.5 pl-5 text-[0.9375rem] leading-[1.6] text-muted">
-              {HUB.methodology.map((line) => (
-                <li key={line}>{line}</li>
+            <ul className="mt-6 grid gap-x-6 gap-y-2 text-[1rem] text-foreground sm:grid-cols-2">
+              {[`$${EZRA_PLAN.monthly} a month`, 'No setup fee', 'No contract', 'You or your guests pay: your call'].map((item) => (
+                <li key={item} className="flex gap-3">
+                  <span aria-hidden="true" className="mt-[0.6em] size-1.5 shrink-0 rounded-full bg-foreground/50" />
+                  {item}
+                </li>
               ))}
             </ul>
-            <p className="mt-5 text-sm text-muted">
-              Further reading on how booking fees are passed on: <SourceLink source={SOURCES.arival} prefix="" />
-            </p>
+            <div className="mt-7 flex flex-wrap gap-3">
+              <Button asChild variant="ink" size="lg" className="rounded-[10px] px-6" rightIcon={<ArrowRight aria-hidden="true" />}>
+                <Link href="/signup">Start free</Link>
+              </Button>
+              <Button asChild variant="secondary" size="lg" className="rounded-[10px] px-6">
+                <Link href="/pricing">See pricing</Link>
+              </Button>
+            </div>
           </div>
-          <ReportError page="Compare tour and activity booking software" />
-        </div>
-      </Section>
+        </section>
+
+        {/* ---------- at a glance ---------- */}
+        <Block id="at-a-glance" title="At a glance" intro={<p>Twelve systems, in three plain columns. Names with a link have their own comparison.</p>}>
+          <GlanceTable caption={`Tour booking software at a glance. Last checked ${checked}.`} rows={glance} />
+        </Block>
+
+        {/* ---------- how they charge ---------- */}
+        <Block id="how-they-charge" title="How they charge" intro={<p>Booking itself works much the same everywhere. The real difference is the bill.</p>}>
+          <ul className="grid gap-4 sm:grid-cols-3">
+            {HUB.models.map((model, i) => (
+              <li key={model.title} className={cn('flex flex-col rounded-[1.25rem] p-5', ['bg-cal-seafoam', 'bg-cal-sky', 'bg-cal-peach'][i])}>
+                <h3 className="font-display text-[1.125rem] font-medium tracking-[-0.015em] text-foreground">{model.title}</h3>
+                <p className="mt-2 text-[0.9375rem] leading-[1.5] text-foreground/80">{model.body}</p>
+                <p className="mt-auto pt-4 text-sm text-foreground">{model.who}</p>
+              </li>
+            ))}
+          </ul>
+        </Block>
+
+        {/* ---------- features ---------- */}
+        <Block
+          id="features"
+          title="Features that differ"
+          intro={<p>Online booking, payments and promo codes are standard, so they’re left out. These six vary.</p>}
+        >
+          <ul className="grid gap-4 sm:grid-cols-2">
+            {features.map((feature) => (
+              <li key={feature.key} className="rounded-[1.25rem] bg-surface p-5 ring-1 ring-black/[0.06]">
+                <h3 className="font-medium text-foreground">{feature.label}</h3>
+                <dl className="mt-3 space-y-3">
+                  {feature.groups.map((group) => (
+                    <div key={group.tone}>
+                      <dt className="text-xs font-medium text-subtle">{group.label}</dt>
+                      <dd className="mt-1.5 flex flex-wrap gap-1.5">
+                        {group.entries.map((entry) => (
+                          <span
+                            key={entry.key}
+                            title={entry.cell.text}
+                            className={cn(
+                              'inline-flex items-center rounded-full px-2.5 py-0.5 text-sm',
+                              entry.ours
+                                ? 'bg-foreground text-background'
+                                : group.tone === 'yes'
+                                  ? 'bg-cal-honeydew text-foreground'
+                                  : group.tone === 'limited'
+                                    ? 'bg-cal-sunbeam text-foreground'
+                                    : 'bg-background-subtle text-muted',
+                            )}
+                          >
+                            {entry.name}
+                            <sup className="relative -top-[0.4em] ml-0.5 align-baseline text-xs leading-none">
+                              <a href={`#source-${entry.n}`} aria-label={`Source ${entry.n}`} className={cn('no-underline', entry.ours ? 'text-background/70' : 'text-subtle')}>
+                                {entry.n}
+                              </a>
+                            </sup>
+                          </span>
+                        ))}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </li>
+            ))}
+          </ul>
+        </Block>
+
+        {/* ---------- calculator ---------- */}
+        <Block
+          id="calculator"
+          title="What would you pay?"
+          intro={
+            <p>
+              Enter a month of online bookings. As volume grows, several plans cost less than EZRA Pro, and the bars show it.
+              {calcRefs.map((n) => (
+                <Ref key={n} n={n} />
+              ))}
+            </p>
+          }
+        >
+          <CostCalculator rates={PLAN_RATES} defaultValue={10_000} checkedOn={checked} />
+        </Block>
+
+        {/* ---------- every page ---------- */}
+        <Block id="comparisons" title="Comparisons">
+          <LinkCards
+            links={[
+              ...VS_SLUGS.map((slug) => ({ href: `/compare/${slug}`, label: VS_CONTENT[slug].h1, note: VENDORS[VS_CONTENT[slug].vendor].bestFor })),
+              ...ALTERNATIVES_SLUGS.map((slug) => ({
+                href: `/alternatives/${slug}`,
+                label: `${VENDORS[slug].name} alternatives`,
+                note: `${ALT_CONTENT[slug].entries.length} options, in plain terms`,
+              })),
+            ]}
+          />
+        </Block>
+
+        {/* ---------- method ---------- */}
+        <Block id="method" title="How we check">
+          <Bullets items={HUB.method.map((text) => ({ text }))} />
+        </Block>
+
+        <SourcesList
+          notes={notes.list}
+          page={HUB.h1}
+          extra={
+            <p className="mt-5 text-sm text-muted">
+              Further reading on how booking fees are passed on: <SourceAnchor source={SOURCES.arival} />
+            </p>
+          }
+        />
+      </ArticleBody>
 
       <ClosingCta />
     </>

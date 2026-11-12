@@ -40,6 +40,8 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
 import { toast } from '@/components/ui/toaster'
+import { useBookingDefaults } from '@/hooks/use-booking-defaults'
+import { BOOKING_FEE_LABEL, EZRA_FEE_PERCENT, FEE_PAYER_OPTIONS, ezraFee, guestBookingFee, type FeePayer } from '@/lib/fees'
 import { cn, addDays, formatCurrency, formatDateLong, formatNumber } from '@/lib/utils'
 import type { KpiMetric, Tenant } from '@/types'
 
@@ -70,9 +72,6 @@ interface PaymentSettings {
   taxMode: 'inclusive' | 'exclusive'
   taxLabel: string
   taxId: string
-  feeBearer: 'operator' | 'guest'
-  bookingFeePercent: string
-  bookingFeeFixed: string
   tippingEnabled: boolean
   tipPresets: string
   tipRecipient: 'crew_pool' | 'assigned_guide' | 'business'
@@ -87,9 +86,6 @@ const INITIAL: PaymentSettings = {
   taxMode: 'exclusive',
   taxLabel: 'Hawaii GET + county surcharge',
   taxId: 'GE-123-4567-8901-02',
-  feeBearer: 'guest',
-  bookingFeePercent: '2.5',
-  bookingFeeFixed: '1.50',
   tippingEnabled: true,
   tipPresets: '15, 18, 20, 25',
   tipRecipient: 'crew_pool',
@@ -116,19 +112,26 @@ export function PaymentSettingsClient({ tenant: CURRENT_TENANT, now: NOW, kpis }
   } = React.useMemo(() => computePaymentsData(CURRENT_TENANT, kpis, NOW), [CURRENT_TENANT, kpis, NOW])
   const [settings, setSettings] = React.useState<PaymentSettings>(INITIAL)
   const [saving, setSaving] = React.useState(false)
+  // Who pays EZRA Pro's 4% is kept with the booking defaults, which checkout, the walk-in desk and the manage page read.
+  const { defaults: bookingDefaults, save: saveBookingDefaults } = useBookingDefaults(CURRENT_TENANT.slug)
+  /** A choice made here and not saved yet; null shows the saved one. */
+  const [feeDraft, setFeeDraft] = React.useState<FeePayer | null>(null)
+  const feePayer = feeDraft ?? bookingDefaults.feePayer
 
   const set = <K extends keyof PaymentSettings>(key: K, value: PaymentSettings[K]) =>
     setSettings((prev) => ({ ...prev, [key]: value }))
 
   const dirty = React.useMemo(
-    () => JSON.stringify(settings) !== JSON.stringify(INITIAL),
-    [settings],
+    () => JSON.stringify(settings) !== JSON.stringify(INITIAL) || (feeDraft !== null && feeDraft !== bookingDefaults.feePayer),
+    [settings, feeDraft, bookingDefaults.feePayer],
   )
 
   function save() {
     setSaving(true)
     window.setTimeout(() => {
       setSaving(false)
+      if (feeDraft !== null && feeDraft !== bookingDefaults.feePayer && !saveBookingDefaults({ ...bookingDefaults, feePayer: feeDraft })) return
+      setFeeDraft(null)
       toast.success('Payment settings saved', {
         description: 'New bookings use these rules immediately.',
       })
@@ -142,12 +145,10 @@ export function PaymentSettingsClient({ tenant: CURRENT_TENANT, now: NOW, kpis }
       ? Math.round((sampleFare * taxRateNumber) / 100)
       : Math.round(sampleFare - sampleFare / (1 + taxRateNumber / 100))
     : 0
-  const sampleFee =
-    Math.round((sampleFare * (Number(settings.bookingFeePercent) || 0)) / 100) +
-    Math.round((Number(settings.bookingFeeFixed) || 0) * 100)
-  const guestPays =
-    (settings.taxMode === 'exclusive' ? sampleFare + sampleTax : sampleFare) +
-    (settings.feeBearer === 'guest' ? sampleFee : 0)
+  // EZRA Pro's 4% on the tickets, before tax: the same maths as checkout.
+  const sampleFee = guestBookingFee(sampleFare, feePayer)
+  const guestPays = (settings.taxMode === 'exclusive' ? sampleFare + sampleTax : sampleFare) + sampleFee
+  const youKeep = sampleFare - (feePayer === 'business' ? ezraFee(sampleFare) : 0)
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
@@ -230,7 +231,7 @@ export function PaymentSettingsClient({ tenant: CURRENT_TENANT, now: NOW, kpis }
         </CardHeader>
 
         <CardContent className="grid gap-5 pt-0 sm:grid-cols-2">
-          <Field label="Payout schedule" description="Daily is the default on the Growth plan.">
+          <Field label="Payout schedule" description="Daily is the default.">
             {({ id }) => (
               <Select
                 value={settings.payoutSchedule}
@@ -415,69 +416,41 @@ export function PaymentSettingsClient({ tenant: CURRENT_TENANT, now: NOW, kpis }
         </CardContent>
       </Card>
 
-      {/* ---------------- Service fee ---------------- */}
+      {/* ---------------- EZRA Pro's fee ---------------- */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <BadgePercent className="size-4 text-primary" aria-hidden="true" />
-            Service fee
+            Who pays the {EZRA_FEE_PERCENT}%
           </CardTitle>
           <CardDescription>
-            EZRA Pro charges {CURRENT_TENANT.plan === 'growth' ? '4.5%' : '3%'} per booking. You
-            decide whether that comes out of your margin or is shown to the guest.
+            EZRA Pro costs {EZRA_FEE_PERCENT}% of each booking. Nothing else: no monthly fee, no setup fee, no
+            contract. Choose whether it comes out of the booking or is added for the guest.
           </CardDescription>
         </CardHeader>
 
         <CardContent className="flex flex-col gap-5 pt-0">
           <RadioGroup
-            value={settings.feeBearer}
-            onValueChange={(v) => set('feeBearer', v as PaymentSettings['feeBearer'])}
+            value={feePayer}
+            onValueChange={(v) => setFeeDraft(v as FeePayer)}
             className="sm:grid-cols-2"
+            aria-label={`Who pays the ${EZRA_FEE_PERCENT}%`}
           >
-            <RadioGroupCard
-              value="operator"
-              icon={<HandCoins />}
-              label="I absorb it"
-              description="Cleanest price on the page. Comes out of your net."
-            />
-            <RadioGroupCard
-              value="guest"
-              icon={<Percent />}
-              label="Guest pays it"
-              description="Shown as a booking fee line at checkout."
-            />
+            {FEE_PAYER_OPTIONS.map((option) => (
+              <RadioGroupCard
+                key={option.value}
+                value={option.value}
+                icon={option.value === 'business' ? <HandCoins /> : <Percent />}
+                label={option.label}
+                description={option.description}
+              />
+            ))}
           </RadioGroup>
-
-          <div
-            className={cn(
-              'grid gap-5 sm:grid-cols-2',
-              settings.feeBearer === 'operator' && 'pointer-events-none opacity-45',
-            )}
-          >
-            <Field label="Booking fee — percentage">
-              <Input
-                value={settings.bookingFeePercent}
-                inputMode="decimal"
-                disabled={settings.feeBearer === 'operator'}
-                onChange={(e) => set('bookingFeePercent', e.target.value)}
-                suffix="%"
-              />
-            </Field>
-            <Field label="Booking fee — fixed">
-              <Input
-                value={settings.bookingFeeFixed}
-                inputMode="decimal"
-                disabled={settings.feeBearer === 'operator'}
-                onChange={(e) => set('bookingFeeFixed', e.target.value)}
-                suffix={CURRENCY}
-              />
-            </Field>
-          </div>
 
           {/* Worked example */}
           <div className="overflow-hidden rounded-xl border border-line">
             <p className="border-b border-line bg-surface-sunken px-4 py-2 text-xs font-semibold tracking-[0.08em] text-subtle uppercase">
-              What a two-adult sunset sail looks like
+              A {formatCurrency(sampleFare, CURRENCY)} booking
             </p>
             <dl className="divide-y divide-line-subtle text-sm">
               <ExampleRow label="Tickets · 2 adults" value={formatCurrency(sampleFare, CURRENCY)} />
@@ -490,12 +463,16 @@ export function PaymentSettingsClient({ tenant: CURRENT_TENANT, now: NOW, kpis }
                   muted={settings.taxMode === 'inclusive'}
                 />
               ) : null}
-              {settings.feeBearer === 'guest' ? (
-                <ExampleRow label="Booking fee" value={formatCurrency(sampleFee, CURRENCY)} />
+              {sampleFee > 0 ? (
+                <ExampleRow label={BOOKING_FEE_LABEL} value={formatCurrency(sampleFee, CURRENCY)} />
               ) : null}
               <ExampleRow label="Guest pays" value={formatCurrency(guestPays, CURRENCY)} strong />
+              <ExampleRow label="You keep, before tax" value={formatCurrency(youKeep, CURRENCY)} />
             </dl>
           </div>
+          <p className="text-xs leading-relaxed text-muted">
+            Card fees are between you and your payment provider. EZRA Pro never adds a card fee line for guests.
+          </p>
         </CardContent>
       </Card>
 
@@ -519,7 +496,7 @@ export function PaymentSettingsClient({ tenant: CURRENT_TENANT, now: NOW, kpis }
                 Offer tipping at checkout and after the activity
               </Label>
               <p className="mt-0.5 text-xs leading-relaxed text-muted">
-                Tips are never subject to the EZRA Pro service fee.
+                EZRA Pro takes nothing from tips.
               </p>
             </div>
             <Switch

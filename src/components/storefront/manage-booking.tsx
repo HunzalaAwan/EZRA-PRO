@@ -45,6 +45,7 @@ import {
 import { sendGuestMessage, useInbox } from '@/hooks/use-inbox'
 import { useBookingDefaults } from '@/hooks/use-booking-defaults'
 import { resolveTerms } from '@/lib/booking-defaults'
+import { BOOKING_FEE_LABEL, guestBookingFee } from '@/lib/fees'
 import type { InboxThread } from '@/lib/inbox'
 import { answerProblem } from '@/lib/guest-requirements'
 import { cn, formatCurrency, formatDateLong, formatRelative, formatTime, pluralize } from '@/lib/utils'
@@ -376,7 +377,9 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
   const canMove = rules.reschedule && hoursToGo >= rules.rescheduleHours && (rules.maxReschedules === 0 || moves < rules.maxReschedules)
   const freeWindow = activity.policy.freeCancellationHours > 0 && hoursToGo >= activity.policy.freeCancellationHours
   // Added guests, and a dearer pickup point chosen here.
-  const extra = addCost(booking.partySize, partySize) + rideExtra(currentChoice, partySize)
+  // What is added to the booking pays EZRA Pro's 4% as at checkout: on top only when the business passes it on.
+  const withFee = (amount: number) => amount + guestBookingFee(amount, bookingDefaults.feePayer)
+  const extra = withFee(addCost(booking.partySize, partySize) + rideExtra(currentChoice, partySize))
   const deposit = activity.payment.collect === 'deposit' ? splitPayment(activity.payment, booking.total, booking.partySize).now : 0
   const balance = state.balancePaid ? 0 : Math.max(0, booking.total + extra - booking.amountPaid)
   const unsigned = state.waiversSigned ? 0 : booking.participants.filter((participant) => !participant.waiverSigned).length
@@ -405,7 +408,7 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
   /* add guests */
   const [adding, setAdding] = React.useState(1)
   /** What the guests being added cost. */
-  const addingCost = addCost(partySize, partySize + adding) + Math.max(0, rideExtra(currentChoice, partySize + adding) - rideExtra(currentChoice, partySize))
+  const addingCost = withFee(addCost(partySize, partySize + adding) + Math.max(0, rideExtra(currentChoice, partySize + adding) - rideExtra(currentChoice, partySize)))
 
   /* messages */
   const threadMeta = React.useMemo(
@@ -834,7 +837,8 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
                     if (inExtra === adding) return `more ${extraWords}`
                     const usual = perGroup ? 'more, in the group price' : `more at ${formatCurrency(pricePerGuest, currency)} each`
                     return inExtra > 0 ? `${usual} · ${inExtra} ${extraWords}` : usual
-                  })()}{' '}
+                  })()}
+                  {addingCost > 0 && bookingDefaults.feePayer === 'guest' ? `, plus a ${BOOKING_FEE_LABEL.toLowerCase()}` : ''}{' '}
                   · {privateGroup ? `up to ${privateMost} ${pluralize(privateMost, 'guest')}` : priceStops ? `up to ${groupLimit} ${pluralize(groupLimit, 'guest')}` : `${roomNow} ${pluralize(roomNow, 'spot')} left`}
                 </span>
               </div>

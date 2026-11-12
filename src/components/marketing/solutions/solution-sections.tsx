@@ -186,7 +186,7 @@ export function OtherTrades({ siblings }: { siblings: Vertical[] }) {
           id="other-trades-title"
           label="The other trades"
           title="Run more than one kind of business?"
-          description="A dive shop with a café, a hotel with an excursion desk, a studio that runs retreats. One account covers every trade; multi-brand and multi-location are on Scale and Enterprise."
+          description="A dive shop with a café, a hotel with an excursion desk, a studio that runs retreats. One account covers every trade, with several brands and locations included."
         />
 
         {/* a swipeable row on phones, a grid from sm */}

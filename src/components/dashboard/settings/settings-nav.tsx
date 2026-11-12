@@ -95,7 +95,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
   {
     href: '/dashboard/settings/billing',
     label: 'Billing',
-    description: 'Plan, usage, invoices and payment method',
+    description: 'The 4% fee, what it came to, and statements',
     icon: ReceiptText,
   },
 ]

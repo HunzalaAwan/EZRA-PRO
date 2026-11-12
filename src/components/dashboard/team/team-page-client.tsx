@@ -307,7 +307,7 @@ export function TeamPageClient({
           icon={<Users className="size-4" />}
           value={members.length}
           label="Workspace members"
-          hint={`${members.length} of 15 team members on the Growth plan`}
+          hint="Add as many as you need"
         />
         <SummaryTile
           icon={<ShieldCheck className="size-4" />}

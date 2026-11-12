@@ -23,7 +23,7 @@ export const metadata: Metadata = {
 /* ==========================================================================
    /contact — the form, and every other way to reach a person.
 
-   `?topic=` prefills the message (migration, enterprise, pricing, careers)
+   `?topic=` prefills the message (migration, pricing, careers)
    so a deep link from elsewhere on the site means something. The careers
    topic also swaps the headline, since an applicant is not booking a demo.
    ========================================================================== */

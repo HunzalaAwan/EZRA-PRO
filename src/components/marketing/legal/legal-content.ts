@@ -126,10 +126,10 @@ export const LEGAL_DOCUMENTS: Record<LegalKey, LegalDocument> = {
       },
       {
         id: 'fees',
-        heading: 'Fees and commission',
+        heading: 'Fees',
         paragraphs: [
-          'Each plan charges a commission on bookings taken through EZRA Pro, and some plans charge a monthly platform fee, as set out on the pricing page at the time you subscribe. Commission is charged only on bookings actually taken, and is calculated on the amount the guest pays before taxes. You may pass the commission to the guest as a booking fee, per product, or absorb it.',
-          'Payment processing charges set by our payment processor are passed through at cost and shown separately. Prices are in US dollars unless your account is set to another currency. We may change fees with thirty days’ notice; a change never applies to bookings already taken.',
+          'EZRA Pro charges 4% of each booking taken through it, as set out on the pricing page. There is no monthly fee, no setup fee and no contract. The fee is charged only on bookings actually taken, and is calculated on the booking amount before taxes. You choose in your settings whether you pay it or pass it to the guest as a booking fee.',
+          'Card processing charges are between you and your payment provider, and are not added to the guest’s price by EZRA Pro. Prices are in US dollars unless your account is set to another currency. We may change fees with thirty days’ notice; a change never applies to bookings already taken.',
         ],
       },
       {

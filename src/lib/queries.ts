@@ -294,12 +294,11 @@ export function getSession(): Session {
   SESSION = {
     user: CURRENT_USER,
     tenant: DEFAULT_TENANT,
-    availableTenants: TENANTS.map(({ id, slug, name, vertical, plan }) => ({
+    availableTenants: TENANTS.map(({ id, slug, name, vertical }) => ({
       id,
       slug,
       name,
       vertical,
-      plan,
     })),
   }
   return SESSION

@@ -8,228 +8,27 @@
  * owns the guest list, what happens when the harbour loses signal — instead of
  * gesturing at "powerful features".
  *
- * The pricing matrix is generated from one shared row definition so the four
- * plans can never drift apart: a row either exists on a tier or it does not, and
- * inclusion is monotonic up the ladder.
+ * Pricing is not defined here: EZRA Pro has one price (4% of each booking,
+ * $0 a month), kept in `@/content/marketing` and re-exported below so the two
+ * can never disagree.
  */
 
-import type {
-  FaqItem,
-  FeatureBlock,
-  Integration,
-  PlanTier,
-  PricingPlan,
-  Testimonial,
-} from '@/types'
+import type { FaqItem, FeatureBlock, Integration, PricingPlan, Testimonial } from '@/types'
+import { PRICING_PLANS } from '@/content/marketing'
 import { avatarUrl } from './constants'
 
 /* ==========================================================================
    PRICING
    ========================================================================== */
 
-const PLAN_ORDER: PlanTier[] = ['starter', 'growth', 'scale', 'enterprise']
+export { PRICING_PLANS }
 
-interface FeatureRow {
-  label: string
-  /** Lowest tier that includes it. */
-  from: PlanTier
-  hint?: string
-}
-
-/**
- * One definition, four rendered columns. `from` is the cheapest plan that
- * carries the row; everything above inherits it, which is what makes the
- * comparison table honest when someone reads it column by column.
- */
-const FEATURE_ROWS: FeatureRow[] = [
-  {
-    label: 'Unlimited activities, departures and seats',
-    from: 'starter',
-    hint: 'No per-product fees and no cap on how many times a day you run. Seasonal operators are not penalised for a busy July.',
-  },
-  {
-    label: 'Embeddable booking widget and hosted storefront',
-    from: 'starter',
-    hint: 'One script tag, or a full storefront on your own domain if you do not have a site yet.',
-  },
-  {
-    label: 'Mobile manifests, check-in and digital waivers',
-    from: 'starter',
-    hint: 'Works on a phone at the dock. Waivers are countersigned and stored against the guest, not the booking.',
-  },
-  {
-    label: 'Offline-tolerant check-in',
-    from: 'starter',
-    hint: 'Manifests cache on the device. Scan and check in with no signal; the queue syncs when you come back into range.',
-  },
-  {
-    label: 'Automated confirmations, reminders and review requests',
-    from: 'starter',
-    hint: 'Email included. SMS is passed through at carrier cost with no markup.',
-  },
-  {
-    label: 'Card, Apple Pay, Google Pay and bank transfer',
-    from: 'starter',
-  },
-  {
-    label: 'Next-business-day payouts',
-    from: 'growth',
-    hint: 'Starter settles on a weekly cycle. From Growth up, yesterday’s takings land the next business day.',
-  },
-  {
-    label: 'Resource and crew scheduling with conflict detection',
-    from: 'growth',
-    hint: 'Vessels, vehicles, guides and gear are modelled as real inventory, so a boat cannot be sold twice.',
-  },
-  {
-    label: 'Advanced analytics, cohorts and occupancy heatmaps',
-    from: 'growth',
-    hint: 'Every figure traces back to the rows behind it — click a number, get the bookings that made it.',
-  },
-  {
-    label: 'Channel manager — Viator, GetYourGuide, Expedia, Google',
-    from: 'growth',
-    hint: 'One live availability pool. Distribution stops being a second calendar you maintain by hand.',
-  },
-  {
-    label: 'Waitlists with automatic backfill',
-    from: 'growth',
-    hint: 'A cancellation inside the cut-off window offers the seat to the waitlist before it goes back on sale.',
-  },
-  {
-    label: 'Dynamic pricing and yield rules',
-    from: 'scale',
-    hint: 'Price by lead time, day of week, forecast occupancy or weather confidence — capped so you never surprise a guest.',
-  },
-  {
-    label: 'Gift cards, memberships and prepaid passes',
-    from: 'scale',
-  },
-  {
-    label: 'Multi-location, multi-currency and multi-entity',
-    from: 'scale',
-    hint: 'Separate books and separate payouts, one login and one consolidated report.',
-  },
-  {
-    label: 'Open REST API, webhooks and CSV/Parquet exports',
-    from: 'scale',
-    hint: 'Your data leaves whenever you want it to. No export tickets, no fees.',
-  },
-  {
-    label: 'SSO/SAML, granular roles and a full audit log',
-    from: 'enterprise',
-  },
-  {
-    label: 'Named migration engineer and 99.95% uptime SLA',
-    from: 'enterprise',
-    hint: 'We rebuild your products, schedules and historical bookings, then run parallel for a fortnight before cutover.',
-  },
-]
-
-function featuresFor(plan: PlanTier): PricingPlan['features'] {
-  const planIndex = PLAN_ORDER.indexOf(plan)
-  return FEATURE_ROWS.map((row) => ({
-    label: row.label,
-    included: PLAN_ORDER.indexOf(row.from) <= planIndex,
-    ...(row.hint ? { hint: row.hint } : {}),
-  }))
-}
-
-/**
- * The industry's commission model, undercut deliberately.
- *
- * The incumbents both sit around 6% passed to the guest as a booking fee.
- * We match that at the free tier and then trade percentage points for a flat
- * monthly fee, which is strictly better for anyone doing real volume — the
- * break-even lines are spelled out in the blurbs so an operator can do the
- * arithmetic without a sales call.
- *
- * `monthlyPrice` and `annualPrice` are minor units. Enterprise carries zeroes
- * because it is quoted, not listed; render that column from `badge` and
- * `blurb`, not from the numbers.
- */
-export const PRICING_PLANS: PricingPlan[] = [
-  {
-    id: 'starter',
-    name: 'Starter',
-    commissionPercent: 6,
-    monthlyPrice: 0,
-    annualPrice: 0,
-    blurb:
-      'Everything you need to take your first online booking today. No monthly fee, no contract, no card to start — you pay only when a guest does.',
-    highlights: [
-      'Live in an afternoon, on your own',
-      'Weekly payouts, no minimum volume',
-      'Keep the booking fee or pass it to the guest',
-    ],
-    features: featuresFor('starter'),
-    cta: 'Start free',
-    popular: false,
-  },
-  {
-    id: 'growth',
-    name: 'Growth',
-    commissionPercent: 4.5,
-    monthlyPrice: 7_900,
-    annualPrice: 79_000,
-    blurb:
-      'The plan most operators land on. At $79/mo the 1.5-point saving pays for itself past roughly $5,300 of monthly bookings — about eighteen seats on a sunset sail.',
-    highlights: [
-      'Crew, vessel and gear scheduling',
-      'OTA channel manager included',
-      'Next-business-day payouts',
-      'Cohort and occupancy analytics',
-    ],
-    features: featuresFor('growth'),
-    cta: 'Start 21-day trial',
-    popular: true,
-    badge: 'Most popular',
-  },
-  {
-    id: 'scale',
-    name: 'Scale',
-    commissionPercent: 3,
-    monthlyPrice: 24_900,
-    annualPrice: 249_000,
-    blurb:
-      'For multi-vessel, multi-site operators running seven figures a season. Past roughly $16,600 a month in bookings, Scale is cheaper than Growth — and it is where yield management starts paying for itself.',
-    highlights: [
-      'Dynamic pricing and yield rules',
-      'Multi-location, multi-currency books',
-      'Gift cards, memberships and passes',
-      'Open API, webhooks and raw exports',
-    ],
-    features: featuresFor('scale'),
-    cta: 'Start 21-day trial',
-    popular: false,
-  },
-  {
-    id: 'enterprise',
-    name: 'Enterprise',
-    commissionPercent: 1.9,
-    monthlyPrice: 0,
-    annualPrice: 0,
-    blurb:
-      'Negotiated rates from 1.9%, a named migration engineer and a 99.95% uptime SLA. Built for fleets, DMCs and groups running more than 250,000 guests a year.',
-    highlights: [
-      'Rate negotiated against annual volume',
-      'SSO/SAML, roles and audit logging',
-      'Dedicated migration and parallel run',
-      'Named CSM and 99.95% uptime SLA',
-    ],
-    features: featuresFor('enterprise'),
-    cta: 'Talk to sales',
-    popular: false,
-    badge: 'Custom',
-  },
-]
-
-export function getPricingPlan(id: PlanTier): PricingPlan | undefined {
+export function getPricingPlan(id: string): PricingPlan | undefined {
   return PRICING_PLANS.find((plan) => plan.id === id)
 }
 
-/** Row labels in matrix order — for a comparison table's left-hand column. */
-export const PRICING_FEATURE_LABELS: string[] = FEATURE_ROWS.map((row) => row.label)
+/** Everything included, in order. */
+export const PRICING_FEATURE_LABELS: string[] = PRICING_PLANS[0].features.map((feature) => feature.label)
 
 /* ==========================================================================
    SOCIAL PROOF
@@ -366,30 +165,30 @@ export const FAQS: FaqItem[] = [
   {
     id: 'faq_commission',
     category: 'pricing',
-    question: 'How does 4.5% compare with what I pay today?',
+    question: 'What does EZRA Pro cost?',
     answer:
-      'The incumbents typically land around 6% of the booking, usually presented as a fee your guest pays. Growth is 4.5% plus $79 a month, so the crossover is about $5,300 of monthly bookings — roughly eighteen seats on a sunset sail. Above that you are saving; below it, Starter matches the 6% you already pay with no monthly fee at all. Scale drops to 3% and overtakes Growth past about $16,600 a month.',
+      '4% of each booking. That is the entire bill: no monthly fee, no setup fee, no contract, and every feature is included.',
   },
   {
     id: 'faq_guest_fee',
     category: 'pricing',
-    question: 'Can I pass the booking fee to the guest, like my current provider does?',
+    question: 'Can I pass the 4% to the guest?',
     answer:
-      'Yes, and you can do it per activity. Absorb it on the products where you compete on price, pass it through on the ones where you do not, or split it. The widget shows the guest exactly what they are paying either way — hidden fees are the fastest route to a chargeback.',
+      'Yes. You choose in Settings: pay it yourself and guests pay the price you set, or pass it on as one “Booking fee (4%)” line at checkout. Card fees stay between you and your payment provider.',
   },
   {
     id: 'faq_contract',
     category: 'pricing',
     question: 'Is there a contract or a minimum term?',
     answer:
-      'No. Every plan is month to month and you can leave whenever you like, including mid-season. Annual billing saves two months if you want it, but it is an option rather than a lock-in. We do not use termination fees, auto-renewing multi-year terms, or the clause where your rate resets when volume grows.',
+      'No. There is no contract and no monthly fee, so there is nothing to cancel: you pay 4% of the bookings you take and can leave whenever you like, including mid-season.',
   },
   {
     id: 'faq_migration_effort',
     category: 'migration',
     question: 'How much work is migrating off my current system?',
     answer:
-      'For a single-location operator with under twenty products, most of a day. You export your products, schedules, guests and booking history; we import them and rebuild your seasonal calendars, then send you a diff to check line by line. On Enterprise a migration engineer does the whole thing and we run both systems in parallel for two weeks before cutover, so there is never a day where your bookings only exist in one place.',
+      'For a single-location operator with under twenty products, most of a day. You export your products, schedules, guests and booking history; we import them and rebuild your seasonal calendars, then send you a diff to check line by line. We can run both systems in parallel for two weeks before cutover, so there is never a day where your bookings only exist in one place.',
   },
   {
     id: 'faq_future_bookings',
@@ -403,7 +202,7 @@ export const FAQS: FaqItem[] = [
     category: 'payments',
     question: 'When do I actually get paid?',
     answer:
-      'Growth and above settle next business day: everything captured by midnight lands in your account the following working morning, including the deposit portion of part-paid bookings. Starter settles weekly on a Wednesday. You are paid on capture, not on departure, so a guest booking in March for an August trip funds your March.',
+      'Next business day: everything captured by midnight lands in your account the following working morning, including the deposit portion of part-paid bookings. You are paid on capture, not on departure, so a guest booking in March for an August trip funds your March.',
   },
   {
     id: 'faq_chargebacks',
@@ -431,7 +230,7 @@ export const FAQS: FaqItem[] = [
     category: 'product',
     question: 'Do you connect to Viator, GetYourGuide and Expedia?',
     answer:
-      'Yes, from Growth up, through a live two-way connection rather than a nightly file. Availability is one pool: a seat sold on Viator disappears from your widget in seconds and from Google Things to do just as fast. Pricing and cut-offs are managed per channel from one screen, so you can hold back inventory on marketplaces without maintaining a second calendar.',
+      'Yes, through a live two-way connection rather than a nightly file. Availability is one pool: a seat sold on Viator disappears from your widget in seconds and from Google Things to do just as fast. Pricing and cut-offs are managed per channel from one screen, so you can hold back inventory on marketplaces without maintaining a second calendar.',
   },
   {
     id: 'faq_resources',
@@ -445,7 +244,7 @@ export const FAQS: FaqItem[] = [
     category: 'product',
     question: 'Who owns my guest list, and can I take it with me?',
     answer:
-      'You own it, unambiguously, and export is a button rather than a support ticket. Bookings, guests, payments, payouts, waivers and reviews all export as CSV or Parquet, and Scale and above have a REST API and webhooks for continuous sync into your own warehouse. We will never sell your guests a competing product or market to them on our own behalf.',
+      'You own it, unambiguously, and export is a button rather than a support ticket. Bookings, guests, payments, payouts, waivers and reviews all export as CSV or Parquet, and there is a REST API and webhooks for continuous sync into your own warehouse. We will never sell your guests a competing product or market to them on our own behalf.',
   },
   {
     id: 'faq_support',
@@ -466,7 +265,7 @@ export const FAQS: FaqItem[] = [
     category: 'product',
     question: 'We run several sites in different currencies. Does that work?',
     answer:
-      'From Scale up. Each location keeps its own products, staff, tax treatment, payout account and currency, while you get one login and a consolidated view that converts at the day’s rate for reporting without touching the underlying books. Staff permissions are scoped per location by default.',
+      'Yes. Each location keeps its own products, staff, tax treatment, payout account and currency, while you get one login and a consolidated view that converts at the day’s rate for reporting without touching the underlying books. Staff permissions are scoped per location by default.',
   },
   {
     id: 'faq_trial',

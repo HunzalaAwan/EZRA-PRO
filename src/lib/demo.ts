@@ -22,6 +22,7 @@ import { rentalItemsOf, rentalSpan } from '@/lib/rental-items'
 import { departureFromSlotId, isGeneratedSlotId, parseSlotId } from '@/lib/activity-schedule'
 import { slotExtraSpotsOf } from '@/lib/extra-spots'
 import { priceBooking } from '@/lib/price-engine'
+import { BOOKING_FEE_LABEL, ezraFee } from '@/lib/fees'
 import { bookingPickupOf, drops, transportOf } from '@/lib/transport'
 import {
   airlineOf,
@@ -67,7 +68,6 @@ import type {
   Participant,
   Payment,
   PaymentStatus,
-  PlanTier,
   PriceTier,
   PricingModel,
   RangePreset,
@@ -1312,12 +1312,12 @@ for (const [tenantId, specs] of SPEC_BY_TENANT) {
             }
 
             const net = subtotal - discountTotal
-            // Transfer prices include every fee.
-            const feeTotal = channel === 'walk_in' || ride ? 0 : round(net * 0.06)
+            // Historic online bookings were taken with EZRA Pro's 4% passed on to the guest. Transfer prices include every fee.
+            const feeTotal = channel === 'walk_in' || ride ? 0 : ezraFee(net)
             if (feeTotal > 0) {
               lineItems.push({
                 id: `li_${bookingId}_${++li}`,
-                label: 'Booking & harbour fee',
+                label: BOOKING_FEE_LABEL,
                 kind: 'fee',
                 quantity: 1,
                 unitPrice: feeTotal,
@@ -2996,16 +2996,16 @@ export function getNotifications(tenantId: string): NotificationItem[] {
   })
 
   out.push({
-    id: 'ntf_system_plan',
+    id: 'ntf_system_pricing',
     tenantId,
     kind: 'system',
-    title: `You are on the ${tenant.plan} plan`,
+    title: tenant.features.dynamicPricing ? 'Dynamic pricing is on' : 'Price busy times up automatically',
     body: tenant.features.dynamicPricing
       ? 'Dynamic pricing is active on time slots above 85% full.'
-      : 'Dynamic pricing and the channel manager unlock on Scale — most operators see a 6-9% lift in average booking value.',
+      : 'Price rules and the channel manager are included, like every feature. Most businesses see a 6-9% lift in average booking value.',
     createdAt: isoLocal(addDays(NOW, -6)),
     read: true,
-    href: '/dashboard/settings/billing',
+    href: '/dashboard/pricing',
     severity: 'info',
   })
 

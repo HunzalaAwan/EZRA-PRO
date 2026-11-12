@@ -1,5 +1,6 @@
 import { availabilityText, isAvailableAt, priceSelection, selectionKey, toOrderLine, windowsOf, type PricedSelection } from '@/lib/hospitality/menu-pricing'
 import type { DishSelection, Menu, OrderChannel, OrderLine, OrderLineGroup, OrderLinePick, OrderingHours } from '@/lib/hospitality/types'
+import { DEFAULT_FEE_PAYER, guestBookingFee, type FeePayer } from '@/lib/fees'
 
 /* ==========================================================================
    The order cart — what a guest has picked from the menu, kept in the
@@ -86,13 +87,14 @@ export function writeCart(slug: string, cart: Cart | null) {
   window.dispatchEvent(new Event(CART_EVENT))
 }
 
-export const SERVICE_FEE_RATE = 0.03
-
 export interface CartTotals {
   count: number
   subtotal: number
   deliveryFee: number
+  /** Room service: the hotel's tray charge. 0 otherwise. */
   serviceFee: number
+  /** EZRA Pro's 4% when the business passes it on to the guest; 0 when the business pays it. */
+  bookingFee: number
   tax: number
   tip: number
   total: number
@@ -101,12 +103,13 @@ export interface CartTotals {
   belowMinimum: boolean
 }
 
-export function cartTotals(cart: Cart, ordering: OrderingHours, taxRate: number): CartTotals {
+export function cartTotals(cart: Cart, ordering: OrderingHours, taxRate: number, feePayer: FeePayer = DEFAULT_FEE_PAYER): CartTotals {
   const zones = ordering.delivery.zones
   const subtotal = cart.lines.reduce((sum, line) => sum + line.unitPrice * line.qty, 0)
   const zone = cart.mode === 'delivery' ? zones.find((z) => z.id === cart.zoneId) ?? zones[0] : null
   const deliveryFee = zone ? zone.fee : 0
-  const serviceFee = cart.mode === 'room' ? ordering.roomService.trayCharge : Math.round(subtotal * SERVICE_FEE_RATE)
+  const serviceFee = cart.mode === 'room' ? ordering.roomService.trayCharge : 0
+  const bookingFee = guestBookingFee(subtotal, feePayer)
   const tax = Math.round(subtotal * taxRate)
   const tip = Math.round(subtotal * (cart.tipPercent / 100))
   const minOrder = zone?.minOrder ?? 0
@@ -115,9 +118,10 @@ export function cartTotals(cart: Cart, ordering: OrderingHours, taxRate: number)
     subtotal,
     deliveryFee,
     serviceFee,
+    bookingFee,
     tax,
     tip,
-    total: subtotal + deliveryFee + serviceFee + tax + tip,
+    total: subtotal + deliveryFee + serviceFee + bookingFee + tax + tip,
     minOrder,
     belowMinimum: cart.mode === 'delivery' && subtotal > 0 && subtotal < minOrder,
   }

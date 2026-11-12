@@ -1,17 +1,8 @@
 'use client'
 
 import * as React from 'react'
-import {
-  ArrowUpRight,
-  Check,
-  CreditCard,
-  Download,
-  FileText,
-  Gauge,
-  Minus,
-  Sparkles,
-  Users,
-} from 'lucide-react'
+import Link from 'next/link'
+import { ArrowRight, Check, Download, FileText } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -23,8 +14,6 @@ import {
   CardTitle,
   CardToolbar,
 } from '@/components/ui/card'
-import { Progress } from '@/components/ui/progress'
-import { Segmented } from '@/components/ui/segmented'
 import { Separator } from '@/components/ui/separator'
 import {
   Table,
@@ -35,10 +24,9 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { toast } from '@/components/ui/toaster'
-import { PRICING_PLANS } from '@/content/marketing'
+import { useBookingDefaults } from '@/hooks/use-booking-defaults'
+import { EZRA_FEE_PERCENT, FEE_PAYER_OPTIONS, ezraFee } from '@/lib/fees'
 import {
-  cn,
-  addDays,
   createRng,
   formatCurrency,
   formatDateLong,
@@ -46,86 +34,63 @@ import {
   hashSeed,
   rngInt,
 } from '@/lib/utils'
-import type { KpiMetric, PlanTier, Tenant } from '@/types'
+import type { KpiMetric, Tenant } from '@/types'
 
 /* ==========================================================================
-   PLAN LIMITS
+   BILLING — one price for everyone: 4% of each booking. No monthly fee, no
+   setup fee, no contract, no plans and no limits. The screen shows what was
+   booked, what the 4% came to, who pays it, and the monthly statements.
    ========================================================================== */
 
-interface PlanLimits {
-  bookings: number | null
-  seats: number | null
-  activities: number | null
-}
+/** Everything every business gets. Nothing is held back. */
+const INCLUDED = [
+  'Unlimited activities, times and team members',
+  'Online checkout, deposits and next-day payouts',
+  'Storefront on your own domain',
+  'Marketplaces and channel sync',
+  'Price rules, promo codes and gift cards',
+  'Several locations under one login',
+  'Reports, exports and the API',
+  'Free move from your current platform',
+]
 
-const PLAN_LIMITS: Record<PlanTier, PlanLimits> = {
-  starter: { bookings: 250, seats: 3, activities: 10 },
-  growth: { bookings: 3000, seats: 15, activities: 60 },
-  scale: { bookings: 12000, seats: 60, activities: null },
-  enterprise: { bookings: null, seats: null, activities: null },
-}
-
-const PLAN_ORDER: PlanTier[] = ['starter', 'growth', 'scale', 'enterprise']
-
-interface InvoiceRow {
+interface StatementRow {
   id: string
   number: string
   issuedAt: Date
-  platformFee: number
-  commission: number
-  total: number
+  booked: number
+  fee: number
   status: 'paid' | 'open'
 }
 
 /**
- * Every figure on this screen derives from the tenant, its 30-day KPIs, and
- * usage counts — all fetched server-side. Computing the derived values here
- * (rather than importing `@/lib/demo` directly) is what keeps the synthetic
- * dataset out of the client bundle.
+ * Every figure on this screen derives from the tenant and its 30-day KPIs,
+ * fetched server-side. Computing them here (rather than importing
+ * `@/lib/demo` directly) keeps the synthetic dataset out of the client bundle.
  */
-function computeBillingData(tenant: Tenant, kpis: KpiMetric[], seatsUsed: number, activitiesUsed: number, now: Date) {
-  const currency = tenant.currency
-  const plan = PRICING_PLANS.find((p) => p.id === tenant.plan) ?? PRICING_PLANS[1]
-  const limits = PLAN_LIMITS[tenant.plan]
-
+function computeBillingData(tenant: Tenant, kpis: KpiMetric[], now: Date) {
   const bookings30d = kpis.find((k) => k.key === 'bookings')?.value ?? 0
-  const revenue30d = kpis.find((k) => k.key === 'net_revenue')?.value ?? 0
-
-  const commission30d = Math.round((revenue30d * plan.commissionPercent) / 100)
-  const nextInvoiceTotal = plan.monthlyPrice + commission30d
-  const renewsOn = addDays(now, 19)
+  const booked30d = kpis.find((k) => k.key === 'net_revenue')?.value ?? 0
+  const fee30d = ezraFee(booked30d)
 
   const rng = createRng(hashSeed(`${tenant.id}::invoices`))
-  const invoices: InvoiceRow[] = []
+  const statements: StatementRow[] = []
   for (let i = 0; i < 9; i++) {
     const issuedAt = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    // Seasonal swing: Maui summer runs hot, shoulder months settle back.
+    // Seasonal swing: summer runs hot, shoulder months settle back.
     const seasonal = 0.72 + 0.5 * Math.abs(Math.sin((issuedAt.getMonth() + 2) / 2))
-    const commission = Math.round(commission30d * seasonal + rngInt(rng, -4200, 4200) * 100)
-    invoices.push({
-      id: `inv_${issuedAt.getFullYear()}${String(issuedAt.getMonth() + 1).padStart(2, '0')}`,
+    const booked = Math.max(0, Math.round(booked30d * seasonal + rngInt(rng, -42_000, 42_000) * 100))
+    statements.push({
+      id: `stm_${issuedAt.getFullYear()}${String(issuedAt.getMonth() + 1).padStart(2, '0')}`,
       number: `EZR-${issuedAt.getFullYear()}-${String(1042 - i).padStart(4, '0')}`,
       issuedAt,
-      platformFee: plan.monthlyPrice,
-      commission,
-      total: plan.monthlyPrice + commission,
+      booked,
+      fee: ezraFee(booked),
       status: i === 0 ? 'open' : 'paid',
     })
   }
 
-  return {
-    currency,
-    plan,
-    limits,
-    bookings30d,
-    revenue30d,
-    seatsUsed,
-    activitiesUsed,
-    commission30d,
-    nextInvoiceTotal,
-    renewsOn,
-    invoices,
-  }
+  return { currency: tenant.currency, bookings30d, booked30d, fee30d, statements }
 }
 
 /* ==========================================================================
@@ -140,278 +105,107 @@ export interface BillingSettingsClientProps {
   activitiesUsed: number
 }
 
-export function BillingSettingsClient({
-  tenant: CURRENT_TENANT,
-  now: NOW,
-  kpis,
-  seatsUsed,
-  activitiesUsed,
-}: BillingSettingsClientProps) {
-  const {
-    currency: CURRENCY,
-    plan: PLAN,
-    limits: LIMITS,
-    bookings30d: BOOKINGS_30D,
-    seatsUsed: SEATS_USED,
-    activitiesUsed: ACTIVITIES_USED,
-    commission30d: COMMISSION_30D,
-    nextInvoiceTotal: NEXT_INVOICE_TOTAL,
-    renewsOn: RENEWS_ON,
-    invoices: INVOICES,
-  } = React.useMemo(
-    () => computeBillingData(CURRENT_TENANT, kpis, seatsUsed, activitiesUsed, NOW),
-    [CURRENT_TENANT, kpis, seatsUsed, activitiesUsed, NOW],
+export function BillingSettingsClient({ tenant, now, kpis, seatsUsed, activitiesUsed }: BillingSettingsClientProps) {
+  const { currency, bookings30d, booked30d, fee30d, statements } = React.useMemo(
+    () => computeBillingData(tenant, kpis, now),
+    [tenant, kpis, now],
   )
-  const [cycle, setCycle] = React.useState<'monthly' | 'annual'>('monthly')
+  const { defaults } = useBookingDefaults(tenant.slug)
+  const payer = FEE_PAYER_OPTIONS.find((option) => option.value === defaults.feePayer) ?? FEE_PAYER_OPTIONS[0]
 
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      {/* ---------------- Current plan ---------------- */}
-      <Card variant="gradient">
+      {/* ---------------- The price ---------------- */}
+      <Card>
         <CardContent className="flex flex-col gap-6 p-5 sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="font-display text-lg font-semibold tracking-tight text-foreground">
-                  {PLAN.name}
-                </h3>
-                <Badge variant="primary" size="sm">
-                  Current plan
-                </Badge>
-                {CURRENT_TENANT.status === 'trialing' ? (
-                  <Badge variant="warning" size="sm">
-                    Trialing
-                  </Badge>
-                ) : null}
-              </div>
-              <p className="mt-1 max-w-prose text-sm text-muted">{PLAN.blurb}</p>
-            </div>
-
-            <div className="text-right">
-              <p className="font-display text-2xl font-semibold tracking-tight text-foreground tabular">
-                {formatCurrency(PLAN.monthlyPrice, CURRENCY)}
-                <span className="text-sm font-normal text-muted"> / month</span>
-              </p>
-              <p className="text-xs text-muted tabular">
-                + {PLAN.commissionPercent}% per booking
+              <h3 className="font-display text-lg font-semibold tracking-tight text-foreground">
+                {EZRA_FEE_PERCENT}% of each booking
+              </h3>
+              <p className="mt-1 max-w-prose text-sm text-muted">
+                That is the whole bill. No monthly fee, no setup fee, no contract. Every feature is
+                included.
               </p>
             </div>
+            <p className="text-right font-display text-2xl font-semibold tracking-tight text-foreground tabular">
+              {formatCurrency(0, currency)}
+              <span className="text-sm font-normal text-muted"> a month</span>
+            </p>
           </div>
 
           <Separator />
 
-          <div className="grid gap-5 sm:grid-cols-3">
-            <UsageMeter
-              icon={<Gauge className="size-4" />}
-              label="Bookings this cycle"
-              used={BOOKINGS_30D}
-              limit={LIMITS.bookings}
+          <dl className="grid gap-5 sm:grid-cols-3">
+            <Stat
+              label="Booked, last 30 days"
+              value={formatCurrency(booked30d, currency, { compact: true })}
+              hint={`${formatNumber(bookings30d)} bookings`}
             />
-            <UsageMeter
-              icon={<Users className="size-4" />}
-              label="Team members"
-              used={SEATS_USED}
-              limit={LIMITS.seats}
+            <Stat
+              label={`EZRA Pro's ${EZRA_FEE_PERCENT}%, last 30 days`}
+              value={formatCurrency(fee30d, currency, { compact: true })}
+              hint="Taken from your payouts"
             />
-            <UsageMeter
-              icon={<Sparkles className="size-4" />}
-              label="Published activities"
-              used={ACTIVITIES_USED}
-              limit={LIMITS.activities}
+            <Stat
+              label="Team and activities"
+              value={`${formatNumber(seatsUsed)} · ${formatNumber(activitiesUsed)}`}
+              hint="No limits on either"
             />
-          </div>
+          </dl>
 
           <Separator />
 
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="text-xs font-medium text-muted">Next invoice</p>
-              <p className="font-display text-xl font-semibold tracking-tight text-foreground tabular">
-                {formatCurrency(NEXT_INVOICE_TOTAL, CURRENCY)}
-              </p>
-              <p className="text-xs text-subtle">
-                {formatCurrency(PLAN.monthlyPrice, CURRENCY)} platform +{' '}
-                {formatCurrency(COMMISSION_30D, CURRENCY)} commission · due{' '}
-                {formatDateLong(RENEWS_ON)}
-              </p>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-muted">Who pays the {EZRA_FEE_PERCENT}%</p>
+              <p className="mt-0.5 text-sm font-medium text-foreground">{payer.label}</p>
+              <p className="text-xs text-subtle">{payer.description}</p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="ghost" size="sm">
-                Cancel plan
-              </Button>
-              <Button size="sm" rightIcon={<ArrowUpRight />}>
-                Upgrade to Scale
-              </Button>
-            </div>
+            <Button asChild variant="outline" size="sm" rightIcon={<ArrowRight />}>
+              <Link href="/dashboard/settings/payments">Change</Link>
+            </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* ---------------- Plan comparison ---------------- */}
+      {/* ---------------- Included ---------------- */}
       <Card>
         <CardHeader>
-          <CardTitle>Compare plans</CardTitle>
-          <CardDescription>
-            Every plan includes unlimited activities, next-day payouts and the full mobile
-            guest list. Commission is what changes.
-          </CardDescription>
-          <CardToolbar>
-            <Segmented
-              size="sm"
-              label="Billing cycle"
-              value={cycle}
-              onValueChange={setCycle}
-              options={[
-                { value: 'monthly', label: 'Monthly' },
-                { value: 'annual', label: 'Annual' },
-              ]}
-            />
-          </CardToolbar>
+          <CardTitle>Everything is included</CardTitle>
+          <CardDescription>There are no plans to move between and nothing to unlock.</CardDescription>
         </CardHeader>
-
         <CardContent className="pt-0">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {PLAN_ORDER.map((id) => {
-              const plan = PRICING_PLANS.find((p) => p.id === id)
-              if (!plan) return null
-              const isCurrent = id === CURRENT_TENANT.plan
-              const price = cycle === 'annual' ? Math.round(plan.annualPrice / 12) : plan.monthlyPrice
-
-              return (
-                <div
-                  key={id}
-                  className={cn(
-                    'flex flex-col gap-3 rounded-xl border p-4',
-                    'transition-all duration-300 ease-[var(--ease-out-expo)]',
-                    isCurrent
-                      ? 'border-primary/45 bg-primary-soft/25 shadow-sm'
-                      : 'border-line bg-surface hover:-translate-y-0.5 hover:border-line-strong hover:shadow-md',
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-display text-sm font-semibold text-foreground">
-                      {plan.name}
-                    </p>
-                    {isCurrent ? (
-                      <Badge variant="primary" size="sm">
-                        Current
-                      </Badge>
-                    ) : plan.badge ? (
-                      <Badge variant="accent" size="sm">
-                        {plan.badge}
-                      </Badge>
-                    ) : null}
-                  </div>
-
-                  <div>
-                    <p className="font-display text-xl font-semibold tracking-tight text-foreground tabular">
-                      {plan.monthlyPrice === 0 && plan.id !== 'starter'
-                        ? 'Custom'
-                        : formatCurrency(price, CURRENCY)}
-                      {plan.monthlyPrice === 0 && plan.id !== 'starter' ? null : (
-                        <span className="text-xs font-normal text-muted"> /mo</span>
-                      )}
-                    </p>
-                    <p className="text-xs text-muted tabular">
-                      {plan.commissionPercent === 0
-                        ? 'Negotiated commission'
-                        : `${plan.commissionPercent}% per booking`}
-                    </p>
-                  </div>
-
-                  <ul className="flex flex-1 flex-col gap-1.5">
-                    {plan.highlights.map((h) => (
-                      <li key={h} className="flex items-start gap-1.5 text-xs text-muted">
-                        <Check
-                          className="mt-0.5 size-3.5 shrink-0 text-success"
-                          aria-hidden="true"
-                        />
-                        {h}
-                      </li>
-                    ))}
-                  </ul>
-
-                  <Button
-                    variant={isCurrent ? 'outline' : id === 'scale' ? 'primary' : 'secondary'}
-                    size="sm"
-                    fullWidth
-                    disabled={isCurrent}
-                    onClick={() =>
-                      toast(`Switching to ${plan.name}`, {
-                        description: 'Your success manager will confirm the migration window.',
-                      })
-                    }
-                  >
-                    {isCurrent ? 'Your plan' : plan.id === 'enterprise' ? 'Talk to sales' : `Move to ${plan.name}`}
-                  </Button>
-                </div>
-              )
-            })}
-          </div>
+          <ul className="grid gap-2 sm:grid-cols-2">
+            {INCLUDED.map((item) => (
+              <li key={item} className="flex items-start gap-2 text-sm text-foreground">
+                <Check className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
+                {item}
+              </li>
+            ))}
+          </ul>
         </CardContent>
       </Card>
 
-      {/* ---------------- Payment method ---------------- */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CreditCard className="size-4 text-primary" aria-hidden="true" />
-            Payment method
-          </CardTitle>
-          <CardDescription>
-            Charged on the first of each month, alongside the commission from the cycle just
-            closed.
-          </CardDescription>
-        </CardHeader>
-
-        <CardContent className="flex flex-col gap-3 pt-0">
-          <div className="flex flex-wrap items-center gap-4 rounded-xl border border-line bg-surface p-4">
-            <span
-              aria-hidden="true"
-              className="grid h-9 w-13 shrink-0 place-items-center rounded-md bg-ink-900 text-xs font-bold tracking-wider text-ink-50"
-            >
-              VISA
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-foreground tabular">•••• •••• •••• 4242</p>
-              <p className="text-xs text-muted">Expires 09 / 2029 · Kaimana Reyes</p>
-            </div>
-            <Badge variant="success" size="sm">
-              Default
-            </Badge>
-            <Button variant="ghost" size="sm">
-              Replace
-            </Button>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-4 rounded-xl border border-line-subtle bg-surface-sunken p-4">
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-foreground">Billing email</p>
-              <p className="text-xs text-muted">accounts@bluehorizonmaui.com · invoices as PDF</p>
-            </div>
-            <Button variant="ghost" size="sm">
-              Change
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ---------------- Invoices ---------------- */}
+      {/* ---------------- Statements ---------------- */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileText className="size-4 text-primary" aria-hidden="true" />
-            Invoice history
+            Monthly statements
           </CardTitle>
-          <CardDescription>Nine months of statements, ready for your accountant.</CardDescription>
+          <CardDescription>
+            What was booked each month and the {EZRA_FEE_PERCENT}% taken from your payouts. Sent to
+            your billing email as a PDF.
+          </CardDescription>
           <CardToolbar>
             <Button
               variant="outline"
               size="sm"
               leftIcon={<Download />}
               onClick={() =>
-                toast.success('Export queued', {
-                  description: 'A CSV of every invoice is on its way to your billing email.',
+                toast.success('Export started', {
+                  description: 'A CSV of every statement is on its way to your billing email.',
                 })
               }
             >
@@ -426,16 +220,13 @@ export function BillingSettingsClient({
             <Table density="comfortable">
               <TableHeader>
                 <TableRow>
-                  <TableHead>Invoice</TableHead>
+                  <TableHead>Statement</TableHead>
                   <TableHead>Issued</TableHead>
                   <TableHead numeric align="right">
-                    Platform
+                    Booked
                   </TableHead>
                   <TableHead numeric align="right">
-                    Commission
-                  </TableHead>
-                  <TableHead numeric align="right">
-                    Total
+                    {EZRA_FEE_PERCENT}% fee
                   </TableHead>
                   <TableHead align="right">Status</TableHead>
                   <TableHead align="right">
@@ -444,22 +235,19 @@ export function BillingSettingsClient({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {INVOICES.map((inv) => (
-                  <TableRow key={inv.id}>
-                    <TableCell className="font-mono text-xs">{inv.number}</TableCell>
-                    <TableCell className="text-muted">{formatDateLong(inv.issuedAt)}</TableCell>
+                {statements.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell className="font-mono text-xs">{row.number}</TableCell>
+                    <TableCell className="text-muted">{formatDateLong(row.issuedAt)}</TableCell>
                     <TableCell numeric align="right">
-                      {formatCurrency(inv.platformFee, CURRENCY)}
-                    </TableCell>
-                    <TableCell numeric align="right">
-                      {formatCurrency(inv.commission, CURRENCY)}
+                      {formatCurrency(row.booked, currency)}
                     </TableCell>
                     <TableCell numeric align="right" className="font-semibold">
-                      {formatCurrency(inv.total, CURRENCY)}
+                      {formatCurrency(row.fee, currency)}
                     </TableCell>
                     <TableCell align="right">
-                      <Badge variant={inv.status === 'paid' ? 'success' : 'warning'} size="sm">
-                        {inv.status === 'paid' ? 'Paid' : 'Open'}
+                      <Badge variant={row.status === 'paid' ? 'success' : 'warning'} size="sm">
+                        {row.status === 'paid' ? 'Settled' : 'This month'}
                       </Badge>
                     </TableCell>
                     <TableCell align="right">
@@ -467,9 +255,7 @@ export function BillingSettingsClient({
                         variant="ghost"
                         size="xs"
                         leftIcon={<Download />}
-                        onClick={() =>
-                          toast(`${inv.number}.pdf`, { description: 'Download started.' })
-                        }
+                        onClick={() => toast(`${row.number}.pdf`, { description: 'Download started.' })}
                       >
                         PDF
                       </Button>
@@ -482,21 +268,20 @@ export function BillingSettingsClient({
 
           {/* Mobile cards */}
           <ul className="flex flex-col gap-2 px-5 sm:hidden">
-            {INVOICES.map((inv) => (
-              <li
-                key={inv.id}
-                className="flex items-center gap-3 rounded-xl border border-line bg-surface p-3"
-              >
+            {statements.map((row) => (
+              <li key={row.id} className="flex items-center gap-3 rounded-xl border border-line bg-surface p-3">
                 <div className="min-w-0 flex-1">
-                  <p className="font-mono text-xs text-foreground">{inv.number}</p>
-                  <p className="text-xs text-muted">{formatDateLong(inv.issuedAt)}</p>
+                  <p className="font-mono text-xs text-foreground">{row.number}</p>
+                  <p className="text-xs text-muted">
+                    {formatDateLong(row.issuedAt)} · {formatCurrency(row.booked, currency)} booked
+                  </p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-semibold text-foreground tabular">
-                    {formatCurrency(inv.total, CURRENCY)}
+                    {formatCurrency(row.fee, currency)}
                   </p>
-                  <Badge variant={inv.status === 'paid' ? 'success' : 'warning'} size="sm">
-                    {inv.status === 'paid' ? 'Paid' : 'Open'}
+                  <Badge variant={row.status === 'paid' ? 'success' : 'warning'} size="sm">
+                    {row.status === 'paid' ? 'Settled' : 'This month'}
                   </Badge>
                 </div>
               </li>
@@ -510,42 +295,12 @@ export function BillingSettingsClient({
 
 /* ========================================================================== */
 
-function UsageMeter({
-  icon,
-  label,
-  used,
-  limit,
-}: {
-  icon: React.ReactNode
-  label: string
-  used: number
-  limit: number | null
-}) {
-  const percent = limit === null ? 0 : Math.min(100, Math.round((used / limit) * 100))
-  const tone = percent >= 90 ? 'danger' : percent >= 70 ? 'warning' : 'primary'
-
+function Stat({ label, value, hint }: { label: string; value: string; hint: string }) {
   return (
     <div className="min-w-0">
-      <div className="flex items-center gap-2 text-xs font-medium text-muted">
-        <span aria-hidden="true" className="text-subtle">
-          {icon}
-        </span>
-        {label}
-      </div>
-      <p className="mt-1 font-display text-lg font-semibold tracking-tight text-foreground tabular">
-        {formatNumber(used)}
-        <span className="text-sm font-normal text-muted">
-          {limit === null ? ' / unlimited' : ` / ${formatNumber(limit)}`}
-        </span>
-      </p>
-      {limit === null ? (
-        <p className="mt-2 flex items-center gap-1 text-xs text-subtle">
-          <Minus className="size-3" aria-hidden="true" />
-          No cap on this plan
-        </p>
-      ) : (
-        <Progress value={percent} tone={tone} size="sm" className="mt-2" />
-      )}
+      <dt className="text-xs font-medium text-muted">{label}</dt>
+      <dd className="mt-0.5 font-display text-xl font-semibold tracking-tight text-foreground tabular">{value}</dd>
+      <p className="mt-0.5 text-xs text-subtle">{hint}</p>
     </div>
   )
 }

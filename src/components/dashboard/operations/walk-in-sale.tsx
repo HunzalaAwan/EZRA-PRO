@@ -47,6 +47,7 @@ import { forSlot, usualSpotsOf } from '@/lib/extra-spots'
 import { placesOf } from '@/lib/places'
 import { useActivityOverrides } from '@/hooks/use-pricing-override'
 import { useBookingDefaults } from '@/hooks/use-booking-defaults'
+import { BOOKING_FEE_LABEL, guestBookingFee } from '@/lib/fees'
 import { useBookingLedger } from '@/hooks/use-booking-ledger'
 import { recordBooking, withLedger } from '@/lib/booking-ledger'
 import { useTransport } from '@/hooks/use-transport'
@@ -275,6 +276,8 @@ function WalkInTill({
   onOpenLog: () => void
 }) {
   const pricing = usePricing(tenantSlug)
+  // Who pays EZRA Pro's 4%: the business, or the guest as a booking fee line.
+  const { feePayer } = useBookingDefaults(tenantSlug).defaults
   const [query, setQuery] = React.useState('')
   const [slug, setSlug] = React.useState(activities[0]?.slug ?? '')
   const [slotId, setSlotId] = React.useState('')
@@ -436,11 +439,13 @@ function WalkInTill({
       ]
     : []
   const subtotal = lines.reduce((sum, line) => sum + line.total, 0)
+  // EZRA Pro's 4%, as at checkout: a line only when the business passes it on to the guest.
+  const fee = guestBookingFee(subtotal, feePayer)
   const promo = findPromo(pricing.promos, promoCode)
   const card = pricing.giftCards.find((entry) => entry.code === giftCode)
   const promoOff = promo && activity && !promoProblem(promo, { activitySlug: activity.slug, subtotal, todayKey }) ? promoDiscount(promo, subtotal) : 0
-  const giftOff = card && !giftProblem(card, todayKey) ? Math.min(card.balance, subtotal - promoOff) : 0
-  const total = Math.max(0, subtotal - promoOff - giftOff)
+  const giftOff = card && !giftProblem(card, todayKey) ? Math.min(card.balance, subtotal + fee - promoOff) : 0
+  const total = Math.max(0, subtotal + fee - promoOff - giftOff)
   const change = method === 'cash' && tendered ? Math.round(Number(tendered) * 100) - total : 0
   // Rentals with items: each item has its own count at this time.
   const itemCap = (tierId: string) => slot?.itemsLeft?.[tierId] ?? Number.POSITIVE_INFINITY
@@ -499,8 +504,13 @@ function WalkInTill({
           startsAt: slot.startsAt,
           soldAt,
           guests,
-          lines: [...lines, ...(promoOff > 0 ? [{ label: `Code ${promo?.code}`, total: -promoOff }] : []), ...(giftOff > 0 ? [{ label: 'Gift card', total: -giftOff }] : [])],
-          subtotal,
+          lines: [
+            ...lines,
+            ...(fee > 0 ? [{ label: BOOKING_FEE_LABEL, total: fee }] : []),
+            ...(promoOff > 0 ? [{ label: `Code ${promo?.code}`, total: -promoOff }] : []),
+            ...(giftOff > 0 ? [{ label: 'Gift card', total: -giftOff }] : []),
+          ],
+          subtotal: subtotal + fee,
           discount: promoOff + giftOff,
           total,
           method,
@@ -867,6 +877,9 @@ function WalkInTill({
             {appliedLabels.map((entry) => (
               <li key={entry.id} className="text-xs text-subtle">{entry.label} in the prices</li>
             ))}
+            {fee > 0 ? (
+              <li className="flex justify-between gap-2"><span className="truncate text-muted">{BOOKING_FEE_LABEL}</span><span className="tabular-nums">{formatCurrency(fee, currency)}</span></li>
+            ) : null}
             {promoOff > 0 ? (
               <li className="flex justify-between text-success"><span className="inline-flex items-center gap-1">{promo?.code}<button type="button" aria-label="Remove code" onClick={() => setPromoCode(null)}><X className="size-3.5" /></button></span><span className="tabular-nums">−{formatCurrency(promoOff, currency)}</span></li>
             ) : null}

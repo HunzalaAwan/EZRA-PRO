@@ -10,6 +10,8 @@ import { Input } from '@/components/ui/input'
 import { Segmented } from '@/components/ui/segmented'
 import { Textarea } from '@/components/ui/textarea'
 import { useCart } from '@/hooks/use-cart'
+import { useBookingDefaults } from '@/hooks/use-booking-defaults'
+import { BOOKING_FEE_LABEL } from '@/lib/fees'
 import { useMenu } from '@/hooks/use-menu'
 import { cartLineIssues, cartTotals, channelFor, choiceLines, orderLinesFromCart, type CartLine, type CartMode } from '@/lib/cart'
 import { hm, mh } from '@/lib/hospitality/hours'
@@ -62,6 +64,8 @@ const MODE_LABEL: Record<CartMode, string> = { pickup: 'Pickup', delivery: 'Deli
 export function OrderCheckout({ slug, tenantName, tenantPhone, ordering, currency, taxRate, taxLabel, nowTime, weekday, menu: seed, tenantId }: OrderCheckoutProps) {
   const { menu } = useMenu(tenantId, seed)
   const { cart, setMode, setZone, setWhen, setTip, setQty, clear, put, reprice } = useCart(slug)
+  // Who pays EZRA Pro's 4%: the restaurant, or the guest as a booking fee line.
+  const { feePayer } = useBookingDefaults(slug).defaults
   const [choosing, setChoosing] = React.useState<Choosing | null>(null)
   const [details, setDetails] = React.useState<Details>({ name: '', email: '', phone: '', room: '', address: '', instructions: '', card: '', expiry: '', cvc: '' })
   const [errors, setErrors] = React.useState<Partial<Record<keyof Details, string>>>({})
@@ -75,7 +79,7 @@ export function OrderCheckout({ slug, tenantName, tenantPhone, ordering, currenc
   const mode: CartMode = modes.includes(cart.mode) ? cart.mode : modes[0]
   const zones = ordering.delivery.zones
   const zone = zones.find((z) => z.id === cart.zoneId) ?? zones[0]
-  const totals = cartTotals({ ...cart, mode }, ordering, taxRate)
+  const totals = cartTotals({ ...cart, mode }, ordering, taxRate, feePayer)
   const hours = mode === 'room' ? ordering.roomService : ordering[mode]
   const lead = hours.leadMinutes + (mode === 'delivery' ? zone?.minutes ?? 0 : 0)
   const now = hm(nowTime)
@@ -379,8 +383,14 @@ export function OrderCheckout({ slug, tenantName, tenantPhone, ordering, currenc
               ) : null}
               {totals.serviceFee ? (
                 <div className="flex justify-between">
-                  <dt>{mode === 'room' ? 'Tray charge' : 'Service fee'}</dt>
+                  <dt>Tray charge</dt>
                   <dd className="tabular-nums">{money(totals.serviceFee, currency)}</dd>
+                </div>
+              ) : null}
+              {totals.bookingFee ? (
+                <div className="flex justify-between">
+                  <dt>{BOOKING_FEE_LABEL}</dt>
+                  <dd className="tabular-nums">{money(totals.bookingFee, currency)}</dd>
                 </div>
               ) : null}
               <div className="flex justify-between">

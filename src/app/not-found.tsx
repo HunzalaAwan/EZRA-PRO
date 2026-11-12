@@ -30,7 +30,7 @@ export const metadata: Metadata = {
    ========================================================================== */
 
 const DESTINATIONS = [
-  { href: '/pricing', label: 'Pricing', note: 'Commission from 3%, no contract' },
+  { href: '/pricing', label: 'Pricing', note: '4% of each booking, nothing else' },
   { href: '/solutions/watersports', label: 'Solutions', note: 'Six industries, six fits' },
   { href: '/product/booking', label: 'Online booking', note: 'A checkout guests actually finish' },
   { href: '/contact', label: 'Contact', note: 'A person replies within minutes' },

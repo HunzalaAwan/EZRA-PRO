@@ -1,6 +1,6 @@
 import { VS_CONTENT } from '@/components/marketing/compare/compare-content'
-import { LinkCards, WRAP } from '@/components/marketing/compare/compare-ui'
-import { VENDORS, type VsSlug } from '@/lib/data/competitors'
+import { LinkCards } from '@/components/marketing/compare/compare-ui'
+import { EZRA_PRICE_LINE, VENDORS, type VsSlug } from '@/lib/data/competitors'
 
 /* ==========================================================================
    CompareLinks — a short "how we compare" row for product and solution
@@ -30,14 +30,14 @@ export function CompareLinks({ pageKey }: { pageKey: string }) {
     ...slugs.map((slug) => ({
       href: `/compare/${slug}`,
       label: VS_CONTENT[slug].h1,
-      note: VENDORS[VS_CONTENT[slug].vendor].model.text,
+      note: VENDORS[VS_CONTENT[slug].vendor].pricing.text,
     })),
-    { href: '/compare', label: 'All comparisons', note: 'Eleven booking systems, a fee calculator and our sources.' },
+    { href: '/compare', label: 'All comparisons', note: 'Eleven systems, side by side, with a cost calculator.' },
   ]
 
   return (
     <section aria-labelledby={`compare-links-${pageKey}`} className="border-t border-line bg-background py-16 sm:py-20">
-      <div className={WRAP}>
+      <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
         <p className="text-xs font-medium tracking-[0.08em] text-primary uppercase">Compare</p>
         <h2
           id={`compare-links-${pageKey}`}
@@ -45,9 +45,7 @@ export function CompareLinks({ pageKey }: { pageKey: string }) {
         >
           How EZRA Pro compares
         </h2>
-        <p className="mt-3 max-w-2xl text-[1.0625rem] leading-[1.6] text-muted">
-          Fees, features and who each system suits, with a source and a date beside every fact.
-        </p>
+        <p className="mt-3 max-w-2xl text-[1.0625rem] leading-[1.6] text-muted">{EZRA_PRICE_LINE} See how that stacks up.</p>
         <div className="mt-8">
           <LinkCards links={links} />
         </div>

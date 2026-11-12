@@ -13,6 +13,8 @@ import { toast } from '@/components/ui/toaster'
 import { buildQuote, type AvailabilityDay, type Quote } from '@/components/storefront/booking-widget'
 import { useTransferHolds } from '@/hooks/use-transfer-holds'
 import { usePricing } from '@/hooks/use-pricing'
+import { useBookingDefaults } from '@/hooks/use-booking-defaults'
+import type { FeePayer } from '@/lib/fees'
 import { recordBooking, type LedgerEntry } from '@/lib/booking-ledger'
 import { addOnUnits, peopleOf, placesOf } from '@/lib/places'
 import type { PricingRule } from '@/lib/pricing'
@@ -101,7 +103,8 @@ export function deskPlan(
 
 /**
  * Everything a desk sale of a ride records: the quote (the same engine and
- * table as the storefront; transfers carry no booking fee), the ride as the
+ * table as the storefront; every fee is in the price, unless the business
+ * passes EZRA Pro's 4% on to the guest), the ride as the
  * booking keeps it, the ledger entry that puts it on the board and holds its
  * vehicles, and whether it can be sold (the request is sound, the vehicles
  * carry the group and are free on every leg; a shared run has the seats).
@@ -126,6 +129,8 @@ export function walkInTransferSale(args: {
   seatsLeft?: number
   /** Shared runs: the run's own time slot id (from the strip), so online sales count the seats sold here. */
   runId?: string
+  /** Who pays EZRA Pro's 4% (the booking defaults). The business, when not given. */
+  feePayer?: FeePayer
 }): { quote: Quote; details: TransferBookingDetails; entry: LedgerEntry; legs: PlannedLeg[]; errors: Record<string, string>; fits: boolean } {
   const { activity, request, nowIso } = args
   const config = transferOf(activity)
@@ -135,6 +140,7 @@ export function walkInTransferSale(args: {
   const errors = requestErrors({ ...activity, noticeHours: 0 }, request, nowIso)
   const lines = args.lines.filter((line) => line.qty > 0)
   const quote = buildQuote(activity, args.tenantSlug, { tiers: lines, addOns: args.addOns }, 1, {
+    feePayer: args.feePayer,
     party: request.passengers,
     transfer: pricingOf(request),
     startsAt: legs[0]?.pickupAt,
@@ -219,6 +225,7 @@ export function TransferTill({
 }) {
   const config = transferOf(activity)
   const pricing = usePricing(tenantSlug)
+  const { feePayer } = useBookingDefaults(tenantSlug).defaults
   const holds = useTransferHolds(activity, tenantSlug, serverHolds)
   const service = config?.service ?? 'private'
   const shared = service === 'shared'
@@ -297,6 +304,7 @@ export function TransferTill({
   const run = shared ? runs.find((entry) => entry.time === time) : undefined
   const seatsLeft = run?.seatsLeft
   const sale = walkInTransferSale({
+    feePayer,
     activity,
     tenantSlug,
     request,
@@ -331,7 +339,7 @@ export function TransferTill({
       () => {
         const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
         const reference = `EZR-${Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')}`
-        const final = walkInTransferSale({ activity, tenantSlug, request, lines, addOns, holds, nowIso, reference, guest: { name, phone }, flights, note, businessRules: pricing.rules, seatsLeft, ...(run?.departureId ? { runId: run.departureId } : {}) })
+        const final = walkInTransferSale({ feePayer, activity, tenantSlug, request, lines, addOns, holds, nowIso, reference, guest: { name, phone }, flights, note, businessRules: pricing.rules, seatsLeft, ...(run?.departureId ? { runId: run.departureId } : {}) })
         const soldAt = `${nowIso.slice(0, 16)}:${pad(new Date().getSeconds())}`
         recordBooking(tenantSlug, [{ ...final.entry, createdAt: soldAt }])
         const record: WalkInRecord = {
@@ -342,7 +350,10 @@ export function TransferTill({
           startsAt: final.entry.startsAt,
           soldAt,
           guests: people,
-          lines: [...final.quote.ticketLines, ...final.quote.addOnLines].map((line) => ({ label: `${line.quantity} × ${line.label}`, total: line.total })),
+          lines: [
+            ...[...final.quote.ticketLines, ...final.quote.addOnLines].map((line) => ({ label: `${line.quantity} × ${line.label}`, total: line.total })),
+            ...(final.quote.feeTotal > 0 ? [{ label: final.quote.feeLabel, total: final.quote.feeTotal }] : []),
+          ],
           subtotal: final.quote.subtotal,
           discount: 0,
           total: final.quote.total,
@@ -657,12 +668,18 @@ export function TransferTill({
               </li>
             ))}
             {sale.quote.ticketLines.length === 0 ? <li className="text-xs text-subtle">Pick where they are going.</li> : null}
+            {sale.quote.feeTotal > 0 ? (
+              <li className="flex justify-between gap-2">
+                <span className="truncate text-muted">{sale.quote.feeLabel}</span>
+                <span className="tabular-nums">{formatCurrency(sale.quote.feeTotal, currency)}</span>
+              </li>
+            ) : null}
           </ul>
           <p className="mt-3 flex items-baseline justify-between border-t border-line pt-3">
             <span className="text-sm text-muted">To pay</span>
             <span className="font-display text-3xl font-semibold tabular-nums">{formatCurrency(total, currency)}</span>
           </p>
-          <p className="mt-1 text-xs text-subtle">All fees included.</p>
+          {sale.quote.feesIncluded ? <p className="mt-1 text-xs text-subtle">All fees included.</p> : null}
         </div>
 
         <div className="rounded-2xl border border-line bg-surface p-5">

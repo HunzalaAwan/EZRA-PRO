@@ -13,6 +13,7 @@ import type {
   Testimonial,
   VerticalKey,
 } from '@/types'
+import { EZRA_FEE_PERCENT } from '@/lib/fees'
 
 /* ==========================================================================
    HERO / PROOF
@@ -277,99 +278,44 @@ export const VERTICAL_PITCHES: Record<
    PRICING
    ========================================================================== */
 
-const FEATURE_MATRIX = [
-  'Unlimited activities & departures',
-  'Live availability & online checkout',
-  'Calendar, manifest & mobile check-in',
-  'Guest CRM & digital waivers',
-  'Next-day payouts',
-  'Email & SMS confirmations',
-  'Custom-branded storefront',
-  'Advanced analytics & insights',
-  'OTA channel manager',
-  'Resource & staff scheduling',
-  'Dynamic pricing & promotions',
-  'Gift cards & memberships',
-  'Multi-location & multi-brand',
-  'Open REST API & webhooks',
-  'Priority support & SLA',
-  'Dedicated success manager',
-] as const
+/** Everything every business gets. There is one price and nothing is held back. */
+const INCLUDED: { label: string; hint?: string }[] = [
+  { label: 'Unlimited activities, times and team members' },
+  { label: 'Live availability and online checkout' },
+  { label: 'Calendar, guest lists and mobile check-in' },
+  { label: 'Guest records and digital waivers' },
+  { label: 'Next-day payouts', hint: 'Money lands the next business day, not weekly' },
+  { label: 'Email and text confirmations' },
+  { label: 'Storefront on your own domain' },
+  { label: 'Reports and written insights', hint: 'Busy and quiet times, repeat guests and plain suggestions' },
+  { label: 'Marketplace sync', hint: 'Two-way sync with Viator, GetYourGuide and Expedia' },
+  { label: 'Staff and equipment scheduling' },
+  { label: 'Price rules and promo codes', hint: 'By season, how far ahead people book and how full a time is' },
+  { label: 'Gift cards and memberships' },
+  { label: 'Several locations under one login' },
+  { label: 'API and webhooks', hint: 'Build anything on top of your own data' },
+  { label: 'Support seven days a week' },
+  { label: 'Free move from your current platform' },
+]
 
-/** index at which each plan stops including features */
-const PLAN_DEPTH: Record<PricingPlan['id'], number> = {
-  starter: 6,
-  growth: 10,
-  scale: 14,
-  enterprise: 16,
-}
-
-function buildFeatures(planId: PricingPlan['id']) {
-  const depth = PLAN_DEPTH[planId]
-  const hints: Record<string, string> = {
-    'Next-day payouts': 'Funds settle the next business day, not weekly',
-    'Advanced analytics & insights': 'Occupancy heatmap, cohorts and written recommendations',
-    'OTA channel manager': 'Two-way sync with Viator, GetYourGuide and Expedia',
-    'Dynamic pricing & promotions': 'Rules by season, lead time and remaining capacity',
-    'Open REST API & webhooks': 'Build anything on top of your own data',
-  }
-  return FEATURE_MATRIX.map((label, i) => ({
-    label,
-    included: i < depth,
-    hint: hints[label],
-  }))
-}
-
+/**
+ * EZRA Pro's one price: 4% of each booking, $0 a month, no setup fee, no
+ * contract. The business chooses who pays the 4% (Settings → Payments). A
+ * one-item list so every reader (pricing page, homepage, compare pages) reads
+ * the same numbers; `id` is 'ezra'.
+ */
 export const PRICING_PLANS: PricingPlan[] = [
   {
-    id: 'starter',
-    name: 'Starter',
-    commissionPercent: 4,
+    id: 'ezra',
+    name: 'EZRA Pro',
+    commissionPercent: EZRA_FEE_PERCENT,
     monthlyPrice: 0,
     annualPrice: 0,
-    blurb: 'Flat 4% per booking. For new operators taking their first bookings online.',
-    highlights: ['No monthly fee', 'Flat 4% rate', 'Unlimited activities', 'Next-day payouts'],
-    features: buildFeatures('starter'),
+    blurb: `${EZRA_FEE_PERCENT}% of each booking. That is the entire bill.`,
+    highlights: ['$0 a month', 'No setup fee', 'No contract', 'Every feature included', 'You choose who pays the 4%'],
+    features: INCLUDED.map((item) => ({ ...item, included: true })),
     cta: 'Start free',
-    popular: false,
-  },
-  {
-    id: 'growth',
-    name: 'Growth',
-    commissionPercent: 4,
-    monthlyPrice: 4900,
-    annualPrice: 49000,
-    blurb: '4% flat rate with full channel manager and advanced analytics.',
-    highlights: ['Flat 4% rate', 'Advanced analytics', 'OTA channel manager'],
-    features: buildFeatures('growth'),
-    cta: 'Start 14-day trial',
     popular: true,
-    badge: 'Most popular',
-  },
-  {
-    id: 'scale',
-    name: 'Scale',
-    commissionPercent: 2.5,
-    monthlyPrice: 19900,
-    annualPrice: 199000,
-    blurb: 'Reduced 2.5% rate for high-volume operators and multi-location businesses.',
-    highlights: ['2.5% volume rate', 'Dynamic pricing', 'Multi-location'],
-    features: buildFeatures('scale'),
-    cta: 'Start 14-day trial',
-    popular: false,
-  },
-  {
-    id: 'enterprise',
-    name: 'Enterprise',
-    commissionPercent: 0,
-    monthlyPrice: 0,
-    annualPrice: 0,
-    blurb: 'For large attractions, resort groups and marketplaces with custom volumes.',
-    highlights: ['Custom rate', 'Dedicated CSM', '99.99% SLA'],
-    features: buildFeatures('enterprise'),
-    cta: 'Talk to sales',
-    popular: false,
-    badge: 'Custom',
   },
 ]
 
@@ -381,7 +327,7 @@ export const TESTIMONIALS: Testimonial[] = [
   {
     id: 'tst-1',
     quote:
-      'We came off our old platform mid-season, which everyone told us was insane. The migration took a weekend and we did not drop a single booking. Commission went from 6% to 4.5% — that is a crew member&rsquo;s salary back in our pocket.',
+      'We came off our old platform mid-season, which everyone told us was insane. The migration took a weekend and we did not drop a single booking. We pay 4% of each booking and nothing else — that is a crew member&rsquo;s salary back in our pocket.',
     author: 'Kaimana Reyes',
     role: 'Owner',
     company: 'Blue Horizon Watersports',
@@ -486,7 +432,7 @@ export const FAQS: FaqItem[] = [
     category: 'migration',
     question: 'How hard is it to move off my current platform?',
     answer:
-      'Easier than you are expecting. Send us an export and we rebuild your activities, pricing tiers, add-ons, guest records and every future booking inside EZRA Pro — then you flip the switch when you are ready. Most operators go live over a weekend, mid-season, without pausing sales. Migration is free on every plan, including Starter.',
+      'Easier than you are expecting. Send us an export and we rebuild your activities, pricing tiers, add-ons, guest records and every future booking inside EZRA Pro — then you flip the switch when you are ready. Most operators go live over a weekend, mid-season, without pausing sales. The move is free.',
   },
   {
     id: 'faq-2',
@@ -498,23 +444,23 @@ export const FAQS: FaqItem[] = [
   {
     id: 'faq-3',
     category: 'pricing',
-    question: 'Is the commission really lower, or is there a catch?',
+    question: 'What does EZRA Pro cost?',
     answer:
-      'Starter is 6% with no monthly fee — the same headline rate as the big incumbents, so you can move at zero risk. Growth drops it to 4.5% for $79/month and Scale to 3% for $249/month. If you take more than about $18k a month, Growth is already cheaper. We will do the arithmetic with your real numbers before you commit.',
+      '4% of each booking. That is the entire bill: no monthly fee, no setup fee, no contract, and every feature is included. You only pay when a guest books.',
   },
   {
     id: 'faq-4',
     category: 'pricing',
-    question: 'Who pays the commission — me or the guest?',
+    question: 'Who pays the 4% — me or the guest?',
     answer:
-      'Your call, per activity. Absorb it into your price, or pass it on as a booking fee at checkout the way most operators do. EZRA Pro shows you the net-of-commission margin either way, per channel, so you always know what a booking is actually worth.',
+      'You choose, in Settings. Pay it yourself and guests pay exactly the price you set, or pass it on and checkout adds one &ldquo;Booking fee (4%)&rdquo; line. Card fees stay between you and your payment provider; guests never see a card fee line.',
   },
   {
     id: 'faq-5',
     category: 'payments',
     question: 'When do I actually get paid?',
     answer:
-      'Next business day, as standard, on every plan. Not weekly, not on a rolling seven-day hold. You can also take a deposit at booking and the balance on the day of the trip, which is how most charter and multi-day operators run.',
+      'Next business day, as standard. Not weekly, not on a rolling seven-day hold. You can also take a deposit at booking and the balance on the day of the trip, which is how most charter and multi-day operators run.',
   },
   {
     id: 'faq-6',
@@ -528,7 +474,7 @@ export const FAQS: FaqItem[] = [
     category: 'product',
     question: 'Does it work when there is no signal at the dock?',
     answer:
-      'Yes. The crew app caches today&rsquo;s manifest on the device. You can check guests in, mark no-shows and capture signatures completely offline, and everything syncs the moment you get a bar of service. This is the single most requested feature from marine operators and it is on every plan.',
+      'Yes. The crew app caches today&rsquo;s manifest on the device. You can check guests in, mark no-shows and capture signatures completely offline, and everything syncs the moment you get a bar of service. This is the single most requested feature from marine operators, and like everything else it is included.',
   },
   {
     id: 'faq-8',
@@ -549,7 +495,7 @@ export const FAQS: FaqItem[] = [
     category: 'product',
     question: 'Will it match my brand, or will guests see your logo?',
     answer:
-      'Your storefront runs on your own domain with your colours, typography and photography. EZRA Pro branding is off by default on Growth and above. You can embed just the booking widget into the website you already have, or let us host the whole storefront.',
+      'Your storefront runs on your own domain with your colours, typography and photography. EZRA Pro branding is off by default. You can embed just the booking widget into the website you already have, or let us host the whole storefront.',
   },
   {
     id: 'faq-11',
@@ -563,28 +509,28 @@ export const FAQS: FaqItem[] = [
     category: 'support',
     question: 'What does support actually look like in peak season?',
     answer:
-      'Humans who understand the industry, seven days a week, with a median first response under five minutes during operating hours. Scale and Enterprise get a named success manager and a phone number that reaches a person. We staff up for your season, not ours.',
+      'Humans who understand the industry, seven days a week, with a median first response under five minutes during operating hours, and a phone number that reaches a person. We staff up for your season, not ours.',
   },
   {
     id: 'faq-13',
     category: 'support',
     question: 'Am I locked into a contract?',
     answer:
-      'No. Monthly plans are month to month and you can leave whenever you like. There is no termination fee and no notice period. We would rather earn the renewal than trap you into it.',
+      'No. There is no contract, no monthly fee and nothing to cancel: you pay 4% of the bookings you take, and you can leave whenever you like. We would rather earn your next season than trap you into it.',
   },
   {
     id: 'faq-14',
     category: 'support',
     question: 'Can I get my data out if I leave?',
     answer:
-      'Any time, in full, without asking. Guests, bookings, payments, reviews and activity configuration export to CSV or through the API on every plan including Starter. It is your business — holding your data hostage is not a retention strategy we are interested in.',
+      'Any time, in full, without asking. Guests, bookings, payments, reviews and activity configuration export to CSV or through the API. It is your business — holding your data hostage is not a retention strategy we are interested in.',
   },
   {
     id: 'faq-15',
     category: 'pricing',
-    question: 'Is there really a free plan?',
+    question: 'Is it really $0 a month?',
     answer:
-      'Starter has no monthly fee and no card required. You pay 6% only when you actually take a booking, so it costs nothing to run a season on it and decide later. Most operators move to Growth once the maths tips in their favour, and we will tell you when it does.',
+      'Yes. No monthly fee and no card required to start. You pay 4% only when you actually take a booking, so a quiet month costs nothing.',
   },
   {
     id: 'faq-16',

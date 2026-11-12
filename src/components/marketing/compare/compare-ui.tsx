@@ -1,26 +1,25 @@
 import type { ReactNode } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
-import { ArrowRight, ArrowUpRight, Check, CircleDashed, Minus } from 'lucide-react'
+import { ArrowRight, ArrowUpRight } from 'lucide-react'
 
-import {
-  CHECKED_ON,
-  ERROR_REPORT_EMAIL,
-  formatCheckedDate,
-  type CellTone,
-  type Fact,
-  type Source,
-} from '@/lib/data/competitors'
+import { PHOTOS, photoUrl } from '@/components/marketing/story/photos'
+import type { PhotoKey } from '@/components/marketing/compare/compare-content'
+import { TocNav, type TocItem } from '@/components/marketing/compare/toc'
+import { CHECKED_ON, ERROR_REPORT_EMAIL, formatCheckedDate, type Fact, type Source } from '@/lib/data/competitors'
 import { cn } from '@/lib/utils'
 
 /* ==========================================================================
    Shared pieces for /compare and /alternatives.
 
-   Server components only: static text, no motion, so the pages render as
-   plain HTML. Every competitor fact is shown with its source, and anything
-   that comes from a third party carries a visible "Reported" badge.
+   An editorial article: a pastel hero with a photo, a sticky contents list
+   on desktop (a jump menu on phones), a narrow reading column, and a
+   numbered Sources list at the end. Facts carry a small footnote number
+   that leads to their source; third-party figures carry a "Reported" badge.
+   Server components only, except the contents list.
    ========================================================================== */
 
-export const WRAP = 'mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8'
+export const WRAP = 'mx-auto w-full max-w-5xl px-4 sm:px-6 lg:px-8'
 
 /* ---------------------------------------------------------------- JSON-LD */
 
@@ -40,19 +39,16 @@ export interface Crumb {
 export function Breadcrumbs({ items }: { items: Crumb[] }) {
   return (
     <nav aria-label="Breadcrumb">
-      <ol className="flex flex-wrap items-center gap-2 text-[0.9375rem] text-muted">
+      <ol className="flex flex-wrap items-center gap-2 text-sm text-muted">
         {items.map((item, index) => (
           <li key={item.label} className="flex items-center gap-2">
             {index > 0 ? <span aria-hidden="true">/</span> : null}
             {item.href ? (
-              <Link
-                href={item.href}
-                className="rounded transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-              >
+              <Link href={item.href} className="rounded transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
                 {item.label}
               </Link>
             ) : (
-              <span aria-current="page" className="font-semibold text-foreground">
+              <span aria-current="page" className="text-foreground">
                 {item.label}
               </span>
             )}
@@ -65,120 +61,114 @@ export function Breadcrumbs({ items }: { items: Crumb[] }) {
 
 /* ------------------------------------------------------------------- Hero */
 
-export function CompareHero({
-  crumbs,
-  title,
-  lede,
-  children,
-}: {
-  crumbs: Crumb[]
-  title: string
-  lede: string
-  children?: ReactNode
-}) {
+export function ArticleHero({ crumbs, title, lede, photo }: { crumbs: Crumb[]; title: string; lede: string; photo: PhotoKey }) {
+  const image = PHOTOS[photo]
   return (
-    <section className="bg-cal-rain pt-8 pb-12 sm:pt-10 sm:pb-16">
-      <div className={WRAP}>
-        <Breadcrumbs items={crumbs} />
-        <div className="mt-10 max-w-3xl sm:mt-12">
-          <h1 className="font-display text-[2.5rem] leading-[1.05] font-medium tracking-[-0.035em] text-balance text-foreground sm:text-[3.5rem]">
+    <header>
+      <div className="bg-cal-rain pt-8 pb-28 sm:pt-10 sm:pb-40">
+        <div className={WRAP}>
+          <Breadcrumbs items={crumbs} />
+          <h1 className="mt-10 max-w-3xl font-display text-[2.375rem] leading-[1.06] font-medium tracking-[-0.035em] text-balance text-foreground sm:mt-12 sm:text-[3.5rem]">
             {title}
           </h1>
-          <p className="mt-6 max-w-[62ch] text-[1.125rem] leading-[1.55] text-pretty text-muted">{lede}</p>
-          <CheckedLine className="mt-6" />
-          {children}
+          <p className="mt-5 max-w-[56ch] text-[1.125rem] leading-[1.55] text-pretty text-muted sm:text-[1.25rem]">{lede}</p>
+          <p className="mt-6 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
+            <span>
+              Last checked <time dateTime={CHECKED_ON}>{formatCheckedDate()}</time>
+            </span>
+            <span aria-hidden="true">·</span>
+            <span>By the EZRA Pro team</span>
+          </p>
         </div>
       </div>
+      <div className={cn(WRAP, '-mt-20 sm:-mt-28')}>
+        <div className="relative aspect-[16/10] overflow-hidden rounded-[1.5rem] bg-cal-cloud shadow-[var(--shadow-md)] sm:aspect-[21/9] sm:rounded-[1.75rem]">
+          <Image
+            src={photoUrl(image, 1800)}
+            alt={image.alt}
+            fill
+            priority
+            sizes="(min-width: 1024px) 60rem, 100vw"
+            className="object-cover"
+            style={{ objectPosition: image.focus }}
+          />
+        </div>
+      </div>
+    </header>
+  )
+}
+
+/* ------------------------------------------------------- Article layout */
+
+/** A sticky contents list on desktop, a jump menu on phones, and the reading column. */
+export function ArticleBody({ toc, children }: { toc: TocItem[]; children: ReactNode }) {
+  return (
+    <div className={cn(WRAP, 'py-12 sm:py-16')}>
+      <div className="lg:grid lg:grid-cols-[12.5rem_minmax(0,1fr)] lg:gap-14">
+        <aside className="hidden lg:block lg:self-start lg:sticky lg:top-32">
+          <TocNav items={toc} variant="aside" />
+        </aside>
+        <div className="min-w-0">
+          <div className="mb-10 lg:hidden">
+            <TocNav items={toc} variant="mobile" />
+          </div>
+          <div className="max-w-[44rem] space-y-16 sm:space-y-20">{children}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function Block({ id, title, intro, children }: { id: string; title: string; intro?: ReactNode; children?: ReactNode }) {
+  return (
+    <section id={id} aria-labelledby={`${id}-title`} className="scroll-mt-32">
+      <h2 id={`${id}-title`} className="font-display text-[1.75rem] leading-[1.15] font-medium tracking-[-0.03em] text-balance text-foreground sm:text-[2.125rem]">
+        {title}
+      </h2>
+      {intro ? <div className="mt-3 text-[1.0625rem] leading-[1.6] text-pretty text-muted">{intro}</div> : null}
+      {children ? <div className="mt-7">{children}</div> : null}
     </section>
   )
 }
 
-export function CheckedLine({ className }: { className?: string }) {
-  return (
-    <p className={cn('flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted', className)}>
-      <span>
-        Last checked <time dateTime={CHECKED_ON}>{formatCheckedDate()}</time>
-      </span>
-      <span aria-hidden="true">·</span>
-      <span>Sources linked beside each fact</span>
-      <span aria-hidden="true">·</span>
-      <span>Written by the EZRA Pro team</span>
-    </p>
-  )
+/* ------------------------------------------------------------ Footnotes */
+
+export interface NoteEntry {
+  source: Source
+  reported: boolean
 }
 
-/* ---------------------------------------------------------------- Section */
-
-export function Section({
-  id,
-  eyebrow,
-  title,
-  intro,
-  tone = 'plain',
-  children,
-}: {
-  id: string
-  eyebrow?: string
-  title: string
-  intro?: ReactNode
-  tone?: 'plain' | 'subtle' | 'cloud'
-  children: ReactNode
-}) {
-  return (
-    <section
-      id={id}
-      aria-labelledby={`${id}-title`}
-      className={cn(
-        'scroll-mt-28 py-16 sm:py-20',
-        tone === 'plain' && 'bg-background',
-        tone === 'subtle' && 'bg-background-subtle',
-        tone === 'cloud' && 'bg-cal-cloud',
-      )}
-    >
-      <div className={WRAP}>
-        <div className="max-w-3xl">
-          {eyebrow ? <p className="text-xs font-medium tracking-[0.08em] text-primary uppercase">{eyebrow}</p> : null}
-          <h2
-            id={`${id}-title`}
-            className={cn(
-              'font-display text-[1.875rem] leading-[1.12] font-medium tracking-[-0.03em] text-balance text-foreground sm:text-[2.375rem]',
-              eyebrow && 'mt-3',
-            )}
-          >
-            {title}
-          </h2>
-          {intro ? <div className="mt-4 text-[1.0625rem] leading-[1.6] text-pretty text-muted">{intro}</div> : null}
-        </div>
-        <div className="mt-10">{children}</div>
-      </div>
-    </section>
-  )
+/**
+ * Numbers sources in the order they are cited. Call `ref` while building the
+ * page (in the page function, top to bottom) and pass `list` to <SourcesList>.
+ */
+export function createNotes() {
+  const list: NoteEntry[] = []
+  const ref = (source: Source, reported = false) => {
+    let index = list.findIndex((entry) => entry.source.url === source.url)
+    if (index < 0) {
+      list.push({ source, reported })
+      index = list.length - 1
+    } else if (reported) {
+      list[index].reported = true
+    }
+    return index + 1
+  }
+  const fact = (f: Fact) => ref(f.source, f.status === 'reported')
+  return { list, ref, fact }
 }
 
-/* ---------------------------------------------------------- Facts, sources */
-
-function isExternal(url: string) {
-  return /^https?:\/\//.test(url)
-}
-
-export function SourceLink({ source, prefix = 'Source:' }: { source: Source; prefix?: string }) {
-  const className =
-    'inline-flex items-center gap-0.5 rounded text-xs text-subtle underline decoration-line-strong underline-offset-2 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary'
+export function Ref({ n }: { n: number }) {
   return (
-    <span className="text-xs text-subtle">
-      {prefix ? `${prefix} ` : null}
-      {isExternal(source.url) ? (
-        <a href={source.url} target="_blank" rel="noopener noreferrer nofollow" className={className}>
-          {source.label}
-          <ArrowUpRight aria-hidden="true" className="size-3" />
-          <span className="sr-only"> (opens in a new tab)</span>
-        </a>
-      ) : (
-        <Link href={source.url} className={className}>
-          {source.label}
-        </Link>
-      )}
-    </span>
+    <sup className="relative -top-[0.5em] ml-px align-baseline text-xs leading-none">
+      <a
+        href={`#source-${n}`}
+        aria-label={`Source ${n}`}
+        className="rounded px-0.5 text-subtle no-underline transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-primary"
+      >
+        {n}
+      </a>
+    </sup>
   )
 }
 
@@ -186,7 +176,7 @@ export function ReportedBadge() {
   return (
     <span
       title="From a third party, not the vendor. Confirm with the vendor."
-      className="inline-flex items-center rounded-full bg-cal-sunbeam px-2 py-0.5 text-xs font-medium text-foreground ring-1 ring-cal-peach"
+      className="ml-1.5 inline-flex translate-y-[-1px] items-center rounded-full bg-cal-sunbeam px-2 py-px align-middle text-xs font-medium text-foreground ring-1 ring-cal-peach"
     >
       Reported
       <span className="sr-only"> (a third-party figure, not published by the vendor)</span>
@@ -194,180 +184,224 @@ export function ReportedBadge() {
   )
 }
 
-/** A fact with its badge and source underneath. */
-export function FactBlock({ fact, className }: { fact: Fact; className?: string }) {
+/** A fact's text, its badge when reported, and its footnote. */
+export function FactInline({ fact, n }: { fact: Fact; n: number }) {
   return (
-    <div className={className}>
-      <p className="leading-snug text-foreground">{fact.text}</p>
-      <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-        {fact.status === 'reported' ? <ReportedBadge /> : null}
-        <SourceLink source={fact.source} />
-      </p>
-    </div>
-  )
-}
-
-/** A fact's text and badge only, for dense tables whose sources sit in the row header. */
-export function FactBrief({ fact }: { fact: Fact }) {
-  return (
-    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
-      <span>{fact.text}</span>
+    <>
+      {fact.text}
       {fact.status === 'reported' ? <ReportedBadge /> : null}
-    </span>
+      <Ref n={n} />
+    </>
   )
 }
 
-const TONE_ICON: Record<CellTone, { icon: typeof Check; className: string; label: string }> = {
-  yes: { icon: Check, className: 'text-success', label: 'Yes' },
-  limited: { icon: CircleDashed, className: 'text-cal-tangerine', label: 'Partly or on some plans' },
-  'not-shown': { icon: Minus, className: 'text-faint', label: 'Not shown' },
+/* ------------------------------------------------------------ At a glance */
+
+export interface GlanceRow {
+  key: string
+  name: string
+  href?: string
+  ours?: boolean
+  note?: string
+  pricing: ReactNode
+  whoPays: ReactNode
+  bestFor: string
 }
 
-export function ToneMark({ tone }: { tone: CellTone }) {
-  const { icon: Icon, className, label } = TONE_ICON[tone]
-  return (
-    <span className="mt-0.5 shrink-0">
-      <Icon aria-hidden="true" className={cn('size-4', className)} strokeWidth={2.5} />
-      <span className="sr-only">{label}: </span>
-    </span>
-  )
-}
+const CELL = 'block md:table-cell md:px-5 md:py-4 md:align-top'
+const LABEL = 'mb-0.5 block text-xs font-medium tracking-[0.04em] text-subtle uppercase md:hidden'
 
-export function ToneLegend() {
+/** Three plain columns. On phones each row becomes a small stacked card, so nothing scrolls sideways. */
+export function GlanceTable({ caption, rows }: { caption: string; rows: GlanceRow[] }) {
   return (
-    <ul className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted">
-      {(Object.keys(TONE_ICON) as CellTone[]).map((tone) => {
-        const { icon: Icon, className, label } = TONE_ICON[tone]
-        return (
-          <li key={tone} className="inline-flex items-center gap-1.5">
-            <Icon aria-hidden="true" className={cn('size-4', className)} strokeWidth={2.5} />
-            {label}
-          </li>
-        )
-      })}
-      <li className="inline-flex items-center gap-1.5">
-        <ReportedBadge /> third-party figure
-      </li>
-    </ul>
-  )
-}
-
-/* ------------------------------------------------------------------ Table */
-
-/** A table that scrolls sideways on small screens instead of squashing. */
-export function ScrollTable({ label, children, minWidth = '44rem' }: { label: string; children: ReactNode; minWidth?: string }) {
-  return (
-    <div
-      role="region"
-      aria-label={label}
-      tabIndex={0}
-      className="relative overflow-x-auto rounded-[1.25rem] bg-surface shadow-[var(--shadow-sm)] ring-1 ring-black/[0.05] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-    >
-      <div style={{ minWidth }}>{children}</div>
+    <div className="overflow-hidden rounded-[1.25rem] bg-surface ring-1 ring-black/[0.06]">
+      <table className="block w-full text-left text-[0.9375rem] leading-[1.5] md:table">
+        <caption className="sr-only">{caption}</caption>
+        <thead className="hidden md:table-header-group">
+          <tr className="border-b border-line">
+            {['System', 'Pricing', 'Who pays', 'Best for'].map((label) => (
+              <th key={label} scope="col" className="px-5 py-3 text-left text-xs font-semibold tracking-[0.06em] text-subtle uppercase">
+                {label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="block md:table-row-group">
+          {rows.map((row) => (
+            <tr key={row.key} className={cn('grid gap-3 border-b border-line-subtle px-5 py-5 last:border-b-0 md:table-row md:p-0', row.ours && 'bg-cal-haze')}>
+              <th scope="row" className={cn(CELL, 'font-medium text-foreground md:w-[24%]')}>
+                {row.href ? (
+                  <Link href={row.href} className="underline decoration-line-strong underline-offset-4 hover:text-primary">
+                    {row.name}
+                  </Link>
+                ) : (
+                  row.name
+                )}
+                {row.ours ? <span className="ml-2 inline-flex rounded-full bg-foreground px-2 py-px align-middle text-xs font-medium text-background">Ours</span> : null}
+                {row.note ? <span className="mt-0.5 block text-xs font-normal text-subtle">{row.note}</span> : null}
+              </th>
+              <td className={cn(CELL, 'text-foreground')}>
+                <span className={LABEL}>Pricing</span>
+                {row.pricing}
+              </td>
+              <td className={cn(CELL, 'text-foreground md:w-[22%]')}>
+                <span className={LABEL}>Who pays</span>
+                {row.whoPays}
+              </td>
+              <td className={cn(CELL, 'text-muted md:w-[26%]')}>
+                <span className={LABEL}>Best for</span>
+                {row.bestFor}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
 
-export const TH = 'px-4 py-3 text-left text-xs font-semibold tracking-[0.06em] text-subtle uppercase'
-export const TD = 'px-4 py-4 align-top text-sm'
+/* ---------------------------------------------------------------- Verdict */
 
-export function ScrollHint() {
-  return <p className="mt-3 text-xs text-subtle md:hidden">Scroll the table sideways to see every column.</p>
-}
-
-/** A quiet bullet: the site avoids tick-mark lists. */
-export function Dot({ className }: { className?: string }) {
-  return <span aria-hidden="true" className={cn('mt-[0.6em] size-1.5 shrink-0 rounded-full bg-foreground/40', className)} />
-}
-
-/* ------------------------------------------------------------- Point grid */
-
-export function PointGrid({ points, numbered = false }: { points: { title: string; body: string; source?: Source; reported?: boolean }[]; numbered?: boolean }) {
-  const List = numbered ? 'ol' : 'ul'
+export function Verdict({ them, us }: { them: { name: string; items: string[] }; us: string[] }) {
+  const sides = [
+    { heading: `Choose ${them.name} if`, items: them.items, tone: 'bg-cal-sunbeam' },
+    { heading: 'Choose EZRA Pro if', items: us, tone: 'bg-cal-honeydew' },
+  ]
   return (
-    <List className={cn('grid gap-5 sm:grid-cols-2', points.length === 4 ? 'lg:grid-cols-2' : 'lg:grid-cols-3')}>
-      {points.map((point, index) => (
-        <li key={point.title} className="flex flex-col rounded-[1.25rem] bg-surface p-6 shadow-[var(--shadow-sm)] ring-1 ring-black/[0.04]">
-          {numbered ? (
-            <span aria-hidden="true" className="grid size-8 place-items-center rounded-full bg-cal-lavender text-sm font-medium text-foreground">
-              {index + 1}
-            </span>
-          ) : null}
-          <h3 className={cn('font-display text-[1.1875rem] leading-[1.25] font-medium tracking-[-0.015em] text-foreground', numbered && 'mt-4')}>
-            {point.title}
-          </h3>
-          <p className="mt-2.5 text-[0.9375rem] leading-[1.55] text-muted">{point.body}</p>
-          {point.source ? (
-            <p className="mt-auto flex flex-wrap items-center gap-2 pt-4">
-              {point.reported ? <ReportedBadge /> : null}
-              <SourceLink source={point.source} />
-            </p>
-          ) : null}
-        </li>
-      ))}
-    </List>
-  )
-}
-
-/* -------------------------------------------------------------------- FAQ */
-
-export function FaqList({ faqs }: { faqs: { q: string; a: string; source?: Source; reported?: boolean }[] }) {
-  return (
-    <div className="divide-y divide-line rounded-[1.25rem] bg-surface px-6 shadow-[var(--shadow-sm)] ring-1 ring-black/[0.04] sm:px-8">
-      {faqs.map((faq) => (
-        <div key={faq.q} className="py-6">
-          <h3 className="font-display text-[1.125rem] leading-[1.3] font-medium tracking-[-0.01em] text-foreground">{faq.q}</h3>
-          <p className="mt-2.5 max-w-[68ch] text-[0.9375rem] leading-[1.6] text-muted">{faq.a}</p>
-          {faq.source ? (
-            <p className="mt-2.5 flex flex-wrap items-center gap-2">
-              {faq.reported ? <ReportedBadge /> : null}
-              <SourceLink source={faq.source} />
-            </p>
-          ) : null}
+    <div className="grid gap-4 sm:grid-cols-2">
+      {sides.map((side) => (
+        <div key={side.heading} className={cn('rounded-[1.25rem] p-6', side.tone)}>
+          <h3 className="font-display text-[1.25rem] font-medium tracking-[-0.02em] text-foreground">{side.heading}</h3>
+          <Bullets className="mt-4" items={side.items.map((text) => ({ text }))} />
         </div>
       ))}
     </div>
   )
 }
 
-/* ------------------------------------------------------- Method and errors */
+/* ---------------------------------------------------------------- Lists */
 
-export function ReportError({ page }: { page: string }) {
-  const subject = encodeURIComponent(`Correction: ${page}`)
+/** A quiet bullet: the site avoids tick-mark lists. */
+export function Dot({ className }: { className?: string }) {
+  return <span aria-hidden="true" className={cn('mt-[0.6em] size-1.5 shrink-0 rounded-full bg-foreground/45', className)} />
+}
+
+export function Bullets({ items, className }: { items: { text: string; n?: number; reported?: boolean }[]; className?: string }) {
   return (
-    <div className="rounded-[1.25rem] bg-cal-sunbeam p-6 sm:p-7">
-      <h3 className="font-display text-[1.125rem] font-medium text-foreground">Spotted something out of date?</h3>
-      <p className="mt-2 max-w-[62ch] text-[0.9375rem] leading-[1.55] text-muted">
-        Prices and features change. If anything here is wrong, including about EZRA Pro, tell us with a link to the source and we will
-        check it and update the page and its date.
-      </p>
-      <p className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[0.9375rem]">
-        <a
-          href={`mailto:${ERROR_REPORT_EMAIL}?subject=${subject}`}
-          className="font-medium text-foreground underline underline-offset-4 hover:text-primary"
-        >
-          Email {ERROR_REPORT_EMAIL}
-        </a>
-        <Link href="/contact" className="font-medium text-foreground underline underline-offset-4 hover:text-primary">
-          Use the contact form
-        </Link>
-      </p>
+    <ul className={cn('space-y-2.5', className)}>
+      {items.map((item) => (
+        <li key={item.text} className="flex gap-3 text-[1rem] leading-[1.55] text-foreground">
+          <Dot />
+          <span>
+            {item.text}
+            {item.reported ? <ReportedBadge /> : null}
+            {item.n ? <Ref n={item.n} /> : null}
+          </span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** Short titled points, one sentence each. */
+export function Points({ items }: { items: { title: string; body: string }[] }) {
+  return (
+    <ul className="divide-y divide-line-subtle rounded-[1.25rem] bg-surface ring-1 ring-black/[0.06]">
+      {items.map((item) => (
+        <li key={item.title} className="px-6 py-5">
+          <h3 className="font-medium text-foreground">{item.title}</h3>
+          <p className="mt-1 text-[0.9375rem] leading-[1.55] text-muted">{item.body}</p>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+export function Steps({ items }: { items: string[] }) {
+  return (
+    <ol className="space-y-3">
+      {items.map((item, index) => (
+        <li key={item} className="flex items-start gap-4 rounded-[1rem] bg-cal-cloud px-5 py-4">
+          <span aria-hidden="true" className="grid size-7 shrink-0 place-items-center rounded-full bg-surface text-sm font-medium text-foreground">
+            {index + 1}
+          </span>
+          <span className="pt-0.5 text-[1rem] leading-[1.5] text-foreground">{item}</span>
+        </li>
+      ))}
+    </ol>
+  )
+}
+
+export function FaqList({ items }: { items: { q: string; a: string; n?: number; reported?: boolean }[] }) {
+  return (
+    <div className="divide-y divide-line-subtle border-y border-line-subtle">
+      {items.map((faq) => (
+        <div key={faq.q} className="py-5">
+          <h3 className="font-medium text-[1.0625rem] text-foreground">{faq.q}</h3>
+          <p className="mt-1.5 text-[0.9375rem] leading-[1.6] text-muted">
+            {faq.a}
+            {faq.reported ? <ReportedBadge /> : null}
+            {faq.n ? <Ref n={faq.n} /> : null}
+          </p>
+        </div>
+      ))}
     </div>
   )
 }
 
-export function MethodNote() {
+/* ---------------------------------------------------------------- Sources */
+
+function isExternal(url: string) {
+  return /^https?:\/\//.test(url)
+}
+
+export function SourceAnchor({ source }: { source: Source }) {
+  const className = 'underline decoration-line-strong underline-offset-2 transition-colors hover:text-foreground'
+  return isExternal(source.url) ? (
+    <a href={source.url} target="_blank" rel="noopener noreferrer nofollow" className={cn(className, 'inline-flex items-center gap-0.5')}>
+      {source.label}
+      <ArrowUpRight aria-hidden="true" className="size-3" />
+      <span className="sr-only"> (opens in a new tab)</span>
+    </a>
+  ) : (
+    <Link href={source.url} className={className}>
+      {source.label}
+    </Link>
+  )
+}
+
+/** The numbered list every footnote points at, plus how to report an error. */
+export function SourcesList({ notes, page, extra }: { notes: NoteEntry[]; page: string; extra?: ReactNode }) {
+  const subject = encodeURIComponent(`Correction: ${page}`)
   return (
-    <p className="max-w-[68ch] text-[0.9375rem] leading-[1.6] text-muted">
-      Facts about other companies come from their own pricing and features pages, read on{' '}
-      <time dateTime={CHECKED_ON}>{formatCheckedDate()}</time>. Figures marked “Reported” come from third parties because the vendor
-      doesn’t publish them. “Not shown” means we couldn’t find a feature on the vendor’s pages, not that it doesn’t exist. We make EZRA
-      Pro. The full method is on the{' '}
-      <Link href="/compare#method" className="font-medium text-foreground underline underline-offset-4 hover:text-primary">
-        comparison hub
-      </Link>
-      .
-    </p>
+    <section id="sources" aria-labelledby="sources-title" className="scroll-mt-32 border-t border-line pt-10">
+      <h2 id="sources-title" className="font-display text-[1.375rem] font-medium tracking-[-0.02em] text-foreground">
+        Sources
+      </h2>
+      <p className="mt-2 text-sm text-muted">
+        Read on <time dateTime={CHECKED_ON}>{formatCheckedDate()}</time>. “Reported” marks a third-party figure the vendor doesn’t publish. “Not shown” means
+        we couldn’t find it on the vendor’s pages, not that it’s missing.
+      </p>
+      <ol className="mt-5 space-y-2 text-sm text-muted">
+        {notes.map((entry, index) => (
+          <li key={entry.source.url} id={`source-${index + 1}`} className="flex scroll-mt-32 gap-3">
+            <span className="w-5 shrink-0 text-right tabular-nums text-subtle">{index + 1}.</span>
+            <span>
+              <SourceAnchor source={entry.source} />
+              {entry.reported ? <ReportedBadge /> : null}
+            </span>
+          </li>
+        ))}
+      </ol>
+      {extra}
+      <p className="mt-6 text-sm text-muted">
+        Spotted something out of date, about anyone including us?{' '}
+        <a href={`mailto:${ERROR_REPORT_EMAIL}?subject=${subject}`} className="font-medium text-foreground underline underline-offset-4 hover:text-primary">
+          Tell us
+        </a>{' '}
+        and we’ll fix it and update the date.
+      </p>
+    </section>
   )
 }
 
@@ -375,12 +409,12 @@ export function MethodNote() {
 
 export function LinkCards({ links }: { links: { href: string; label: string; note?: string }[] }) {
   return (
-    <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <ul className="grid gap-3 sm:grid-cols-2">
       {links.map((link) => (
         <li key={link.href}>
           <Link
             href={link.href}
-            className="group flex h-full items-start justify-between gap-4 rounded-[1rem] bg-surface p-5 shadow-[var(--shadow-xs)] ring-1 ring-black/[0.05] transition-shadow hover:shadow-[var(--shadow-md)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            className="group flex h-full items-start justify-between gap-4 rounded-[1rem] bg-surface p-5 ring-1 ring-black/[0.06] transition-shadow hover:shadow-[var(--shadow-md)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           >
             <span>
               <span className="block font-medium text-foreground">{link.label}</span>
@@ -394,21 +428,25 @@ export function LinkCards({ links }: { links: { href: string; label: string; not
   )
 }
 
-export function OnThisPage({ items }: { items: { href: string; label: string }[] }) {
+/* ---------------------------------------------------------------- Visuals */
+
+const TILE_TONES = ['bg-cal-lavender', 'bg-cal-seafoam', 'bg-cal-sunbeam', 'bg-cal-sky', 'bg-cal-peach', 'bg-cal-honeydew', 'bg-cal-lilac']
+
+/** A plain lettermark tile: no vendor logos, just the first letters on a pastel square. */
+export function Monogram({ name, index = 0, ours = false, className }: { name: string; index?: number; ours?: boolean; className?: string }) {
+  const letters = name.replace(/[^A-Za-zÀ-ž ]/g, '').split(' ').filter(Boolean)
+  const raw = ours ? 'EZ' : letters.length > 1 ? `${letters[0][0]}${letters[1][0]}` : name.slice(0, 2)
+  const mark = raw.charAt(0).toUpperCase() + raw.slice(1)
   return (
-    <nav aria-label="On this page" className="mt-8">
-      <ul className="flex flex-wrap gap-2">
-        {items.map((item) => (
-          <li key={item.href}>
-            <a
-              href={item.href}
-              className="inline-flex rounded-full bg-surface px-3.5 py-1.5 text-sm text-foreground ring-1 ring-black/[0.06] transition-colors hover:bg-cal-cloud focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-            >
-              {item.label}
-            </a>
-          </li>
-        ))}
-      </ul>
-    </nav>
+    <span
+      aria-hidden="true"
+      className={cn(
+        'grid size-14 shrink-0 place-items-center rounded-[1rem] font-display text-[1.25rem] font-medium tracking-[-0.02em]',
+        ours ? 'bg-foreground text-background' : cn(TILE_TONES[index % TILE_TONES.length], 'text-foreground'),
+        className,
+      )}
+    >
+      {mark}
+    </span>
   )
 }

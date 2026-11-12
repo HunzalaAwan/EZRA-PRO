@@ -1,18 +1,11 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { ArrowRight, Calculator, CircleCheck, Headset, ShieldCheck } from 'lucide-react'
+import { ArrowRight, CircleCheck, Headset, ShieldCheck, Truck } from 'lucide-react'
 
-import {
-  AuroraBackground,
-  GlowOrb,
-  GridBackground,
-  NoiseOverlay,
-} from '@/components/motion/backgrounds'
+import { GridBackground } from '@/components/motion/backgrounds'
 import { Reveal } from '@/components/motion/reveal'
-import { StaggerGroup, StaggerItem } from '@/components/motion/stagger'
 import { CtaSection } from '@/components/marketing/cta-section'
 import { PricingSection } from '@/components/marketing/pricing-section'
-import { PricingTable } from '@/components/marketing/pricing-table'
 import { SectionHeading } from '@/components/marketing/section-heading'
 import {
   Accordion,
@@ -22,18 +15,19 @@ import {
 } from '@/components/ui/accordion'
 import { Button } from '@/components/ui/button'
 import { FAQS, PRICING_PLANS } from '@/content/marketing'
-import { cn } from '@/lib/utils'
+import { formatCurrency } from '@/lib/utils'
+
+const PLAN = PRICING_PLANS[0]
+const PERCENT = PLAN.commissionPercent
 
 export const metadata: Metadata = {
   title: 'Pricing',
-  description:
-    'Commission from 3% per booking, platform fees from $0, and free migration on every plan. Compare Starter, Growth, Scale and Enterprise — then run your own numbers in the savings calculator.',
+  description: `${PERCENT}% of each booking. That is the entire bill: $0 a month, no setup fee, no contract, every feature included. You choose who pays the ${PERCENT}%.`,
   alternates: { canonical: '/pricing' },
   openGraph: {
     url: '/pricing',
-    title: 'EZRA Pro pricing — commission from 3%, migration free',
-    description:
-      'Starter matches the 6% everyone else charges. Growth drops it to 4.5%, Scale to 3%. No contract, no setup fee, free white-glove migration.',
+    title: `EZRA Pro pricing — ${PERCENT}% of each booking, $0 a month`,
+    description: `${PERCENT}% of each booking. That is the entire bill. No monthly fee, no setup fee, no contract, and a free move from your current platform.`,
   },
 }
 
@@ -55,7 +49,7 @@ const ENTITIES: Record<string, string> = {
   '&mdash;': '—',
   '&ndash;': '–',
   '&hellip;': '…',
-  '&nbsp;': ' ',
+  '&nbsp;': ' ',
   '&quot;': '"',
   '&#39;': '’',
   '&amp;': '&',
@@ -68,38 +62,42 @@ function decodeEntities(input: string) {
 }
 
 /* ==========================================================================
-   COMMISSION LADDER
+   WHO PAYS THE 4%
 
-   The page's one memorable moment. Commission is the number that decides an
-   operator's year, so it gets stated before a single plan card appears: three
-   rungs, each bar scaled against the 6% everyone else charges, so the drop is
-   something you see rather than something you have to work out.
+   The one choice a business makes about the price, shown on a $100 booking
+   so the arithmetic is on the page rather than in someone's head.
    ========================================================================== */
 
-const LADDER_BASELINE = 6
+const EXAMPLE = 10_000
+const EXAMPLE_FEE = Math.round((EXAMPLE * PERCENT) / 100)
 
-const LADDER = PRICING_PLANS.filter((plan) => plan.id !== 'enterprise').map((plan) => ({
-  id: plan.id,
-  name: plan.name,
-  percent: plan.commissionPercent,
-  /** Kept share of a $100 booking, to the cent. */
-  keeps: (100 - plan.commissionPercent).toFixed(2).replace(/\.00$/, ''),
-  width: `${(plan.commissionPercent / LADDER_BASELINE) * 100}%`,
-}))
+const WHO_PAYS = [
+  {
+    title: 'You pay it',
+    line: 'Guests pay the price you set. Nothing is added at checkout.',
+    guestPays: EXAMPLE,
+    youKeep: EXAMPLE - EXAMPLE_FEE,
+  },
+  {
+    title: 'Guests pay it',
+    line: `Checkout adds one “Booking fee (${PERCENT}%)” line on top of your price.`,
+    guestPays: EXAMPLE + EXAMPLE_FEE,
+    youKeep: EXAMPLE,
+  },
+]
 
 const TRUST_POINTS = [
-  { icon: ShieldCheck, label: 'No contract, cancel any time' },
-  { icon: Calculator, label: 'Free migration on every plan' },
-  { icon: Headset, label: 'Support 7 days a week, all plans' },
+  { icon: ShieldCheck, label: 'No contract, leave any time' },
+  { icon: Truck, label: 'Free move from your current platform' },
+  { icon: Headset, label: 'Support 7 days a week' },
 ]
 
 /* ==========================================================================
    PRICING-SPECIFIC FAQ
 
-   The landing page runs the full sixteen. Here only the money questions are
+   The landing page runs the full set. Here only the money questions are
    worth the room, so the set is narrowed to `pricing` and `payments` and
-   rendered as a plain server-side accordion — no filter chips to get in the
-   way of someone who is already reading a price list.
+   rendered as a plain server-side accordion.
    ========================================================================== */
 
 const MONEY_FAQS = FAQS.filter(
@@ -114,34 +112,15 @@ export default function PricingPage() {
           ================================================================ */}
       <section
         aria-labelledby="pricing-page-title"
-        className="relative isolate overflow-hidden bg-background pb-16 pt-14 sm:pb-20 sm:pt-20 lg:pb-24"
+        className="relative isolate overflow-hidden bg-background pb-4 pt-14 sm:pt-20"
       >
         <GridBackground fade="radial" seed="ezra-pricing-grid" className="opacity-70" />
-        <AuroraBackground
-          seed="ezra-pricing"
-          blobs={4}
-          intensity="subtle"
-          palette={['lagoon', 'reef']}
-        />
-        <NoiseOverlay opacity={0.035} />
-        <GlowOrb
-          color="coral"
-          size={460}
-          opacity={0.13}
-          blur={110}
-          float={false}
-          className="-top-40 right-[-10%]"
-        />
 
         <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-3xl text-center">
             <Reveal direction="up" distance={8} blur={false}>
-              <span className="glass inline-flex items-center gap-2.5 rounded-full px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
-                <span aria-hidden="true" className="relative flex size-1.5">
-                  <span className="absolute inline-flex size-full animate-pulse-ring rounded-full bg-primary/70" />
-                  <span className="relative inline-flex size-1.5 rounded-full bg-primary" />
-                </span>
-                Transparent pricing
+              <span className="inline-flex items-center rounded-full border border-line bg-surface px-3.5 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
+                Pricing
               </span>
             </Reveal>
 
@@ -149,10 +128,9 @@ export default function PricingPage() {
               as="h1"
               id="pricing-page-title"
               delay={0.06}
-              blur
               className="mt-6 font-display text-display-sm font-semibold tracking-[-0.03em] text-balance text-foreground sm:text-display-md"
             >
-              Commission is the only number that decides your year
+              {PERCENT}% of each booking. That is the entire bill.
             </Reveal>
 
             <Reveal
@@ -160,9 +138,8 @@ export default function PricingPage() {
               delay={0.12}
               className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-pretty text-muted sm:text-lg"
             >
-              Everyone else charges 6% and calls it standard. Starter matches it at no monthly
-              cost, so moving is free — then Growth and Scale take it down to a number your
-              competitors cannot run on. Migration is white-glove and free on every plan.
+              No monthly fee, no setup fee, no contract. Every feature is included, and you choose
+              whether you pay the {PERCENT}% or your guests do.
             </Reveal>
 
             <Reveal
@@ -172,91 +149,79 @@ export default function PricingPage() {
               <Button
                 asChild
                 size="lg"
-                variant="primary"
+                variant="ink"
                 rightIcon={<ArrowRight aria-hidden="true" />}
                 className="w-full sm:w-auto"
               >
                 <Link href="/signup">Start free — no card</Link>
               </Button>
-              <Button
-                asChild
-                size="lg"
-                variant="outline"
-                leftIcon={<Calculator aria-hidden="true" />}
-                className="w-full sm:w-auto"
-              >
-                <Link href="#roi">Run your numbers</Link>
+              <Button asChild size="lg" variant="outline" className="w-full sm:w-auto">
+                <Link href="#who-pays">Who pays the {PERCENT}%?</Link>
               </Button>
             </Reveal>
+
+            <Reveal
+              delay={0.24}
+              className="mt-8 flex flex-wrap items-center justify-center gap-x-7 gap-y-3"
+            >
+              {TRUST_POINTS.map(({ icon: Icon, label }) => (
+                <span key={label} className="flex items-center gap-2 text-sm font-medium text-muted">
+                  <Icon className="size-4 shrink-0 text-success" aria-hidden="true" />
+                  {label}
+                </span>
+              ))}
+            </Reveal>
           </div>
-
-          {/* ---------- The ladder ---------- */}
-          <StaggerGroup
-            as="ul"
-            stagger={0.09}
-            startDelay={0.22}
-            className="mx-auto mt-14 grid max-w-4xl gap-4 sm:mt-16 sm:grid-cols-3"
-          >
-            {LADDER.map((rung) => (
-              <StaggerItem
-                as="li"
-                key={rung.id}
-                distance={16}
-                blur={false}
-                className={cn(
-                  'relative overflow-hidden rounded-2xl border border-line bg-surface p-5 shadow-sm',
-                  'transition-[transform,box-shadow,border-color] duration-300 ease-[var(--ease-out-expo)]',
-                  'hover:-translate-y-0.5 hover:border-line-strong hover:shadow-md',
-                  'motion-reduce:transition-none motion-reduce:hover:translate-y-0',
-                )}
-              >
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-subtle">
-                  {rung.name}
-                </p>
-                <p className="mt-3 flex items-baseline gap-1.5 font-display text-display-sm font-semibold tracking-[-0.03em] text-foreground tabular">
-                  {rung.percent}
-                  <span className="text-xl font-semibold text-muted">%</span>
-                </p>
-
-                <div
-                  aria-hidden="true"
-                  className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-surface-sunken"
-                >
-                  <div
-                    className="h-full rounded-full bg-primary"
-                    style={{ width: rung.width }}
-                  />
-                </div>
-
-                <p className="mt-3 text-sm leading-relaxed text-muted">
-                  You keep{' '}
-                  <span className="font-semibold text-foreground tabular">${rung.keeps}</span> of
-                  every $100 booked.
-                </p>
-              </StaggerItem>
-            ))}
-          </StaggerGroup>
-
-          <Reveal
-            delay={0.4}
-            className="mt-8 flex flex-wrap items-center justify-center gap-x-7 gap-y-3"
-          >
-            {TRUST_POINTS.map(({ icon: Icon, label }) => (
-              <span key={label} className="flex items-center gap-2 text-sm font-medium text-muted">
-                <Icon className="size-4 shrink-0 text-success" aria-hidden="true" />
-                {label}
-              </span>
-            ))}
-          </Reveal>
         </div>
       </section>
 
       {/* ================================================================
-          PLANS · MATRIX
+          THE PRICE
           ================================================================ */}
-      <PricingSection className="scroll-mt-4 border-y border-line bg-background-subtle" />
+      <PricingSection className="scroll-mt-4 bg-background" />
 
-      <PricingTable className="scroll-mt-4 border-y border-line bg-surface-sunken" />
+      {/* ================================================================
+          WHO PAYS
+          ================================================================ */}
+      <section id="who-pays" className="scroll-mt-4 border-y border-line bg-background-subtle py-20 sm:py-24">
+        <div className="mx-auto w-full max-w-4xl px-4 sm:px-6 lg:px-8">
+          <SectionHeading
+            align="center"
+            eyebrow="Your choice"
+            title={`Who pays the ${PERCENT}%`}
+            description={`Set it once in Settings and change it whenever you like. Here is a ${formatCurrency(EXAMPLE)} booking either way.`}
+          />
+
+          <Reveal delay={0.08} className="mt-10 grid gap-4 sm:grid-cols-2">
+            {WHO_PAYS.map((option) => (
+              <div key={option.title} className="flex flex-col rounded-2xl border border-line bg-surface p-6 shadow-sm">
+                <h3 className="font-display text-lg font-semibold tracking-[-0.015em] text-foreground">
+                  {option.title}
+                </h3>
+                <p className="mt-1 text-sm leading-relaxed text-muted">{option.line}</p>
+                <dl className="mt-5 divide-y divide-line-subtle border-t border-line-subtle text-sm">
+                  <div className="flex items-baseline justify-between gap-3 py-2.5">
+                    <dt className="text-muted">Guest pays</dt>
+                    <dd className="font-semibold text-foreground tabular">
+                      {formatCurrency(option.guestPays, 'USD', { decimals: true })}
+                    </dd>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-3 py-2.5">
+                    <dt className="text-muted">You keep</dt>
+                    <dd className="font-semibold text-foreground tabular">
+                      {formatCurrency(option.youKeep, 'USD', { decimals: true })}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            ))}
+          </Reveal>
+
+          <p className="mt-6 text-center text-sm leading-relaxed text-muted">
+            Card fees are between you and your payment provider. Guests never see a card fee line.
+          </p>
+        </div>
+      </section>
 
       {/* ================================================================
           MONEY QUESTIONS
@@ -267,7 +232,7 @@ export default function PricingPage() {
             align="center"
             eyebrow="Straight answers"
             title="Questions about the money"
-            description="Commission, who pays it, when you actually get paid, and what happens when a guest disputes a charge."
+            description="What it costs, who pays it, when you actually get paid, and what happens when a guest disputes a charge."
           />
 
           <Reveal delay={0.08} className="mt-10">
@@ -296,8 +261,8 @@ export default function PricingPage() {
             <p className="flex items-start gap-2.5 text-sm leading-relaxed text-muted">
               <CircleCheck className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
               <span>
-                Still doing the arithmetic? Send us last season&rsquo;s numbers and we will tell you
-                which plan wins — including when the answer is Starter.
+                Still doing the arithmetic? Send us last season&rsquo;s numbers and we will show you
+                what {PERCENT}% comes to against what you pay today.
               </span>
             </p>
             <Button
@@ -307,7 +272,7 @@ export default function PricingPage() {
               rightIcon={<ArrowRight aria-hidden="true" />}
               className="shrink-0"
             >
-              <Link href="/contact">Talk to sales</Link>
+              <Link href="/contact?topic=pricing">Talk to us</Link>
             </Button>
           </Reveal>
 
@@ -316,7 +281,7 @@ export default function PricingPage() {
             <Link href="/compare" className="font-medium text-foreground underline underline-offset-4 hover:text-primary">
               how EZRA Pro compares
             </Link>{' '}
-            with FareHarbor, Peek Pro, Bókun, Rezdy, Checkfront and Xola, with sources, dates and a fee calculator.
+            with other booking platforms, with sources, dates and a fee calculator.
           </p>
         </div>
       </section>

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 
-import { CHECKED_ON, EZRA_PLANS, PUBLISHED_ON } from '@/lib/data/competitors'
+import { CHECKED_ON, EZRA_PLAN, PUBLISHED_ON } from '@/lib/data/competitors'
 import { SITE } from '@/lib/site-config'
 
 /* ==========================================================================
@@ -8,8 +8,8 @@ import { SITE } from '@/lib/site-config'
 
    Dates in the schema are the same constants the pages print, so the
    visible "Last checked" date and dateModified can never disagree.
-   SoftwareApplication describes EZRA Pro only, with its published plans and
-   no ratings: third-party ratings must never be marked up.
+   SoftwareApplication describes EZRA Pro only, with its one plan as a single
+   offer and no ratings: third-party ratings must never be marked up.
    ========================================================================== */
 
 const abs = (path: string) => new URL(path, SITE.url).toString()
@@ -69,13 +69,13 @@ export function ezraSoftwareSchema() {
     applicationCategory: 'BusinessApplication',
     operatingSystem: 'Web',
     description: SITE.description,
-    offers: EZRA_PLANS.map((plan) => ({
+    offers: {
       '@type': 'Offer',
-      name: plan.name,
-      price: String(plan.monthly),
+      name: EZRA_PLAN.name,
+      price: String(EZRA_PLAN.monthly),
       priceCurrency: 'USD',
-      description: `$${plan.monthly} a month plus ${plan.percent}% commission per booking`,
+      description: `$${EZRA_PLAN.monthly} a month. ${EZRA_PLAN.percent}% of each booking, paid by the business or passed to guests as a booking fee. No setup fee, no contract.`,
       url: abs('/pricing'),
-    })),
+    },
   }
 }

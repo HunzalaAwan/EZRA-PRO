@@ -4,43 +4,41 @@ import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 
 import { ClosingCta } from '@/components/marketing/land/closing-cta'
-import { ALT_CONTENT, VS_CONTENT, type AltEntry } from '@/components/marketing/compare/compare-content'
+import { ALT_CONTENT, type AltEntry } from '@/components/marketing/compare/compare-content'
 import {
-  CompareHero,
-  Dot,
-  FactBlock,
-  FactBrief,
+  ArticleBody,
+  ArticleHero,
+  Block,
+  Bullets,
+  FactInline,
   FaqList,
+  GlanceTable,
   JsonLd,
   LinkCards,
-  MethodNote,
-  OnThisPage,
-  PointGrid,
-  ReportError,
-  ScrollHint,
-  ScrollTable,
-  Section,
-  SourceLink,
-  TD,
-  TH,
+  Monogram,
+  SourcesList,
+  createNotes,
 } from '@/components/marketing/compare/compare-ui'
 import { articleSchema, breadcrumbSchema, compareMetadata, ezraSoftwareSchema } from '@/components/marketing/compare/compare-schema'
 import {
   ALTERNATIVES_SLUGS,
-  SOURCES,
+  CHARGE_LABEL,
+  EZRA,
   VENDORS,
   VS_SLUGS,
   formatCheckedDate,
   type AlternativesSlug,
+  type Fact,
   type VsSlug,
 } from '@/lib/data/competitors'
-import { cn } from '@/lib/utils'
 
 /* ==========================================================================
    /alternatives/[competitor] — the systems people consider instead of X.
 
-   Grouped by how each one charges, never ranked. EZRA Pro sits in its own
-   pricing group like the rest, with its drawbacks listed.
+   Like an editorial "alternatives" article: a short intro, an at-a-glance
+   table, then one well-spaced card per option (what it is, key features,
+   pricing, best for, one thing worth knowing). EZRA Pro is listed first and
+   labelled as ours.
    ========================================================================== */
 
 export const dynamicParams = false
@@ -61,19 +59,14 @@ export async function generateMetadata({ params }: { params: Promise<{ competito
   return compareMetadata({ title: content.title, description: content.description, path: `/alternatives/${slug}` })
 }
 
-const entryName = (entry: AltEntry) => (entry.vendor === 'ezra' ? 'EZRA Pro' : VENDORS[entry.vendor].name)
-const entryAnchor = (entry: AltEntry) => `alt-${entry.vendor}`
+const isVs = (id: string): id is VsSlug => (VS_SLUGS as readonly string[]).includes(id)
 
-function vsLink(entry: AltEntry, current: AlternativesSlug) {
+function profile(entry: AltEntry) {
   if (entry.vendor === 'ezra') {
-    const vs = current as string
-    return (VS_SLUGS as readonly string[]).includes(vs)
-      ? { href: `/compare/${vs}`, label: `EZRA Pro vs ${VENDORS[current].name}` }
-      : { href: '/pricing', label: 'EZRA Pro pricing' }
+    return { name: 'EZRA Pro', ours: true, charge: CHARGE_LABEL[EZRA.charge], pricing: EZRA.pricing, whoPays: EZRA.whoPays, bestFor: entry.bestFor ?? EZRA.bestFor }
   }
-  return (VS_SLUGS as readonly string[]).includes(entry.vendor)
-    ? { href: `/compare/${entry.vendor}`, label: `EZRA Pro vs ${VENDORS[entry.vendor].name}` }
-    : null
+  const v = VENDORS[entry.vendor]
+  return { name: v.name, ours: false, charge: CHARGE_LABEL[v.charge], pricing: v.pricing, whoPays: v.whoPays, bestFor: entry.bestFor ?? v.bestFor }
 }
 
 export default async function AlternativesPage({ params }: { params: Promise<{ competitor: string }> }) {
@@ -84,18 +77,37 @@ export default async function AlternativesPage({ params }: { params: Promise<{ c
   const content = ALT_CONTENT[slug]
   const vendor = VENDORS[content.vendor]
   const path = `/alternatives/${slug}`
-  const entries = content.groups.flatMap((group) => group.entries)
   const crumbLabel = `${vendor.name} alternatives`
+  const anchor = (entry: AltEntry) => `alt-${entry.vendor}`
+
+  /* Footnotes are numbered here, in reading order. */
+  const notes = createNotes()
+  const fact = (f: Fact) => <FactInline fact={f} n={notes.fact(f)} />
+
+  const glance = [
+    ...content.entries.map((entry) => {
+      const p = profile(entry)
+      return { key: entry.vendor, name: p.name, href: `#${anchor(entry)}`, ours: p.ours, pricing: fact(p.pricing), whoPays: fact(p.whoPays), bestFor: p.bestFor }
+    }),
+    { key: vendor.id, name: vendor.name, note: 'For reference', pricing: fact(vendor.pricing), whoPays: fact(vendor.whoPays), bestFor: vendor.bestFor },
+  ]
+
+  const cards = content.entries.map((entry, index) => {
+    const p = profile(entry)
+    const vs = entry.vendor === 'ezra' ? (isVs(slug) ? { href: `/compare/${slug}`, label: `EZRA Pro vs ${vendor.name}` } : null) : isVs(entry.vendor) ? { href: `/compare/${entry.vendor}`, label: `EZRA Pro vs ${p.name}` } : null
+    return { entry, index, ...p, pricingNode: fact(p.pricing), vs }
+  })
+
+  const faqs = content.faqs.map((faq) => ({ ...faq, n: faq.source ? notes.ref(faq.source, faq.reported) : undefined }))
 
   const related = [
-    ...((VS_SLUGS as readonly string[]).includes(slug)
-      ? [{ href: `/compare/${slug}`, label: `EZRA Pro vs ${vendor.name}`, note: VS_CONTENT[slug as VsSlug].description }]
-      : []),
+    ...(isVs(slug) ? [{ href: `/compare/${slug}`, label: `EZRA Pro vs ${vendor.name}`, note: 'Side by side, with a cost calculator.' }] : []),
     ...ALTERNATIVES_SLUGS.filter((other) => other !== slug).map((other) => ({
       href: `/alternatives/${other}`,
       label: `${VENDORS[other].name} alternatives`,
+      note: `${ALT_CONTENT[other].entries.length} options, in plain terms.`,
     })),
-    { href: '/compare', label: 'All comparisons', note: 'Eleven systems, the fee calculator and our method.' },
+    { href: '/compare', label: 'All comparisons', note: 'Eleven systems and the full cost calculator.' },
   ]
 
   return (
@@ -112,200 +124,96 @@ export default async function AlternativesPage({ params }: { params: Promise<{ c
         ]}
       />
 
-      <CompareHero
+      <ArticleHero
         crumbs={[{ label: 'Home', href: '/' }, { label: 'Compare', href: '/compare' }, { label: crumbLabel }]}
         title={content.h1}
         lede={content.lede}
+        photo={content.photo}
+      />
+
+      <ArticleBody
+        toc={[
+          { id: 'at-a-glance', label: 'At a glance' },
+          { id: 'options', label: 'The options' },
+          ...cards.map((card) => ({ id: anchor(card.entry), label: `${card.index + 1}. ${card.name}`, sub: true })),
+          { id: 'how-to-choose', label: 'How to choose' },
+          { id: 'questions', label: 'Questions' },
+          { id: 'sources', label: 'Sources' },
+        ]}
       >
-        <OnThisPage
-          items={[
-            { href: '#at-a-glance', label: 'At a glance' },
-            ...content.groups.map((group, index) => ({ href: `#group-${index + 1}`, label: group.title })),
-            { href: '#questions', label: 'Questions' },
-          ]}
-        />
-      </CompareHero>
+        <Block id="at-a-glance" title="At a glance">
+          <GlanceTable caption={`${vendor.name} alternatives at a glance. Not a ranking. Last checked ${formatCheckedDate()}.`} rows={glance} />
+        </Block>
 
-      {/* ---------- at a glance ---------- */}
-      <Section
-        id="at-a-glance"
-        eyebrow="At a glance"
-        title={`${entries.length} options, and who each suits`}
-        intro={
-          <ul className="space-y-1.5">
-            {content.howWeChose.map((line) => (
-              <li key={line} className="flex gap-2.5">
-                <Dot />
-                <span>{line}</span>
-              </li>
-            ))}
-          </ul>
-        }
-      >
-        <ScrollTable label={`${vendor.name} alternatives at a glance`} minWidth="52rem">
-          <table className="w-full border-collapse text-left">
-            <caption className="px-4 pt-4 pb-2 text-left text-sm text-muted">
-              {vendor.name} and its alternatives, in the order they appear below (not a ranking). Last checked {formatCheckedDate()}.
-            </caption>
-            <thead>
-              <tr className="border-b border-line">
-                <th scope="col" className={TH}>System</th>
-                <th scope="col" className={TH}>Best for</th>
-                <th scope="col" className={TH}>Monthly</th>
-                <th scope="col" className={TH}>Fee on online bookings</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-b border-line bg-background-subtle">
-                <th scope="row" className={`${TD} font-medium text-foreground`}>
-                  {vendor.name} <span className="font-normal text-muted">(for reference)</span>
-                  <span className="mt-1.5 block"><SourceLink source={vendor.fee.source} /></span>
-                </th>
-                <td className={`${TD} text-muted`}>{vendor.suits}</td>
-                <td className={TD}><FactBrief fact={vendor.monthly} /></td>
-                <td className={TD}><FactBrief fact={vendor.fee} /></td>
-              </tr>
-              {entries.map((entry) => {
-                const monthly = entry.pricing[0]
-                const fee = entry.pricing[1]
-                return (
-                  <tr key={entry.vendor} className={cn('border-b border-line-subtle last:border-b-0', entry.vendor === 'ezra' && 'bg-cal-haze')}>
-                    <th scope="row" className={`${TD} font-medium text-foreground`}>
-                      <a href={`#${entryAnchor(entry)}`} className="underline decoration-line-strong underline-offset-4 hover:text-primary">
-                        {entryName(entry)}
-                      </a>
-                      <span className="mt-1.5 block"><SourceLink source={fee.source} /></span>
-                    </th>
-                    <td className={`${TD} text-muted`}>{entry.bestFor}</td>
-                    <td className={TD}><FactBrief fact={monthly} /></td>
-                    <td className={TD}><FactBrief fact={fee} /></td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </ScrollTable>
-        <ScrollHint />
-      </Section>
-
-      {/* ---------- groups ---------- */}
-      {content.groups.map((group, index) => (
-        <Section
-          key={group.title}
-          id={`group-${index + 1}`}
-          tone={index % 2 === 0 ? 'subtle' : 'plain'}
-          eyebrow={`Group ${index + 1}`}
-          title={group.title}
-          intro={<p>{group.intro}</p>}
-        >
-          <div className="grid gap-6">
-            {group.entries.map((entry) => {
-              const link = vsLink(entry, slug)
-              const ours = entry.vendor === 'ezra'
-              return (
-                <article
-                  key={entry.vendor}
-                  id={entryAnchor(entry)}
-                  aria-labelledby={`${entryAnchor(entry)}-name`}
-                  className={cn(
-                    'scroll-mt-28 rounded-[1.5rem] bg-surface p-6 shadow-[var(--shadow-sm)] ring-1 ring-black/[0.04] sm:p-8',
-                    ours && 'ring-2 ring-cal-iris',
-                  )}
-                >
-                  <div className="flex flex-wrap items-baseline justify-between gap-3">
-                    <h3 id={`${entryAnchor(entry)}-name`} className="font-display text-[1.625rem] font-medium tracking-[-0.025em] text-foreground">
-                      {entryName(entry)}
-                    </h3>
-                    {ours ? (
-                      <span className="rounded-full bg-cal-lavender px-3 py-1 text-xs font-medium text-foreground">Our product</span>
-                    ) : null}
-                  </div>
-                  <p className="mt-2 text-[1.0625rem] leading-[1.5] text-foreground">
-                    <span className="font-medium">Best for: </span>
-                    {entry.bestFor}
-                  </p>
-
-                  <div className="mt-6 grid gap-6 lg:grid-cols-3">
-                    <div>
-                      <h4 className="text-sm font-semibold text-foreground">Why consider it</h4>
-                      <ul className="mt-3 space-y-2.5 text-[0.9375rem] leading-[1.5] text-muted">
-                        {entry.why.map((line) => (
-                          <li key={line} className="flex gap-2.5">
-                            <Dot />
-                            <span>{line}</span>
-                          </li>
-                        ))}
-                      </ul>
+        <Block id="options" title={`The ${cards.length} options`} intro={<p>Not a ranking. We make EZRA Pro, so it’s first and marked as ours.</p>}>
+          <ol className="space-y-8">
+            {cards.map((card) => (
+              <li key={card.entry.vendor}>
+                <article id={anchor(card.entry)} aria-labelledby={`${anchor(card.entry)}-title`} className="scroll-mt-32 overflow-hidden rounded-[1.5rem] bg-surface ring-1 ring-black/[0.06]">
+                  <header className="flex items-center gap-4 border-b border-line-subtle px-6 py-5 sm:px-7">
+                    <Monogram name={card.name} index={card.index} ours={card.ours} />
+                    <div className="min-w-0">
+                      <p className="text-sm text-muted">
+                        <span className="tabular-nums">{card.index + 1}.</span> {card.charge}
+                      </p>
+                      <h3 id={`${anchor(card.entry)}-title`} className="font-display text-[1.5rem] leading-[1.2] font-medium tracking-[-0.025em] text-foreground">
+                        {card.name}
+                        {card.ours ? <span className="ml-2 inline-flex rounded-full bg-foreground px-2 py-px align-middle text-xs font-medium tracking-normal text-background">Ours</span> : null}
+                      </h3>
                     </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-foreground">Watch for</h4>
-                      <ul className="mt-3 space-y-2.5 text-[0.9375rem] leading-[1.5] text-muted">
-                        {entry.watch.map((line) => (
-                          <li key={line} className="flex gap-2.5">
-                            <Dot className="bg-cal-tangerine" />
-                            <span>{line}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-semibold text-foreground">Pricing</h4>
-                      <dl className="mt-3 space-y-3.5 text-[0.9375rem]">
-                        {entry.pricing.map((fact, i) => (
-                          <div key={fact.text}>
-                            <dt className="text-xs font-medium tracking-[0.04em] text-subtle uppercase">{['Monthly', 'Fee', 'Who pays'][i]}</dt>
-                            <dd className="mt-1"><FactBlock fact={fact} /></dd>
-                          </div>
-                        ))}
-                      </dl>
-                    </div>
-                  </div>
+                  </header>
 
-                  {link ? (
-                    <p className="mt-6">
-                      <Link
-                        href={link.href}
-                        className="inline-flex items-center gap-1.5 text-[0.9375rem] font-medium text-foreground underline underline-offset-4 hover:text-primary"
-                      >
-                        {link.label}
+                  <div className="space-y-6 px-6 py-6 sm:px-7">
+                    <p className="text-[1.0625rem] leading-[1.6] text-foreground">{card.entry.about}</p>
+
+                    <div>
+                      <h4 className="text-xs font-semibold tracking-[0.06em] text-subtle uppercase">Key features</h4>
+                      <Bullets className="mt-3" items={card.entry.features.map((text) => ({ text }))} />
+                    </div>
+
+                    <dl className="grid gap-4 rounded-[1rem] bg-background-subtle p-5 sm:grid-cols-2">
+                      <div>
+                        <dt className="text-xs font-semibold tracking-[0.06em] text-subtle uppercase">Pricing</dt>
+                        <dd className="mt-1 text-[0.9375rem] leading-[1.5] text-foreground">{card.pricingNode}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs font-semibold tracking-[0.06em] text-subtle uppercase">Best for</dt>
+                        <dd className="mt-1 text-[0.9375rem] leading-[1.5] text-foreground">{card.bestFor}</dd>
+                      </div>
+                    </dl>
+
+                    <p className="text-[0.9375rem] leading-[1.55] text-muted">
+                      <span className="font-medium text-foreground">Worth knowing: </span>
+                      {card.entry.watch}
+                    </p>
+
+                    {card.vs ? (
+                      <Link href={card.vs.href} className="inline-flex items-center gap-1.5 text-[0.9375rem] font-medium text-foreground underline underline-offset-4 hover:text-primary">
+                        {card.vs.label}
                         <ArrowRight aria-hidden="true" className="size-4" />
                       </Link>
-                    </p>
-                  ) : null}
+                    ) : null}
+                  </div>
                 </article>
-              )
-            })}
-          </div>
-        </Section>
-      ))}
+              </li>
+            ))}
+          </ol>
+        </Block>
 
-      {/* ---------- before you switch ---------- */}
-      <Section id="before-you-switch" tone="cloud" eyebrow="Before you switch" title={`Three things to settle before leaving ${vendor.name}`}>
-        <PointGrid points={content.beforeYouSwitch} numbered />
-      </Section>
+        <Block id="how-to-choose" title="How to choose">
+          <Bullets items={content.howToChoose.map((text) => ({ text }))} />
+        </Block>
 
-      {/* ---------- questions ---------- */}
-      <Section id="questions" eyebrow="Questions" title={`${vendor.name} alternatives: common questions`}>
-        <FaqList faqs={content.faqs} />
-      </Section>
+        <Block id="questions" title="Questions">
+          <FaqList items={faqs} />
+        </Block>
 
-      {/* ---------- method ---------- */}
-      <Section id="method" tone="subtle" eyebrow="How we checked" title="Sources, dates and corrections">
-        <div className="grid gap-8 lg:grid-cols-2">
-          <div>
-            <MethodNote />
-            <p className="mt-4 text-sm text-muted">
-              Why fees matter here: the industry association Arival notes that a fee labelled as the guest’s lets a vendor call its software
-              free, “but someone always pays.” <SourceLink source={SOURCES.arival} prefix="" />
-            </p>
-          </div>
-          <ReportError page={content.h1} />
-        </div>
-        <h3 className="mt-12 font-display text-[1.25rem] font-medium text-foreground">Keep comparing</h3>
-        <div className="mt-5">
+        <Block id="keep-comparing" title="Keep comparing">
           <LinkCards links={related} />
-        </div>
-      </Section>
+        </Block>
+
+        <SourcesList notes={notes.list} page={content.h1} />
+      </ArticleBody>
 
       <ClosingCta />
     </>

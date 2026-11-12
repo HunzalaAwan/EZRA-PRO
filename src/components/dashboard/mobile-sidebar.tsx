@@ -18,7 +18,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { Logo } from '@/components/marketing/logo'
-import { DashboardNavList, PlanUsageCard, type NavCounts } from '@/components/dashboard/sidebar'
+import { DashboardNavList, type NavCounts } from '@/components/dashboard/sidebar'
 import { TenantSwitcher } from '@/components/dashboard/tenant-switcher'
 
 /* ==========================================================================
@@ -73,9 +73,6 @@ export function MobileSidebar({ navCounts, className }: { navCounts: NavCounts; 
           </div>
         </SheetBody>
 
-        <div className="shrink-0 border-t border-line-subtle p-3">
-          <PlanUsageCard />
-        </div>
       </SheetContent>
     </Sheet>
   )

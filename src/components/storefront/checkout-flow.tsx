@@ -567,6 +567,8 @@ export function CheckoutFlow({
   const bookedPickup: BookingPickup | undefined = transport && !rideRequest ? bookingPickupOf(transport, getThere, transportZones, departure.startsAt, departure.endsAt) : undefined
 
   const pricing = usePricing(tenant.slug)
+  // Who pays EZRA Pro's 4%: the business (nothing added) or the guest (a booking fee line).
+  const feePayer = bookingDefaults.feePayer
   // The same engine and inputs as the widget: the slot's start, the clock, how full it is, its dynamic pricing and the business's rules.
   // Group rules count people (a charter: its party), worked out by the engine.
   const quote = React.useMemo(
@@ -574,6 +576,7 @@ export function CheckoutFlow({
       rideRequest
         ? // A ride: the price table for the trip and destination, from the first pickup, for the passengers.
           buildQuote(activity, tenant.slug, rideSelection ?? serverSelection, 1, {
+            feePayer,
             party: rideRequest.passengers,
             transfer: pricingOf(rideRequest),
             startsAt: rideLegs[0]?.pickupAt,
@@ -581,6 +584,7 @@ export function CheckoutFlow({
             businessRules: pricing.rules,
           })
         : buildQuote(slotActivity, tenant.slug, selection, departure.priceMultiplier, {
+      feePayer,
       days: rentalDays,
       party,
       private: privateBooking,
@@ -593,7 +597,7 @@ export function CheckoutFlow({
       // Transport: one way or both ways from the pickup point, per guest or per booking.
       ...(transport ? { transport: { choice: getThere, zoneName: transportZoneName } } : {}),
     }),
-    [slotActivity, tenant.slug, selection, departure.priceMultiplier, departure.slotStartsAt, departure.startsAt, capacity, booked, nowIso, pricing.rules, rentalDays, party, rentalMode, rentalHours, rentalLength, privateBooking, rideRequest, rideSelection, serverSelection, rideLegs, activity, transport, getThere, transportZoneName],
+    [slotActivity, tenant.slug, selection, departure.priceMultiplier, departure.slotStartsAt, departure.startsAt, capacity, booked, nowIso, pricing.rules, rentalDays, party, rentalMode, rentalHours, rentalLength, privateBooking, rideRequest, rideSelection, serverSelection, rideLegs, activity, transport, getThere, transportZoneName, feePayer],
   )
   /** A shared shuttle: a run with fewer seats left than the tickets, counting this browser's other bookings on it. */
   const runsFull =
@@ -1690,26 +1694,23 @@ function SummaryLines({
         </p>
       ) : null}
 
-      <div className="mt-3 space-y-1.5 border-t border-line-subtle pt-3 text-xs text-muted">
-        <div className="flex items-baseline justify-between gap-3">
-          <span>Subtotal</span>
-          <span className="tabular">{formatCurrency(quote.subtotal, tenant.currency)}</span>
-        </div>
-        {quote.feesIncluded ? (
-          <p className="text-subtle">All fees included</p>
-        ) : (
-          <>
+      {/* The business passes EZRA Pro's 4% on: one booking fee line. It pays it: the guest pays the price, nothing added. */}
+      {quote.feeTotal > 0 || quote.feesIncluded ? (
+        <div className="mt-3 space-y-1.5 border-t border-line-subtle pt-3 text-xs text-muted">
+          <div className="flex items-baseline justify-between gap-3">
+            <span>Subtotal</span>
+            <span className="tabular">{formatCurrency(quote.subtotal, tenant.currency)}</span>
+          </div>
+          {quote.feeTotal > 0 ? (
             <div className="flex items-baseline justify-between gap-3">
               <span>{quote.feeLabel}</span>
               <span className="tabular">{formatCurrency(quote.feeTotal, tenant.currency)}</span>
             </div>
-            <div className="flex items-baseline justify-between gap-3">
-              <span>{quote.taxLabel}</span>
-              <span className="tabular">{formatCurrency(quote.taxTotal, tenant.currency)}</span>
-            </div>
-          </>
-        )}
-      </div>
+          ) : (
+            <p className="text-subtle">All fees included</p>
+          )}
+        </div>
+      ) : null}
 
       <div className="mt-3 flex items-baseline justify-between gap-3 border-t border-line pt-3">
         <span className="text-sm font-semibold text-foreground">Total</span>
@@ -2057,7 +2058,8 @@ function Confirmation({
   }
 
   const downloadTicket = () => {
-    const rows = [...quote.ticketLines, ...quote.addOnLines]
+    const feeLine = quote.feeTotal > 0 ? [{ label: quote.feeLabel, quantity: 1, total: quote.feeTotal }] : []
+    const rows = [...quote.ticketLines, ...quote.addOnLines, ...feeLine]
       .map(
         (line) =>
           `<tr><td>${line.label} × ${line.quantity}</td><td style="text-align:right">${formatCurrency(

@@ -11,6 +11,8 @@ import { Segmented } from '@/components/ui/segmented'
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { toast } from '@/components/ui/toaster'
 import { useCart } from '@/hooks/use-cart'
+import { useBookingDefaults } from '@/hooks/use-booking-defaults'
+import { BOOKING_FEE_LABEL } from '@/lib/fees'
 import { useMenu } from '@/hooks/use-menu'
 import { cartLineFrom, cartLineIssues, cartTotals, channelFor, choiceLines, readCartRaw, type CartLine, type CartMode } from '@/lib/cart'
 import { hm } from '@/lib/hospitality/hours'
@@ -76,6 +78,7 @@ export function choosingFor(menu: Menu, line: CartLine): Choosing | null {
 export function MenuBrowser({ menu: seed, tenantId, ordering, periods, currency, slug, taxRate, nowTime, weekday, phone, eyebrow = 'The menu', title, defaultMode }: MenuBrowserProps) {
   const { menu } = useMenu(tenantId, seed)
   const { cart, add, put, setQty, setMode, setZone, setWhen, reprice } = useCart(slug)
+  const { feePayer } = useBookingDefaults(slug).defaults
   const [query, setQuery] = React.useState('')
   const [activeCategory, setActiveCategory] = React.useState('popular')
   const [choosing, setChoosing] = React.useState<Choosing | null>(null)
@@ -93,7 +96,7 @@ export function MenuBrowser({ menu: seed, tenantId, ordering, periods, currency,
   const categories = menu.categories.filter((c) => menu.items.some((i) => i.categoryId === c.id && i.status !== 'hidden'))
   const visible = menu.items.filter((i) => i.status !== 'hidden')
   const popular = visible.filter((i) => i.popular && i.status === 'available').slice(0, 8)
-  const totals = cartTotals({ ...cart, mode }, ordering, taxRate)
+  const totals = cartTotals({ ...cart, mode }, ordering, taxRate, feePayer)
   const needle = query.trim().toLowerCase()
   const results = needle ? visible.filter((i) => i.name.toLowerCase().includes(needle) || i.description.toLowerCase().includes(needle) || i.tags.some((t) => DIETARY_META[t].label.toLowerCase().includes(needle))) : []
   const service = periods.find((p) => p.weekdays.includes(weekday) && hm(p.startTime) <= now && hm(p.endTime) > now)
@@ -465,8 +468,10 @@ function DishCard({ item, info, badge, currency, channel, inCart, showPopular = 
 
 export function CartBody({ slug, menu, ordering, currency, taxRate, modes, onZone, onEdit }: { slug: string; menu: Menu; ordering: OrderingHours; currency: CurrencyCode; taxRate: number; modes: CartMode[]; onZone: (zoneId: string | null) => void; onEdit?: (line: CartLine) => void }) {
   const { cart, setQty, setMode } = useCart(slug)
+  // Who pays EZRA Pro's 4%: the restaurant, or the guest as a booking fee line.
+  const { feePayer } = useBookingDefaults(slug).defaults
   const mode: CartMode = modes.includes(cart.mode) ? cart.mode : modes[0]
-  const totals = cartTotals({ ...cart, mode }, ordering, taxRate)
+  const totals = cartTotals({ ...cart, mode }, ordering, taxRate, feePayer)
   const zone = ordering.delivery.zones.find((z) => z.id === cart.zoneId) ?? ordering.delivery.zones[0]
 
   return (
@@ -527,8 +532,14 @@ export function CartBody({ slug, menu, ordering, currency, taxRate, modes, onZon
           ) : null}
           {totals.serviceFee ? (
             <div className="flex justify-between">
-              <dt>{mode === 'room' ? 'Tray charge' : 'Service fee'}</dt>
+              <dt>Tray charge</dt>
               <dd className="tabular-nums">{money(totals.serviceFee, currency)}</dd>
+            </div>
+          ) : null}
+          {totals.bookingFee ? (
+            <div className="flex justify-between">
+              <dt>{BOOKING_FEE_LABEL}</dt>
+              <dd className="tabular-nums">{money(totals.bookingFee, currency)}</dd>
             </div>
           ) : null}
           <div className="flex justify-between">

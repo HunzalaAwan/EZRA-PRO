@@ -1,8 +1,8 @@
 /**
  * The four demo operators.
  *
- * Each one is a fully realised business with its own currency, timezone, plan
- * tier and personality — enough contrast to prove the product is genuinely
+ * Each one is a fully realised business with its own currency, timezone and
+ * personality — enough contrast to prove the product is genuinely
  * multi-tenant and multi-vertical, not one dataset wearing four hats.
  *
  * Branding colours are written as `oklch()` strings drawn from the same ramps as
@@ -14,62 +14,25 @@ import type { Tenant, TenantFeatures } from '@/types'
 import { DEFAULT_TENANT_SLUG, unsplashUrl } from './constants'
 
 /**
- * Baseline entitlements per plan. Real tenants then apply a small number of
- * per-account overrides (sales concessions, vertical necessities) on top.
+ * What each business has switched on. Every feature is open to every
+ * business — EZRA Pro has one price and no plans — so these only describe
+ * how each demo business runs.
  */
-const PLAN_FEATURES: Record<Tenant['plan'], TenantFeatures> = {
-  starter: {
-    advancedAnalytics: false,
-    resourceScheduling: false,
-    multiLocation: false,
-    apiAccess: false,
-    customBranding: false,
-    waitlists: false,
-    dynamicPricing: false,
-    channelManager: false,
-    giftCards: true,
-    memberships: false,
-  },
-  growth: {
-    advancedAnalytics: true,
-    resourceScheduling: true,
-    multiLocation: false,
-    apiAccess: false,
-    customBranding: true,
-    waitlists: true,
-    dynamicPricing: false,
-    channelManager: true,
-    giftCards: true,
-    memberships: false,
-  },
-  scale: {
-    advancedAnalytics: true,
-    resourceScheduling: true,
-    multiLocation: true,
-    apiAccess: true,
-    customBranding: true,
-    waitlists: true,
-    dynamicPricing: true,
-    channelManager: true,
-    giftCards: true,
-    memberships: false,
-  },
-  enterprise: {
-    advancedAnalytics: true,
-    resourceScheduling: true,
-    multiLocation: true,
-    apiAccess: true,
-    customBranding: true,
-    waitlists: true,
-    dynamicPricing: true,
-    channelManager: true,
-    giftCards: true,
-    memberships: true,
-  },
+const NONE: TenantFeatures = {
+  advancedAnalytics: false,
+  resourceScheduling: false,
+  multiLocation: false,
+  apiAccess: false,
+  customBranding: false,
+  waitlists: false,
+  dynamicPricing: false,
+  channelManager: false,
+  giftCards: false,
+  memberships: false,
 }
 
-function features(plan: Tenant['plan'], overrides: Partial<TenantFeatures> = {}): TenantFeatures {
-  return { ...PLAN_FEATURES[plan], ...overrides }
+function inUse(...on: (keyof TenantFeatures)[]): TenantFeatures {
+  return { ...NONE, ...Object.fromEntries(on.map((key) => [key, true])) }
 }
 
 export const TENANTS: Tenant[] = [
@@ -79,7 +42,6 @@ export const TENANTS: Tenant[] = [
     name: 'Blue Horizon Watersports',
     legalName: 'Blue Horizon Watersports LLC',
     vertical: 'watersports',
-    plan: 'growth',
     status: 'active',
     currency: 'USD',
     timezone: 'Pacific/Honolulu',
@@ -93,9 +55,8 @@ export const TENANTS: Tenant[] = [
       logoText: 'Blue Horizon',
       coverImage: unsplashUrl('1505228395891-9a51e7e86bf6', 2000),
     },
-    // Dynamic pricing was unlocked outside the growth baseline during the 2026
-    // renewal — Molokini dawn slots were being left underpriced in peak weeks.
-    features: features('growth', { dynamicPricing: true }),
+    // Dynamic pricing switched on in 2026: Molokini dawn slots were being left underpriced in peak weeks.
+    features: inUse('advancedAnalytics', 'resourceScheduling', 'customBranding', 'waitlists', 'channelManager', 'giftCards', 'dynamicPricing'),
     stats: {
       monthlyBookings: 1284,
       monthlyRevenue: 38_742_500,
@@ -117,7 +78,6 @@ export const TENANTS: Tenant[] = [
     name: 'Coral Cay Expeditions',
     legalName: 'Coral Cay Expeditions Pty Ltd',
     vertical: 'island',
-    plan: 'scale',
     status: 'active',
     currency: 'AUD',
     timezone: 'Australia/Brisbane',
@@ -131,9 +91,8 @@ export const TENANTS: Tenant[] = [
       logoText: 'Coral Cay',
       coverImage: unsplashUrl('1544551763-46a013bb70d5', 2000),
     },
-    // Memberships shipped as an enterprise feature; Coral Cay pilots the reef
-    // conservation membership under a design-partner agreement.
-    features: features('scale', { memberships: true }),
+    // Coral Cay runs a reef conservation membership.
+    features: inUse('advancedAnalytics', 'resourceScheduling', 'multiLocation', 'apiAccess', 'customBranding', 'waitlists', 'dynamicPricing', 'channelManager', 'giftCards', 'memberships'),
     stats: {
       monthlyBookings: 2164,
       monthlyRevenue: 91_486_000,
@@ -155,8 +114,7 @@ export const TENANTS: Tenant[] = [
     name: 'Saltline Kitchen & Terrace',
     legalName: 'Saltline Hospitality Single Member P.C.',
     vertical: 'restaurants',
-    plan: 'starter',
-    status: 'trialing',
+    status: 'active',
     currency: 'EUR',
     timezone: 'Europe/Athens',
     locale: 'el-GR',
@@ -169,9 +127,8 @@ export const TENANTS: Tenant[] = [
       logoText: 'Saltline',
       coverImage: unsplashUrl('1414235077428-338989a2e8c0', 2000),
     },
-    // Table-plan scheduling and waitlists are table stakes for a restaurant, so
-    // they ship inside the starter "Table Pack" rather than gating to growth.
-    features: features('starter', { resourceScheduling: true, waitlists: true }),
+    // Table scheduling and waitlists are how a restaurant runs.
+    features: inUse('giftCards', 'resourceScheduling', 'waitlists'),
     stats: {
       monthlyBookings: 946,
       monthlyRevenue: 12_648_000,
@@ -193,7 +150,6 @@ export const TENANTS: Tenant[] = [
     name: 'Ridgeline Adventure Co.',
     legalName: 'Ridgeline Adventure Company Limited',
     vertical: 'adventure',
-    plan: 'enterprise',
     status: 'active',
     currency: 'NZD',
     timezone: 'Pacific/Auckland',
@@ -207,7 +163,7 @@ export const TENANTS: Tenant[] = [
       logoText: 'Ridgeline',
       coverImage: unsplashUrl('1506905925346-21bda4d32df4', 2000),
     },
-    features: features('enterprise'),
+    features: inUse('advancedAnalytics', 'resourceScheduling', 'multiLocation', 'apiAccess', 'customBranding', 'waitlists', 'dynamicPricing', 'channelManager', 'giftCards', 'memberships'),
     stats: {
       monthlyBookings: 1735,
       monthlyRevenue: 128_965_000,

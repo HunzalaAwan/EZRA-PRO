@@ -317,10 +317,13 @@ export function TransferWidget({
   /* ---------- the price: the same engine and inputs as checkout ---------- */
 
   const { rules } = usePricing(tenantSlug)
+  // Every fee is in the owner's prices, unless the business passes EZRA Pro's 4% on to the guest.
+  const feePayer = defaults.feePayer
   const tiers = shared ? activity.priceTiers.map((tier) => ({ tierId: tier.id, qty: ticketQty(tier) })) : lines
   const quote = React.useMemo(
     () =>
       buildQuote(activity, tenantSlug, { tiers, addOns: addOnsSelected }, 1, {
+        feePayer,
         startsAt: legs[0]?.pickupAt,
         nowIso,
         party: request.passengers,
@@ -328,7 +331,7 @@ export function TransferWidget({
         businessRules: rules,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [activity, tenantSlug, JSON.stringify(tiers), JSON.stringify(addOnsSelected), legs, nowIso, request, rules],
+    [activity, tenantSlug, JSON.stringify(tiers), JSON.stringify(addOnsSelected), legs, nowIso, request, rules, feePayer],
   )
 
   /* ---------- book or ask ---------- */
@@ -791,11 +794,17 @@ export function TransferWidget({
               </li>
             ))}
             {quote.ticketLines.length === 0 ? <li className="text-sm text-subtle">{located ? 'Pick a time to see your total.' : "Pick where you're going to see your total."}</li> : null}
+            {quote.feeTotal > 0 ? (
+              <li className="flex items-baseline justify-between gap-3 text-xs text-muted">
+                <span>{quote.feeLabel}</span>
+                <span className="shrink-0 tabular">{formatCurrency(quote.feeTotal, currency)}</span>
+              </li>
+            ) : null}
           </ul>
           <div className="mt-3 flex items-end justify-between gap-3 border-t border-line pt-3">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">Total</p>
-              <p className="text-xs text-subtle">{quote.countLabel} · all fees included</p>
+              <p className="text-xs text-subtle">{quote.countLabel}{quote.feesIncluded ? ' · all fees included' : ''}</p>
             </div>
             <AnimatePresence mode="popLayout" initial={false}>
               <motion.span

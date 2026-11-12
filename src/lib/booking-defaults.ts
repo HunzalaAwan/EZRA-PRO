@@ -1,10 +1,12 @@
 import { DEFAULT_PAYMENT, policySummary } from '@/lib/booking-policy'
+import { DEFAULT_FEE_PAYER, cleanFeePayer, type FeePayer } from '@/lib/fees'
 import type { Activity, BusinessClosure, CancellationPolicy, GuestQuestion, PaymentTerms } from '@/types'
 
 /* ==========================================================================
    Booking defaults — the business-wide rules set in Settings → Booking flow:
    the calendar window, waitlists, what checkout asks for, the business's
-   own checkout questions, and the default payment and cancellation terms.
+   own checkout questions, the default payment and cancellation terms, and
+   who pays EZRA Pro's 4% (set on Settings → Payments).
    An activity that sets its own payment or cancellation terms keeps them;
    one that follows the default reads these. Browser- and server-safe.
    ========================================================================== */
@@ -39,6 +41,8 @@ export interface BookingDefaults {
   closures?: BusinessClosure[]
   /** Public holidays of a country close the business too, when switched on. */
   holidays?: { country: string; enabled: boolean }
+  /** Who pays EZRA Pro's 4%: the business (guests pay the listed price) or the guest (a booking fee line at checkout). */
+  feePayer: FeePayer
 }
 
 export const DEFAULT_CHECKOUT_FIELDS: CheckoutFields = { phone: 'required', country: 'required', requests: 'optional' }
@@ -52,6 +56,7 @@ export const DEFAULT_BOOKING_DEFAULTS: BookingDefaults = {
   payment: DEFAULT_PAYMENT,
   cancellation: { freeCancellationHours: 24, lateRefundPercent: 0, keepDeposit: false },
   closures: [],
+  feePayer: DEFAULT_FEE_PAYER,
 }
 
 /** Closed days as saved, without broken entries or dates that aren't day keys. */
@@ -78,6 +83,7 @@ export function normalizeDefaults(stored: Partial<BookingDefaults> | null | unde
     payment: { ...base.payment, ...stored.payment },
     cancellation: { ...base.cancellation, ...stored.cancellation },
     closures: cleanClosures(stored.closures),
+    feePayer: cleanFeePayer(stored.feePayer),
     holidays:
       stored.holidays && typeof stored.holidays === 'object' && typeof stored.holidays.country === 'string' && stored.holidays.country
         ? { country: stored.holidays.country, enabled: Boolean(stored.holidays.enabled) }

@@ -10,8 +10,6 @@
    TENANCY & IDENTITY
    ========================================================================== */
 
-export type PlanTier = 'starter' | 'growth' | 'scale' | 'enterprise'
-
 export type VerticalKey =
   | 'watersports'
   | 'tours'
@@ -52,8 +50,7 @@ export interface Tenant {
   name: string
   legalName: string
   vertical: VerticalKey
-  plan: PlanTier
-  status: 'active' | 'trialing' | 'past_due' | 'paused'
+  status: 'active' | 'past_due' | 'paused'
   currency: CurrencyCode
   timezone: string
   locale: string
@@ -61,7 +58,7 @@ export interface Tenant {
   city: string
   createdAt: string
   branding: TenantBranding
-  /** Feature flags resolved from plan + overrides. */
+  /** What this business has switched on. Every feature is available to every business; nothing is gated. */
   features: TenantFeatures
   stats: TenantStats
   contact: {
@@ -1628,16 +1625,22 @@ export interface ActivityFeedItem {
    MARKETING / PUBLIC SITE
    ========================================================================== */
 
+/**
+ * EZRA Pro's one price. There is a single plan (`id: 'ezra'`): 4% of each
+ * booking, $0 a month, no setup fee, no contract, every feature included.
+ */
 export interface PricingPlan {
-  id: PlanTier
+  id: string
   name: string
-  /** Per-booking commission percent, the model most booking platforms use. */
+  /** Per-booking fee in percent: 4. */
   commissionPercent: number
-  /** Optional monthly platform fee in minor units; 0 = commission only. */
+  /** Monthly fee in minor units: 0. */
   monthlyPrice: number
+  /** Yearly fee in minor units: 0. */
   annualPrice: number
   blurb: string
   highlights: string[]
+  /** Everything included; `included` is always true. */
   features: { label: string; included: boolean; hint?: string }[]
   cta: string
   popular: boolean
@@ -1693,7 +1696,7 @@ export interface Session {
   user: User
   tenant: Tenant
   /** All tenants the user can switch between. */
-  availableTenants: Pick<Tenant, 'id' | 'slug' | 'name' | 'vertical' | 'plan'>[]
+  availableTenants: Pick<Tenant, 'id' | 'slug' | 'name' | 'vertical'>[]
 }
 
 /* ==========================================================================

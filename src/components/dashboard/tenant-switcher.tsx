@@ -4,11 +4,10 @@ import * as React from 'react'
 import Link from 'next/link'
 import { Check, ChevronsUpDown, Plus, Settings2 } from 'lucide-react'
 
-import type { PlanTier, Tenant, VerticalKey } from '@/types'
+import type { Tenant, VerticalKey } from '@/types'
 import { cn } from '@/lib/utils'
 import { TENANTS } from '@/lib/demo-core'
 import { useWorkspace } from '@/components/dashboard/workspace-provider'
-import { Badge, type BadgeVariant } from '@/components/ui/badge'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,13 +35,6 @@ const VERTICAL_LABEL: Record<VerticalKey, string> = {
   adventure: 'Adventure',
   island: 'Island & resort',
   wellness: 'Wellness',
-}
-
-const PLAN_BADGE: Record<PlanTier, BadgeVariant> = {
-  starter: 'neutral',
-  growth: 'primary',
-  scale: 'accent',
-  enterprise: 'info',
 }
 
 /**
@@ -140,8 +132,8 @@ export function TenantSwitcher({ collapsed = false, className }: TenantSwitcherP
         <span className="block truncate text-[0.9375rem] font-semibold tracking-[-0.01em] text-foreground">
           {active.name}
         </span>
-        <span className="block truncate text-[0.8125rem] text-subtle capitalize">
-          {active.plan} · {active.city}
+        <span className="block truncate text-[0.8125rem] text-subtle">
+          {active.city}
         </span>
       </span>
       <ChevronsUpDown
@@ -186,20 +178,12 @@ export function TenantSwitcher({ collapsed = false, className }: TenantSwitcherP
                   <span className="truncate text-sm font-medium text-foreground">
                     {tenant.name}
                   </span>
-                  {tenant.status === 'trialing' ? (
-                    <Badge variant="warning" size="sm" className="shrink-0">
-                      Trial
-                    </Badge>
-                  ) : null}
                 </span>
                 <span className="block truncate text-xs text-subtle">
                   {VERTICAL_LABEL[tenant.vertical]}
                 </span>
               </span>
               <span className="flex shrink-0 items-center gap-1.5">
-                <Badge variant={PLAN_BADGE[tenant.plan]} size="sm" className="capitalize">
-                  {tenant.plan}
-                </Badge>
                 {isActive ? (
                   <Check aria-hidden="true" className="size-4 text-primary" />
                 ) : (

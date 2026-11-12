@@ -1,43 +1,41 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
 
 import { ClosingCta } from '@/components/marketing/land/closing-cta'
-import { VS_CONTENT } from '@/components/marketing/compare/compare-content'
+import { ALT_CONTENT, VS_CONTENT } from '@/components/marketing/compare/compare-content'
 import {
-  CompareHero,
-  Dot,
-  FactBlock,
+  ArticleBody,
+  ArticleHero,
+  Block,
+  Bullets,
+  FactInline,
   FaqList,
+  GlanceTable,
   JsonLd,
   LinkCards,
-  MethodNote,
-  OnThisPage,
-  PointGrid,
-  ReportError,
-  ScrollHint,
-  ScrollTable,
-  Section,
-  TD,
-  TH,
+  Points,
+  Ref,
+  SourcesList,
+  Steps,
+  Verdict,
+  createNotes,
 } from '@/components/marketing/compare/compare-ui'
 import { articleSchema, breadcrumbSchema, compareMetadata, ezraSoftwareSchema } from '@/components/marketing/compare/compare-schema'
 import { CostCalculator } from '@/components/marketing/compare/cost-calculator'
-import { EZRA_CALC_NOTE, PLAN_RATES, VENDORS, VS_SLUGS, formatCheckedDate, type VsSlug } from '@/lib/data/competitors'
+import { EZRA, PLAN_RATES, VENDORS, VS_SLUGS, formatCheckedDate, type VsSlug } from '@/lib/data/competitors'
 
 /* ==========================================================================
    /compare/[competitor] — EZRA Pro against one tour booking system.
 
-   The order a reader needs:
-     hero        what this compares, and when it was checked
-     verdict     choose them if… / choose EZRA Pro if…
-     table       fees and features, every fact sourced
-     cost        a month's cost at a real volume, then the calculator
-     strengths   what the competitor does well
-     differences where EZRA Pro differs
-     switching   how to move
-     faq         questions, answered on the page
-     method      how we checked, how to report an error, where to go next
+   Read top to bottom in a few minutes:
+     at a glance   pricing, who pays, best for (two rows)
+     short answer  choose them if / choose EZRA Pro if
+     cost          one sentence, then a one-input calculator
+     they do well  three sourced bullets
+     we differ     three short points
+     switching     three steps
+     questions     three answers
+     sources       every footnote, numbered
    ========================================================================== */
 
 export const dynamicParams = false
@@ -68,17 +66,39 @@ export default async function VsPage({ params }: { params: Promise<{ competitor:
   const path = `/compare/${slug}`
   const rates = PLAN_RATES.filter((rate) => rate.vendor === 'ezra' || rate.vendor === content.vendor)
 
+  /* Footnotes are numbered here, in reading order. */
+  const notes = createNotes()
+  const glance = [
+    {
+      key: vendor.id,
+      name: vendor.name,
+      pricing: <FactInline fact={vendor.pricing} n={notes.fact(vendor.pricing)} />,
+      whoPays: <FactInline fact={vendor.whoPays} n={notes.fact(vendor.whoPays)} />,
+      bestFor: vendor.bestFor,
+    },
+    {
+      key: 'ezra',
+      name: 'EZRA Pro',
+      ours: true,
+      pricing: <FactInline fact={EZRA.pricing} n={notes.fact(EZRA.pricing)} />,
+      whoPays: <FactInline fact={EZRA.whoPays} n={notes.fact(EZRA.whoPays)} />,
+      bestFor: EZRA.bestFor,
+    },
+  ]
+  const costRefs = [...new Set(rates.filter((r) => r.vendor !== 'ezra').map((r) => notes.ref(r.source, r.status === 'reported')))]
+  const strengths = content.strengths.map((line) => ({ ...line, n: line.source ? notes.ref(line.source, line.reported) : undefined }))
+  const faqs = content.faqs.map((faq) => ({ ...faq, n: faq.source ? notes.ref(faq.source, faq.reported) : undefined }))
+
   const related = [
     ...(content.alternatives
-      ? [{ href: `/alternatives/${content.alternatives}`, label: `${vendor.name} alternatives`, note: 'Other systems, grouped by how they charge.' }]
+      ? [{ href: `/alternatives/${content.alternatives}`, label: `${vendor.name} alternatives`, note: `${ALT_CONTENT[content.alternatives].entries.length} options, in plain terms.` }]
       : []),
     ...content.related.map((other) => ({
       href: `/compare/${other}`,
       label: `EZRA Pro vs ${VENDORS[VS_CONTENT[other].vendor].name}`,
-      note: VENDORS[VS_CONTENT[other].vendor].model.text,
+      note: VENDORS[VS_CONTENT[other].vendor].pricing.text,
     })),
-    { href: '/compare', label: 'All comparisons', note: 'Eleven systems, the fee calculator and our method.' },
-    { href: '/pricing', label: 'EZRA Pro pricing', note: 'Plans, commission and what each includes.' },
+    { href: '/compare', label: 'All comparisons', note: 'Eleven systems and the full cost calculator.' },
   ]
 
   return (
@@ -95,140 +115,70 @@ export default async function VsPage({ params }: { params: Promise<{ competitor:
         ]}
       />
 
-      <CompareHero
+      <ArticleHero
         crumbs={[{ label: 'Home', href: '/' }, { label: 'Compare', href: '/compare' }, { label: content.h1 }]}
         title={content.h1}
         lede={content.lede}
-      >
-        <OnThisPage
-          items={[
-            { href: '#verdict', label: 'Verdict' },
-            { href: '#side-by-side', label: 'Side by side' },
-            { href: '#cost', label: 'Cost' },
-            { href: '#switching', label: 'Switching' },
-            { href: '#questions', label: 'Questions' },
-          ]}
-        />
-      </CompareHero>
+        photo={content.photo}
+      />
 
-      {/* ---------- verdict ---------- */}
-      <Section id="verdict" eyebrow="The short answer" title={`${vendor.name} or EZRA Pro?`}>
-        <div className="grid gap-5 lg:grid-cols-2">
-          {[
-            { heading: `Choose ${vendor.name} if…`, items: content.verdict.them, tone: 'bg-cal-sunbeam' },
-            { heading: 'Choose EZRA Pro if…', items: content.verdict.us, tone: 'bg-cal-honeydew' },
-          ].map((side) => (
-            <div key={side.heading} className={`rounded-[1.5rem] p-6 sm:p-8 ${side.tone}`}>
-              <h3 className="font-display text-[1.375rem] font-medium tracking-[-0.02em] text-foreground">{side.heading}</h3>
-              <ul className="mt-5 space-y-3.5">
-                {side.items.map((item) => (
-                  <li key={item} className="flex gap-3 text-[1rem] leading-[1.55] text-foreground">
-                    <Dot />
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      </Section>
-
-      {/* ---------- table ---------- */}
-      <Section
-        id="side-by-side"
-        tone="subtle"
-        eyebrow="Side by side"
-        title="Fees and features, with sources"
-        intro={
-          <p>
-            Each {vendor.name} fact links to the page it came from. “Reported” marks a figure from a third party because {vendor.name} doesn’t
-            publish it. EZRA Pro’s column comes from our pricing page, our checkout and the product itself.
-          </p>
-        }
+      <ArticleBody
+        toc={[
+          { id: 'at-a-glance', label: 'At a glance' },
+          { id: 'short-answer', label: 'The short answer' },
+          { id: 'cost', label: 'What it costs' },
+          { id: 'strengths', label: `What ${vendor.name} does well` },
+          { id: 'differences', label: 'Where EZRA Pro differs' },
+          { id: 'switching', label: 'Switching' },
+          { id: 'questions', label: 'Questions' },
+          { id: 'sources', label: 'Sources' },
+        ]}
       >
-        <ScrollTable label={`EZRA Pro and ${vendor.name} compared`} minWidth="46rem">
-          <table className="w-full border-collapse text-left">
-            <caption className="px-4 pt-4 pb-2 text-left text-sm text-muted">
-              EZRA Pro and {vendor.name} compared. Last checked {formatCheckedDate()}.
-            </caption>
-            <thead>
-              <tr className="border-b border-line">
-                <th scope="col" className={`${TH} w-[22%]`}>What</th>
-                <th scope="col" className={`${TH} w-[39%]`}>{vendor.name}</th>
-                <th scope="col" className={`${TH} w-[39%]`}>EZRA Pro</th>
-              </tr>
-            </thead>
-            <tbody>
-              {content.rows.map((row) => (
-                <tr key={row.label} className="border-b border-line-subtle last:border-b-0">
-                  <th scope="row" className={`${TD} font-medium text-foreground`}>{row.label}</th>
-                  <td className={TD}><FactBlock fact={row.them} /></td>
-                  <td className={`${TD} bg-cal-haze`}><FactBlock fact={row.us} /></td>
-                </tr>
+        <Block id="at-a-glance" title="At a glance">
+          <GlanceTable caption={`${vendor.name} and EZRA Pro at a glance. Last checked ${formatCheckedDate()}.`} rows={glance} />
+        </Block>
+
+        <Block id="short-answer" title="The short answer">
+          <Verdict them={{ name: vendor.name, items: content.verdict.them }} us={content.verdict.us} />
+        </Block>
+
+        <Block
+          id="cost"
+          title="What it costs"
+          intro={
+            <p>
+              {content.cost.summary}
+              {costRefs.map((n) => (
+                <Ref key={n} n={n} />
               ))}
-            </tbody>
-          </table>
-        </ScrollTable>
-        <ScrollHint />
-      </Section>
+            </p>
+          }
+        >
+          <CostCalculator rates={rates} defaultValue={content.cost.value} checkedOn={formatCheckedDate()} />
+        </Block>
 
-      {/* ---------- cost ---------- */}
-      <Section id="cost" eyebrow="Cost" title="What a month costs" intro={<p>{content.cost.intro}</p>}>
-        <ul className="mb-8 max-w-3xl space-y-3 text-[1rem] leading-[1.6] text-foreground">
-          {content.cost.points.map((point) => (
-            <li key={point} className="flex gap-3">
-              <span aria-hidden="true" className="mt-2.5 size-1.5 shrink-0 rounded-full bg-primary" />
-              <span>{point}</span>
-            </li>
-          ))}
-        </ul>
-        <CostCalculator rates={rates} defaultValue={content.cost.value} checkedOn={formatCheckedDate()} ezraNote={EZRA_CALC_NOTE} />
-      </Section>
+        <Block id="strengths" title={`What ${vendor.name} does well`}>
+          <Bullets items={strengths} />
+        </Block>
 
-      {/* ---------- strengths ---------- */}
-      <Section
-        id="strengths"
-        tone="subtle"
-        eyebrow="Fair is fair"
-        title={`What ${vendor.name} does well`}
-        intro={<p>{vendor.suits}</p>}
-      >
-        <PointGrid points={content.strengths} />
-      </Section>
+        <Block id="differences" title="Where EZRA Pro differs">
+          <Points items={content.differences} />
+        </Block>
 
-      {/* ---------- differences ---------- */}
-      <Section id="differences" eyebrow="EZRA Pro" title="Where EZRA Pro differs">
-        <PointGrid points={content.differences} />
-        <p className="mt-6 text-sm text-muted">
-          See every plan and what it includes on{' '}
-          <Link href="/pricing" className="font-medium text-foreground underline underline-offset-4 hover:text-primary">
-            our pricing page
-          </Link>
-          .
-        </p>
-      </Section>
+        <Block id="switching" title={`Switching from ${vendor.name}`}>
+          <Steps items={content.switching} />
+        </Block>
 
-      {/* ---------- switching ---------- */}
-      <Section id="switching" tone="cloud" eyebrow="Switching" title={`Moving from ${vendor.name}`} intro={<p>{content.switching.intro}</p>}>
-        <PointGrid points={content.switching.steps} numbered />
-      </Section>
+        <Block id="questions" title="Questions">
+          <FaqList items={faqs} />
+        </Block>
 
-      {/* ---------- questions ---------- */}
-      <Section id="questions" eyebrow="Questions" title={`${vendor.name} and EZRA Pro: common questions`}>
-        <FaqList faqs={content.faqs} />
-      </Section>
-
-      {/* ---------- method, errors, next ---------- */}
-      <Section id="method" tone="subtle" eyebrow="How we checked" title="Sources, dates and corrections">
-        <div className="grid gap-8 lg:grid-cols-2">
-          <MethodNote />
-          <ReportError page={content.h1} />
-        </div>
-        <h3 className="mt-12 font-display text-[1.25rem] font-medium text-foreground">Keep comparing</h3>
-        <div className="mt-5">
+        <Block id="keep-comparing" title="Keep comparing">
           <LinkCards links={related} />
-        </div>
-      </Section>
+        </Block>
+
+        <SourcesList notes={notes.list} page={content.h1} />
+      </ArticleBody>
 
       <ClosingCta />
     </>

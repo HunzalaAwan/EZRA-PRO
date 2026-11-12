@@ -25,6 +25,7 @@
  *     `participants.length` and `partySize` disagree.
  */
 
+import { BOOKING_FEE_LABEL, ezraFee } from '@/lib/fees'
 import type {
   Activity,
   Booking,
@@ -69,8 +70,6 @@ const TAX: Record<string, { rate: number; label: string }> = {
   tnt_ridgeline: { rate: 0.15, label: 'GST' },
 }
 
-/** Booking fee percentage on channels the operator pays to process. */
-const SERVICE_FEE_RATE = 0.045
 
 /** Channels that carry a booking fee — a walk-up at the kiosk does not. */
 const FEE_CHANNELS = new Set<BookingChannel>([
@@ -749,11 +748,12 @@ function priceBooking(
   }
 
   const net = subtotal - discountTotal
-  const feeTotal = FEE_CHANNELS.has(channel) ? Math.round(net * SERVICE_FEE_RATE) : 0
+  // EZRA Pro's 4%, passed on to the guest on these historic online bookings.
+  const feeTotal = FEE_CHANNELS.has(channel) ? ezraFee(net) : 0
   if (feeTotal > 0) {
     items.push({
       id: `li_${bookingNumber}_${++seq}`,
-      label: 'Booking & service fee',
+      label: BOOKING_FEE_LABEL,
       kind: 'fee',
       quantity: 1,
       unitPrice: feeTotal,

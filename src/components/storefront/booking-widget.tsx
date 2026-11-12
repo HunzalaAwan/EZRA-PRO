@@ -32,7 +32,8 @@ import {
   fromDateKey,
   pluralize,
 } from '@/lib/utils'
-import type { Activity, CurrencyCode, DepartureStatus, Location, PickupZone, PriceTier, VerticalKey } from '@/types'
+import type { Activity, CurrencyCode, DepartureStatus, Location, PickupZone, PriceTier } from '@/types'
+import { BOOKING_FEE_LABEL, guestBookingFee, type FeePayer } from '@/lib/fees'
 import { Switch } from '@/components/ui/switch'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { useBookingDefaults } from '@/hooks/use-booking-defaults'
@@ -141,26 +142,13 @@ export interface AvailabilityDay {
 /* ==========================================================================
    PRICING
 
-   Mirrors the maths in `@/lib/demo` so a quote produced here reconciles with
-   the bookings the operator sees in the dashboard: 6% booking fee on the net,
-   then card processing at cost on top.
+   Tickets, extras and transport come from the price engine. The only thing
+   added on top is EZRA Pro's 4%, and only when the business passes it on
+   (`feePayer: 'guest'`, Settings → Payments): one "Booking fee (4%)" line.
+   When the business pays it, the guest pays the listed price. Card
+   processing is between the business and its payment provider, so it is
+   never a line here.
    ========================================================================== */
-
-export const BOOKING_FEE_RATE = 0.06
-
-/** Card processing, passed through at cost: what Stripe charges on a card payment. */
-export const PROCESSING_FEE = { rate: 0.025, label: 'Card processing (2.5%)' } as const
-
-/** Kept for callers that looked fees up by tenant; every tenant now carries the same processing line. */
-export const TAX_BY_TENANT: Record<string, { rate: number; label: string }> = {
-  'blue-horizon': PROCESSING_FEE,
-  'coral-cay': PROCESSING_FEE,
-  saltline: PROCESSING_FEE,
-  ridgeline: PROCESSING_FEE,
-}
-
-/** One plain label everywhere; the harbour levies and service charges are folded into it. */
-const FEE_LABEL: Partial<Record<VerticalKey, string>> = {}
 
 export interface QuoteSelection {
   tiers: { tierId: string; qty: number }[]
@@ -186,10 +174,9 @@ export interface Quote {
   ticketLines: QuoteLine[]
   addOnLines: QuoteLine[]
   subtotal: number
+  /** EZRA Pro's 4% when the business passes it on to the guest; 0 when the business pays it. */
   feeTotal: number
   feeLabel: string
-  taxTotal: number
-  taxLabel: string
   total: number
   /** Tickets that consume a seat. */
   seats: number
@@ -209,7 +196,7 @@ export interface Quote {
   countLabel: string
   /** Every change that moved a ticket price: the activity's own, group discounts, business rules, dynamic pricing. */
   appliedChanges: AppliedChange[]
-  /** Transfers: the owner's prices include every fee, so no booking fee or card processing is added. */
+  /** Transfers: the owner's prices include every fee and nothing is added on top ("All fees included"). */
   feesIncluded?: boolean
 }
 
@@ -238,6 +225,8 @@ export interface QuoteOptions {
   transfer?: TransferPricing
   /** Transport on the activity: the guest's trip and pickup point (and its name, for the line). */
   transport?: { choice: TransportChoice; zoneName?: string }
+  /** Who pays EZRA Pro's 4% (the booking defaults). The business, when not given. */
+  feePayer?: FeePayer
 }
 
 /**
@@ -245,8 +234,8 @@ export interface QuoteOptions {
  * Tickets come from the price engine (`@/lib/price-engine`): the activity's
  * own price changes, group discounts, the time slot's dynamic pricing
  * (`priceMultiplier`, nothing else) and `options.businessRules`, then the
- * price cap and the minimum charge. Extras, the booking fee and card
- * processing are added here.
+ * price cap and the minimum charge. Extras, and the booking fee when the
+ * business passes it on, are added here.
  */
 export function buildQuote(
   activity: Activity,
@@ -256,7 +245,6 @@ export function buildQuote(
   options: QuoteOptions = {},
 ): Quote {
   const days = Math.max(1, Math.floor(options.days ?? 1))
-  const tax = TAX_BY_TENANT[tenantSlug] ?? PROCESSING_FEE
   const priced = priceBooking({
     activity,
     lines: selection.tiers,
@@ -318,20 +306,18 @@ export function buildQuote(
     subtotal += ride.total
   }
 
-  // Transfers are sold at the owner's table prices, which include every fee: nothing is added on top.
-  const feesIncluded = (activity.kind ?? 'trip') === 'transfer'
-  const feeTotal = feesIncluded ? 0 : Math.round(subtotal * BOOKING_FEE_RATE)
-  const taxTotal = feesIncluded ? 0 : Math.round(subtotal * tax.rate)
+  // EZRA Pro's 4%: a line only when the business passes it on. Transfers are sold at the owner's
+  // table prices with every fee included, unless the business passes the 4% on.
+  const feeTotal = guestBookingFee(subtotal, options.feePayer)
+  const feesIncluded = (activity.kind ?? 'trip') === 'transfer' && feeTotal === 0
 
   return {
     ticketLines,
     addOnLines,
     subtotal,
     feeTotal,
-    feeLabel: FEE_LABEL[activity.category] ?? 'Booking fee',
-    taxTotal,
-    taxLabel: tax.label,
-    total: subtotal + feeTotal + taxTotal,
+    feeLabel: BOOKING_FEE_LABEL,
+    total: subtotal + feeTotal,
     seats: priced.seats,
     headcount: priced.headcount,
     days,
@@ -969,9 +955,12 @@ function BookingWidgetInner({
     [slot, nowIso, slotBooked, rules, kind, party, headcount, rated, rentalMode, byLength, length],
   )
 
+  // Who pays EZRA Pro's 4%: the business, or the guest as a booking fee line.
+  const { feePayer } = useBookingDefaults(tenantSlug).defaults
   const quote = React.useMemo(
     () =>
       buildQuote(slotActivity, tenantSlug, selection, slot?.priceMultiplier ?? 1, {
+        feePayer,
         days: dayRental ? rentDays : 1,
         party,
         private: goPrivate,
@@ -983,7 +972,7 @@ function BookingWidgetInner({
         businessRules: rules,
         ...(transport ? { transport: { choice: getThere, zoneName: transportZones.find((zone) => zone.id === getThere.zoneId)?.name } } : {}),
       }),
-    [slotActivity, tenantSlug, selection, slot, slotBooked, nowIso, rules, dayRental, rentDays, party, rated, rentalMode, rentHours, byLength, length, goPrivate, transport, getThere, transportZones],
+    [slotActivity, tenantSlug, selection, slot, slotBooked, nowIso, rules, dayRental, rentDays, party, rated, rentalMode, rentHours, byLength, length, goPrivate, transport, getThere, transportZones, feePayer],
   )
   /** What moved the price, as chips under the total; dynamic pricing shows as "Peak time" instead. */
   const priceChips = quote.appliedChanges.filter((change) => change.source !== 'dynamic')
@@ -1952,27 +1941,25 @@ function BookingWidgetInner({
             ) : null}
           </ul>
 
-          <div className="mt-3 space-y-2 border-t border-line pt-3 text-xs">
-            <div className="flex items-baseline justify-between gap-3 text-muted">
-              <span className="inline-flex items-center gap-1.5">
-                {quote.feeLabel}
-                <SimpleTooltip label="Covers card processing, ticketing and the harbour or site access levy.">
-                  <button
-                    type="button"
-                    aria-label="What is this fee?"
-                    className="inline-grid place-items-center rounded-full text-faint transition-colors hover:text-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
-                  >
-                    <Info className="size-3" aria-hidden="true" />
-                  </button>
-                </SimpleTooltip>
-              </span>
-              <span className="tabular">{formatCurrency(quote.feeTotal, currency)}</span>
+          {quote.feeTotal > 0 ? (
+            <div className="mt-3 space-y-2 border-t border-line pt-3 text-xs">
+              <div className="flex items-baseline justify-between gap-3 text-muted">
+                <span className="inline-flex items-center gap-1.5">
+                  {quote.feeLabel}
+                  <SimpleTooltip label="The booking platform's fee, added to the price.">
+                    <button
+                      type="button"
+                      aria-label="What is this fee?"
+                      className="inline-grid place-items-center rounded-full text-faint transition-colors hover:text-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      <Info className="size-3" aria-hidden="true" />
+                    </button>
+                  </SimpleTooltip>
+                </span>
+                <span className="tabular">{formatCurrency(quote.feeTotal, currency)}</span>
+              </div>
             </div>
-            <div className="flex items-baseline justify-between gap-3 text-muted">
-              <span>{quote.taxLabel}</span>
-              <span className="tabular">{formatCurrency(quote.taxTotal, currency)}</span>
-            </div>
-          </div>
+          ) : null}
 
           <div className="mt-3 flex items-end justify-between gap-3 border-t border-line pt-3">
             <div>

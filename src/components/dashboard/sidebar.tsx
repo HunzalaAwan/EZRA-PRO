@@ -25,7 +25,6 @@ import {
   Ship,
   ShoppingBag,
   ShoppingCart,
-  Sparkles,
   Star,
   Store,
   Tags,
@@ -35,7 +34,6 @@ import {
   Utensils,
   UtensilsCrossed,
   Waves,
-  Zap,
   Bus,
   Inbox,
   KeyRound,
@@ -49,14 +47,11 @@ import {
 } from 'lucide-react'
 
 import type { DashboardNavItem } from '@/lib/site-config'
-import type { PlanTier } from '@/types'
 import { useWorkspace } from '@/components/dashboard/workspace-provider'
-import { cn, formatNumber } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { Logo } from '@/components/marketing/logo'
-import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
-import { Progress } from '@/components/ui/progress'
 import { SimpleTooltip, TooltipProvider } from '@/components/ui/tooltip'
 import { TenantSwitcher } from '@/components/dashboard/tenant-switcher'
 
@@ -298,74 +293,6 @@ export function DashboardNavList({
 }
 
 /* --------------------------------------------------------------------------
-   PLAN / USAGE CARD
-   -------------------------------------------------------------------------- */
-
-/** Monthly booking allowance per tier — the number the usage bar fills against. */
-const PLAN_BOOKING_QUOTA: Record<PlanTier, number> = {
-  starter: 400,
-  growth: 3_000,
-  scale: 12_000,
-  enterprise: 40_000,
-}
-
-export function PlanUsageCard({ className }: { className?: string }) {
-  const { tenant, profile } = useWorkspace()
-  const used = tenant.stats.monthlyBookings
-  const quota = PLAN_BOOKING_QUOTA[tenant.plan]
-  const unitLabel = `${profile.vocab.bookings.charAt(0).toUpperCase()}${profile.vocab.bookings.slice(1)} this month`
-  const percent = Math.min(100, Math.round((used / quota) * 100))
-  const tone = percent >= 90 ? 'danger' : percent >= 75 ? 'warning' : 'primary'
-
-  return (
-    <div
-      className={cn(
-        'relative overflow-hidden rounded-xl border border-line bg-surface-sunken p-3',
-        className,
-      )}
-    >
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute -top-10 -right-8 size-24 rounded-full bg-primary-soft opacity-70 blur-2xl"
-      />
-
-      <div className="relative flex items-center justify-between gap-2">
-        <span className="flex items-center gap-1.5 text-[0.9375rem] font-semibold tracking-[-0.01em] text-foreground capitalize">
-          <Sparkles aria-hidden="true" className="size-3.5 text-primary" />
-          {tenant.plan} plan
-        </span>
-        <span className="text-[0.8125rem] font-semibold text-subtle tabular-nums">{percent}%</span>
-      </div>
-
-      <p className="relative mt-2 text-[0.8125rem] text-subtle">{unitLabel}</p>
-      <p className="relative mt-0.5 text-base font-semibold text-foreground tabular-nums">
-        {formatNumber(used)}
-        <span className="font-normal text-faint"> / {formatNumber(quota)}</span>
-      </p>
-
-      <Progress
-        value={percent}
-        tone={tone}
-        size="xs"
-        className="relative mt-2.5"
-        aria-label={`${percent}% of the monthly booking allowance used`}
-      />
-
-      <Button
-        asChild
-        size="xs"
-        variant="outline"
-        fullWidth
-        className="relative mt-3"
-        leftIcon={<Zap aria-hidden="true" />}
-      >
-        <Link href="/dashboard/settings">Upgrade plan</Link>
-      </Button>
-    </div>
-  )
-}
-
-/* --------------------------------------------------------------------------
    SIDEBAR
    -------------------------------------------------------------------------- */
 
@@ -453,8 +380,6 @@ export function Sidebar({ navCounts, className }: { navCounts: NavCounts; classN
             collapsed ? 'px-2 py-2' : 'space-y-2 px-3 py-3',
           )}
         >
-          {!collapsed ? <PlanUsageCard /> : null}
-
           {collapsed ? (
             <SimpleTooltip label="Expand sidebar" side="right" provider={false}>
               <button

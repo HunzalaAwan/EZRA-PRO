@@ -29,6 +29,7 @@ import { z } from 'zod'
 import type { Activity, Customer } from '@/types'
 import { CURRENT_TENANT, getActivitiesByTenant } from '@/lib/demo-core'
 import { useBookingDefaults } from '@/hooks/use-booking-defaults'
+import { BOOKING_FEE_LABEL, guestBookingFee } from '@/lib/fees'
 import { effectiveCancellation } from '@/lib/booking-defaults'
 import type { CalendarEvent } from '@/lib/demo'
 import { fetchStorefrontAvailability, searchCustomers } from '@/lib/actions/dashboard'
@@ -78,7 +79,6 @@ type StepId = (typeof STEPS)[number]['id']
 
 /** Maui general excise tax — applied to the whole taxable order. */
 const TAX_RATE = 0.04166
-const FEE_RATE = 0.03
 
 const PAYMENT_METHODS = [
   {
@@ -379,10 +379,11 @@ export function NewBookingDialog({ open, onOpenChange }: NewBookingDialogProps) 
       lines.push({ id: addOn.id, label: addOn.label, qty, unit: addOn.price, total })
     }
 
-    const fee = Math.round(subtotal * FEE_RATE)
-    const tax = Math.round((subtotal + fee) * TAX_RATE)
+    // EZRA Pro's 4%: added only when the business passes it on to the guest.
+    const fee = guestBookingFee(subtotal, bookingDefaults.feePayer)
+    const tax = Math.round(subtotal * TAX_RATE)
     return { lines, seats, subtotal, fee, tax, total: subtotal + fee + tax }
-  }, [activity, addOnQty, tierQty])
+  }, [activity, addOnQty, tierQty, bookingDefaults.feePayer])
 
   const seatsLeft = selectedEvent?.seatsLeft ?? 0
   const overCapacity = pricing.seats > seatsLeft
@@ -1031,12 +1032,14 @@ export function NewBookingDialog({ open, onOpenChange }: NewBookingDialogProps) 
                           </span>
                         </li>
                       ))}
-                      <li className="flex items-center justify-between gap-3 py-1.5 text-[0.8125rem] text-muted">
-                        <span>Booking fee (3%)</span>
-                        <span className="tabular-nums">
-                          {formatCurrency(pricing.fee, currency, { decimals: true })}
-                        </span>
-                      </li>
+                      {pricing.fee > 0 ? (
+                        <li className="flex items-center justify-between gap-3 py-1.5 text-[0.8125rem] text-muted">
+                          <span>{BOOKING_FEE_LABEL}</span>
+                          <span className="tabular-nums">
+                            {formatCurrency(pricing.fee, currency, { decimals: true })}
+                          </span>
+                        </li>
+                      ) : null}
                       <li className="flex items-center justify-between gap-3 py-1.5 text-[0.8125rem] text-muted">
                         <span>General excise tax</span>
                         <span className="tabular-nums">
