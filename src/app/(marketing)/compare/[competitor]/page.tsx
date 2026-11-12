@@ -1,41 +1,35 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
 
-import { ClosingCta } from '@/components/marketing/land/closing-cta'
-import { ALT_CONTENT, VS_CONTENT } from '@/components/marketing/compare/compare-content'
+import { VS_CONTENT } from '@/components/marketing/compare/compare-content'
 import {
-  ArticleBody,
-  ArticleHero,
-  Block,
-  Bullets,
-  FactInline,
-  FaqList,
-  GlanceTable,
+  CardNote,
+  CompareCta,
+  CompareHero,
+  ComparisonCard,
+  FaqGrid,
   JsonLd,
-  LinkCards,
-  Points,
-  Ref,
+  Section,
   SourcesList,
-  Steps,
   Verdict,
+  WRAP,
+  buildColumns,
   createNotes,
 } from '@/components/marketing/compare/compare-ui'
 import { articleSchema, breadcrumbSchema, compareMetadata, ezraSoftwareSchema } from '@/components/marketing/compare/compare-schema'
-import { CostCalculator } from '@/components/marketing/compare/cost-calculator'
-import { EZRA, PLAN_RATES, VENDORS, VS_SLUGS, formatCheckedDate, type VsSlug } from '@/lib/data/competitors'
+import { CostCheck } from '@/components/marketing/compare/cost-calculator'
+import { EZRA, PLAN_RATES, VENDORS, VS_SLUGS, formatCheckedDate, rateById, type VsSlug } from '@/lib/data/competitors'
 
 /* ==========================================================================
-   /compare/[competitor] — EZRA Pro against one tour booking system.
+   /compare/[competitor] — EZRA Pro against one system, in a minute's read.
 
-   Read top to bottom in a few minutes:
-     at a glance   pricing, who pays, best for (two rows)
-     short answer  choose them if / choose EZRA Pro if
-     cost          one sentence, then a one-input calculator
-     they do well  three sourced bullets
-     we differ     three short points
-     switching     three steps
-     questions     three answers
-     sources       every footnote, numbered
+     headline     one line under it
+     the card     six rows, two systems side by side
+     which fits   choose EZRA Pro if / choose them if, three each
+     cost         one input, two bars
+     questions    three short answers
+     CTA, also compare, sources
    ========================================================================== */
 
 export const dynamicParams = false
@@ -64,42 +58,18 @@ export default async function VsPage({ params }: { params: Promise<{ competitor:
   const content = VS_CONTENT[slug]
   const vendor = VENDORS[content.vendor]
   const path = `/compare/${slug}`
-  const rates = PLAN_RATES.filter((rate) => rate.vendor === 'ezra' || rate.vendor === content.vendor)
+  const checked = formatCheckedDate()
 
   /* Footnotes are numbered here, in reading order. */
   const notes = createNotes()
-  const glance = [
-    {
-      key: vendor.id,
-      name: vendor.name,
-      pricing: <FactInline fact={vendor.pricing} n={notes.fact(vendor.pricing)} />,
-      whoPays: <FactInline fact={vendor.whoPays} n={notes.fact(vendor.whoPays)} />,
-      bestFor: vendor.bestFor,
-    },
-    {
-      key: 'ezra',
-      name: 'EZRA Pro',
-      ours: true,
-      pricing: <FactInline fact={EZRA.pricing} n={notes.fact(EZRA.pricing)} />,
-      whoPays: <FactInline fact={EZRA.whoPays} n={notes.fact(EZRA.whoPays)} />,
-      bestFor: EZRA.bestFor,
-    },
-  ]
-  const costRefs = [...new Set(rates.filter((r) => r.vendor !== 'ezra').map((r) => notes.ref(r.source, r.status === 'reported')))]
-  const strengths = content.strengths.map((line) => ({ ...line, n: line.source ? notes.ref(line.source, line.reported) : undefined }))
+  const columns = buildColumns(notes, [
+    { key: 'ezra', name: EZRA.name, ours: true, cells: EZRA.cells },
+    { key: vendor.id, name: vendor.name, cells: vendor.cells },
+  ])
+  const theirRates = PLAN_RATES.filter((rate) => rate.vendor === content.vendor)
+  theirRates.forEach((rate) => notes.ref(rate.source, rate.status === 'reported'))
   const faqs = content.faqs.map((faq) => ({ ...faq, n: faq.source ? notes.ref(faq.source, faq.reported) : undefined }))
-
-  const related = [
-    ...(content.alternatives
-      ? [{ href: `/alternatives/${content.alternatives}`, label: `${vendor.name} alternatives`, note: `${ALT_CONTENT[content.alternatives].entries.length} options, in plain terms.` }]
-      : []),
-    ...content.related.map((other) => ({
-      href: `/compare/${other}`,
-      label: `EZRA Pro vs ${VENDORS[VS_CONTENT[other].vendor].name}`,
-      note: VENDORS[VS_CONTENT[other].vendor].pricing.text,
-    })),
-    { href: '/compare', label: 'All comparisons', note: 'Eleven systems and the full cost calculator.' },
-  ]
+  const others = VS_SLUGS.filter((other) => other !== slug)
 
   return (
     <>
@@ -110,77 +80,49 @@ export default async function VsPage({ params }: { params: Promise<{ competitor:
             { name: 'Compare', path: '/compare' },
             { name: content.h1, path },
           ]),
-          articleSchema({ headline: content.title, description: content.description, path }),
+          articleSchema({ headline: content.h1, description: content.description, path }),
           ezraSoftwareSchema(),
         ]}
       />
 
-      <ArticleHero
-        crumbs={[{ label: 'Home', href: '/' }, { label: 'Compare', href: '/compare' }, { label: content.h1 }]}
-        title={content.h1}
-        lede={content.lede}
-        photo={content.photo}
-      />
+      <CompareHero crumbs={[{ label: 'Home', href: '/' }, { label: 'Compare', href: '/compare' }, { label: content.h1 }]} title={content.h1} subhead={content.subhead} />
 
-      <ArticleBody
-        toc={[
-          { id: 'at-a-glance', label: 'At a glance' },
-          { id: 'short-answer', label: 'The short answer' },
-          { id: 'cost', label: 'What it costs' },
-          { id: 'strengths', label: `What ${vendor.name} does well` },
-          { id: 'differences', label: 'Where EZRA Pro differs' },
-          { id: 'switching', label: 'Switching' },
-          { id: 'questions', label: 'Questions' },
-          { id: 'sources', label: 'Sources' },
-        ]}
-      >
-        <Block id="at-a-glance" title="At a glance">
-          <GlanceTable caption={`${vendor.name} and EZRA Pro at a glance. Last checked ${formatCheckedDate()}.`} rows={glance} />
-        </Block>
+      <div className={WRAP}>
+        <div className="mx-auto -mt-20 max-w-3xl sm:-mt-28">
+          <ComparisonCard caption={`${content.h1}: price, fees and features side by side. Last checked ${checked}.`} columns={columns} />
+          <CardNote fair={content.fairNote} />
+        </div>
 
-        <Block id="short-answer" title="The short answer">
-          <Verdict them={{ name: vendor.name, items: content.verdict.them }} us={content.verdict.us} />
-        </Block>
+        <div className="space-y-16 py-16 sm:space-y-20 sm:py-20">
+          <Section id="which-fits" title="Which one fits you?">
+            <Verdict them={{ name: vendor.name, items: content.verdict.them }} us={content.verdict.us} />
+          </Section>
 
-        <Block
-          id="cost"
-          title="What it costs"
-          intro={
-            <p>
-              {content.cost.summary}
-              {costRefs.map((n) => (
-                <Ref key={n} n={n} />
-              ))}
-            </p>
-          }
-        >
-          <CostCalculator rates={rates} defaultValue={content.cost.value} checkedOn={formatCheckedDate()} />
-        </Block>
+          <Section id="cost" title="What you’d pay">
+            <CostCheck ezra={rateById('ezra')} them={theirRates} defaultValue={content.costValue} checkedOn={checked} />
+          </Section>
 
-        <Block id="strengths" title={`What ${vendor.name} does well`}>
-          <Bullets items={strengths} />
-        </Block>
+          <Section id="questions" title="Questions">
+            <FaqGrid items={faqs} />
+          </Section>
 
-        <Block id="differences" title="Where EZRA Pro differs">
-          <Points items={content.differences} />
-        </Block>
+          <CompareCta />
 
-        <Block id="switching" title={`Switching from ${vendor.name}`}>
-          <Steps items={content.switching} />
-        </Block>
+          <nav aria-label="Other comparisons" className="flex flex-wrap items-center gap-x-6 gap-y-2 text-[0.9375rem]">
+            <span className="text-muted">Also compare:</span>
+            {others.map((other) => (
+              <Link key={other} href={`/compare/${other}`} className="font-medium text-foreground underline decoration-line-strong underline-offset-4 hover:text-primary">
+                EZRA Pro vs {VENDORS[other].name}
+              </Link>
+            ))}
+            <Link href="/compare" className="font-medium text-foreground underline decoration-line-strong underline-offset-4 hover:text-primary">
+              All four side by side
+            </Link>
+          </nav>
 
-        <Block id="questions" title="Questions">
-          <FaqList items={faqs} />
-        </Block>
-
-        <Block id="keep-comparing" title="Keep comparing">
-          <LinkCards links={related} />
-        </Block>
-
-        <SourcesList notes={notes.list} page={content.h1} />
-      </ArticleBody>
-
-      <ClosingCta />
+          <SourcesList notes={notes.list} page={content.h1} />
+        </div>
+      </div>
     </>
   )
 }

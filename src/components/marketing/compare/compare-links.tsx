@@ -1,53 +1,59 @@
-import { VS_CONTENT } from '@/components/marketing/compare/compare-content'
-import { LinkCards } from '@/components/marketing/compare/compare-ui'
-import { EZRA_PRICE_LINE, VENDORS, type VsSlug } from '@/lib/data/competitors'
+import Link from 'next/link'
+import { ArrowRight } from 'lucide-react'
+
+import { VsCards } from '@/components/marketing/compare/compare-ui'
+import { EZRA_PRICE_LINE, VS_SLUGS, type VsSlug } from '@/lib/data/competitors'
 
 /* ==========================================================================
    CompareLinks — a short "how we compare" row for product and solution
-   pages, pointing at the comparisons most relevant to that page.
+   pages: the three vs cards, the one most relevant to the page first, and
+   a link to all four side by side.
    ========================================================================== */
 
-/** Which comparisons each product and solution page leads to. Unknown keys get the hub only. */
-const RELEVANT: Record<string, VsSlug[]> = {
+/** Which comparison leads on each product and solution page. Unknown keys keep the default order. */
+const LEAD: Record<string, VsSlug> = {
   // product pages
-  booking: ['fareharbor', 'xola', 'peek-pro'],
-  scheduling: ['checkfront', 'bokun', 'rezdy'],
-  analytics: ['bokun', 'rezdy'],
-  payments: ['xola', 'fareharbor', 'checkfront'],
-  crm: ['peek-pro', 'xola'],
-  channels: ['bokun', 'rezdy', 'fareharbor'],
+  booking: 'fareharbor',
+  scheduling: 'bokun',
+  analytics: 'bokun',
+  payments: 'fareharbor',
+  crm: 'peek-pro',
+  channels: 'bokun',
   // solution pages
-  watersports: ['peek-pro', 'fareharbor', 'checkfront'],
-  tours: ['fareharbor', 'bokun', 'rezdy'],
-  island: ['bokun', 'rezdy', 'xola'],
-  adventure: ['peek-pro', 'xola', 'checkfront'],
-  wellness: ['xola', 'checkfront'],
+  watersports: 'peek-pro',
+  tours: 'fareharbor',
+  island: 'bokun',
+  adventure: 'peek-pro',
+  wellness: 'fareharbor',
 }
 
 export function CompareLinks({ pageKey }: { pageKey: string }) {
-  const slugs = RELEVANT[pageKey] ?? []
-  const links = [
-    ...slugs.map((slug) => ({
-      href: `/compare/${slug}`,
-      label: VS_CONTENT[slug].h1,
-      note: VENDORS[VS_CONTENT[slug].vendor].pricing.text,
-    })),
-    { href: '/compare', label: 'All comparisons', note: 'Eleven systems, side by side, with a cost calculator.' },
-  ]
+  const lead = LEAD[pageKey]
+  const slugs = lead ? [lead, ...VS_SLUGS.filter((slug) => slug !== lead)] : VS_SLUGS
 
   return (
     <section aria-labelledby={`compare-links-${pageKey}`} className="border-t border-line bg-background py-16 sm:py-20">
       <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
-        <p className="text-xs font-medium tracking-[0.08em] text-primary uppercase">Compare</p>
-        <h2
-          id={`compare-links-${pageKey}`}
-          className="mt-3 font-display text-[1.75rem] leading-[1.15] font-medium tracking-[-0.03em] text-foreground sm:text-[2.125rem]"
-        >
-          How EZRA Pro compares
-        </h2>
-        <p className="mt-3 max-w-2xl text-[1.0625rem] leading-[1.6] text-muted">{EZRA_PRICE_LINE} See how that stacks up.</p>
+        <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
+          <div>
+            <h2
+              id={`compare-links-${pageKey}`}
+              className="font-display text-[1.75rem] leading-[1.15] font-medium tracking-[-0.03em] text-foreground sm:text-[2.125rem]"
+            >
+              How EZRA Pro compares
+            </h2>
+            <p className="mt-3 max-w-2xl text-[1.0625rem] leading-[1.6] text-muted">{EZRA_PRICE_LINE}</p>
+          </div>
+          <Link
+            href="/compare"
+            className="inline-flex items-center gap-1.5 text-[0.9375rem] font-medium text-foreground underline decoration-line-strong underline-offset-4 hover:text-primary"
+          >
+            EZRA Pro vs FareHarbor, Peek Pro and Bókun
+            <ArrowRight aria-hidden="true" className="size-4" />
+          </Link>
+        </div>
         <div className="mt-8">
-          <LinkCards links={links} />
+          <VsCards slugs={slugs} />
         </div>
       </div>
     </section>

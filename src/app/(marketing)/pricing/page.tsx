@@ -279,9 +279,9 @@ export default function PricingPage() {
           <p className="mt-6 text-center text-sm leading-relaxed text-muted">
             Weighing us against another system? See{' '}
             <Link href="/compare" className="font-medium text-foreground underline underline-offset-4 hover:text-primary">
-              how EZRA Pro compares
-            </Link>{' '}
-            with other booking platforms, with sources, dates and a fee calculator.
+              EZRA Pro vs FareHarbor, Peek Pro and Bókun
+            </Link>
+            , side by side.
           </p>
         </div>
       </section>

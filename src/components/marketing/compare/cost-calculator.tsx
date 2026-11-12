@@ -1,62 +1,60 @@
 'use client'
 
-import { useId, useMemo, useState } from 'react'
+import { useId, useState } from 'react'
 
 import type { PlanRate } from '@/lib/data/competitors'
 import { cn } from '@/lib/utils'
 
 /* ==========================================================================
-   CostCalculator — one input (a month of online bookings) in, a bar list of
-   each plan's estimated monthly cost out: subscription plus percentage.
-   Rates arrive as props from the server page. Euro plans are listed apart
-   and never converted.
+   CostCheck — one input (a month of online bookings), two bars: EZRA Pro and
+   the other system. When the other system has several plans, the cheapest
+   one at that value is shown. Rates arrive as props from the server page.
    ========================================================================== */
 
 const MIN = 1_000
-const MAX = 100_000
-const STEP = 1_000
+const MAX = 50_000
+const STEP = 500
 
-function money(amount: number, currency: PlanRate['currency'] = 'USD') {
-  const symbol = currency === 'EUR' ? '€' : '$'
-  return `${symbol}${Math.round(amount).toLocaleString('en-US')}`
+function money(amount: number) {
+  return `$${Math.round(amount).toLocaleString('en-US')}`
 }
 
 function cost(rate: PlanRate, value: number) {
-  return rate.percent === null ? null : rate.monthly + (value * rate.percent) / 100
+  return rate.monthly + (value * rate.percent) / 100
 }
 
 function formula(rate: PlanRate) {
-  const pct = rate.percent === null ? 'fee not published' : `${rate.percent}%`
-  return rate.monthly === 0 ? `$0 a month + ${pct}` : `${money(rate.monthly, rate.currency)} a month + ${pct}`
+  return rate.monthly === 0 ? `${rate.percent}% per booking` : `${money(rate.monthly)} a month + ${rate.percent}%`
 }
 
-export function CostCalculator({ rates, defaultValue = 10_000, checkedOn }: { rates: PlanRate[]; defaultValue?: number; checkedOn: string }) {
+export function CostCheck({ ezra, them, defaultValue = 10_000, checkedOn }: { ezra: PlanRate; them: PlanRate[]; defaultValue?: number; checkedOn: string }) {
   const id = useId()
   const [value, setValue] = useState(defaultValue)
 
-  const groups = useMemo(() => {
-    const sorted = (list: PlanRate[]) =>
-      [...list].sort((a, b) => {
-        const ca = cost(a, value)
-        const cb = cost(b, value)
-        if (ca === null) return 1
-        if (cb === null) return -1
-        return ca - cb
-      })
-    return [
-      { key: 'usd', label: null as string | null, rows: sorted(rates.filter((r) => r.currency === 'USD')) },
-      { key: 'eur', label: 'Priced in euros (not converted)', rows: sorted(rates.filter((r) => r.currency === 'EUR')) },
-    ].filter((g) => g.rows.length > 0)
-  }, [rates, value])
+  const best = them.reduce((a, b) => (cost(b, value) < cost(a, value) ? b : a))
+  const rows = [
+    { rate: ezra, label: 'EZRA Pro', ours: true },
+    { rate: best, label: them.length > 1 ? `${best.vendorName} ${best.plan}` : best.vendorName, ours: false },
+  ].map((row) => ({ ...row, amount: cost(row.rate, value) }))
+  const max = Math.max(1, ...rows.map((r) => r.amount))
+  const diff = rows[1].amount - rows[0].amount
+  const summary =
+    Math.abs(diff) < 1
+      ? 'About the same either way.'
+      : diff > 0
+        ? `EZRA Pro costs ${money(diff)} less a month.`
+        : `${rows[1].label} costs ${money(-diff)} less a month.`
 
   return (
-    <div className="rounded-[1.5rem] bg-cal-cloud p-5 sm:p-7">
+    <div className="rounded-[1.5rem] bg-cal-cloud p-5 sm:p-8">
       <label htmlFor={`${id}-value`} className="block text-[0.9375rem] font-medium text-foreground">
         Your online bookings in a month
       </label>
       <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-3">
         <div className="flex items-center rounded-[0.75rem] bg-surface px-3 ring-1 ring-black/[0.08] focus-within:ring-2 focus-within:ring-primary">
-          <span aria-hidden="true" className="text-lg text-muted">$</span>
+          <span aria-hidden="true" className="text-lg text-muted">
+            $
+          </span>
           <input
             id={`${id}-value`}
             inputMode="numeric"
@@ -80,55 +78,39 @@ export function CostCalculator({ rates, defaultValue = 10_000, checkedOn }: { ra
         />
       </div>
 
-      {groups.map((group) => {
-        const max = Math.max(1, ...group.rows.map((r) => cost(r, value) ?? 0))
-        return (
-          <div key={group.key} className="mt-7">
-            {group.label ? <p className="mb-3 text-xs font-medium tracking-[0.06em] text-subtle uppercase">{group.label}</p> : null}
-            <ul className="space-y-4">
-              {group.rows.map((rate) => {
-                const amount = cost(rate, value)
-                const ours = rate.vendor === 'ezra'
-                return (
-                  <li key={rate.id}>
-                    <div className="flex items-baseline justify-between gap-3">
-                      <p className="min-w-0 text-[0.9375rem] text-foreground">
-                        <span className="font-medium">{rate.vendorName}</span>
-                        <span className="text-muted"> · {rate.plan}</span>
-                        {rate.status === 'reported' ? (
-                          <span
-                            title="From a third party, not the vendor."
-                            className="ml-1.5 inline-flex rounded-full bg-cal-sunbeam px-2 py-px align-middle text-xs font-medium ring-1 ring-cal-peach"
-                          >
-                            Reported
-                          </span>
-                        ) : null}
-                      </p>
-                      <p className={cn('shrink-0 tabular-nums', ours ? 'text-lg font-semibold text-foreground' : 'font-medium text-foreground')}>
-                        {amount === null ? '—' : money(amount, rate.currency)}
-                      </p>
-                    </div>
-                    <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-surface">
-                      {amount !== null ? (
-                        <div
-                          className={cn('h-full rounded-full transition-[width] duration-300 motion-reduce:transition-none', ours ? 'bg-foreground' : 'bg-cal-iris')}
-                          style={{ width: `${Math.max(2, (amount / max) * 100)}%` }}
-                        />
-                      ) : null}
-                    </div>
-                    <p className="mt-1 text-xs text-subtle">
-                      {formula(rate)} · {rate.whoPays}
-                    </p>
-                  </li>
-                )
-              })}
-            </ul>
-          </div>
-        )
-      })}
+      <ul className="mt-8 space-y-5">
+        {rows.map((row) => (
+          <li key={row.rate.id}>
+            <div className="flex items-baseline justify-between gap-3">
+              <p className="min-w-0 text-[0.9375rem] text-foreground">
+                <span className="font-medium">{row.label}</span>
+                <span className="text-muted"> · {formula(row.rate)}</span>
+                {row.rate.status === 'reported' ? (
+                  <span
+                    title="From a third party, not the vendor."
+                    className="ml-1.5 inline-flex rounded-full bg-cal-sunbeam px-2 py-px align-middle text-xs font-medium ring-1 ring-cal-peach"
+                  >
+                    Reported
+                  </span>
+                ) : null}
+              </p>
+              <p className={cn('shrink-0 font-display text-[1.375rem] font-medium tracking-[-0.02em] tabular-nums text-foreground')}>{money(row.amount)}</p>
+            </div>
+            <div className="mt-2 h-3 overflow-hidden rounded-full bg-surface">
+              <div
+                className={cn('h-full rounded-full transition-[width] duration-300 motion-reduce:transition-none', row.ours ? 'bg-foreground' : 'bg-cal-lilac')}
+                style={{ width: `${Math.max(2, (row.amount / max) * 100)}%` }}
+              />
+            </div>
+          </li>
+        ))}
+      </ul>
 
-      <p className="mt-7 text-xs leading-relaxed text-subtle">
-        Subscription plus the percentage on online bookings, at list prices checked {checkedOn}. Card fees aren’t included. An estimate, not a quote.
+      <p aria-live="polite" className="mt-6 text-[1.0625rem] font-medium text-foreground">
+        {summary}
+      </p>
+      <p className="mt-2 text-xs leading-relaxed text-subtle">
+        Platform fee only, at list prices checked {checkedOn}. Card fees aren’t included. An estimate, not a quote.
       </p>
     </div>
   )

@@ -121,12 +121,9 @@ export const FOOTER_NAV: { heading: string; links: NavLink[] }[] = [
     heading: 'Compare',
     links: [
       { label: 'All comparisons', href: '/compare' },
-      { label: 'vs FareHarbor', href: '/compare/fareharbor' },
-      { label: 'vs Peek Pro', href: '/compare/peek-pro' },
-      { label: 'vs Bókun', href: '/compare/bokun' },
-      { label: 'vs Rezdy', href: '/compare/rezdy' },
-      { label: 'vs Checkfront', href: '/compare/checkfront' },
-      { label: 'vs Xola', href: '/compare/xola' },
+      { label: 'EZRA Pro vs FareHarbor', href: '/compare/fareharbor' },
+      { label: 'EZRA Pro vs Peek Pro', href: '/compare/peek-pro' },
+      { label: 'EZRA Pro vs Bókun', href: '/compare/bokun' },
     ],
   },
   {
