@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 
+import { BusinessLinks } from '@/components/marketing/booking-software/niche-sections'
 import { ClosingCta } from '@/components/marketing/land/closing-cta'
 import { CompareLinks } from '@/components/marketing/compare/compare-links'
 import { PricingSection } from '@/components/marketing/pricing-section'
@@ -8,6 +9,7 @@ import { SOLUTION_CONTENT, SOLUTION_POINTS } from '@/components/marketing/soluti
 import { SolutionHero } from '@/components/marketing/solutions/solution-hero'
 import { ConsoleStage, MomentTimeline, OtherTrades, PillarGrid } from '@/components/marketing/solutions/solution-sections'
 import { FEATURE_BLOCKS, VERTICAL_PITCHES } from '@/content/marketing'
+import { NICHES, type NicheSlug } from '@/content/booking-software'
 import { VERTICALS, getVertical } from '@/lib/data/verticals'
 import type { FeatureBlock, MarketingVerticalKey as VerticalKey } from '@/types'
 
@@ -102,6 +104,13 @@ function decodeBlock(block: FeatureBlock): FeatureBlock {
   return { ...block, description: decodeEntities(block.description), bullets: block.bullets.map(decodeEntities) }
 }
 
+/** The /booking-software pages that sit under a trade, linked from its page. */
+const VERTICAL_BUSINESSES: Partial<Record<VerticalKey, NicheSlug[]>> = {
+  watersports: ['boat-rental', 'jet-ski-rental', 'kayak-rental', 'boat-charters'],
+  island: ['airport-shuttle', 'golf-cart-rental', 'boat-charters'],
+  adventure: ['bike-rental', 'ski-rental'],
+}
+
 /* ==========================================================================
    PAGE
 
@@ -150,6 +159,7 @@ export default async function VerticalSolutionPage({ params }: { params: Promise
       {/* ---------- the other five ---------- */}
       <OtherTrades siblings={siblings.map((item) => ({ ...item, tagline: decodeEntities(item.tagline) }))} />
 
+      <BusinessLinks niches={(VERTICAL_BUSINESSES[key] ?? []).map((slug) => NICHES[slug])} />
       <CompareLinks pageKey={key} />
       <ClosingCta />
     </>

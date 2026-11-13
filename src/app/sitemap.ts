@@ -1,12 +1,14 @@
 import type { MetadataRoute } from 'next'
 
+import { NICHE_SLUGS } from '@/content/booking-software'
 import { CHECKED_ON, VS_SLUGS } from '@/lib/data/competitors'
 import { FOOTER_NAV, MARKETING_NAV, SITE } from '@/lib/site-config'
 
 /**
  * The public marketing site. Product, solution, company and legal pages are
  * read from the navigation (every one of them is linked there), so a new page
- * in the nav lands here too. The compare pages carry their real check date.
+ * in the nav lands here too. The compare pages carry their real check date,
+ * and the /booking-software pages are listed from their own slugs.
  */
 export default function sitemap(): MetadataRoute.Sitemap {
   const url = (path: string) => new URL(path, SITE.url).toString()
@@ -14,7 +16,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const navPaths = [
     ...MARKETING_NAV.flatMap((group) => [group.href, ...(group.items ?? []).map((item) => item.href)]),
     ...FOOTER_NAV.flatMap((section) => section.links.map((link) => link.href)),
-  ].filter((href): href is string => Boolean(href) && href!.startsWith('/') && !href!.startsWith('/compare'))
+  ].filter(
+    (href): href is string =>
+      Boolean(href) && href!.startsWith('/') && !href!.startsWith('/compare') && !href!.startsWith('/booking-software'),
+  )
 
   const general = [...new Set(['/', '/pricing', ...navPaths])].map((path) => ({
     url: url(path),
@@ -32,5 +37,15 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority,
   }))
 
-  return [...general, ...compare]
+  /* One page per kind of business, and the hub that lists them. */
+  const booking = [
+    { path: '/booking-software', priority: 0.8 },
+    ...NICHE_SLUGS.map((slug) => ({ path: `/booking-software/${slug}`, priority: 0.7 })),
+  ].map(({ path, priority }) => ({
+    url: url(path),
+    changeFrequency: 'monthly' as const,
+    priority,
+  }))
+
+  return [...general, ...booking, ...compare]
 }

@@ -304,6 +304,23 @@ export const PHOTOS = {
   /** A bartender in a black apron stirring a cocktail. */
   heroBartender: { id: '16807989', source: 'pexels', alt: 'A bartender in a black apron stirring a cocktail at a wooden bar', focus: '50% 35%' },
 
+  /* ---- /booking-software, one per business (Pexels, each looked at) ---- */
+
+  /** A white motorboat moored at a wooden dock in a mountain bay, more boats beside it. */
+  pxMotorboatDock: { id: '5668278', source: 'pexels', alt: 'A white rental motorboat tied up at a wooden dock in a mountain bay', focus: '50% 60%' },
+  /** A long row of red-and-white rental bikes parked along a city pavement. */
+  pxBikeRow: { id: '674735', source: 'pexels', alt: 'A long row of red rental bikes parked along a city pavement', focus: '35% 60%' },
+  /** A traveller in a checked coat pulling a suitcase outside an airport terminal. */
+  pxAirportTraveller: { id: '3885527', source: 'pexels', alt: 'A traveller pulling a suitcase outside an airport terminal', focus: '68% 50%' },
+  /** A fishing rod set over the stern of a motorboat, open blue sea ahead. */
+  pxFishingStern: { id: '15311906', source: 'pexels', alt: 'A fishing rod set over the stern of a charter boat on open blue sea', focus: '50% 60%' },
+  /** Skis, boots, poles and a shovel laid out on wooden boards, seen from above. */
+  pxSkiFlatlay: { id: '257961', source: 'pexels', alt: 'Rental skis, ski boots and poles laid out on wooden boards', focus: '50% 50%' },
+  /** A jet ski resting on wet sand at the water's edge. */
+  pxJetSkiShore: { id: '10364376', source: 'pexels', alt: 'A rental jet ski resting on the sand at the water’s edge', focus: '50% 60%' },
+  /** A woman driving a golf cart across a lawn above the sea. */
+  pxGolfCart: { id: '9366555', source: 'pexels', alt: 'A woman driving a rental golf cart across a lawn by the sea', focus: '55% 60%' },
+
   /* ---- the user's own photographs, for the solutions heroes (public/photos) ---- */
 
   solCafeGift: { id: 'sol-cafe-gift.jpg', source: 'local', alt: 'Friends at a café table handing over a wrapped gift', focus: '50% 40%' },

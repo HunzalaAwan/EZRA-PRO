@@ -220,6 +220,26 @@ export default function PricingPage() {
           <p className="mt-6 text-center text-sm leading-relaxed text-muted">
             Card fees are between you and your payment provider. Guests never see a card fee line.
           </p>
+
+          <p className="mt-3 text-center text-sm leading-relaxed text-muted">
+            See the {PERCENT}% worked out for{' '}
+            <Link href="/booking-software/boat-rental" className="font-medium text-foreground underline underline-offset-4 hover:text-primary">
+              boat rentals
+            </Link>
+            ,{' '}
+            <Link href="/booking-software/bike-rental" className="font-medium text-foreground underline underline-offset-4 hover:text-primary">
+              bike rentals
+            </Link>
+            ,{' '}
+            <Link href="/booking-software/airport-shuttle" className="font-medium text-foreground underline underline-offset-4 hover:text-primary">
+              airport shuttles
+            </Link>{' '}
+            and{' '}
+            <Link href="/booking-software" className="font-medium text-foreground underline underline-offset-4 hover:text-primary">
+              other businesses
+            </Link>
+            .
+          </p>
         </div>
       </section>
 

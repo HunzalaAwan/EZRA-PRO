@@ -247,7 +247,7 @@ export function SiteFooter({ className }: SiteFooterProps) {
             {/* Two renderings of one sitemap: columns where there is room, a
                 stack of disclosures where there is not. */}
             <div>
-              <div className="hidden grid-cols-2 gap-x-6 gap-y-10 sm:grid md:grid-cols-3 lg:grid-cols-5">
+              <div className="hidden grid-cols-2 gap-x-6 gap-y-10 sm:grid md:grid-cols-3 xl:grid-cols-6">
                 {FOOTER_NAV.map((section) => (
                   <nav key={section.heading} aria-label={section.heading}>
                     <h3 className="font-display text-[0.8125rem] font-semibold tracking-wide text-foreground">

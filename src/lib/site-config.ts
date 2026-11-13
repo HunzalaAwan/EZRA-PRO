@@ -118,6 +118,20 @@ export const FOOTER_NAV: { heading: string; links: NavLink[] }[] = [
     ],
   },
   {
+    heading: 'Booking software',
+    links: [
+      { label: 'All businesses', href: '/booking-software' },
+      { label: 'Boat rental', href: '/booking-software/boat-rental' },
+      { label: 'Bike rental', href: '/booking-software/bike-rental' },
+      { label: 'Airport shuttle', href: '/booking-software/airport-shuttle' },
+      { label: 'Boat charters', href: '/booking-software/boat-charters' },
+      { label: 'Kayak rental', href: '/booking-software/kayak-rental' },
+      { label: 'Ski rental', href: '/booking-software/ski-rental' },
+      { label: 'Jet ski rental', href: '/booking-software/jet-ski-rental' },
+      { label: 'Golf cart rental', href: '/booking-software/golf-cart-rental' },
+    ],
+  },
+  {
     heading: 'Compare',
     links: [
       { label: 'All comparisons', href: '/compare' },
