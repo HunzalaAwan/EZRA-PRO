@@ -1,5 +1,6 @@
 'use client'
 
+import { HelpVideo, useHelpVideoTab } from '@/components/dashboard/help-video'
 import { categoryLabel, themeLabel, themeOf } from '@/lib/activity-kinds'
 import * as React from 'react'
 import Image from 'next/image'
@@ -1000,6 +1001,7 @@ export function ActivityDetail({ detail, tenantSlug, nowIso }: ActivityDetailPro
   const hero = primaryMedia(activity)
   const accent = ACTIVITY_ACCENT[activity.colorKey]
   const [tab, setTab] = React.useState('overview')
+  useHelpVideoTab(tab)
 
   const tabs = [
     { value: 'overview', label: 'Overview' },
@@ -1041,6 +1043,7 @@ export function ActivityDetail({ detail, tenantSlug, nowIso }: ActivityDetailPro
           </div>
 
           <div className="absolute top-4 right-4 flex items-center gap-2">
+            <HelpVideo tone="glass" />
             <Button
               variant="glass"
               size="sm"

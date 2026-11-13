@@ -1,5 +1,6 @@
 'use client'
 
+import { useHelpVideoTab } from '@/components/dashboard/help-video'
 import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { AnimatePresence, motion } from 'motion/react'
@@ -2271,6 +2272,7 @@ export function ActivityWizard({
   /** Request or call with no set schedule: no days and times to set. */
   const unscheduled = isUnscheduled(draft)
   const currentStep = steps[step] ?? steps[0]
+  useHelpVideoTab(currentStep.id)
   // What the Schedule step reads about the activity itself; recomputed only when those facts change.
   const scheduleCapacity = seatsFor(draft).capacity
   const scheduleBase = React.useMemo(

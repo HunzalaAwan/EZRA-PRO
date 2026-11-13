@@ -1,5 +1,6 @@
 'use client'
 
+import { useHelpVideoTab } from '@/components/dashboard/help-video'
 import * as React from 'react'
 import Image from 'next/image'
 import {
@@ -167,6 +168,7 @@ export function WalkInDesk({ tenantSlug, tenantName, currency, activities: seede
   const activities = useDeskActivities(seeded, tenantSlug, nowIso)
   const walkIns = useWalkIns(tenantSlug, seed)
   const [tab, setTab] = React.useState<DeskTab>('sale')
+  useHelpVideoTab(tab)
   const todayKey = nowIso.slice(0, 10)
   const today = React.useMemo(() => walkIns.records.filter((record) => record.soldAt.slice(0, 10) === todayKey), [walkIns.records, todayKey])
   const summary = summarize(today)

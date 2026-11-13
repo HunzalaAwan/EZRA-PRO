@@ -1,5 +1,6 @@
 'use client'
 
+import { useHelpVideoTab } from '@/components/dashboard/help-video'
 import * as React from 'react'
 import { motion } from 'motion/react'
 import { useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
@@ -114,6 +115,7 @@ export function AnalyticsShell({ initialSnapshot }: AnalyticsShellProps) {
   const [metric, setMetric] = React.useState<RevenueMetric>('revenue')
   const [shadow, setShadow] = React.useState(true)
   const [tab, setTab] = React.useState<TabKey>('overview')
+  useHelpVideoTab(tab)
   const [pending, setPending] = React.useState(false)
   const [nonce, setNonce] = React.useState(0)
 

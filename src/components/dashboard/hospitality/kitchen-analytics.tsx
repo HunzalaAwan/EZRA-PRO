@@ -1,5 +1,6 @@
 'use client'
 
+import { useHelpVideoTab } from '@/components/dashboard/help-video'
 import * as React from 'react'
 import Image from 'next/image'
 import { motion } from 'motion/react'
@@ -78,6 +79,7 @@ export function KitchenAnalytics({ initialSnapshot }: KitchenAnalyticsProps) {
   const [preset, setPreset] = React.useState<RangePreset>('30d')
   const [range, setRange] = React.useState<DateRange>(() => rangeForPreset('30d', NOW) ?? { from: TODAY_KEY, to: TODAY_KEY })
   const [tab, setTab] = React.useState<TabKey>('overview')
+  useHelpVideoTab(tab)
   const [pending, setPending] = React.useState(false)
   const [nonce, setNonce] = React.useState(0)
   const [shadow, setShadow] = React.useState(true)

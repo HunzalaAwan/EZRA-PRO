@@ -10,6 +10,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb'
+import { HelpVideo } from '@/components/dashboard/help-video'
 
 /* ==========================================================================
    PageHeader — the masthead every dashboard screen starts with.
@@ -68,9 +69,13 @@ export function PageHeader({
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-8">
         <div className="min-w-0 max-w-3xl">
-          <h1 className="font-display text-display-sm font-semibold text-balance text-foreground">
-            {title}
-          </h1>
+          <div className="flex items-center gap-3">
+            <h1 className="min-w-0 font-display text-display-sm font-semibold text-balance text-foreground">
+              {title}
+            </h1>
+            {/* Client island: shows only when this page has a video in src/content/help-videos.ts. */}
+            <HelpVideo />
+          </div>
           {description ? (
             <p className="mt-2 max-w-2xl text-[0.9375rem] leading-relaxed text-muted text-pretty">
               {description}

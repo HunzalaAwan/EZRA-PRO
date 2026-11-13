@@ -6,6 +6,7 @@
  * on "Payouts".
  */
 
+import { useHelpVideoTab } from '@/components/dashboard/help-video'
 import * as React from 'react'
 import Link from 'next/link'
 import {
@@ -191,6 +192,7 @@ export function PaymentsTable({
   className,
 }: PaymentsTableProps) {
   const [tab, setTab] = React.useState('transactions')
+  useHelpVideoTab(tab)
   const [query, setQuery] = React.useState('')
   const [status, setStatus] = React.useState('all')
   const [method, setMethod] = React.useState('all')
