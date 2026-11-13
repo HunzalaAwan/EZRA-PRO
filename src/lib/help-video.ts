@@ -1,4 +1,4 @@
-import { HELP_VIDEOS, type HelpVideo, type HelpVideoEntry } from '@/content/help-videos'
+import { DEFAULT_HELP_VIDEO_URL, HELP_VIDEOS, type HelpVideo, type HelpVideoEntry } from '@/content/help-videos'
 
 /* ==========================================================================
    Help videos: which video a page shows, and how a share link plays.
@@ -16,7 +16,7 @@ export interface ResolvedHelpVideo {
 
 function resolve(video: HelpVideo | undefined): ResolvedHelpVideo | null {
   if (!video) return null
-  const url = video.url.trim() || PREVIEW_URL
+  const url = video.url.trim() || PREVIEW_URL || DEFAULT_HELP_VIDEO_URL.trim()
   return url ? { title: video.title, url, duration: video.duration?.trim() || undefined } : null
 }
 
@@ -61,7 +61,7 @@ export function findHelpVideo(pathname: string, tab?: string | null): ResolvedHe
    ========================================================================== */
 
 export type VideoSource =
-  | { kind: 'iframe'; provider: 'youtube' | 'vimeo' | 'loom'; src: string }
+  | { kind: 'iframe'; provider: 'youtube' | 'vimeo' | 'loom' | 'drive'; src: string }
   | { kind: 'file'; src: string }
   /** Something we can't embed: offer it as a link. */
   | { kind: 'link'; src: string }
@@ -121,6 +121,16 @@ function loom(url: URL): string | null {
   return `https://www.loom.com/embed/${id}?${params}`
 }
 
+/** Google Drive: /file/d/<id>/view (or open?id=<id>) plays in Drive's own preview player. */
+function drive(url: URL): string | null {
+  const host = url.hostname.replace(/^www\./, '')
+  if (host !== 'drive.google.com') return null
+  const fromPath = /\/file\/d\/([\w-]+)/.exec(url.pathname)?.[1]
+  const id = fromPath ?? url.searchParams.get('id')
+  if (!id || !/^[\w-]{10,}$/.test(id)) return null
+  return `https://drive.google.com/file/d/${id}/preview`
+}
+
 export function toVideoSource(raw: string): VideoSource | null {
   const value = raw.trim()
   if (!value) return null
@@ -141,6 +151,8 @@ export function toVideoSource(raw: string): VideoSource | null {
   if (vm) return { kind: 'iframe', provider: 'vimeo', src: vm }
   const lm = loom(url)
   if (lm) return { kind: 'iframe', provider: 'loom', src: lm }
+  const gd = drive(url)
+  if (gd) return { kind: 'iframe', provider: 'drive', src: gd }
   if (FILE_PATTERN.test(url.pathname)) return { kind: 'file', src: url.toString() }
   return { kind: 'link', src: url.toString() }
 }

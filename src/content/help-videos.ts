@@ -9,7 +9,11 @@
      YouTube   https://www.youtube.com/watch?v=…   https://youtu.be/…   https://www.youtube.com/shorts/…
      Vimeo     https://vimeo.com/123456789          (unlisted: https://vimeo.com/123456789/abcdef1234)
      Loom      https://www.loom.com/share/…
+     Drive     https://drive.google.com/file/d/…/view   (share as "Anyone with the link")
      A file    https://…/bookings.mp4               (.mp4, .webm, .mov or .m4v)
+
+   DEFAULT_HELP_VIDEO_URL below plays on every page whose own `url` is empty.
+   Clear it ('') to hide the button on pages without their own video.
 
    `title` is the heading of the video window. `duration` is optional and shows
    on the button, e.g. '2 min'.
@@ -60,6 +64,9 @@ const ACTIVITY_STEPS: HelpVideoEntry = {
     review: { title: 'Activity steps: Review and publish', url: '' },
   },
 }
+
+/** Plays on every page and tab without its own link. */
+export const DEFAULT_HELP_VIDEO_URL = 'https://drive.google.com/file/d/1ml2nu95VxNSClv3gD9IZ8gHrmoW7ZHj3/view?usp=sharing'
 
 export const HELP_VIDEOS: Record<string, HelpVideoEntry> = {
   /* ---------- Today ---------- */
