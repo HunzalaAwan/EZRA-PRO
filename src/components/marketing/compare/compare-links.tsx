@@ -7,7 +7,7 @@ import { EZRA_PRICE_LINE, VS_SLUGS, type VsSlug } from '@/lib/data/competitors'
 /* ==========================================================================
    CompareLinks — a short "how we compare" row for product and solution
    pages: the three vs cards, the one most relevant to the page first, and
-   a link to all four side by side.
+   a link to every comparison.
    ========================================================================== */
 
 /** Which comparison leads on each product and solution page. Unknown keys keep the default order. */
@@ -29,7 +29,7 @@ const LEAD: Record<string, VsSlug> = {
 
 export function CompareLinks({ pageKey }: { pageKey: string }) {
   const lead = LEAD[pageKey]
-  const slugs = lead ? [lead, ...VS_SLUGS.filter((slug) => slug !== lead)] : VS_SLUGS
+  const slugs = (lead ? [lead, ...VS_SLUGS.filter((slug) => slug !== lead)] : [...VS_SLUGS]).slice(0, 3)
 
   return (
     <section aria-labelledby={`compare-links-${pageKey}`} className="border-t border-line bg-background py-16 sm:py-20">
@@ -48,7 +48,7 @@ export function CompareLinks({ pageKey }: { pageKey: string }) {
             href="/compare"
             className="inline-flex items-center gap-1.5 text-[0.9375rem] font-medium text-foreground underline decoration-line-strong underline-offset-4 hover:text-primary"
           >
-            EZRA Pro vs FareHarbor, Peek Pro and Bókun
+            See every comparison
             <ArrowRight aria-hidden="true" className="size-4" />
           </Link>
         </div>

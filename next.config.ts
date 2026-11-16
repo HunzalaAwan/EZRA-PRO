@@ -7,13 +7,10 @@ const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR || '.next',
   reactStrictMode: true,
   poweredByHeader: false,
-  // The compare section covers FareHarbor, Peek Pro and Bókun only. Retired
-  // comparison and alternatives URLs point at the closest page left.
+  // Retired comparison and alternatives URLs point at the closest page left.
   async redirects() {
     return [
       { source: '/compare/rezdy', destination: '/compare', permanent: true },
-      { source: '/compare/checkfront', destination: '/compare', permanent: true },
-      { source: '/compare/xola', destination: '/compare', permanent: true },
       { source: '/alternatives/fareharbor', destination: '/compare/fareharbor', permanent: true },
       { source: '/alternatives/peek-pro', destination: '/compare/peek-pro', permanent: true },
       { source: '/alternatives/rezdy', destination: '/compare', permanent: true },

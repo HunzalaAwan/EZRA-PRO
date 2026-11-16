@@ -138,6 +138,10 @@ export const FOOTER_NAV: { heading: string; links: NavLink[] }[] = [
       { label: 'EZRA Pro vs FareHarbor', href: '/compare/fareharbor' },
       { label: 'EZRA Pro vs Peek Pro', href: '/compare/peek-pro' },
       { label: 'EZRA Pro vs Bókun', href: '/compare/bokun' },
+      { label: 'EZRA Pro vs Checkfront', href: '/compare/checkfront' },
+      { label: 'EZRA Pro vs ROLLER', href: '/compare/roller' },
+      { label: 'EZRA Pro vs Bookeo', href: '/compare/bookeo' },
+      { label: 'EZRA Pro vs Xola', href: '/compare/xola' },
     ],
   },
   {

@@ -1,30 +1,20 @@
 import type { Metadata } from 'next'
 
 import { HUB } from '@/components/marketing/compare/compare-content'
-import {
-  CardNote,
-  CompareCta,
-  CompareHero,
-  ComparisonCard,
-  JsonLd,
-  Section,
-  SourcesList,
-  VsCards,
-  WRAP,
-  buildColumns,
-  createNotes,
-} from '@/components/marketing/compare/compare-ui'
-import { articleSchema, breadcrumbSchema, compareMetadata, ezraSoftwareSchema } from '@/components/marketing/compare/compare-schema'
+import { Prose, SystemsTable } from '@/components/marketing/compare/compare-longform'
+import { CardNote, CompareCta, CompareHero, FaqGrid, JsonLd, Section, SourcesList, VsCards, WRAP, buildColumns, createNotes } from '@/components/marketing/compare/compare-ui'
+import { articleSchema, breadcrumbSchema, compareMetadata, ezraSoftwareSchema, faqPageSchema } from '@/components/marketing/compare/compare-schema'
 import { EZRA, VENDORS, VENDOR_ORDER, VS_SLUGS, formatCheckedDate } from '@/lib/data/competitors'
 
 /* ==========================================================================
-   /compare — EZRA Pro against FareHarbor, Peek Pro and Bókun.
+   /compare — EZRA Pro against every system we compare.
 
      headline     one line under it
-     the card     six rows, four systems, EZRA Pro's column in lavender
+     the table    systems down, key facts across, EZRA Pro first in lavender
+     how to pick  a few paragraphs
      vs cards     one per comparison page
-     CTA          the price, two buttons
-     sources      every footnote, numbered
+     questions    marked up as FAQPage
+     CTA, sources
    ========================================================================== */
 
 const PATH = '/compare'
@@ -37,6 +27,7 @@ export default function CompareHubPage() {
     { key: 'ezra', name: EZRA.name, ours: true, cells: EZRA.cells },
     ...VENDOR_ORDER.map((id) => ({ key: id, name: VENDORS[id].name, cells: VENDORS[id].cells })),
   ])
+  const faqs = HUB.faqs.map((faq) => ({ ...faq, n: faq.source ? notes.ref(faq.source, faq.reported) : undefined }))
 
   return (
     <>
@@ -47,25 +38,32 @@ export default function CompareHubPage() {
             { name: 'Compare', path: PATH },
           ]),
           articleSchema({ headline: HUB.h1, description: HUB.description, path: PATH }),
+          faqPageSchema(HUB.faqs),
           ezraSoftwareSchema(),
         ]}
       />
 
       <CompareHero crumbs={[{ label: 'Home', href: '/' }, { label: 'Compare' }]} title={HUB.h1} subhead={HUB.subhead} />
 
-      <div className={WRAP}>
+      <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
         <div className="-mt-20 sm:-mt-28">
-          <ComparisonCard
-            caption={`EZRA Pro, FareHarbor, Peek Pro and Bókun compared on price, fees and features. Last checked ${formatCheckedDate()}.`}
-            columns={columns}
-            stackOnPhones
-          />
-          <CardNote fair={HUB.fairNote} />
+          <SystemsTable caption={`EZRA Pro and ${VENDOR_ORDER.length} other booking systems compared on price, fees and features. Last checked ${formatCheckedDate()}.`} columns={columns} keys={HUB.keys} />
+          <CardNote fair={HUB.fairNote} estimates={HUB.estimatesNote} />
         </div>
+      </div>
 
+      <div className={WRAP}>
         <div className="space-y-16 py-16 sm:space-y-20 sm:py-20">
+          <Section id="how-to-choose" title="How to choose">
+            <Prose paragraphs={HUB.howToChoose} />
+          </Section>
+
           <Section id="one-at-a-time" title="Compare one at a time">
             <VsCards slugs={VS_SLUGS} />
+          </Section>
+
+          <Section id="questions" title="Questions">
+            <FaqGrid items={faqs} />
           </Section>
 
           <CompareCta />

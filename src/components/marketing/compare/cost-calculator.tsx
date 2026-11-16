@@ -23,8 +23,14 @@ function cost(rate: PlanRate, value: number) {
   return rate.monthly + (value * rate.percent) / 100
 }
 
+function price(amount: number) {
+  return Number.isInteger(amount) ? money(amount) : `$${amount.toFixed(2)}`
+}
+
 function formula(rate: PlanRate) {
-  return rate.monthly === 0 ? `${rate.percent}% per booking` : `${money(rate.monthly)} a month + ${rate.percent}%`
+  if (rate.monthly === 0) return `${rate.percent}% per booking`
+  if (rate.percent === 0) return `${price(rate.monthly)} a month`
+  return `${price(rate.monthly)} a month + ${rate.percent}%`
 }
 
 export function CostCheck({ ezra, them, defaultValue = 10_000, checkedOn }: { ezra: PlanRate; them: PlanRate[]; defaultValue?: number; checkedOn: string }) {

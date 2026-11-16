@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import Link from 'next/link'
 import { ArrowRight, ArrowUpRight, Check, Minus } from 'lucide-react'
 
@@ -165,7 +165,7 @@ export function buildColumns(notes: Notes, columns: { key: string; name: string;
   return out
 }
 
-function CellValue({ cell, n }: { cell: Cell; n?: number }) {
+export function CellValue({ cell, n }: { cell: Cell; n?: number }) {
   const icon =
     cell.tone === 'yes' ? (
       <Check aria-hidden="true" strokeWidth={2.5} className="mt-[0.2em] size-4 shrink-0 text-success" />
@@ -175,9 +175,9 @@ function CellValue({ cell, n }: { cell: Cell; n?: number }) {
       <Minus aria-hidden="true" strokeWidth={2.5} className="mt-[0.2em] size-4 shrink-0 text-subtle" />
     ) : null
   return (
-    <span className="flex items-start gap-2">
+    <span className="flex items-start gap-1.5 sm:gap-2">
       {icon}
-      <span className={cn(cell.tone === 'value' ? 'font-medium text-foreground' : cell.tone === 'no' ? 'text-muted' : 'text-foreground')}>
+      <span className={cn('min-w-0 [overflow-wrap:break-word]', cell.tone === 'value' ? 'font-medium text-foreground' : cell.tone === 'no' ? 'text-muted' : 'text-foreground')}>
         {cell.text}
       </span>
     </span>
@@ -189,9 +189,13 @@ const VENDOR_TONE: Record<string, string> = {
   fareharbor: 'bg-cal-seafoam',
   'peek-pro': 'bg-cal-sunbeam',
   bokun: 'bg-cal-honeydew',
+  checkfront: 'bg-cal-sky',
+  roller: 'bg-cal-peach',
+  bookeo: 'bg-cal-lilac',
+  xola: 'bg-cal-linen',
 }
 
-function ColumnHead({ column, inline = false }: { column: Column; inline?: boolean }) {
+export function ColumnHead({ column, inline = false }: { column: Column; inline?: boolean }) {
   return (
     <span className={cn('flex gap-2.5', inline ? 'items-center' : 'flex-col items-start sm:flex-row sm:items-center')}>
       <Monogram name={column.name} ours={column.ours} className={cn('size-9 rounded-[0.625rem] text-[0.9375rem]', VENDOR_TONE[column.key])} />
@@ -209,10 +213,10 @@ export function ComparisonCard({ caption, columns, stackOnPhones = false }: { ca
   const last = ROWS.length - 1
   return (
     <div className="rounded-[1.5rem] bg-surface p-2 shadow-[var(--shadow-md)] ring-1 ring-black/[0.06] sm:p-3">
-      <table className={cn('w-full table-fixed border-separate border-spacing-0 text-left text-[0.875rem] leading-[1.45] sm:text-[0.9375rem]', stackOnPhones && 'hidden md:table')}>
+      <table className={cn('w-full table-fixed border-separate border-spacing-0 text-left text-[0.8125rem] leading-[1.45] sm:text-[0.9375rem]', stackOnPhones && 'hidden md:table')}>
         <caption className="sr-only">{caption}</caption>
         <colgroup>
-          <col className={stackOnPhones ? 'w-[22%]' : 'w-[30%] sm:w-[28%]'} />
+          <col className={stackOnPhones ? 'w-[22%]' : 'w-[25%] sm:w-[28%]'} />
           {columns.map((c) => (
             <col key={c.key} />
           ))}
@@ -231,15 +235,26 @@ export function ComparisonCard({ caption, columns, stackOnPhones = false }: { ca
         </thead>
         <tbody>
           {ROWS.map((row, r) => (
-            <tr key={row.key}>
-              <th scope="row" className="border-t border-line-subtle px-2.5 py-4 align-top font-normal text-muted sm:px-4">
+            <Fragment key={row.key}>
+            {row.group !== ROWS[r - 1]?.group ? (
+              <tr>
+                <th scope="colgroup" colSpan={1} className="px-2.5 pt-6 pb-2 text-left align-bottom text-[0.8125rem] font-medium text-foreground sm:px-4">
+                  {row.group}
+                </th>
+                {columns.map((c) => (
+                  <td key={c.key} aria-hidden="true" className={cn(c.ours && 'bg-cal-lavender')} />
+                ))}
+              </tr>
+            ) : null}
+            <tr>
+              <th scope="row" className="border-t border-line-subtle px-2 py-4 align-top font-normal text-muted sm:px-4">
                 {row.label}
               </th>
               {columns.map((c) => (
                 <td
                   key={c.key}
                   className={cn(
-                    'border-t px-2.5 py-4 align-top sm:px-4',
+                    'border-t px-2 py-4 align-top sm:px-4',
                     c.ours ? 'border-foreground/[0.07] bg-cal-lavender' : 'border-line-subtle',
                     c.ours && r === last && 'rounded-b-[1rem]',
                   )}
@@ -248,6 +263,7 @@ export function ComparisonCard({ caption, columns, stackOnPhones = false }: { ca
                 </td>
               ))}
             </tr>
+            </Fragment>
           ))}
         </tbody>
       </table>
@@ -260,12 +276,15 @@ export function ComparisonCard({ caption, columns, stackOnPhones = false }: { ca
                 <ColumnHead column={c} inline />
               </h3>
               <dl className="mt-3 divide-y divide-foreground/[0.07] text-[0.9375rem] leading-[1.45]">
-                {ROWS.map((row) => (
-                  <div key={row.key} className="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-3 py-2.5">
-                    <dt className="text-muted">{row.label}</dt>
-                    <dd>
-                      <CellValue {...c.cells[row.key]} />
-                    </dd>
+                {ROWS.map((row, r) => (
+                  <div key={row.key} className="py-2.5">
+                    {row.group !== ROWS[r - 1]?.group ? <p className="pt-2 pb-2 text-[0.8125rem] font-medium text-foreground">{row.group}</p> : null}
+                    <div className="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-3">
+                      <dt className="text-muted">{row.label}</dt>
+                      <dd>
+                        <CellValue {...c.cells[row.key]} />
+                      </dd>
+                    </div>
                   </div>
                 ))}
               </dl>
@@ -278,11 +297,13 @@ export function ComparisonCard({ caption, columns, stackOnPhones = false }: { ca
 }
 
 /** The key under a comparison card, plus an optional fair line. */
-export function CardNote({ fair }: { fair?: string }) {
+export function CardNote({ fair, estimates }: { fair?: string; estimates?: string }) {
   return (
     <div className="mt-4 space-y-1.5 px-1 text-sm leading-relaxed text-muted">
       {fair ? <p className="font-medium text-foreground">{fair}</p> : null}
-      <p>“Not shown” means we couldn’t find it on the vendor’s pages, not that it’s missing. FareHarbor and Peek Pro don’t publish their fees, so their figures are third-party estimates.</p>
+      <p>
+        “Not shown” means we couldn’t find it on the vendor’s pages, not that it’s missing.{estimates ? ` ${estimates}` : ''}
+      </p>
     </div>
   )
 }
@@ -317,7 +338,7 @@ export function Verdict({ them, us }: { them: { name: string; items: string[] };
 
 export function FaqGrid({ items }: { items: { q: string; a: string; n?: number; reported?: boolean }[] }) {
   return (
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="grid gap-4 md:grid-cols-2">
       {items.map((faq) => (
         <div key={faq.q} className="rounded-[1.25rem] bg-surface p-6 ring-1 ring-black/[0.06]">
           <h3 className="text-[1.0625rem] leading-[1.35] font-medium text-foreground">{faq.q}</h3>
@@ -340,7 +361,7 @@ export function FaqGrid({ items }: { items: { q: string; a: string; n?: number; 
 export function VsCards({ slugs, headingLevel = 'h3' }: { slugs: readonly VsSlug[]; headingLevel?: 'h2' | 'h3' }) {
   const Heading = headingLevel
   return (
-    <ul className="grid gap-4 sm:grid-cols-3">
+    <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {slugs.map((slug) => {
         const vendor = VENDORS[slug]
         return (

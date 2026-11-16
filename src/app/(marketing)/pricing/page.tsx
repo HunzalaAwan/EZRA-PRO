@@ -299,7 +299,7 @@ export default function PricingPage() {
           <p className="mt-6 text-center text-sm leading-relaxed text-muted">
             Weighing us against another system? See{' '}
             <Link href="/compare" className="font-medium text-foreground underline underline-offset-4 hover:text-primary">
-              EZRA Pro vs FareHarbor, Peek Pro and Bókun
+              how EZRA Pro compares with FareHarbor, Peek Pro, Bókun and others
             </Link>
             , side by side.
           </p>
