@@ -1,4 +1,5 @@
 import type { PhotoKey } from '@/components/marketing/story/photos'
+import { EZRA_FEE_PERCENT } from '@/lib/fees'
 
 /* ==========================================================================
    /booking-software — one page per kind of business (boat rental, bike
@@ -135,6 +136,31 @@ export interface NicheStep {
 export interface NicheFaq {
   q: string
   a: string
+}
+
+/**
+ * The long-form half of a page, kept one file per business in
+ * src/content/booking-software-long/. Plain sentences, no prices or fee
+ * amounts (those are worked out on the page), no competitor names, and only
+ * features EZRA Pro really has, under their product names.
+ */
+export interface NicheLong {
+  /** Plural noun for what they sell: "boats", "bikes", "rides", "trips". */
+  things: string
+  /** H2 of the opening section: "What boat rental software does". */
+  introTitle: string
+  /** Three paragraphs, about 180 words in all. */
+  intro: [string, string, string]
+  /** Five kinds of business it suits. */
+  fits: { label: string; hint: string }[]
+  /** Five moments of a working day, morning to close. */
+  day: { time: string; title: string; body: string }[]
+  /** Six things to look for in the software, each 35–50 words, naming the feature. */
+  lookFor: { title: string; body: string }[]
+  /** Two short paragraphs on how the price works for this business. */
+  pricing: [string, string]
+  /** Four more questions, added after the four on the page. Answers 30–60 words. */
+  faqs: NicheFaq[]
 }
 
 export interface Niche {
@@ -594,7 +620,7 @@ export const NICHES: Record<NicheSlug, Niche> = {
       rows: [
         { lead: '10:00', title: 'Nguyen · 2 tandems', detail: 'Waivers 4 of 4', status: 'Signed', tone: 'success', action: 'Check in' },
         { lead: '10:00', title: 'Silva · 1 board', detail: 'Waivers 1 of 1', status: 'Checked in', tone: 'info' },
-        { lead: '10:00', title: 'Walker · 3 singles', detail: 'Waivers 2 of 3', status: '1 to sign', tone: 'warning', action: 'Send link' },
+        { lead: '10:00', title: 'Walker · 3 singles', detail: 'Waivers 2 of 3', status: '1 to sign', tone: 'warning' },
         { lead: '10:00', title: 'Walk-in · 1 canoe', detail: 'Paid at the dock', status: 'Signed', tone: 'success', action: 'Check in' },
       ],
       caption: 'Check-in: who is here, who has signed, one button per party.',
@@ -662,7 +688,7 @@ export const NICHES: Record<NicheSlug, Niche> = {
       {
         icon: 'GraduationCap',
         problem: 'Lessons with the gear',
-        fix: 'Add a lesson with a level and students per instructor, and bundle it with the rental as a package.',
+        fix: 'Add a lesson with a level and the days in the course, and sell it with the rental as a package.',
         feature: 'Lessons and packages',
       },
       {
@@ -763,7 +789,7 @@ export const NICHES: Record<NicheSlug, Niche> = {
       sub: 'Today · 11:00',
       rows: [
         { lead: '11:00', title: 'Ramos · 2 skis', detail: 'Boater card ✓ · waivers 4 of 4', status: 'Ready', tone: 'success', action: 'Check in' },
-        { lead: '11:00', title: 'Hughes · 1 ski', detail: 'Boater card ✓ · waivers 1 of 2', status: '1 to sign', tone: 'warning', action: 'Send link' },
+        { lead: '11:00', title: 'Hughes · 1 ski', detail: 'Boater card ✓ · waivers 1 of 2', status: '1 to sign', tone: 'warning' },
         { lead: '11:30', title: 'Kim · 1 ski', detail: 'Deposit $300 held', status: 'Out', tone: 'info' },
         { lead: '—', title: 'Ski 4', detail: 'Impeller check', status: 'In repair', tone: 'neutral' },
       ],
@@ -915,3 +941,116 @@ export const SHARED_TOOLS: { icon: NicheIcon; label: string }[] = [
   { icon: 'PackagePlus', label: 'Promo codes' },
   { icon: 'Store', label: 'Walk-ins' },
 ]
+
+/** The long-form half of the hub: what the software does, how to choose, the price, questions. */
+export const HUB_LONG: {
+  introTitle: string
+  intro: string[]
+  kindsTitle: string
+  kinds: { label: string; setupAs: string; body: string }[]
+  chooseTitle: string
+  choose: { title: string; body: string }[]
+  pricingTitle: string
+  pricing: string[]
+  faqs: NicheFaq[]
+} = {
+  introTitle: 'What rental booking software does',
+  intro: [
+    'Rental booking software lets guests book and pay for your boats, bikes, carts, gear or rides online, at any hour, without calling you. It keeps count of what you own, so two people can never book the last kayak, and it shows your team what goes out, what is due back and what is in repair.',
+    'A good system also handles the parts around the booking: the waiver, the deposit, the licence or age check, extras like helmets or coolers, and the reminder the day before. It takes walk-up sales from the same stock as the website, and it keeps one record of every guest, so a returning family is recognised.',
+    'EZRA Pro does all of this for rentals, private trips and rides. Each business above has its own page, showing how it is set up, the screen it runs from on the day, what a working day looks like, what to look for when you compare systems, and what it costs at an example price. If you rent more than one kind of thing, like boats and paddleboards, they all sell from the same account and the same booking page.',
+  ],
+  kindsTitle: 'Rentals, private trips or rides?',
+  kinds: [
+    {
+      label: 'Rentals',
+      setupAs: 'Rental · Self-drive or gear',
+      body: 'Guests take something out and bring it back: a boat, a bike, a kayak, skis or a golf cart. You sell by the hour, by the day or for set lengths, each item has its own stock, and the Rentals screen shows what is out, due back or late.',
+    },
+    {
+      label: 'Private trips',
+      setupAs: 'Activity or tour · Private',
+      body: 'One group books the whole boat or guide for a time, at one price for the group, up to the most guests you allow. Charters often take a deposit now and the rest before the trip, and big or custom trips can come in as requests you quote.',
+    },
+    {
+      label: 'Rides',
+      setupAs: 'Rental · With a driver',
+      body: 'Guests are taken from one place to another: airport transfers, shuttles, a driver by the hour. You price by zone and vehicle or sell shared seats on set runs, and every ride lands on the Pickups board with a driver.',
+    },
+  ],
+  chooseTitle: 'How to choose rental booking software',
+  choose: [
+    {
+      title: 'It counts what you own',
+      body: 'The software should know how many of each thing you have, by type and size, and stop selling when they are all out. Check that rentals that overlap across days are counted properly, not just same-day hours.',
+    },
+    {
+      title: 'It prices the way you sell',
+      body: 'By the hour, by the day, set lengths like a half day, a week with a cap, per group or per seat. Add weekend and season prices on top, without building a separate product for each.',
+    },
+    {
+      title: 'Deposits, waivers and checks are built in',
+      body: 'A refundable deposit, a waiver signed before arrival, and a licence or minimum age at checkout should come with the booking, not from a second tool you pay for and connect yourself.',
+    },
+    {
+      title: 'Online and walk-up share one stock',
+      body: 'Most rental businesses still sell at the counter or the dock. Walk-up sales need to come out of the same count as online bookings, or you will sell the same thing twice on a busy day.',
+    },
+    {
+      title: 'The day-of screen is simple',
+      body: 'Staff need a plain list: what goes out next, what is due back, what is late, with one button each. If it takes training to read, it will not get used on a busy Saturday.',
+    },
+    {
+      title: 'The price fits a seasonal business',
+      body: 'Many rental businesses close for months. A monthly fee keeps running when the water is frozen. A fee per booking costs nothing in the months you are closed.',
+    },
+    {
+      title: 'Guests can sort things out themselves',
+      body: 'Confirmations and reminders by email and text, and a link where guests can see their booking, change it or cancel under your rules. Every change they make themselves is a phone call you do not take.',
+    },
+    {
+      title: 'Bad weather takes minutes, not hours',
+      body: 'Wind, storms and snow cancel days. Look for a way to hold, move or cancel a whole day’s bookings at once, with one message to every guest, instead of calling each one.',
+    },
+  ],
+  pricingTitle: 'One price for every rental business',
+  pricing: [
+    `EZRA Pro is ${EZRA_FEE_PERCENT}% of each booking, with no monthly fee, no setup fee and no contract. Every feature on every page here is included: deposits, waivers, walk-ins, pickups, gift cards, promo codes, messages and reports.`,
+    `You choose who pays the ${EZRA_FEE_PERCENT}%. Keep your prices as they are and pay it yourself, or add it to the guest’s total as one booking fee line at checkout. Card processing is between you and your payment provider.`,
+    'Because the fee follows your bookings, it rises in a busy month and falls to nothing in a closed one. Each business page above works it through for one example booking, a busy month and a quiet month, so you can see the numbers for a business like yours before you sign up.',
+  ],
+  faqs: [
+    {
+      q: 'What is rental booking software?',
+      a: 'Software that lets guests book and pay for rentals online, keeps count of what is available, and helps you run the day: hand-outs, returns, deposits, waivers and late items. It replaces a paper calendar, phone bookings and spreadsheets.',
+    },
+    {
+      q: 'Can one account run rentals, tours and rides?',
+      a: 'Yes. A business can sell rentals, private trips, shared tours and rides with a driver from one account and one booking page, with one guest list and one set of reports.',
+    },
+    {
+      q: 'How much does EZRA Pro cost for a rental business?',
+      a: `${EZRA_FEE_PERCENT}% of each booking and nothing else: no monthly fee, no setup fee and no contract. In a month with no bookings, there is no bill. You choose whether you pay the ${EZRA_FEE_PERCENT}% or guests pay it at checkout.`,
+    },
+    {
+      q: 'Do guests need an account to book?',
+      a: 'No. Guests book with their name, email and phone, pay, and sign the waiver if you use one. They get a link to see, change or cancel their booking under your rules.',
+    },
+    {
+      q: 'Can I sell at the counter as well as online?',
+      a: 'Yes. The Walk-ins desk takes card or cash sales from the same stock as your booking page, and walk-in takings are reported apart from online bookings.',
+    },
+    {
+      q: 'Can I take bookings on my own website?',
+      a: 'Yes. Add a Book now button or the booking page itself to your website, or share the link on social media and in messages. Guests book and pay without leaving your brand, and your booking page can run on your own domain.',
+    },
+    {
+      q: 'What happens when the weather closes us for the day?',
+      a: 'Open Weather & conditions, hold or cancel the day’s time slots, and send one message to everyone booked. Then offer a free move to another day, a credit or a refund.',
+    },
+    {
+      q: 'How long does it take to get started?',
+      a: 'Most businesses publish their first booking page the same day. If you are moving from another system, send us an export and we move your items, prices, guests and future bookings for free.',
+    },
+  ],
+}

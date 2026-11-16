@@ -115,10 +115,10 @@ export const ICONS: Record<NicheIcon, LucideIcon> = {
 const money = (minor: number, decimals = minor % 100 !== 0) => formatCurrency(minor, 'USD', { decimals })
 
 /** "Boat rental software" from "boat rental software". */
-const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
+export const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
 
-const H2 = 'font-display text-[1.875rem] leading-[1.1] font-medium tracking-[-0.03em] text-balance text-foreground sm:text-[2.5rem]'
-const EYEBROW = 'text-sm font-medium text-muted'
+export const H2 = 'font-display text-[1.875rem] leading-[1.1] font-medium tracking-[-0.03em] text-balance text-foreground sm:text-[2.5rem]'
+export const EYEBROW = 'text-sm font-medium text-muted'
 
 /** The one line every page carries about the price. */
 export const PRICE_LINE = `${EZRA_FEE_PERCENT}% per booking · $0 a month · no contract`
@@ -204,9 +204,9 @@ export function NicheHero({ niche, crumbs }: { niche: Niche; crumbs: Crumb[] }) 
 
 /* --------------------------------------------------------- the day-to-day */
 
-export function ProblemGrid({ niche }: { niche: Niche }) {
+export function ProblemGrid({ niche, className }: { niche: Niche; className?: string }) {
   return (
-    <section aria-labelledby="handled-title" className="bg-background py-20 sm:py-28">
+    <section aria-labelledby="handled-title" className={cn('bg-background py-20 sm:py-28', className)}>
       <div className={WRAP}>
         <div className="max-w-2xl">
           <p className={EYEBROW}>The day-to-day</p>
@@ -350,7 +350,7 @@ function MonthTile({ month, tone, kind }: { month: NicheCost['busy']; tone: Nich
   )
 }
 
-export function CostSection({ niche }: { niche: Niche }) {
+export function CostSection({ niche, paragraphs }: { niche: Niche; paragraphs?: string[] }) {
   const { cost } = niche
   const fee = ezraFee(cost.price)
   const feeLine = `EZRA Pro (${EZRA_FEE_PERCENT}%)`
@@ -366,6 +366,11 @@ export function CostSection({ niche }: { niche: Niche }) {
           <p className="mt-5 text-[1.0625rem] leading-[1.6] text-muted">
             {EZRA_FEE_PERCENT}% of each booking, $0 a month, no setup, no contract. You choose who pays it.
           </p>
+          {paragraphs?.map((text) => (
+            <p key={text} className="mt-4 text-[1.0625rem] leading-[1.6] text-muted">
+              {text}
+            </p>
+          ))}
         </div>
 
         <div className="mt-12 grid gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)]">
@@ -483,9 +488,9 @@ export function SetupSteps({ steps, name }: { steps: NicheStep[]; name: string }
 
 /* ------------------------------------------------------------------- FAQ */
 
-export function FaqList({ faqs, title }: { faqs: NicheFaq[]; title: string }) {
+export function FaqList({ faqs, title, className }: { faqs: NicheFaq[]; title: string; className?: string }) {
   return (
-    <section aria-labelledby="faq-title" className="bg-background py-20 sm:py-28">
+    <section aria-labelledby="faq-title" className={cn('bg-background py-20 sm:py-28', className)}>
       <div className={cn(WRAP, 'grid gap-10 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)] lg:gap-16')}>
         <div>
           <p className={EYEBROW}>Questions</p>

@@ -2,20 +2,21 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowRight, Check } from 'lucide-react'
 
-import { ICONS, NicheCard, PRICE_LINE, WRAP } from '@/components/marketing/booking-software/niche-sections'
+import { FaqList, H2, ICONS, NicheCard, PRICE_LINE, WRAP } from '@/components/marketing/booking-software/niche-sections'
 import { hubSchema, pageMetadata } from '@/components/marketing/booking-software/niche-schema'
 import { Breadcrumbs, JsonLd } from '@/components/marketing/compare/compare-ui'
 import { ClosingCta } from '@/components/marketing/land/closing-cta'
 import { PHOTOS, photoUrl } from '@/components/marketing/story/photos'
 import { Button } from '@/components/ui/button'
-import { HUB, NICHE_GROUPS, NICHE_LIST, SHARED_TOOLS } from '@/content/booking-software'
+import { HUB, HUB_LONG, NICHE_GROUPS, NICHE_LIST, SHARED_TOOLS } from '@/content/booking-software'
 import { EZRA_FEE_PERCENT } from '@/lib/fees'
 import { FOOTER_NAV } from '@/lib/site-config'
 import { cn } from '@/lib/utils'
 
 /* ==========================================================================
    /booking-software — the hub: every business with its own page, grouped
-   as Rentals, Private trips and Rides, then the tools they all share.
+   as Rentals, Private trips and Rides, then the tools they all share, a
+   short guide to choosing, the price, and questions (marked up as FAQPage).
    ========================================================================== */
 
 export const metadata: Metadata = pageMetadata({
@@ -34,7 +35,7 @@ const SOLUTIONS = FOOTER_NAV.find((section) => section.heading === 'Solutions')?
 export default function BookingSoftwareHub() {
   return (
     <>
-      <JsonLd data={hubSchema(NICHE_LIST)} />
+      <JsonLd data={hubSchema(NICHE_LIST, HUB_LONG.faqs)} />
 
       {/* ---------- hero ---------- */}
       <section aria-labelledby="hub-title" className="bg-cal-linen pt-8 pb-16 sm:pt-10 sm:pb-24">
@@ -156,6 +157,71 @@ export default function BookingSoftwareHub() {
           </div>
         </div>
       </section>
+
+      {/* ---------- what it does, how to choose ---------- */}
+      <section aria-labelledby="guide-title" className="bg-background py-20 sm:py-28">
+        <div className={WRAP}>
+          <div className="grid gap-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-16">
+            <h2 id="guide-title" className={H2}>
+              {HUB_LONG.introTitle}
+            </h2>
+            <div className="max-w-[64ch] space-y-4 text-[1.0625rem] leading-[1.7] text-foreground/85">
+              {HUB_LONG.intro.map((text) => (
+                <p key={text}>{text}</p>
+              ))}
+            </div>
+          </div>
+
+          <h2 id="kinds-title" className={cn(H2, 'mt-20 sm:mt-24')}>
+            {HUB_LONG.kindsTitle}
+          </h2>
+          <ul aria-labelledby="kinds-title" className="mt-10 grid gap-4 md:grid-cols-3 lg:gap-5">
+            {HUB_LONG.kinds.map((kind, index) => (
+              <li key={kind.label} className={cn('flex flex-col rounded-[1.375rem] p-6 sm:p-7', ['bg-cal-seafoam', 'bg-cal-rain', 'bg-cal-sunbeam'][index])}>
+                <h3 className="font-display text-[1.375rem] leading-[1.2] font-medium tracking-[-0.02em] text-foreground">{kind.label}</h3>
+                <p className="mt-3 text-[0.9375rem] leading-[1.6] text-foreground/80">{kind.body}</p>
+                <p className="mt-auto pt-5 text-[0.8125rem] text-foreground/70">
+                  Set up as <span className="font-medium text-foreground">{kind.setupAs}</span>
+                </p>
+              </li>
+            ))}
+          </ul>
+
+          <h2 id="choose-title" className={cn(H2, 'mt-20 sm:mt-24')}>
+            {HUB_LONG.chooseTitle}
+          </h2>
+          <ol aria-labelledby="choose-title" className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
+            {HUB_LONG.choose.map((item, index) => (
+              <li key={item.title} className="flex flex-col rounded-[1.375rem] border border-line bg-surface p-6 sm:p-7">
+                <span aria-hidden="true" className="font-display text-[1.5rem] leading-none font-medium tracking-[-0.03em] text-foreground/30 tabular">
+                  {String(index + 1).padStart(2, '0')}
+                </span>
+                <h3 className="mt-5 font-display text-[1.1875rem] leading-[1.3] font-medium tracking-[-0.02em] text-foreground">{item.title}</h3>
+                <p className="mt-2.5 text-[0.9375rem] leading-[1.6] text-pretty text-muted">{item.body}</p>
+              </li>
+            ))}
+          </ol>
+
+          <div className="mt-20 grid gap-10 rounded-[1.75rem] bg-cal-linen p-6 sm:mt-24 sm:p-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-16">
+            <h2 id="hub-price-title" className={H2}>
+              {HUB_LONG.pricingTitle}
+            </h2>
+            <div className="max-w-[64ch] space-y-4 text-[1.0625rem] leading-[1.7] text-foreground/85">
+              {HUB_LONG.pricing.map((text) => (
+                <p key={text}>{text}</p>
+              ))}
+              <p>
+                <Link href="/pricing" className="inline-flex items-center gap-1.5 font-medium text-foreground underline decoration-line-strong underline-offset-4 hover:text-primary">
+                  How the {EZRA_FEE_PERCENT}% works
+                  <ArrowRight aria-hidden="true" className="size-4" />
+                </Link>
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <FaqList faqs={HUB_LONG.faqs} title="Questions about rental booking software" className="bg-background-subtle" />
 
       <ClosingCta />
     </>

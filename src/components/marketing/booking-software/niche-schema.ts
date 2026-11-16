@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 
 import { breadcrumbSchema, ezraSoftwareSchema } from '@/components/marketing/compare/compare-schema'
 import { PHOTOS, photoUrl } from '@/components/marketing/story/photos'
-import { HUB, type Niche } from '@/content/booking-software'
+import { HUB, type Niche, type NicheFaq } from '@/content/booking-software'
 import { SITE } from '@/lib/site-config'
 
 /* ==========================================================================
@@ -48,7 +48,8 @@ function webPageSchema({ path, title, description, image, type = 'WebPage' }: { 
   }
 }
 
-export function nicheSchema(niche: Niche) {
+/** `faqs` is the full list the page prints, so the markup matches it. */
+export function nicheSchema(niche: Niche, faqs: NicheFaq[] = niche.faqs) {
   const path = nichePath(niche)
   return [
     breadcrumbSchema([
@@ -58,19 +59,23 @@ export function nicheSchema(niche: Niche) {
     ]),
     webPageSchema({ path, title: niche.title, description: niche.meta, image: photoUrl(PHOTOS[niche.photo], 1200) }),
     ezraSoftwareSchema(),
-    {
-      '@context': 'https://schema.org',
-      '@type': 'FAQPage',
-      mainEntity: niche.faqs.map((faq) => ({
-        '@type': 'Question',
-        name: faq.q,
-        acceptedAnswer: { '@type': 'Answer', text: faq.a },
-      })),
-    },
+    faqPage(faqs),
   ]
 }
 
-export function hubSchema(niches: Niche[]) {
+function faqPage(faqs: NicheFaq[]) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: faqs.map((faq) => ({
+      '@type': 'Question',
+      name: faq.q,
+      acceptedAnswer: { '@type': 'Answer', text: faq.a },
+    })),
+  }
+}
+
+export function hubSchema(niches: Niche[], faqs: NicheFaq[] = []) {
   return [
     breadcrumbSchema([
       { name: 'Home', path: '/' },
@@ -90,5 +95,6 @@ export function hubSchema(niches: Niche[]) {
       },
     },
     ezraSoftwareSchema(),
+    ...(faqs.length ? [faqPage(faqs)] : []),
   ]
 }
