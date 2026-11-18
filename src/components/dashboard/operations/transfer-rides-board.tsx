@@ -364,7 +364,7 @@ function RideRow({
         <div className="min-w-0 flex-1">
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
             <Badge size="sm" variant={ride.direction === 'from_hub' ? 'info' : ride.direction === 'to_hub' ? 'accent' : 'neutral'}>
-              {directionLabel(ride.direction)}
+              {directionLabel(ride.direction, activity?.transfer?.hub)}
             </Badge>
             <span className="font-semibold text-foreground">{ride.guestName}</span>
             <span className="text-muted">

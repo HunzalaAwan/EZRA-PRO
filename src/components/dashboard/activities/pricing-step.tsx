@@ -419,7 +419,7 @@ function transferPricingHead(transfer: DraftKindSettings['transfer'], named: num
   if (transfer.service === 'hourly') return `${named} ${pluralize(named, 'vehicle')} from ${from} an hour`
   const zones = transfer.zones.filter((zone) => zone.name.trim()).length
   const rows = transfer.service === 'shared' ? `${named} ${pluralize(named, 'ticket')}` : `${named} ${pluralize(named, 'vehicle')}`
-  return `${zones} ${pluralize(zones, 'destination')}, ${rows}, from ${from}`
+  return `${zones} ${pluralize(zones, transfer.noHub ? 'area' : 'destination')}, ${rows}, from ${from}`
 }
 
 /* ---------- small layout pieces ---------- */
@@ -615,7 +615,7 @@ export function PricingStep({ draft, patch, errors, currency, dining = false, ac
       {transfer ? (
         <Block
           title={transfer.service === 'hourly' ? 'Price per hour' : transfer.service === 'shared' ? 'Prices per person' : 'Prices per vehicle'}
-          hint={transfer.service === 'hourly' ? undefined : 'A row for each destination.'}
+          hint={transfer.service === 'hourly' ? undefined : transfer.noHub ? 'A row for each area you collect from or drop off in.' : 'A row for each destination.'}
         >
           <TransferPriceTable value={transfer} tiers={draft.tiers} onChange={(next) => patch({ kindSettings: { ...settings, transfer: next } })} currency={currency} errors={errors} />
         </Block>

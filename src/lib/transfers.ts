@@ -67,21 +67,21 @@ export function tripLabel(trip: TransferTrip, hub?: TransferHub): string {
     case 'round_trip':
       return 'Round trip'
     case 'between':
-      return 'Hotel to hotel'
+      return hub ? 'Hotel to hotel' : 'Pickup to drop-off'
     case 'hourly':
       return 'By the hour'
   }
 }
 
-/** One ride's way: "Arrival", "Departure" (ports and stations too), "Hotel to hotel", "By the hour". */
-export function directionLabel(direction: TransferDirection, _hub?: TransferHub): string {
+/** One ride's way: "Arrival", "Departure" (ports and stations too), "Hotel to hotel" ("Pickup to drop-off" with no airport), "By the hour". */
+export function directionLabel(direction: TransferDirection, hub?: TransferHub): string {
   switch (direction) {
     case 'from_hub':
       return 'Arrival'
     case 'to_hub':
       return 'Departure'
     case 'between':
-      return 'Hotel to hotel'
+      return hub ? 'Hotel to hotel' : 'Pickup to drop-off'
     case 'hourly':
       return 'By the hour'
   }
@@ -327,7 +327,7 @@ export function transferConfigErrors(config: TransferConfig, tiers: Pick<PriceTi
     return errors
   }
   const zones = activeZones(config).filter((zone) => zone.name.trim())
-  if (zones.length === 0) errors['transfer.zones'] = 'Add a destination'
+  if (zones.length === 0) errors['transfer.zones'] = 'Add at least one area'
   const priced = config.service === 'shared' ? tierIds : new Set((config.vehicles ?? []).map((vehicle) => vehicle.tierId).filter((id) => tierIds.has(id)))
   for (const zone of zones) {
     if (!(config.rates ?? []).some((rate) => rate.zoneId === zone.id && priced.has(rate.tierId) && rate.oneWay > 0)) {
@@ -720,7 +720,9 @@ export function legsFor(activity: TransferSource, request: TransferRequest): Pla
       // A shared run: the time is the run's at the hub. Departures are collected the drive before it.
       const run = normalIso(at)
       const pickupAt = direction === 'to_hub' ? pickupFor({ ...config, checkInMinutes: 0 }, request.zoneId, 'to_hub', run) : run
-      return { direction, pickupAt, slotStartsAt: run, busyMinutes, from: direction === 'to_hub' ? stay : hub, to: direction === 'to_hub' ? hub : stay }
+      const dropOff = request.dropOff?.trim() || zoneById(config, request.toZoneId)?.name || ''
+      const ends = direction === 'between' ? { from: stay, to: dropOff } : direction === 'to_hub' ? { from: stay, to: hub } : { from: hub, to: stay }
+      return { direction, pickupAt, slotStartsAt: run, busyMinutes, ...ends }
     }
     const pickupAt = pickupFor(config, request.zoneId, direction, at)
     const base = { direction, pickupAt, slotStartsAt: slotStartOf(pickupAt), busyMinutes }

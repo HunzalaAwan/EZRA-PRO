@@ -110,7 +110,10 @@ function ZonePrices({ value, tiers, onChange, currency, errors }: TransferPriceT
     })
   const addZone = () => onChange({ ...value, zones: [...value.zones, { id: freshZoneId(value.zones), name: '', places: [], driveMinutes: 30 }] })
   const toggle = (id: string) => setOpen((current) => ({ ...current, [id]: !current[id] }))
-  const zoneName = (zone: TransferZone, index: number) => zone.name.trim() || `destination ${index + 1}`
+  // With no airport, rows are the areas guests are collected from and dropped at.
+  const place = value.noHub ? 'area' : 'destination'
+  const Place = value.noHub ? 'Area' : 'Destination'
+  const zoneName = (zone: TransferZone, index: number) => zone.name.trim() || `${place} ${index + 1}`
   const tierName = (tier: DraftTier, index: number) => tier.label.trim() || (shared ? `ticket ${index + 1}` : `vehicle ${index + 1}`)
 
   /** One way, and round trip when sold: one input each. */
@@ -151,7 +154,7 @@ function ZonePrices({ value, tiers, onChange, currency, errors }: TransferPriceT
           <thead>
             <tr className="text-xs text-subtle">
               <th scope="col" rowSpan={roundTrips ? 2 : 1} className="w-40 align-bottom font-medium">
-                Destination
+                {Place}
               </th>
               <th scope="col" rowSpan={roundTrips ? 2 : 1} className="w-24 align-bottom font-medium">
                 Drive
@@ -185,7 +188,7 @@ function ZonePrices({ value, tiers, onChange, currency, errors }: TransferPriceT
               <React.Fragment key={zone.id}>
                 <tr className="align-top">
                   <td>
-                    <Input size="sm" aria-label={`Destination ${zoneIndex + 1}`} value={zone.name} placeholder="Playa del Carmen" error={Boolean(errors[`transfer.zone.${zone.id}.name`])} onChange={(event) => setZone(zone.id, { name: event.target.value })} />
+                    <Input size="sm" aria-label={`${Place} ${zoneIndex + 1}`} value={zone.name} placeholder="Playa del Carmen" error={Boolean(errors[`transfer.zone.${zone.id}.name`])} onChange={(event) => setZone(zone.id, { name: event.target.value })} />
                     {/* The hotels line is cut short so it never widens the column. */}
                     <div className="mt-1 max-w-40 truncate px-0.5">{placesButton(zone)}</div>
                   </td>
@@ -225,7 +228,7 @@ function ZonePrices({ value, tiers, onChange, currency, errors }: TransferPriceT
           <li key={zone.id} className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-3">
             <div className="flex items-start gap-2">
               <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_6.5rem] gap-2">
-                <Input size="sm" aria-label={`Destination ${zoneIndex + 1}`} value={zone.name} placeholder="Playa del Carmen" error={Boolean(errors[`transfer.zone.${zone.id}.name`])} onChange={(event) => setZone(zone.id, { name: event.target.value })} />
+                <Input size="sm" aria-label={`${Place} ${zoneIndex + 1}`} value={zone.name} placeholder="Playa del Carmen" error={Boolean(errors[`transfer.zone.${zone.id}.name`])} onChange={(event) => setZone(zone.id, { name: event.target.value })} />
                 <Input size="sm" type="number" min={0} max={600} step={5} suffix="min" inputClassName="tabular" aria-label={`Drive to ${zoneName(zone, zoneIndex)}, minutes`} value={zone.driveMinutes} onChange={(event) => setZone(zone.id, { driveMinutes: minutes(event.target.value) })} />
               </div>
               <IconButton type="button" size="xs" variant="ghost" className="mt-1 text-danger hover:bg-danger-soft" aria-label={`Remove ${zoneName(zone, zoneIndex)}`} disabled={value.zones.length === 1} onClick={() => removeZone(zone.id)}>
@@ -256,7 +259,7 @@ function ZonePrices({ value, tiers, onChange, currency, errors }: TransferPriceT
 
       <div className="flex flex-wrap items-center gap-2">
         <Button type="button" variant="secondary" size="sm" leftIcon={<Plus />} onClick={addZone}>
-          Add destination
+          Add {place}
         </Button>
         <Button type="button" variant="ghost" size="sm" leftIcon={<ClipboardPaste />} aria-expanded={pasting} onClick={() => setPasting((current) => !current)}>
           Paste prices
@@ -268,7 +271,7 @@ function ZonePrices({ value, tiers, onChange, currency, errors }: TransferPriceT
         <div className="flex flex-col gap-2 rounded-xl border border-line p-3">
           <Field
             label="Rows from your price sheet"
-            description={`One destination per line: the name, then ${tiers.map((tier, index) => (roundTrips ? `${tierName(tier, index)} one way and round trip` : tierName(tier, index))).join(', then ')}. Copy them from a spreadsheet.`}
+            description={`One ${place} per line: the name, then ${tiers.map((tier, index) => (roundTrips ? `${tierName(tier, index)} one way and round trip` : tierName(tier, index))).join(', then ')}. Copy them from a spreadsheet.`}
           >
             <Textarea rows={4} value={pasted} placeholder={`Playa del Carmen\t75\t140\t95\t180`} onChange={(event) => setPasted(event.target.value)} />
           </Field>
@@ -296,7 +299,11 @@ function ZonePrices({ value, tiers, onChange, currency, errors }: TransferPriceT
         {shared ? 'Leave a price empty to not sell that ticket there.' : 'Guests see the price for the vehicle that fits their group. Leave a price empty to not offer it there.'}
         {roundTrips ? ' An empty round trip is twice the one way.' : ''}
       </p>
-      {between && !shared ? <p className="text-xs text-subtle">Hotel to hotel costs the higher of the two destinations.</p> : null}
+      {value.noHub ? (
+        <p className="text-xs text-subtle">A ride costs the higher of its pickup and drop-off areas.</p>
+      ) : between && !shared ? (
+        <p className="text-xs text-subtle">Hotel to hotel costs the higher of the two destinations.</p>
+      ) : null}
     </div>
   )
 }

@@ -65,9 +65,10 @@ export const TRIP_ORDER: DraftTrip[] = ['from_hub', 'to_hub', 'round_trip', 'bet
 export function defaultTransferDraft(): DraftTransfer {
   return {
     service: 'private',
+    // New rides go from the guest's pickup to their drop-off: no airport.
     hub: { name: '', kind: 'airport' },
-    noHub: false,
-    trips: ['from_hub', 'to_hub', 'round_trip'],
+    noHub: true,
+    trips: ['between'],
     // A fixed id so the server and the browser agree on a new draft.
     zones: [{ id: 'tz_first', name: '', places: [], driveMinutes: 30 }],
     vehicles: {},
@@ -77,7 +78,7 @@ export function defaultTransferDraft(): DraftTransfer {
     maxHours: 10,
     freeWaitMinutes: 60,
     checkInMinutes: 120,
-    askFlight: true,
+    askFlight: false,
     maxVehicles: 4,
     shared: { fromHubTimes: [], toHubTimes: [] },
   }
@@ -87,13 +88,16 @@ export function defaultTransferDraft(): DraftTransfer {
 export function normalizeTransferDraft(value: Partial<DraftTransfer> | undefined): DraftTransfer {
   const base = defaultTransferDraft()
   if (!value) return base
+  // An unsaved draft from when the wizard asked for an airport, with none named: pickup to drop-off.
+  const unnamed = !value.noHub && !value.hub?.name?.trim()
   return {
     ...base,
     ...value,
     hub: { ...base.hub, ...value.hub },
     shared: { ...base.shared, ...value.shared },
     zones: Array.isArray(value.zones) ? value.zones : base.zones,
-    trips: Array.isArray(value.trips) ? value.trips : base.trips,
+    trips: unnamed ? base.trips : Array.isArray(value.trips) ? value.trips : base.trips,
+    ...(unnamed ? { noHub: true } : {}),
     vehicles: value.vehicles ?? {},
     rates: value.rates ?? {},
     hourly: value.hourly ?? {},
@@ -238,7 +242,8 @@ export function configOfDraft(transfer: DraftTransfer, tiers: Pick<DraftTier, 'i
             return rate && rate.oneWay > 0 ? [{ zoneId: zone.id, tierId: tier.id, oneWay: rate.oneWay, ...(rate.roundTrip > 0 ? { roundTrip: rate.roundTrip } : {}) }] : []
           }),
         )
-  const shared = service === 'shared' ? sharedOfDraft(transfer.shared, options.runTimes ?? []) : undefined
+  // With no airport, every shared run simply runs: no ways to choose.
+  const shared = service === 'shared' && !transfer.noHub ? sharedOfDraft(transfer.shared, options.runTimes ?? []) : undefined
   return {
     service,
     ...(hub ? { hub } : {}),
@@ -266,7 +271,7 @@ export function configOfDraft(transfer: DraftTransfer, tiers: Pick<DraftTier, 'i
       : {}),
     freeWaitMinutes: transfer.freeWaitMinutes,
     checkInMinutes: transfer.checkInMinutes,
-    askFlight: hub ? transfer.askFlight : false,
+    askFlight: service === 'hourly' ? false : transfer.askFlight,
     ...(shared ? { shared } : {}),
     ...(service !== 'shared' ? { maxVehicles: transfer.maxVehicles } : {}),
   }
@@ -327,7 +332,7 @@ export function transferDraftErrors(transfer: DraftTransfer, tiers: Pick<DraftTi
   const all: Record<string, string> = { ...transferConfigErrors(configOfDraft(transfer, tiers), tiers) }
   if (transfer.service === 'shared' && !tiers.some((tier) => tier.countsTowardCapacity)) all['transfer.tickets'] = 'Add a ticket that takes a seat'
   if (transfer.service !== 'hourly') {
-    for (const zone of transfer.zones) if (!zone.name.trim()) all[`transfer.zone.${zone.id}.name`] = 'Name this destination, or remove it'
+    for (const zone of transfer.zones) if (!zone.name.trim()) all[`transfer.zone.${zone.id}.name`] = transfer.noHub ? 'Name this area, or remove it' : 'Name this destination, or remove it'
   }
   tiers.forEach((tier, index) => {
     if (tier.label.trim().length < 2) all[`tiers.${index}.label`] = transfer.service === 'shared' ? 'Name this ticket' : 'Name this vehicle'
@@ -350,8 +355,8 @@ export function transferFacts(transfer: DraftTransfer, tiers: Pick<DraftTier, 'i
   const zones = transfer.zones.filter((zone) => zone.name.trim()).length
   const fleet = fleetOfDraft(transfer, tiers)
   if (transfer.service === 'hourly') return [service, `${plural(tiers.length, 'vehicle')} (${fleet} in all)`, `${transfer.minHours}–${transfer.maxHours} hours`]
-  if (transfer.service === 'shared') return [service, plural(zones, 'destination'), plural(tiers.length, 'ticket')]
-  return [service, plural(zones, 'destination'), `${plural(tiers.length, 'vehicle')} (${fleet} in all)`]
+  if (transfer.service === 'shared') return [service, plural(zones, transfer.noHub ? 'area' : 'destination'), plural(tiers.length, 'ticket')]
+  return [service, plural(zones, transfer.noHub ? 'area' : 'destination'), `${plural(tiers.length, 'vehicle')} (${fleet} in all)`]
 }
 
 /** "10 vehicles", "14 seats per run": a transfer's capacity in a few words; null for anything else. */

@@ -263,7 +263,7 @@ export function TransferTill({
   // Shared runs: the run times today that go this way, from now on.
   const runs = React.useMemo(() => {
     if (!shared) return []
-    const way = trip === 'to_hub' ? config?.shared?.toHubTimes : config?.shared?.fromHubTimes
+    const way = trip === 'between' ? undefined : trip === 'to_hub' ? config?.shared?.toHubTimes : config?.shared?.fromHubTimes
     const today = days.find((day) => day.dateKey === todayKey)?.slots ?? []
     const known = [...new Set([...(way ?? []), ...today.map((slot) => slot.startsAt.slice(11, 16))])].sort()
     return known
@@ -325,7 +325,7 @@ export function TransferTill({
   const nameMissing = name.trim().length < 2
   const phoneBad = !PHONE.test(phone.trim())
   const placeMissing = hourly && !place.trim()
-  const askFlight = Boolean(config?.askFlight) && (trip === 'from_hub' || trip === 'to_hub' || trip === 'round_trip')
+  const askFlight = Boolean(config?.askFlight) && trip !== 'hourly'
   const canPay = sale.fits && !nameMissing && !phoneBad && !placeMissing && (method === 'card' || change >= 0)
 
   const most = Math.max(1, (config?.maxVehicles ?? 4) * Math.max(1, biggestVehicle(activity)))

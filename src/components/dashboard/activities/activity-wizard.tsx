@@ -2435,7 +2435,7 @@ export function ActivityWizard({
                   {step + 1}. {currentStep.label}
                 </CardTitle>
                 <CardDescription>
-                  {currentStep.id === 'pricing' && !dining && (draft.kind ?? 'trip') === 'rental' ? 'What you lend out, how many you have of each, what it costs, and the extras you offer.' : currentStep.id === 'pricing' && !dining && draft.kind === 'transfer' ? 'Your prices for each destination, and the extras you offer.' : currentStep.id === 'guests' && !dining && draft.kind === 'transfer' ? 'What checkout asks of guests.' : dining ? DINING_STEP_COPY[step] : STEP_COPY[currentStep.id]}
+                  {currentStep.id === 'pricing' && !dining && (draft.kind ?? 'trip') === 'rental' ? 'What you lend out, how many you have of each, what it costs, and the extras you offer.' : currentStep.id === 'pricing' && !dining && draft.kind === 'transfer' ? (draft.kindSettings.transfer.noHub ? 'Your prices for each area, and the extras you offer.' : 'Your prices for each destination, and the extras you offer.') : currentStep.id === 'guests' && !dining && draft.kind === 'transfer' ? 'What checkout asks of guests.' : dining ? DINING_STEP_COPY[step] : STEP_COPY[currentStep.id]}
                 </CardDescription>
               </div>
             </CardHeader>

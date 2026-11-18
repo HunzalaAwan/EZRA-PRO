@@ -4,14 +4,13 @@ import * as React from 'react'
 import { Bus, Car, Check, Clock, Plus, Trash2, type LucideIcon } from 'lucide-react'
 
 import type { TransferHubKind, TransferService } from '@/types'
-import { HUB_KINDS, TRANSFER_SERVICES, hubWord, tripLabel } from '@/lib/transfers'
+import { TRANSFER_SERVICES, hubWord } from '@/lib/transfers'
 import { clockTime } from '@/lib/activity-schedule'
 import { cn } from '@/lib/utils'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Field } from '@/components/ui/field'
 import { IconButton } from '@/components/ui/icon-button'
 import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 
@@ -19,24 +18,22 @@ import { DriverChoice } from './kind-fields'
 import { KIND_TIER_PRESETS, blankTier, type DraftTier } from './pricing-tier-editor'
 import {
   TRANSFER_VEHICLE_PRESETS,
-  TRIP_ORDER,
   fleetOfDraft,
   runDirections,
   vehicleOf,
   vehicleTier,
-  withHubKind,
   type DraftTransfer,
-  type DraftTrip,
   type DraftVehicle,
 } from './transfer-draft'
 
 export { TRANSFER_VEHICLE_PRESETS }
 
 /* ==========================================================================
-   TRANSFERS IN THE WIZARD — the Basics card (what you run, where rides
-   start or end, the trips guests can book, the vehicles or tickets), the
-   Booking step's ride timing and shuttle run directions, and the Guests
-   step's fixed checkout fields. The price table is on Pricing
+   TRANSFERS IN THE WIZARD — the Basics card (how it's charged, the vehicles
+   or tickets), the Booking step's ride timing and shuttle run directions,
+   and the Guests step's fixed checkout fields. Rides go from the guest's
+   pickup to their drop-off; no airport is asked for. Rides saved with an
+   airport keep it, and their airport timing still shows on Booking. The price table is on Pricing
    (transfer-price-table.tsx); the model is in transfer-draft.ts.
    ========================================================================== */
 
@@ -91,10 +88,6 @@ export interface TransferFieldsProps {
 
 export function TransferFields({ value, tiers, onChange, onService, onSelfDrive, errors }: TransferFieldsProps) {
   const service = value.service
-  const hub = value.noHub ? undefined : value.hub
-  const set = (patch: Partial<DraftTransfer>) => onChange({ ...value, ...patch })
-  const toggleTrip = (trip: DraftTrip) => set({ trips: value.trips.includes(trip) ? value.trips.filter((entry) => entry !== trip) : TRIP_ORDER.filter((entry) => entry === trip || value.trips.includes(entry)) })
-  const trips = value.noHub ? (['between'] as DraftTrip[]) : TRIP_ORDER
 
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-line bg-surface-sunken/40 p-4">
@@ -131,71 +124,6 @@ export function TransferFields({ value, tiers, onChange, onService, onSelfDrive,
           })}
         </div>
       </Section>
-
-      {service === 'hourly' ? null : (
-        <Section title="Rides start or end at" error={errors['transfer.hub']}>
-          {value.noHub ? null : (
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_7rem_minmax(0,11rem)]">
-              <Field label="Name" labelSize="sm" error={errors['transfer.hub'] ? true : undefined}>
-                {(control) => <Input {...control} value={value.hub.name} placeholder="Cancun International Airport" onChange={(event) => set({ hub: { ...value.hub, name: event.target.value } })} />}
-              </Field>
-              <Field label="Code" labelSize="sm" optional>
-                {(control) => <Input {...control} value={value.hub.code ?? ''} placeholder="CUN" maxLength={8} onChange={(event) => set({ hub: { ...value.hub, code: event.target.value.toUpperCase() } })} />}
-              </Field>
-              <Field label="Type" labelSize="sm">
-                <Select value={value.hub.kind} onValueChange={(kind) => onChange(withHubKind(value, kind as TransferHubKind))}>
-                  <SelectTrigger aria-label="Type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {HUB_KINDS.map((kind) => (
-                      <SelectItem key={kind.value} value={kind.value}>
-                        {kind.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-            </div>
-          )}
-          <label className="flex cursor-pointer items-center gap-2.5 text-sm text-muted">
-            <Checkbox
-              size="sm"
-              checked={value.noHub}
-              onCheckedChange={(checked) => set({ noHub: checked === true, ...(checked === true && !value.trips.includes('between') ? { trips: [...value.trips, 'between'] } : {}) })}
-            />
-            No airport or port: rides between areas only
-          </label>
-        </Section>
-      )}
-
-      {service === 'hourly' ? null : (
-        <Section title="Trips guests can book" error={errors['transfer.trips']}>
-          <div role="group" aria-label="Trips guests can book" className="flex flex-wrap gap-2">
-            {trips
-              .filter((trip) => service !== 'shared' || trip !== 'between')
-              .map((trip) => {
-                const on = value.trips.includes(trip)
-                return (
-                  <button
-                    key={trip}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() => toggleTrip(trip)}
-                    className={cn(
-                      'inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-[0.8125rem] font-medium transition-colors duration-150',
-                      'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
-                      on ? 'border-primary/50 bg-primary-soft text-primary' : 'border-line bg-surface text-muted hover:border-line-strong hover:text-foreground',
-                    )}
-                  >
-                    {on ? <Check className="size-3.5" aria-hidden="true" /> : <Plus className="size-3.5" aria-hidden="true" />}
-                    {tripLabel(trip, hub)}
-                  </button>
-                )
-              })}
-          </div>
-        </Section>
-      )}
 
       {service === 'shared' ? (
         <TicketRows value={value} tiers={tiers} onChange={onChange} errors={errors} />
@@ -364,29 +292,43 @@ const FLIGHT_WORDS: Record<TransferHubKind, { ask: string; arrives: string; leav
   other: { ask: 'Ask for a reference number', arrives: 'Free waiting after it arrives', leaves: 'before it leaves' },
 }
 
-/** Ride timing, with a hub: free waiting for arrivals, time at the hub before a departure, the most vehicles, the flight number. */
+/**
+ * Ride timing: the most vehicles per booking and the flight number question.
+ * Rides saved with an airport also keep its free waiting and time before a departure.
+ */
 export function RideTiming({ value, onChange }: { value: DraftTransfer; onChange: (value: DraftTransfer) => void }) {
-  if (value.service === 'hourly' || value.noHub) return null
-  const words = FLIGHT_WORDS[value.hub.kind] ?? FLIGHT_WORDS.airport
+  if (value.service === 'hourly') return null
+  const hubbed = !value.noHub
+  const words = hubbed ? (FLIGHT_WORDS[value.hub.kind] ?? FLIGHT_WORDS.airport) : FLIGHT_WORDS.airport
   const set = (patch: Partial<DraftTransfer>) => onChange({ ...value, ...patch })
+  const fields = hubbed || value.service === 'private'
   return (
     <section className="flex flex-col gap-4 rounded-xl border border-line p-4">
       <h3 className="text-sm font-semibold">Ride timing</h3>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <Field label={words.arrives}>
-          {(control) => <Input {...control} type="number" min={0} max={600} step={5} suffix="min" inputClassName="tabular" value={value.freeWaitMinutes} onChange={(event) => set({ freeWaitMinutes: whole(event.target.value, 0, 600) })} />}
-        </Field>
-        <Field label={`At the ${hubWord(value.hub)} ${words.leaves}`} description="Pickup = flight time, less this, less the drive.">
-          {(control) => <Input {...control} type="number" min={0} max={600} step={5} suffix="min" inputClassName="tabular" value={value.checkInMinutes} onChange={(event) => set({ checkInMinutes: whole(event.target.value, 0, 600) })} />}
-        </Field>
-        {value.service === 'private' ? (
-          <Field label="Most vehicles per booking" description="More sends a request.">
-            {(control) => <Input {...control} type="number" min={1} max={20} inputClassName="tabular" suffix={value.maxVehicles === 1 ? 'vehicle' : 'vehicles'} value={value.maxVehicles} onChange={(event) => set({ maxVehicles: whole(event.target.value, 1, 20) })} />}
-          </Field>
-        ) : null}
-      </div>
-      <label className="flex items-center justify-between gap-3 border-t border-line-subtle pt-3">
-        <span className="text-sm font-medium">{words.ask}</span>
+      {fields ? (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {hubbed ? (
+            <>
+              <Field label={words.arrives}>
+                {(control) => <Input {...control} type="number" min={0} max={600} step={5} suffix="min" inputClassName="tabular" value={value.freeWaitMinutes} onChange={(event) => set({ freeWaitMinutes: whole(event.target.value, 0, 600) })} />}
+              </Field>
+              <Field label={`At the ${hubWord(value.hub)} ${words.leaves}`} description="Pickup = flight time, less this, less the drive.">
+                {(control) => <Input {...control} type="number" min={0} max={600} step={5} suffix="min" inputClassName="tabular" value={value.checkInMinutes} onChange={(event) => set({ checkInMinutes: whole(event.target.value, 0, 600) })} />}
+              </Field>
+            </>
+          ) : null}
+          {value.service === 'private' ? (
+            <Field label="Most vehicles per booking" description="More sends a request.">
+              {(control) => <Input {...control} type="number" min={1} max={20} inputClassName="tabular" suffix={value.maxVehicles === 1 ? 'vehicle' : 'vehicles'} value={value.maxVehicles} onChange={(event) => set({ maxVehicles: whole(event.target.value, 1, 20) })} />}
+            </Field>
+          ) : null}
+        </div>
+      ) : null}
+      <label className={cn('flex items-center justify-between gap-3', fields && 'border-t border-line-subtle pt-3')}>
+        <span className="text-sm font-medium">
+          {words.ask}
+          {hubbed ? null : <span className="block text-xs font-normal text-subtle">For rides to or from an airport.</span>}
+        </span>
         <Switch checked={value.askFlight} onCheckedChange={(askFlight) => set({ askFlight })} aria-label={words.ask} />
       </label>
     </section>
@@ -442,8 +384,8 @@ export function TransferCheckoutFields({ value, meetingPoint, onMeetingPoint, er
   const asks = [
     'Name',
     'Mobile number',
-    value.service === 'hourly' ? 'Pickup address' : 'Hotel or address',
-    ...(hub && value.askFlight ? [flightWord] : []),
+    value.service === 'hourly' ? 'Pickup address' : value.noHub ? 'Pickup and drop-off address' : 'Hotel or address',
+    ...(value.service !== 'hourly' && value.askFlight ? [flightWord] : []),
     value.service === 'shared' ? 'Tickets and suitcases' : 'Passengers and suitcases',
     'Note for the driver (optional)',
   ]

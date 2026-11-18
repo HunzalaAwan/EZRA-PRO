@@ -236,22 +236,23 @@ export function TransferWidget({
   /* ---------- shared runs: each way's times, the ones that work with the flight ---------- */
 
   const runsFor = React.useCallback(
-    (key: string, direction: 'from_hub' | 'to_hub', flight: string) => {
+    (key: string, direction: 'from_hub' | 'to_hub' | 'between', flight: string) => {
       const day = runDays.get(key)
-      const list = direction === 'from_hub' ? config?.shared?.fromHubTimes : config?.shared?.toHubTimes
+      // Pickup to drop-off: every run that day, collected at its time.
+      const list = direction === 'between' ? undefined : direction === 'from_hub' ? config?.shared?.fromHubTimes : config?.shared?.toHubTimes
       return (day?.slots ?? [])
         .filter((slot) => !list || list.includes(slot.startsAt.slice(11, 16)))
         .map((slot) => {
           const at = minutesOf(slot.startsAt.slice(11, 16))
           // Arrivals: a run at least 30 minutes after landing. Departures: at the hub in time for the flight.
-          const fits = direction === 'from_hub' ? at >= minutesOf(flight) + 30 : at <= minutesOf(flight) - checkIn
+          const fits = direction === 'between' ? true : direction === 'from_hub' ? at >= minutesOf(flight) + 30 : at <= minutesOf(flight) - checkIn
           const full = slot.soldOut || slot.seatsLeft < Math.max(1, seatsNeeded)
           return { slot, fits, full, pickup: direction === 'to_hub' ? hhmmOf(at - drive - ((at - drive) % 5 + 5) % 5) : slot.startsAt.slice(11, 16) }
         })
     },
     [runDays, config, checkIn, seatsNeeded, drive],
   )
-  const outRuns = shared ? runsFor(dateKey, trip === 'to_hub' ? 'to_hub' : 'from_hub', flightTime) : []
+  const outRuns = shared ? runsFor(dateKey, trip === 'to_hub' ? 'to_hub' : trip === 'between' ? 'between' : 'from_hub', flightTime) : []
   const backRuns = shared && trip === 'round_trip' ? runsFor(returnKey, 'to_hub', returnFlightTime) : []
   // Keep a run that still works; else the first that does.
   const outRun = outRuns.find((run) => run.slot.departureId === runId && run.fits && !run.full) ?? outRuns.find((run) => run.fits && !run.full)
@@ -674,6 +675,12 @@ export function TransferWidget({
                   Until <span className="font-semibold text-foreground tabular">{hhmmOf(minutesOf(time) + hours * 60)}</span>
                 </p>
                 {fieldError(errors.hours)}
+                {fieldError(errors.at)}
+              </>
+            ) : shared && trip === 'between' ? (
+              <>
+                {dayStrip('Day', dateKey, pickDate)}
+                {runChips(outRuns, outRun?.slot.departureId, setRunId, 'Runs', false)}
                 {fieldError(errors.at)}
               </>
             ) : trip === 'between' ? (
