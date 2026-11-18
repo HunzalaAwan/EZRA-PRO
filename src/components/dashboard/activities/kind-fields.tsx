@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { RadioGroup, RadioGroupCard } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { ACTIVITY_KIND_META, isTimedKind, LESSON_LEVELS, PICKABLE_RENTAL_CATEGORIES, rentalCategoryMeta } from '@/lib/activity-kinds'
+import { ACTIVITY_KIND_META, isTimedKind, LESSON_LEVELS, rentalCategoryMeta } from '@/lib/activity-kinds'
 import { cn } from '@/lib/utils'
 import type { ActivityKind, CharterConfig, DifficultyLevel, LessonConfig, RentalCategory, RentalConfig, RentalDistance, RentalOperator, TransferService } from '@/types'
 
@@ -61,7 +61,8 @@ export interface DraftKindSettings {
     /** Charged per hour late, minor units. */
     lateFee: number
     licence: NonNullable<RentalConfig['licence']>
-    fuel: NonNullable<RentalConfig['fuel']>
+    /** 'none': fuel isn't part of it (kayaks, spaces). */
+    fuel: NonNullable<RentalConfig['fuel']> | 'none'
     kmPerDay: number
     /** Guests book this exact one, or one like it. */
     match: NonNullable<RentalConfig['match']>
@@ -119,9 +120,9 @@ export function defaultKindSettings(): DraftKindSettings {
       items: {},
       lateFee: 0,
       licence: 'none',
-      fuel: 'included',
+      fuel: 'none',
       kmPerDay: 0,
-      match: 'similar',
+      match: 'exact',
       operator: { mode: 'renter', label: 'Driver', price: 0, per: 'hour' },
       distance: { mode: 'none', unit: 'mi', perDay: 0, extra: 0 },
       renters: { minAge: 0, youngUnder: 0, youngFee: 0, licenceYears: 0, extraDrivers: false, extraDriverFee: 0, maxExtraDrivers: 2 },
@@ -244,41 +245,13 @@ function draftDistanceOf(distance: RentalDistance | undefined, kmPerDay?: number
   return { mode: 'none', unit: 'mi', perDay: 0, extra: 0 }
 }
 
-/**
- * Picking what is rented: its usual way of charging, licence, fuel,
- * distance, who drives, exact or similar, seats and youngest driver. Items,
- * prices and lengths already typed are kept.
- */
-export function withRentalCategory(rental: DraftRental, category: RentalCategory): DraftRental {
-  const meta = rentalCategoryMeta(category)
-  const modes = [...meta.modes]
-  const distance: DraftDistance = meta.distance
-    ? draftDistanceOf(meta.distance)
-    : meta.mileage
-      ? { ...rental.distance, mode: 'unlimited' }
-      : { ...rental.distance, mode: 'none' }
-  return {
-    ...rental,
-    category,
-    modes,
-    billing: modes.length === 1 && modes[0] === 'day' ? 'day' : 'length',
-    lengths: modes.includes('length') && rental.lengths.length === 0 ? DEFAULT_LENGTHS.map((entry) => ({ ...entry })) : rental.lengths,
-    licence: meta.licence,
-    fuel: meta.fuel ? 'full_to_full' : 'included',
-    distance,
-    operator: { ...rental.operator, mode: meta.operator.mode, label: meta.operator.label },
-    match: meta.match,
-    seatsPerUnit: meta.seatsPerUnit,
-    renters: { ...rental.renters, minAge: meta.minAge ?? 0 },
-  }
-}
-
 /** The terms a saved rental carries, as the draft edits them. */
-export function draftTermsOf(rental: RentalConfig, minAge: number): Pick<DraftRental, 'match' | 'operator' | 'distance' | 'renters' | 'handover' | 'protection' | 'graceMinutes' | 'lateDayAfterHours'> {
+export function draftTermsOf(rental: RentalConfig, minAge: number): Pick<DraftRental, 'match' | 'fuel' | 'operator' | 'distance' | 'renters' | 'handover' | 'protection' | 'graceMinutes' | 'lateDayAfterHours'> {
   const base = defaultKindSettings().rental
   const renters = rental.renters
   return {
     match: rental.match ?? rentalCategoryMeta(rental.category).match,
+    fuel: rental.fuel ?? 'none',
     operator: rental.operator
       ? { mode: rental.operator.mode, label: rental.operator.label || 'Driver', price: rental.operator.price ?? 0, per: rental.operator.per ?? 'hour' }
       : { ...base.operator, label: rentalCategoryMeta(rental.category).operator.label },
@@ -311,7 +284,7 @@ export function draftTermsOf(rental: RentalConfig, minAge: number): Pick<DraftRe
 
 /** The draft's terms as the rental saves them: only what is set. */
 export function rentalTermsOfDraft(r: DraftRental): Partial<RentalConfig> {
-  const out: Partial<RentalConfig> = { match: r.match, licence: r.licence, fuel: r.fuel }
+  const out: Partial<RentalConfig> = { match: r.match, licence: r.licence, ...(r.fuel !== 'none' ? { fuel: r.fuel } : {}) }
   if (r.operator.mode !== 'renter') {
     out.operator = {
       mode: r.operator.mode,
@@ -477,74 +450,13 @@ export function ChargeChoice({ value, onChange }: { value: RentalCharge; onChang
   )
 }
 
-/** By time: what is rented, how guests book it, and the gap between rentals. Prices and terms are on the Pricing step. */
-export function RentalBasicsFields({
-  settings: raw,
-  onChange,
-  onCategory,
-}: {
-  settings: DraftKindSettings
-  onChange: (settings: DraftKindSettings) => void
-  /** A category was picked: its defaults are applied, and the youngest driver goes with them. */
-  onCategory: (category: RentalCategory) => void
-}) {
+/** By time: the gap between rentals. Items, prices and rental terms are on the Pricing step. */
+export function RentalBasicsFields({ settings: raw, onChange }: { settings: DraftKindSettings; onChange: (settings: DraftKindSettings) => void }) {
   const settings = normalizeKindSettings(raw)
   const rental = settings.rental
   const set = (patch: Partial<DraftRental>) => onChange({ ...settings, rental: { ...rental, ...patch } })
-  const picked = rental.category === 'vehicle' ? 'car' : rental.category
   return (
     <>
-      <Section title="What you rent" hint="Sets sensible defaults for prices and terms. You can change all of them.">
-        <div role="radiogroup" aria-label="What you rent" className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          {PICKABLE_RENTAL_CATEGORIES.map((entry) => {
-            const on = entry.value === picked
-            return (
-              <button
-                key={entry.value}
-                type="button"
-                role="radio"
-                aria-checked={on}
-                onClick={() => (on ? undefined : onCategory(entry.value))}
-                className={cn(
-                  'rounded-xl border px-3.5 py-2.5 text-left transition-colors duration-200',
-                  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
-                  on ? 'border-primary bg-primary-soft/30' : 'border-line bg-surface hover:border-line-strong',
-                )}
-              >
-                <span className="block text-sm font-medium text-foreground">{entry.label}</span>
-                <span className="block text-xs text-subtle">{entry.hint}</span>
-              </button>
-            )
-          })}
-        </div>
-      </Section>
-      <Section title="Guests book">
-        <div role="radiogroup" aria-label="Guests book" className="grid gap-2 sm:grid-cols-2">
-          {([
-            ['exact', 'This exact one', 'Each item is one model or one vehicle, as shown'],
-            ['similar', 'One like it', 'Any of that type: “or similar”'],
-          ] as const).map(([value, label, hint]) => {
-            const on = rental.match === value
-            return (
-              <button
-                key={value}
-                type="button"
-                role="radio"
-                aria-checked={on}
-                onClick={() => set({ match: value })}
-                className={cn(
-                  'rounded-xl border px-3.5 py-2.5 text-left transition-colors duration-200',
-                  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
-                  on ? 'border-primary bg-primary-soft/30' : 'border-line bg-surface hover:border-line-strong',
-                )}
-              >
-                <span className="block text-sm font-medium text-foreground">{label}</span>
-                <span className="block text-xs text-subtle">{hint}</span>
-              </button>
-            )
-          })}
-        </div>
-      </Section>
       <Section title="Between rentals" hint="Items, prices and rental terms are on the Pricing step.">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Gap between rentals" optional description="To clean, refuel or get it ready.">

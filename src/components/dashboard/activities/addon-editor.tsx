@@ -128,7 +128,13 @@ export function rentalAddOnPresets(category: RentalCategory | undefined): AddOnP
         { label: 'Dry bag', price: 800, description: 'Keeps phones and keys dry.', per: 'booking', icon: Backpack },
       ]
     default:
-      return ADDON_PRESETS
+      return [
+        { label: 'Child seat', price: 1500, description: 'For the whole rental. Tell us the ages.', per: 'booking', icon: Baby },
+        { label: 'Helmet', price: 500, description: 'Sized when you pick up.', per: 'guest', icon: HardHat },
+        { label: 'Lock', price: 500, description: 'A strong lock and key.', per: 'booking', icon: Lock },
+        { label: 'Cooler with ice', price: 2000, description: 'Ready when you pick up.', per: 'booking', icon: GlassWater },
+        { label: 'Toll pass', price: 2500, description: 'Tolls charged after.', per: 'booking', icon: MapPin },
+      ]
   }
 }
 

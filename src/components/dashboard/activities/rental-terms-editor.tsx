@@ -7,7 +7,7 @@ import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { FUEL_LABEL, LICENCE_LABEL, isRoadRental, rentalCategoryMeta } from '@/lib/activity-kinds'
+import { FUEL_LABEL, LICENCE_LABEL, rentalCategoryMeta } from '@/lib/activity-kinds'
 import { cn } from '@/lib/utils'
 import type { RentalConfig } from '@/types'
 
@@ -101,16 +101,12 @@ export function RentalTermsEditor({
   const r = settings.rental
   const set = (patch: Partial<DraftRental>) => onSettings({ ...settings, rental: { ...r, ...patch } })
   const meta = rentalCategoryMeta(r.category)
-  const road = isRoadRental(r.category)
   const boat = r.category === 'watercraft'
-  const machine = r.category === 'equipment'
   const cash = (value: number) => (value ? value / 100 : '')
   const sym = <span className="text-sm font-medium">{currencySymbol}</span>
 
-  const showOperator = r.category !== 'space' || r.operator.mode !== 'renter'
-  const showDistance = road || boat || machine || r.distance.mode !== 'none'
-  const showFuel = meta.fuel || r.fuel !== 'included'
-  const showDrivers = (road || boat || r.licence !== 'none' || r.renters.youngUnder > 0 || r.renters.extraDrivers) && r.operator.mode !== 'included'
+  // Every card shows for every rental; each has its own "not used" setting. Drivers hide when the driver comes with it.
+  const showDrivers = r.operator.mode !== 'included'
   const operatorWord = r.operator.label.trim() || meta.operator.label
   const unit = DISTANCE_UNITS.find((entry) => entry.value === r.distance.unit) ?? DISTANCE_UNITS[0]
 
@@ -123,7 +119,7 @@ export function RentalTermsEditor({
 
   return (
     <div className="flex flex-col gap-3">
-      {showOperator ? (
+      {(
         <Card title="Who drives" hint={boat ? 'Or skippers, or operates it.' : undefined}>
           <Pills
             label="Who drives"
@@ -164,9 +160,9 @@ export function RentalTermsEditor({
             </div>
           )}
         </Card>
-      ) : null}
+      )}
 
-      {showDistance ? (
+      {(
         <Card title={r.distance.unit === 'hours' ? 'Engine hours' : 'Distance'} hint="Charged when it comes back, from the reading.">
           <Pills
             label="Distance"
@@ -208,18 +204,18 @@ export function RentalTermsEditor({
             </div>
           )}
         </Card>
-      ) : null}
+      )}
 
-      {showFuel ? (
+      {(
         <Card title={r.category === 'bike' || r.category === 'motorbike' ? 'Fuel or charge' : 'Fuel'}>
           <Pills
             label="Fuel"
             value={r.fuel}
             onChange={(fuel) => set({ fuel })}
-            options={(Object.keys(FUEL_LABEL) as NonNullable<RentalConfig['fuel']>[]).map((value) => ({ value, label: FUEL_LABEL[value] }))}
+            options={[{ value: 'none' as const, label: 'Doesn’t apply' }, ...(Object.keys(FUEL_LABEL) as NonNullable<RentalConfig['fuel']>[]).map((value) => ({ value, label: FUEL_LABEL[value] }))]}
           />
         </Card>
-      ) : null}
+      )}
 
       {showDrivers ? (
         <Card title={boat ? 'Licence and skippers' : 'Licence and drivers'}>

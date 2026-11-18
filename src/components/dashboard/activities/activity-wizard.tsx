@@ -34,7 +34,7 @@ import {
 } from 'lucide-react'
 import { z } from 'zod'
 
-import type { Activity, ActivityKind, ActivityTheme, BookingSettings, ChangeRules, CurrencyCode, PackageConfig, PaymentTerms, PrivateOption, DifficultyLevel, GuestDetailsConfig, GuestQuestion, Location, RentalCategory, TransferService, VerticalKey } from '@/types'
+import type { Activity, ActivityKind, ActivityTheme, BookingSettings, ChangeRules, CurrencyCode, PackageConfig, PaymentTerms, PrivateOption, DifficultyLevel, GuestDetailsConfig, GuestQuestion, Location, TransferService, VerticalKey } from '@/types'
 import { DEFAULT_GUEST_FIELDS, bodyLimitLines, guestDetailsOf, rideAsQuestions, riderLimited } from '@/lib/guest-requirements'
 import { DEFAULT_BOOKING, METHOD_LABEL, bookingOf, groupUnit } from '@/lib/booking-method'
 import { EMPTY_PACKAGE, PackagePartsEditor, packageSeats, type PackageOption } from './package-parts-editor'
@@ -112,7 +112,7 @@ import {
 } from './pricing-tier-editor'
 import { EACH_DEFAULT_MAX, type DraftAddOn } from './addon-editor'
 import { ChargeChoice, KindFields, KindPicker, RentalBasicsFields, TimedFields, defaultKindSettings, draftTermsOf, emptyRoute, normalizeKindSettings,
-  draftItemOf, rentalChargeOf, rentalTermsOfDraft, withRentalCategory, type DraftKindSettings, type DraftRoute, type RentalCharge, type SharedBasics } from './kind-fields'
+  draftItemOf, rentalChargeOf, rentalTermsOfDraft, type DraftKindSettings, type DraftRoute, type RentalCharge, type SharedBasics } from './kind-fields'
 import { DURATION_UNITS, unitFor, type DurationUnit } from './duration-field'
 import { useCustomCategories } from '@/hooks/use-custom-categories'
 import { GuestQuestionsEditor, type WaiverOption } from './guest-questions-editor'
@@ -3098,7 +3098,6 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
     patch({ ...picked, ...transferService({ ...draft, ...picked } as ActivityDraft, service) })
   }
   // What is rented: its defaults (how it is sold, licence, distance, who drives, youngest driver), the items and prices kept.
-  const pickCategory = (category: RentalCategory) => patch({ kindSettings: { ...settings, rental: withRentalCategory(settings.rental, category) } })
   // Shared or private: private is a charter (one group per time slot), per person or per group.
   const sharedKind = React.useRef<ActivityKind>(kind === 'activity' ? 'activity' : 'trip')
   const setPrivate = (on: boolean) => {
@@ -3196,7 +3195,7 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
           <p className="text-[0.8125rem] font-medium">Rental settings</p>
           <ChargeChoice value={rentalChargeOf(kind, settings.transfer.service)} onChange={pickCharge} />
           {kind === 'rental' ? (
-            <RentalBasicsFields settings={settings} onChange={(kindSettings) => patch({ kindSettings })} onCategory={pickCategory} />
+            <RentalBasicsFields settings={settings} onChange={(kindSettings) => patch({ kindSettings })} />
           ) : (
             <TransferFields
               value={settings.transfer}

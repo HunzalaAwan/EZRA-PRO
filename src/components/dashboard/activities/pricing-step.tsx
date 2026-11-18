@@ -717,7 +717,7 @@ export function PricingStep({ draft, patch, errors, currency, dining = false, ac
           onChange={(addOns) => patch({ addOns })}
           currency={currency}
           errors={errors}
-          {...(transfer ? { presets: TRANSFER_ADDON_PRESETS, allowEach: true } : kind === 'rental' ? { presets: rentalAddOnPresets(draft.kindSettings.rental.category) } : {})}
+          {...(transfer ? { presets: TRANSFER_ADDON_PRESETS, allowEach: true } : kind === 'rental' ? { presets: rentalAddOnPresets(draft.kindSettings.rental.category === 'gear' ? undefined : draft.kindSettings.rental.category) } : {})}
         />
       </Block>
 
