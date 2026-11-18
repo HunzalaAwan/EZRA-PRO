@@ -1,4 +1,4 @@
-import type { Activity, ActivityFormat, ActivityKind, ActivityTheme, RentalCategory, RentalConfig, RouteInfo } from '@/types'
+import type { Activity, ActivityFormat, ActivityKind, ActivityTheme, RentalCategory, RentalConfig, RentalDistance, RentalOperator, RouteInfo } from '@/types'
 import { formatDuration } from '@/lib/utils'
 import { privateMostOf, type SpotsSource } from '@/lib/extra-spots'
 import { biggestVehicle, serviceOf, transferUnit } from '@/lib/transfers'
@@ -156,8 +156,12 @@ export const RENTAL_LENGTHS = [
   { minutes: 480, label: 'Full day (8 hours)' },
 ] as const
 
-/** What is rented, and what each one needs asked by default. */
-export const RENTAL_CATEGORIES: {
+/**
+ * What is rented, and the defaults picking it sets: how it is sold, the
+ * licence asked for, distance included, who drives, and whether guests book
+ * an exact item or one like it. Everything stays editable after the pick.
+ */
+export interface RentalCategoryMeta {
   value: RentalCategory
   label: string
   hint: string
@@ -166,22 +170,50 @@ export const RENTAL_CATEGORIES: {
   licence: NonNullable<RentalConfig['licence']>
   seatsPerUnit: number
   billing: NonNullable<RentalConfig['billing']>
+  /** How it is usually sold. */
+  modes: ('hour' | 'day' | 'length')[]
   fuel: boolean
   mileage: boolean
-}[] = [
-  { value: 'gear', label: 'Equipment', hint: 'Boards, kayaks, tools, cameras, sports gear', unit: 'item', units: 'items', licence: 'none', seatsPerUnit: 1, billing: 'length', fuel: false, mileage: false },
-  { value: 'watercraft', label: 'Boats and watercraft', hint: 'Boats, jet skis, pontoons', unit: 'craft', units: 'craft', licence: 'boat', seatsPerUnit: 2, billing: 'length', fuel: true, mileage: false },
-  { value: 'vehicle', label: 'Vehicles', hint: 'Cars, scooters, vans, buggies', unit: 'vehicle', units: 'vehicles', licence: 'driver', seatsPerUnit: 5, billing: 'day', fuel: true, mileage: true },
-  { value: 'bike', label: 'Bikes', hint: 'Bikes, e-bikes, kick scooters', unit: 'bike', units: 'bikes', licence: 'none', seatsPerUnit: 1, billing: 'length', fuel: false, mileage: false },
-  { value: 'space', label: 'Spaces', hint: 'Rooms, desks, courts, lockers, cabanas', unit: 'space', units: 'spaces', licence: 'none', seatsPerUnit: 4, billing: 'length', fuel: false, mileage: false },
+  /** Distance or engine hours included per day by default; absent = unlimited. */
+  distance?: RentalDistance
+  /** Who usually drives or operates it, and what they are called. */
+  operator: Pick<RentalOperator, 'mode' | 'label'>
+  match: NonNullable<RentalConfig['match']>
+  /** The usual minimum age, when there is one. */
+  minAge?: number
+  /** Older or hidden from the picker. */
+  hidden?: boolean
+}
+
+export const RENTAL_CATEGORIES: RentalCategoryMeta[] = [
+  { value: 'car', label: 'Cars', hint: 'Economy to SUVs, by the day or week', unit: 'car', units: 'cars', licence: 'driver', seatsPerUnit: 5, billing: 'day', modes: ['day'], fuel: true, mileage: true, operator: { mode: 'renter', label: 'Driver' }, match: 'similar', minAge: 21 },
+  { value: 'luxury', label: 'Luxury and exotic cars', hint: 'Sports cars, supercars, chauffeured cars', unit: 'car', units: 'cars', licence: 'driver', seatsPerUnit: 4, billing: 'day', modes: ['day'], fuel: true, mileage: true, distance: { unit: 'mi', unlimited: false, perDay: 100, extra: 300 }, operator: { mode: 'optional', label: 'Chauffeur' }, match: 'exact', minAge: 25 },
+  { value: 'van_truck', label: 'Vans and trucks', hint: 'Cargo vans, box trucks, moving and pickup trucks', unit: 'vehicle', units: 'vehicles', licence: 'driver', seatsPerUnit: 3, billing: 'day', modes: ['day'], fuel: true, mileage: true, distance: { unit: 'mi', unlimited: false, perDay: 0, extra: 79 }, operator: { mode: 'renter', label: 'Driver' }, match: 'similar', minAge: 21 },
+  { value: 'motorbike', label: 'Motorbikes and scooters', hint: 'Scooters, mopeds, motorcycles, ATVs', unit: 'bike', units: 'bikes', licence: 'motorcycle', seatsPerUnit: 2, billing: 'day', modes: ['hour', 'day'], fuel: true, mileage: true, operator: { mode: 'renter', label: 'Rider' }, match: 'similar', minAge: 18 },
+  { value: 'rv', label: 'Campervans and RVs', hint: 'Campervans, motorhomes, travel trailers', unit: 'vehicle', units: 'vehicles', licence: 'driver', seatsPerUnit: 4, billing: 'day', modes: ['day'], fuel: true, mileage: true, distance: { unit: 'mi', unlimited: false, perDay: 150, extra: 45 }, operator: { mode: 'renter', label: 'Driver' }, match: 'exact', minAge: 25 },
+  { value: 'watercraft', label: 'Boats and watercraft', hint: 'Boats, pontoons, yachts, jet skis', unit: 'boat', units: 'boats', licence: 'boat', seatsPerUnit: 6, billing: 'length', modes: ['hour', 'length'], fuel: true, mileage: false, operator: { mode: 'optional', label: 'Captain' }, match: 'exact' },
+  { value: 'bike', label: 'Bikes and e-bikes', hint: 'Bikes, e-bikes, kick scooters', unit: 'bike', units: 'bikes', licence: 'none', seatsPerUnit: 1, billing: 'length', modes: ['hour', 'day'], fuel: false, mileage: false, operator: { mode: 'renter', label: 'Rider' }, match: 'similar' },
+  { value: 'equipment', label: 'Equipment and tools', hint: 'Machines, tools, generators, party and event gear', unit: 'item', units: 'items', licence: 'none', seatsPerUnit: 1, billing: 'day', modes: ['day'], fuel: true, mileage: false, operator: { mode: 'renter', label: 'Operator' }, match: 'similar' },
+  { value: 'gear', label: 'Sports and outdoor gear', hint: 'Kayaks, boards, skis, camping gear, cameras', unit: 'item', units: 'items', licence: 'none', seatsPerUnit: 1, billing: 'length', modes: ['hour', 'length'], fuel: false, mileage: false, operator: { mode: 'renter', label: 'Guide' }, match: 'similar' },
+  { value: 'space', label: 'Spaces', hint: 'Rooms, desks, courts, lockers, cabanas', unit: 'space', units: 'spaces', licence: 'none', seatsPerUnit: 4, billing: 'length', modes: ['hour'], fuel: false, mileage: false, operator: { mode: 'renter', label: 'Host' }, match: 'exact' },
+  { value: 'vehicle', label: 'Vehicles', hint: 'Cars, scooters, vans, buggies', unit: 'vehicle', units: 'vehicles', licence: 'driver', seatsPerUnit: 5, billing: 'day', modes: ['day'], fuel: true, mileage: true, operator: { mode: 'renter', label: 'Driver' }, match: 'similar', hidden: true },
 ]
 
-export const rentalCategoryMeta = (category: RentalCategory | undefined) =>
-  RENTAL_CATEGORIES.find((entry) => entry.value === (category ?? 'gear')) ?? RENTAL_CATEGORIES[0]
+/** The categories the wizard offers, in order. */
+export const PICKABLE_RENTAL_CATEGORIES = RENTAL_CATEGORIES.filter((entry) => !entry.hidden)
+
+export const rentalCategoryMeta = (category: RentalCategory | undefined): RentalCategoryMeta =>
+  RENTAL_CATEGORIES.find((entry) => entry.value === (category ?? 'gear')) ?? RENTAL_CATEGORIES.find((entry) => entry.value === 'gear')!
+
+/** Cars, vans, trucks, motorbikes and RVs: things on the road, with a driver's age and licence. */
+export const isRoadRental = (category: RentalCategory | undefined) =>
+  category === 'car' || category === 'luxury' || category === 'van_truck' || category === 'motorbike' || category === 'rv' || category === 'vehicle'
 
 export const LICENCE_LABEL: Record<NonNullable<RentalConfig['licence']>, string> = {
   none: 'No licence needed',
   driver: "Driver's licence",
+  motorcycle: 'Motorcycle licence',
+  commercial: "Commercial driver's licence",
   boat: 'Boat licence or boater card',
 }
 
@@ -463,7 +495,7 @@ export function themeOf(activity: Pick<Activity, 'theme' | 'slug' | 'kind' | 're
   if (activity.kind === 'pass') return 'attractions'
   if (activity.kind === 'rental') {
     const category = activity.rental?.category
-    return category === 'vehicle' ? 'offroad' : category === 'bike' ? 'cycling' : 'water'
+    return category === 'bike' ? 'cycling' : category === 'watercraft' || category === 'gear' || category === undefined ? 'water' : isRoadRental(category) ? 'offroad' : 'sightseeing'
   }
   if (/horse|ranch/.test(slug)) return 'horse'
   if (/heli|parasail|skydiv|balloon|paraglid/.test(slug)) return 'air'

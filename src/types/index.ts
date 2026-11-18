@@ -885,8 +885,86 @@ export interface RouteInfo {
   elevationM?: number
 }
 
-/** What is rented: decides the requirements a rental asks for. */
-export type RentalCategory = 'watercraft' | 'vehicle' | 'bike' | 'gear' | 'space'
+/**
+ * What is rented: picks sensible defaults (how it is sold, distance,
+ * licence, deposit) and the words guests see. 'vehicle' is the older name
+ * for cars, kept for saved rentals.
+ */
+export type RentalCategory =
+  | 'car'
+  | 'luxury'
+  | 'van_truck'
+  | 'motorbike'
+  | 'rv'
+  | 'watercraft'
+  | 'bike'
+  | 'equipment'
+  | 'gear'
+  | 'space'
+  | 'vehicle'
+
+/**
+ * Who drives or operates it. The renter (self-drive), your own driver,
+ * captain or operator in the price, or the guest's choice at a price.
+ */
+export interface RentalOperator {
+  mode: 'renter' | 'included' | 'optional'
+  /** What you call them: "Driver", "Chauffeur", "Captain", "Operator". */
+  label: string
+  /** Optional: what one costs, minor units, per `per`, for each vehicle. */
+  price?: number
+  per?: 'hour' | 'day' | 'rental'
+}
+
+/** What is included per day, and what each one over costs (cars, trucks, machines). */
+export interface RentalDistance {
+  /** Miles, kilometres, or engine hours for machines and boats. */
+  unit: 'mi' | 'km' | 'hours'
+  /** No limit: nothing is counted or charged. */
+  unlimited: boolean
+  /** Included per rental day when limited. 0 = every one is charged (trucks priced per mile). */
+  perDay: number
+  /** Each one over the allowance, minor units. Charged when it comes back. */
+  extra: number
+}
+
+/** Who can rent, and what drivers cost. The minimum age is `Activity.minAge`. */
+export interface RentalRenters {
+  /** Drivers under this age pay `youngFee` per rental day. */
+  youngUnder?: number
+  youngFee?: number
+  /** Years the licence has been held, at least. */
+  licenceYears?: number
+  /** Extra drivers: per rental day each, minor units. Absent = not offered; 0 = free. */
+  extraDriverFee?: number
+  maxExtraDrivers?: number
+}
+
+/** How it gets to the guest and back. */
+export interface RentalHandover {
+  /** Guests collect it from your location. */
+  pickup: boolean
+  /** You bring it to them and collect it after: a fee per trip or for each way. */
+  delivery?: { fee: number; per: 'trip' | 'each_way'; note?: string }
+  /** Returned at another of your locations: a flat fee. */
+  oneWay?: { fee: number }
+}
+
+/** Damage cover guests can buy, per rental day: "Basic", "Full". */
+export interface RentalProtectionPlan {
+  id: string
+  name: string
+  perDay: number
+  /** What the guest still pays if it is damaged, minor units. 0 = nothing. */
+  deductible: number
+  note?: string
+}
+
+export interface RentalProtection {
+  plans: RentalProtectionPlan[]
+  /** Every booking takes one of the plans: there is no "my own cover". */
+  required: boolean
+}
 
 /**
  * One kind of thing a rental lends out — "Single kayak", "Double kayak",
@@ -942,7 +1020,17 @@ export interface RentalConfig {
   minHours?: number
   maxHours?: number
   /** What each tier costs per hour and per day, minor units. */
-  rates?: { tierId: string; hour?: number; day?: number; /** Price per length id. */ lengths?: Record<string, number> }[]
+  rates?: {
+    tierId: string
+    hour?: number
+    day?: number
+    /** Seven days, minor units. Used whenever it is cheaper than the days. */
+    week?: number
+    /** Thirty days, minor units. Used whenever it is cheaper than the weeks and days. */
+    month?: number
+    /** Price per length id. */
+    lengths?: Record<string, number>
+  }[]
   /**
    * How it is charged. length: each price tier is a length (1 hour, half day).
    * day: guests pick a pick-up day and how many days; each tier is a model priced per day.
@@ -957,11 +1045,27 @@ export interface RentalConfig {
   /** People one unit carries (two riders on a jet ski, five seats in a car). */
   seatsPerUnit?: number
   /** Licence the renter shows at pick-up. */
-  licence?: 'none' | 'driver' | 'boat'
+  licence?: 'none' | 'driver' | 'motorcycle' | 'commercial' | 'boat'
   /** Watercraft and vehicles. */
   fuel?: 'included' | 'full_to_full' | 'charged'
-  /** Vehicles: kilometres included per day; 0 or absent = unlimited. */
+  /** Older field: kilometres included per day; 0 or absent = unlimited. `distance` replaces it. */
   kmPerDay?: number
+  /** Who drives or operates it. Absent = the renter. */
+  operator?: RentalOperator
+  /** Distance or engine hours included, and the price of each one over. Absent = unlimited. */
+  distance?: RentalDistance
+  /** Young and extra drivers, licence years. */
+  renters?: RentalRenters
+  /** Pick-up, delivery and one-way returns. Absent = pick-up only. */
+  handover?: RentalHandover
+  /** Damage cover guests can add. */
+  protection?: RentalProtection
+  /** Minutes after the return time before it counts as late. */
+  graceMinutes?: number
+  /** Late by more than this many hours: a full extra day instead of the hourly late fee. */
+  lateDayAfterHours?: number
+  /** Guests book this exact item, or one like it ("or similar"). Default exact. */
+  match?: 'exact' | 'similar'
   /** Units available at once (jet skis, kayaks, bikes). Each departure sells up to this many. */
   units: number
   /** Minutes between rentals for cleaning, fuel or a hand-over. */

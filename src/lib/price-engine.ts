@@ -1,6 +1,7 @@
 import type { Activity, ActivityKind, ChargeBy, CurrencyCode, PriceChange, PriceChangeKind, PriceTier } from '@/types'
 import { applyRules, type PricingRule } from '@/lib/pricing'
 import { rateFor, rentalModes, type RentalMode } from '@/lib/activity-kinds'
+import { spanPrice } from '@/lib/rental-terms'
 import { extraSpotsOf, privateMostOf, slotExtraSpotsOf, spotsPlanOf } from '@/lib/extra-spots'
 import { peopleOf, placesOf } from '@/lib/places'
 import { activeZones, transferOf, transferRateFor, tripsOffered, zoneById, type TransferPricing } from '@/lib/transfers'
@@ -813,7 +814,12 @@ export function priceBooking(input: PriceBookingInput): PriceBookingResult {
       }
       const usualQty = qty - (inExtra[tier.id] ?? 0)
       if (usualQty <= 0) continue
-      const full = unit.price * span
+      // Day rentals with a week or month rate: the cheapest mix of months, weeks and days, at the same price changes.
+      const longRate = kind === 'rental' && rated && rental.mode === 'day' && base > 0 ? activity.rental?.rates?.find((entry) => entry.tierId === tier.id) : undefined
+      const long = longRate && (longRate.week || longRate.month) ? spanPrice({ day: base, week: longRate.week, month: longRate.month }, days) : undefined
+      const longCheaper = long !== undefined && long < base * days
+      const full = longCheaper ? Math.round((long * unit.price) / base) : unit.price * span
+      const longWord = longCheaper ? (longRate?.month && days >= 30 ? ' · monthly rate' : ' · weekly rate') : ''
       // A rental item's cap: an hourly or daily price stops at the most one item costs for the whole rental.
       const itemCap = kind === 'rental' && !byLength ? activity.rental?.items?.find((item) => item.tierId === tier.id)?.cap : undefined
       const unitPrice = itemCap && itemCap > 0 ? Math.min(full, itemCap) : full
@@ -828,7 +834,7 @@ export function priceBooking(input: PriceBookingInput): PriceBookingResult {
             : rated && rental.mode === 'hour'
               ? `${tier.label} · ${hours} ${hours === 1 ? 'hour' : 'hours'}${unitPrice < full ? ' · capped' : ''}`
               : days > 1
-                ? `${tier.label} · ${days} days${unitPrice < full ? ' · capped' : ''}`
+                ? `${tier.label} · ${days} days${longWord}${unitPrice < full ? ' · capped' : ''}`
                 : tier.label,
         quantity: usualQty,
         unitPrice,

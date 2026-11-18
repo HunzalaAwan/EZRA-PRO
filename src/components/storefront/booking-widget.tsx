@@ -43,6 +43,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { hasItems, rentalItemsOf } from '@/lib/rental-items'
+import { cleanRentalChoice, rentalChoiceLines, type RentalChoice } from '@/lib/rental-terms'
 import { bookingOf, groupUnit, showsSchedule } from '@/lib/booking-method'
 import { EnquiryPanel, RequestForm, type RequestContext } from '@/components/storefront/booking-request'
 import type { BookingSettings } from '@/types'
@@ -198,6 +199,8 @@ export interface Quote {
   appliedChanges: AppliedChange[]
   /** Transfers: the owner's prices include every fee and nothing is added on top ("All fees included"). */
   feesIncluded?: boolean
+  /** Rentals: the guest's choices as priced (anything not offered taken out). */
+  rentalChoice?: RentalChoice
 }
 
 export interface QuoteOptions {
@@ -227,6 +230,10 @@ export interface QuoteOptions {
   transport?: { choice: TransportChoice; zoneName?: string }
   /** Who pays EZRA Pro's 4% (the booking defaults). The business, when not given. */
   feePayer?: FeePayer
+  /** Rentals: the guest's choices (driver, cover, drivers, delivery, one-way). Cleaned against the rental here. */
+  rentalChoice?: RentalChoice
+  /** Location names by id, for a one-way return's line. */
+  locationName?: (id: string) => string | undefined
 }
 
 /**
@@ -299,6 +306,16 @@ export function buildQuote(
     })
     subtotal += total
   }
+  // Rentals: the guest's choices — driver, cover, young and extra drivers, delivery, a one-way return.
+  const rentalChoice = (activity.kind ?? 'trip') === 'rental' && options.rentalChoice ? cleanRentalChoice(activity.rental, options.rentalChoice, activity.minAge) : undefined
+  if (rentalChoice && activity.rental) {
+    const units = selection.tiers.reduce((sum, line) => sum + Math.max(0, Math.floor(line.qty)), 0)
+    for (const line of rentalChoiceLines({ config: activity.rental, choice: rentalChoice, units, mode: options.rentalMode ?? (isDayRental(activity) ? 'day' : undefined), days, hours: options.rentalMode === 'length' ? activity.rental.lengths?.find((entry) => entry.id === options.lengthId)?.hours : options.hours, locationName: options.locationName })) {
+      addOnLines.push({ id: line.id, label: line.label, kind: 'addon', quantity: line.quantity, unitPrice: line.unitPrice, total: line.total })
+      subtotal += line.total
+    }
+  }
+
   // Transport (pickup, drop-off or both ways), per guest or per booking: a line with the extras.
   const ride = options.transport ? priceTransport(activity, options.transport.choice, priced.guests, options.transport.zoneName) : null
   if (ride) {
@@ -334,6 +351,7 @@ export function buildQuote(
     countLabel: partyLabel(activity, priced.guests),
     appliedChanges: priced.appliedChanges,
     ...(feesIncluded ? { feesIncluded: true } : {}),
+    ...(rentalChoice ? { rentalChoice } : {}),
   }
 }
 
