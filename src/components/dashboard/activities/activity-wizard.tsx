@@ -34,7 +34,7 @@ import {
 } from 'lucide-react'
 import { z } from 'zod'
 
-import type { Activity, ActivityKind, ActivityTheme, BookingSettings, ChangeRules, CurrencyCode, PackageConfig, PaymentTerms, PrivateOption, DifficultyLevel, GuestDetailsConfig, GuestQuestion, Location, TransferService, VerticalKey } from '@/types'
+import type { Activity, ActivityKind, ActivityTheme, BookingSettings, ChangeRules, CurrencyCode, PackageConfig, PaymentTerms, PrivateOption, DifficultyLevel, GuestDetailsConfig, GuestQuestion, Location, RentalCategory, TransferService, VerticalKey } from '@/types'
 import { DEFAULT_GUEST_FIELDS, bodyLimitLines, guestDetailsOf, rideAsQuestions, riderLimited } from '@/lib/guest-requirements'
 import { DEFAULT_BOOKING, METHOD_LABEL, bookingOf, groupUnit } from '@/lib/booking-method'
 import { EMPTY_PACKAGE, PackagePartsEditor, packageSeats, type PackageOption } from './package-parts-editor'
@@ -111,8 +111,8 @@ import {
   type DraftTier,
 } from './pricing-tier-editor'
 import { EACH_DEFAULT_MAX, type DraftAddOn } from './addon-editor'
-import { KindFields, KindPicker, TimedFields, defaultKindSettings, emptyRoute, normalizeKindSettings,
-  draftItemOf, type DraftKindSettings, type DraftRoute, type SharedBasics } from './kind-fields'
+import { ChargeChoice, KindFields, KindPicker, RentalBasicsFields, TimedFields, defaultKindSettings, draftTermsOf, emptyRoute, normalizeKindSettings,
+  draftItemOf, rentalChargeOf, rentalTermsOfDraft, withRentalCategory, type DraftKindSettings, type DraftRoute, type RentalCharge, type SharedBasics } from './kind-fields'
 import { DURATION_UNITS, unitFor, type DurationUnit } from './duration-field'
 import { useCustomCategories } from '@/hooks/use-custom-categories'
 import { GuestQuestionsEditor, type WaiverOption } from './guest-questions-editor'
@@ -381,7 +381,7 @@ function kindOverride(draft: ActivityDraft) {
     const hourly = r.modes.includes('hour')
     const daily = r.modes.includes('day')
     const byLength = r.modes.includes('length')
-    const rate = (tierId: string) => r.rates[tierId] ?? { hour: 0, day: 0, lengths: {} }
+    const rate = (tierId: string) => r.rates[tierId] ?? { hour: 0, day: 0, week: 0, month: 0, lengths: {} }
     const items = draft.tiers.map((tier) => {
       const item = draftItemOf(r, tier.id)
       return {
@@ -410,6 +410,9 @@ function kindOverride(draft: ActivityDraft) {
           tierId: tier.id,
           ...(hourly ? { hour: rate(tier.id).hour } : {}),
           ...(daily ? { day: rate(tier.id).day } : {}),
+          // A week or a month is sold only with day prices, and only when set.
+          ...(daily && (rate(tier.id).week ?? 0) > 0 ? { week: rate(tier.id).week } : {}),
+          ...(daily && (rate(tier.id).month ?? 0) > 0 ? { month: rate(tier.id).month } : {}),
           ...(byLength ? { lengths: Object.fromEntries(r.lengths.map((length) => [length.id, rate(tier.id).lengths?.[length.id] ?? 0])) } : {}),
         })),
         ...(byLength ? { lengths: r.lengths.map((length) => ({ ...length, label: length.label.trim() || `Up to ${length.hours} hours` })) } : {}),
@@ -418,7 +421,11 @@ function kindOverride(draft: ActivityDraft) {
         ...(daily ? { minDays: r.minDays, maxDays: r.maxDays } : {}),
         pickupTime: hours.opensAt,
         returnTime: hours.closesAt,
+        // What comes with it and what guests can add: who drives, distance, fuel, drivers, cover, handover, late returns.
+        ...rentalTermsOfDraft(r),
       },
+      // The youngest driver or renter is the activity's minimum age (what checkout and the young-driver fee read).
+      ...(r.renters.minAge > 0 ? { minAge: r.renters.minAge } : {}),
     }
   }
   if (kind === 'charter') {
@@ -985,13 +992,14 @@ export function draftFromActivity(source: Activity, nowIso: string): ActivityDra
       return {
         rental: rental
           ? (() => {
-              const { durations, rates, modes, items, lateFee, lengths, ...rest } = rental
+              const { durations, rates, modes, items, lateFee, lengths, operator: _operator, distance: _distance, renters: _renters, handover: _handover, protection: _protection, match: _match, graceMinutes: _grace, lateDayAfterHours: _lateDay, ...rest } = rental
               // Older rentals shared one pool; each item starts with an even share of it.
               const share = Math.max(1, Math.round((rental.units || 1) / Math.max(1, activity.priceTiers.length)))
               return {
                 ...blank.rental,
                 ...rest,
                 lateFee: lateFee ?? 0,
+                ...draftTermsOf(rental, activity.minAge),
                 lengths: lengths ? lengths.map((entry) => ({ ...entry })) : [],
                 items: Object.fromEntries(
                   activity.priceTiers.map((tier) => {
@@ -1009,7 +1017,7 @@ export function draftFromActivity(source: Activity, nowIso: string): ActivityDra
                 rates: Object.fromEntries(
                   activity.priceTiers.map((tier) => {
                     const rate = rates?.find((entry) => entry.tierId === tier.id)
-                    return [tier.id, { hour: rate?.hour ?? (rental.billing === 'day' ? 0 : tier.price), day: rate?.day ?? (rental.billing === 'day' ? tier.price : tier.price * 4), lengths: { ...rate?.lengths } }]
+                    return [tier.id, { hour: rate?.hour ?? (rental.billing === 'day' ? 0 : tier.price), day: rate?.day ?? (rental.billing === 'day' ? tier.price : tier.price * 4), week: rate?.week ?? 0, month: rate?.month ?? 0, lengths: { ...rate?.lengths } }]
                   }),
                 ),
               }
@@ -1415,6 +1423,15 @@ function validateStep(step: number, draft: ActivityDraft): FieldErrors {
     // How it is charged sits on Pricing, so its limits are checked here.
     if (r.modes.includes('day') && r.maxDays > 0 && r.maxDays < r.minDays) errors['rental.maxDays'] = 'Most days cannot be fewer than the fewest'
     if (r.modes.includes('hour') && r.maxHours > 0 && r.maxHours < r.minHours) errors['rental.maxHours'] = 'Most hours cannot be fewer than the fewest'
+    // Rental terms: an optional driver with a price, an allowance that allows something, named plans with a price.
+    if (r.operator.mode === 'optional' && r.operator.price <= 0) errors['rental.operator.price'] = 'Set a price'
+    if (r.distance.mode === 'allowance' && r.distance.perDay <= 0) errors['rental.distance.perDay'] = 'At least 1'
+    if (r.distance.mode === 'every' && r.distance.extra <= 0) errors['rental.distance.extra'] = 'Set a price'
+    if (r.operator.mode !== 'included' && r.renters.youngUnder > 0 && r.renters.youngFee <= 0) errors['rental.youngFee'] = 'Set a fee'
+    for (const plan of r.protection.plans) {
+      if (!plan.name.trim()) errors[`rental.plan.${plan.id}.name`] = 'Name it'
+      if (plan.perDay <= 0) errors[`rental.plan.${plan.id}.perDay`] = 'Set a price'
+    }
   }
   // A transfer's prices are its table: destinations, a price in each, hourly prices and hours. Its row names are checked on Basics.
   if (id === 'pricing' && !isDining(draft) && (draft.kind ?? 'trip') === 'transfer') {
@@ -2536,6 +2553,7 @@ export function ActivityWizard({
                       dining={dining}
                       activitySlug={activity?.slug ?? slugify(draft.name)}
                       payment={pay}
+                      locationCount={draft.schedule.locations.length}
                     />
                   ) : null}
                   {currentStep.id === 'schedule' ? (
@@ -2756,6 +2774,22 @@ function currencySymbol(currency: CurrencyCode | undefined) {
  * instructor, equipment and re-entry are written in the text now. Spots not
  * filled in yet are left out.
  */
+/** "Chauffeur optional", "100 mi a day", "2 cover plans", "Delivery": the rental's terms, short. */
+function rentalTermFacts(r: DraftKindSettings['rental']): string[] {
+  const unit = r.distance.unit === 'hours' ? 'engine hours' : r.distance.unit
+  const label = r.operator.label.trim() || 'Driver'
+  return [
+    ...(r.match === 'similar' ? ['Or similar'] : []),
+    ...(r.operator.mode === 'included' ? [`${label} included`] : r.operator.mode === 'optional' ? [`${label} optional`] : []),
+    ...(r.distance.mode === 'unlimited' ? [`Unlimited ${unit === 'mi' ? 'miles' : unit}`] : r.distance.mode === 'allowance' ? [`${r.distance.perDay} ${unit} a day`] : r.distance.mode === 'every' ? [`Charged per ${unit === 'mi' ? 'mile' : unit === 'engine hours' ? 'engine hour' : unit}`] : []),
+    ...(r.renters.minAge > 0 && r.operator.mode !== 'included' ? [`Drivers ${r.renters.minAge}+`] : []),
+    ...(r.protection.plans.length > 0 ? [`${r.protection.plans.length} cover ${r.protection.plans.length === 1 ? 'plan' : 'plans'}${r.protection.required ? ', one required' : ''}`] : []),
+    ...(r.handover.delivery ? ['Delivery'] : []),
+    ...(r.handover.oneWay ? ['One-way returns'] : []),
+    ...(r.lateFee > 0 || r.lateDayAfterHours > 0 ? ['Late return fee'] : []),
+  ]
+}
+
 function kindFacts(draft: ActivityDraft): string[] {
   const kind = draft.kind ?? 'trip'
   const s = normalizeKindSettings(draft.kindSettings)
@@ -2771,8 +2805,9 @@ function kindFacts(draft: ActivityDraft): string[] {
         const total = draft.tiers.reduce((sum, tier) => sum + draftItemOf(r, tier.id).stock, 0)
         return `${draft.tiers.length} ${draft.tiers.length === 1 ? 'item' : 'items'} to choose from · ${total} in stock`
       })(),
+      ...(r.modes.includes('day') && draft.tiers.some((tier) => (r.rates[tier.id]?.week ?? 0) > 0 || (r.rates[tier.id]?.month ?? 0) > 0) ? ['Week and month rates'] : []),
       ...(draft.tiers.some((tier) => draftItemOf(r, tier.id).deposit > 0) ? ['Refundable deposit held'] : []),
-      ...(r.lateFee > 0 ? ['Late return fee'] : []),
+      ...rentalTermFacts(r),
     ]
   }
   if (kind === 'lesson') {
@@ -2943,7 +2978,7 @@ function transferSchedule(draft: Pick<ActivityDraft, 'schedules' | 'schedule'>, 
 }
 
 /**
- * Picking Rental, "With a driver": the rows become vehicles (a car and a
+ * Picking Rental, by trip or per seat: the rows become vehicles (a car and a
  * van; the ones there are set aside), guests are collected, it is filed
  * under Transfers, books 12 hours ahead, offers tips and has no waiver.
  */
@@ -2985,7 +3020,7 @@ export function transferPick(draft: ActivityDraft): Partial<ActivityDraft> {
 export function transferLeave(draft: ActivityDraft, next: ActivityKind): Partial<ActivityDraft> {
   const back = draft.otherTiers && draft.otherTiers.length > 0 ? draft.otherTiers : [{ ...blankTier(STARTER_LABEL[next], 14900, draft.tiers), minQuantity: next === 'rental' ? 0 : 1 }]
   const settings = normalizeKindSettings(draft.kindSettings)
-  // Back to the kind it was (Self-drive after With a driver): its own arrival and category too.
+  // Back to the kind it was (By time after By trip): its own arrival and category too.
   const other = settings.transfer.keptOther
   const arrival: ArrivalMode = other && other.kind === next ? other.arrivalMode : next === 'pass' || next === 'rental' || next === 'activity' || next === 'package' ? 'venue' : 'meet'
   const schedule = isStarterSchedule(draft.schedules)
@@ -3053,6 +3088,17 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
       ...(next === 'lesson' && draft.maxCapacity < 1 ? { maxCapacity: 8, durationMinutes: draft.durationMinutes || 120 } : {}),
     })
   }
+  // A rental by time, by trip or per seat: by trip and per seat are rides ('transfer'), switched with their own rows and schedule.
+  const pickCharge = (charge: RentalCharge) => {
+    if (charge === 'hourly') return
+    if (charge === 'time') return kind === 'transfer' ? pickKind('rental') : undefined
+    const service: TransferService = charge === 'seat' ? 'shared' : 'private'
+    if (kind === 'transfer') return patch(transferService(draft, service))
+    const picked = transferPick(draft)
+    patch({ ...picked, ...transferService({ ...draft, ...picked } as ActivityDraft, service) })
+  }
+  // What is rented: its defaults (how it is sold, licence, distance, who drives, youngest driver), the items and prices kept.
+  const pickCategory = (category: RentalCategory) => patch({ kindSettings: { ...settings, rental: withRentalCategory(settings.rental, category) } })
   // Shared or private: private is a charter (one group per time slot), per person or per group.
   const sharedKind = React.useRef<ActivityKind>(kind === 'activity' ? 'activity' : 'trip')
   const setPrivate = (on: boolean) => {
@@ -3145,17 +3191,23 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
           }}
         />
       ) : null}
-      {kind === 'transfer' && !dining ? (
-        <TransferFields
-          value={settings.transfer}
-          tiers={draft.tiers}
-          onChange={(transfer, tiers) => patch({ kindSettings: { ...settings, transfer }, ...(tiers ? { tiers } : {}) })}
-          onService={(service) => patch(transferService(draft, service))}
-          onSelfDrive={() => pickKind('rental')}
-          errors={errors}
-        />
+      {(kind === 'rental' || kind === 'transfer') && !dining ? (
+        <div className="flex flex-col gap-4 rounded-xl border border-line bg-surface-sunken/40 p-4">
+          <p className="text-[0.8125rem] font-medium">Rental settings</p>
+          <ChargeChoice value={rentalChargeOf(kind, settings.transfer.service)} onChange={pickCharge} />
+          {kind === 'rental' ? (
+            <RentalBasicsFields settings={settings} onChange={(kindSettings) => patch({ kindSettings })} onCategory={pickCategory} />
+          ) : (
+            <TransferFields
+              value={settings.transfer}
+              tiers={draft.tiers}
+              onChange={(transfer, tiers) => patch({ kindSettings: { ...settings, transfer }, ...(tiers ? { tiers } : {}) })}
+              errors={errors}
+            />
+          )}
+        </div>
       ) : null}
-      {dining || isTimedKind(kind) || kind === 'package' || kind === 'transfer' ? null : (
+      {dining || isTimedKind(kind) || kind === 'package' || kind === 'transfer' || kind === 'rental' ? null : (
         <KindFields
           kind={kind}
           settings={settings}
@@ -3165,7 +3217,6 @@ function BasicsStep({ draft, patch, errors, currency, tenantSlug = '', packageOp
           errors={errors}
           shared={shared}
           onShared={(changes) => patch(changes)}
-          onDriver={kind === 'rental' ? (driver) => (driver ? patch(transferPick(draft)) : undefined) : undefined}
           tenantSlug={tenantSlug}
         />
       )}

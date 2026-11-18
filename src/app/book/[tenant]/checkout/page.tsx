@@ -2,7 +2,8 @@ import type { Metadata } from 'next'
 import { notFound, redirect } from 'next/navigation'
 import { bookingOf } from '@/lib/booking-method'
 
-import { NOW, getActivityById, getDepartureById, getStorefront, getStorefrontAvailability, getLocationById, getWaiverById, getPickupZonesByTenant } from '@/lib/demo'
+import { NOW, getActivityById, getDepartureById, getStorefront, getStorefrontAvailability, getLocationById, getLocationsByTenant, getWaiverById, getPickupZonesByTenant } from '@/lib/demo'
+import { decodeRentalChoice } from '@/lib/rental-terms'
 import { locationAddress } from '@/lib/locations'
 import { buildDays, buildTransferAvailability, rentalItemsLeftFor } from '@/lib/storefront-availability'
 import { decodeTransferQuery, encodeTransferQuery, legsFor, vehiclesLeftAt } from '@/lib/transfers'
@@ -274,6 +275,9 @@ export default async function CheckoutPage({
       rentalHours={rentalHours}
       rentalLength={rental.lengthId}
       rentalRequest={packageLegs ? undefined : rentalRequest}
+      // Rentals: the guest's choices from the widget (driver, cover, drivers, delivery, one-way), priced again in the flow.
+      rentalChoice={activity.kind === 'rental' ? decodeRentalChoice(query.ro) : undefined}
+      locations={getLocationsByTenant(tenant.id)}
       party={party}
       requestedPrivate={query.p === '1'}
       slotEmpty={Boolean(slotRow && slotRow.capacity > 0 && slotRow.seatsLeft >= slotRow.capacity)}

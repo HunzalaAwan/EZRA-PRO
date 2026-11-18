@@ -1,5 +1,6 @@
 import { NOW } from '@/lib/data/constants'
 import type { BookingPickup, CurrencyCode, TransferBookingDetails } from '@/types'
+import type { RentalChoice } from '@/lib/rental-terms'
 
 /* ==========================================================================
    Booking ledger — what changed after the demo data was built: bookings
@@ -33,6 +34,8 @@ export interface LedgerEntry {
   transfer?: TransferBookingDetails
   /** Transport on the activity: where and when the guests are collected and dropped. On the first part only. */
   pickup?: BookingPickup
+  /** Rentals: what the guest chose (driver, cover, drivers, delivery, one-way) and where to deliver it. */
+  rental?: { choice: RentalChoice; deliveryAddress?: string }
   name: string
   email: string
   phone?: string

@@ -9,12 +9,13 @@ import {
   getPickupZonesByTenant,
 } from '@/lib/demo'
 import { addDays, hashSeed, toDateKey } from '@/lib/utils'
-import { rentalCategoryMeta } from '@/lib/activity-kinds'
+import { rateFor, rentalCategoryMeta } from '@/lib/activity-kinds'
+import { selfDriven } from '@/lib/rental-terms'
 import { privateMostOf } from '@/lib/extra-spots'
 import { hasItems, itemsInBooking, itemsSentence, rentalItemsOf, rentalSpan } from '@/lib/rental-items'
 import { ridesOf, type TransferRide } from '@/lib/transfer-rides'
 import { stopsOfPickup } from '@/lib/transport'
-import type { CharterRequest, WeatherSnapshot } from '@/types'
+import type { CharterRequest, RentalConfig, RentalDistance, WeatherSnapshot } from '@/types'
 
 /* ==========================================================================
    Day-of operations — the rentals board, the charter request inbox and the
@@ -59,6 +60,22 @@ export interface RentalRow {
   balance: number
 }
 
+/** What the desk needs to hand out and take back: the checks to tick and what a return can add. */
+export interface RentalTerms {
+  /** Distance or engine hours included; absent = not counted. */
+  distance?: RentalDistance
+  /** Per hour late, minor units. */
+  lateFee: number
+  /** Minutes after the return time before it counts as late. */
+  graceMinutes: number
+  /** Late by more than this many hours: a full extra day. */
+  lateDayAfterHours?: number
+  licence: NonNullable<RentalConfig['licence']>
+  /** The renter drives or operates it, so the licence is checked at hand-out. */
+  selfDriven: boolean
+  fuel?: RentalConfig['fuel']
+}
+
 export interface RentalFleet {
   id: string
   name: string
@@ -77,8 +94,9 @@ export interface RentalFleet {
   lateFee: number
   /** What each unit is called on the board, by unit number - 1: "Double kayak 1". */
   unitNames: string[]
-  /** Rentals with items: each kind with its units and service state. */
-  items: { tierId: string; name: string; stock: number; holds: number; deposit: number; outOfService: number; serviceNote: string; units: number[] }[]
+  /** Rentals with items: each kind with its units and service state, and its day rate (0 when not sold by the day). */
+  items: { tierId: string; name: string; stock: number; holds: number; deposit: number; outOfService: number; serviceNote: string; units: number[]; dayRate: number }[]
+  terms: RentalTerms
 }
 
 export interface RentalBoard {
@@ -116,7 +134,17 @@ export function getRentalBoard(tenantId: string, day: Date = NOW): RentalBoard {
         unitNames.push(`${item.name} ${n}`)
         numbers.push(unitTier.length)
       }
-      return { tierId: item.tierId, name: item.name, stock: item.stock, holds: item.holds, deposit: item.deposit, outOfService: item.outOfService ?? 0, serviceNote: item.serviceNote ?? '', units: numbers }
+      return {
+        tierId: item.tierId,
+        name: item.name,
+        stock: item.stock,
+        holds: item.holds,
+        deposit: item.deposit,
+        outOfService: item.outOfService ?? 0,
+        serviceNote: item.serviceNote ?? '',
+        units: numbers,
+        dayRate: rateFor(activity, item.tierId, 'day') ?? 0,
+      }
     })
     const fleetUnits = items.length > 0 ? unitTier.length : units
     fleets.push({
@@ -134,6 +162,15 @@ export function getRentalBoard(tenantId: string, day: Date = NOW): RentalBoard {
       byDay,
       bufferMinutes: buffer,
       damageDeposit: config?.damageDeposit ?? 0,
+      terms: {
+        ...(config?.distance ? { distance: config.distance } : {}),
+        lateFee: config?.lateFee ?? 0,
+        graceMinutes: config?.graceMinutes ?? 0,
+        ...(config?.lateDayAfterHours ? { lateDayAfterHours: config.lateDayAfterHours } : {}),
+        licence: config?.licence ?? meta.licence,
+        selfDriven: selfDriven(config),
+        ...(config?.fuel ? { fuel: config.fuel } : {}),
+      },
     })
 
     // A day rental picked up earlier in the week can still be out today.

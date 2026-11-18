@@ -37,7 +37,8 @@ import {
 } from '@/lib/utils'
 import type { Activity, DifficultyLevel, Location, PickupZone, Tenant } from '@/types'
 import { locationAddress } from '@/lib/locations'
-import { kindBadge, kindChipLabel, kindNote, priceUnit, rentalCategoryMeta, routeLabel, categoryLabel, themeLabel, themeOf } from '@/lib/activity-kinds'
+import { FUEL_LABEL, LICENCE_LABEL, kindBadge, kindChipLabel, kindNote, priceUnit, rentalCategoryMeta, routeLabel, categoryLabel, themeLabel, themeOf } from '@/lib/activity-kinds'
+import { distanceLine, extraDriversMax, lateLine, operatorLine, planLine, youngOffered } from '@/lib/rental-terms'
 import { biggestVehicle, serviceOf } from '@/lib/transfers'
 import type { TransferAvailability } from '@/lib/storefront-availability'
 import { TransferPriceList } from '@/components/storefront/transfer-price-list'
@@ -195,13 +196,44 @@ export function ActivityDetailView({
   const limits = bodyLimitLines(activity)
   const hasRequirements = activity.requirements.length + bring.length + suitability.length + limits.length > 0
   const transfer = activity.kind === 'transfer'
+  /** Rentals: distance, fuel, who drives, licence and age, drivers, cover, delivery and late returns, in short lines. */
+  const rentalTerms = React.useMemo(() => {
+    const config = (activity.kind ?? 'trip') === 'rental' ? activity.rental : undefined
+    if (!config) return []
+    const money = (minor: number) => formatCurrency(minor, tenant.currency, { decimals: minor % 100 !== 0 })
+    const renterDrives = config.operator?.mode !== 'included'
+    const renters = config.renters
+    const plans = config.protection?.plans ?? []
+    const delivery = config.handover?.delivery
+    const lines = [
+      operatorLine(config.operator, money),
+      config.match === 'similar' ? 'You book a type: the exact model may differ' : null,
+      distanceLine(config.distance, money),
+      config.fuel ? FUEL_LABEL[config.fuel] : null,
+      renterDrives && config.licence && config.licence !== 'none'
+        ? `${LICENCE_LABEL[config.licence]}${renters?.licenceYears ? `, held for ${renters.licenceYears}+ years` : ''}${activity.minAge > 0 ? `. Drivers ${activity.minAge}+` : ''}`
+        : null,
+      renterDrives && youngOffered(config, activity.minAge) && renters?.youngFee ? `Drivers under ${renters.youngUnder}: ${money(renters.youngFee)} a day` : null,
+      renterDrives && extraDriversMax(config) > 0 ? `Extra drivers: ${(renters?.extraDriverFee ?? 0) > 0 ? `${money(renters?.extraDriverFee ?? 0)} a day each` : 'free'}, up to ${extraDriversMax(config)}` : null,
+      plans.length > 0 && config.protection?.required ? 'Damage cover is required: pick a plan when you book' : null,
+      ...plans.map((plan) => planLine(plan, money)),
+      delivery ? `${delivery.per === 'each_way' ? 'Delivery and collection' : 'Delivery'}: ${money(delivery.fee)}${delivery.per === 'each_way' ? ' each way' : ''}${delivery.note ? `. ${delivery.note}` : ''}` : null,
+      config.handover?.oneWay ? `Return at another of our locations: ${money(config.handover.oneWay.fee)}` : null,
+      lateLine(config, money) ?? null,
+    ]
+    return lines.filter((line): line is string => Boolean(line))
+  }, [activity, tenant.currency])
   const sections = React.useMemo(
     () =>
       SECTIONS.filter((section) => section.id !== 'requirements' || hasRequirements).flatMap((section): { id: string; label: string }[] =>
-        // Transfers: their price table right after About.
-        transfer && section.id === 'about' ? [section, { id: 'prices', label: 'Prices' }] : [section],
+        // Transfers: their price table right after About. Rentals: their terms after What's included.
+        transfer && section.id === 'about'
+          ? [section, { id: 'prices', label: 'Prices' }]
+          : rentalTerms.length > 0 && section.id === 'included'
+            ? [section, { id: 'rental-terms', label: 'Rental terms' }]
+            : [section],
       ),
-    [hasRequirements, transfer],
+    [hasRequirements, transfer, rentalTerms.length],
   )
 
   // The strip as the widget shows it: the saved schedule, this browser's bookings, every time slot priced by the engine.
@@ -497,6 +529,20 @@ export function ActivityDetailView({
                 </p>
               ) : null}
             </Section>
+
+            {/* ---------- rentals: the terms, in short lines ---------- */}
+            {rentalTerms.length > 0 ? (
+              <Section id="rental-terms" title="Rental terms">
+                <ul className="space-y-2.5">
+                  {rentalTerms.map((line) => (
+                    <li key={line} className="flex items-start gap-2.5">
+                      <span aria-hidden="true" className="mt-2 size-1.5 shrink-0 rounded-full bg-faint" />
+                      <span className="text-sm leading-relaxed text-foreground">{line}</span>
+                    </li>
+                  ))}
+                </ul>
+              </Section>
+            ) : null}
 
             {/* ---------- requirements: one list, with what to bring and suitability ---------- */}
             {hasRequirements ? (

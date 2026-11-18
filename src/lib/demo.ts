@@ -1082,6 +1082,13 @@ for (const [tenantId, specs] of SPEC_BY_TENANT) {
             clamp(round(capacity * clamp(demand, 0, 1.05)), 0, capacity),
             dayLimit ? Math.max(0, dayLimit - dayBooked) : capacity,
           )
+          // Day rentals stay out for days: new pick-ups a day are the demand spread over the usual length,
+          // so a fleet is busy, not booked solid for weeks.
+          if (activity.kind === 'rental' && activity.rental?.modes?.length === 1 && activity.rental.modes[0] === 'day') {
+            const least = Math.max(1, activity.rental.minDays ?? 1)
+            const usual = (least + Math.max(least, Math.min(activity.rental.maxDays || 5, 5))) / 2
+            booked = Math.floor(booked / usual + rng())
+          }
           // Rentals with items can only sell what is back on the shelf at this start time.
           if (unitFree) booked = Math.min(booked, unitFree.reduce((sum, units) => sum + units.filter((at) => at <= startMs).length, 0))
           dayBooked += booked

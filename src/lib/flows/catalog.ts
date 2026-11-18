@@ -942,7 +942,7 @@ export const ACTIVITY_KIND_LOWER: Record<string, string> = {
   lesson: 'a lesson',
   pass: 'a pass',
   package: 'a package',
-  transfer: 'a rental with a driver',
+  transfer: 'a rental by trip or per seat',
 } satisfies Record<ActivityKind, string>
 
 // A rental with a driver counts as a rental, as an older "activity" counts as an activity or tour.

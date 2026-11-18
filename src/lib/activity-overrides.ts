@@ -507,9 +507,11 @@ export function applyPricingOverride<T extends Activity>(activity: T, override?:
 const positiveWhole = (value: number | undefined) => (typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : undefined)
 
 /**
- * A rental's prices and charging after an edit: rates, the late fee, item
- * caps and deposits, how it is charged, the fewest and most hours or days,
- * and the pick-up and return times. Only the seeded ways of charging can
+ * A rental's prices and charging after an edit: rates (week and month too),
+ * the late fee, item caps and deposits, how it is charged, the fewest and
+ * most hours or days, the pick-up and return times, and its terms (what is
+ * rented, exact or similar, who drives, distance, fuel, licence, drivers,
+ * cover, delivery and one-way returns, grace and late days). Only the seeded ways of charging can
  * stay on (the checkout server reads those), and only ones the edit has on
  * and gives a rate; when none is left, the seeded ones stay.
  */
@@ -548,5 +550,25 @@ function rentalPricingOf(activity: Pick<Activity, 'kind' | 'rental'>, seeded: Re
     maxDays: minDays !== undefined && maxDays !== undefined && maxDays < minDays ? minDays : maxDays,
     pickupTime,
     returnTime,
+    // The terms: an edit saved from the rates editor sets only what is on, so one left out was taken off.
+    ...rentalTermsAfter(seeded, saved),
+  }
+}
+
+/** A rental's terms after an edit. Saves from before the terms existed (no `match`) keep the seeded ones. */
+function rentalTermsAfter(seeded: RentalConfig, saved: RentalConfig): Partial<RentalConfig> {
+  if (!saved.match) return {}
+  return {
+    category: saved.category ?? seeded.category,
+    match: saved.match,
+    licence: saved.licence ?? seeded.licence,
+    fuel: saved.fuel ?? seeded.fuel,
+    operator: saved.operator,
+    distance: saved.distance,
+    renters: saved.renters,
+    handover: saved.handover,
+    protection: saved.protection,
+    graceMinutes: saved.graceMinutes,
+    lateDayAfterHours: saved.lateDayAfterHours,
   }
 }

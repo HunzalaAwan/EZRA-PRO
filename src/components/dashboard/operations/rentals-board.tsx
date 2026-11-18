@@ -32,8 +32,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
 import type { RentalBoard, RentalFleet, RentalRow, RentalStatus } from '@/lib/operations'
 import { useRentalService } from '@/hooks/use-rental-service'
+import { FUEL_LABEL, LICENCE_LABEL } from '@/lib/activity-kinds'
+import { DISTANCE_WORD, distanceLine, lateLine, returnCharges } from '@/lib/rental-terms'
 import { cn, formatCurrency, formatTime, pluralize } from '@/lib/utils'
-import type { CurrencyCode } from '@/types'
+import type { CurrencyCode, RentalConfig } from '@/types'
 
 /* ==========================================================================
    RENTALS
@@ -340,13 +342,15 @@ export function RentalsBoard({ board, currency, tenantSlug }: { board: RentalBoa
         row={selected}
         fleet={selected ? fleetOf(selected.activityId) : undefined}
         dayKey={board.dayKey}
+        nowMs={nowMs}
         currency={currency}
         onClose={() => setSelectedId(null)}
         onHandOut={handOut}
-        onReturn={(row, kept, note) => {
+        onReturn={(row, kept, note, charged) => {
           setStatus(row.id, 'returned')
+          const deposit = kept > 0 ? `${formatCurrency(kept, currency)} kept from the deposit${note ? `: ${note}` : ''}.` : 'Deposit released in full.'
           toast.success(`${row.guestName} is back`, {
-            description: kept > 0 ? `${formatCurrency(kept, currency)} kept from the deposit${note ? `: ${note}` : ''}.` : 'Deposit released in full.',
+            description: charged > 0 ? `${formatCurrency(charged, currency)} charged to the card on file. ${deposit}` : deposit,
           })
           setSelectedId(null)
         }}
@@ -604,10 +608,23 @@ function RentalItem({
    SHEET — the hand-out checklist and the return
    ========================================================================== */
 
+/** The terms as a rental config, for the return charges. */
+const termsConfig = (fleet: RentalFleet): RentalConfig => ({
+  units: fleet.units,
+  bufferMinutes: fleet.bufferMinutes,
+  damageDeposit: fleet.damageDeposit,
+  durations: [],
+  lateFee: fleet.terms.lateFee,
+  graceMinutes: fleet.terms.graceMinutes,
+  ...(fleet.terms.lateDayAfterHours ? { lateDayAfterHours: fleet.terms.lateDayAfterHours } : {}),
+  ...(fleet.terms.distance ? { distance: fleet.terms.distance } : {}),
+})
+
 function RentalSheet({
   row,
   fleet,
   dayKey,
+  nowMs,
   currency,
   onClose,
   onHandOut,
@@ -616,26 +633,56 @@ function RentalSheet({
   row: RentalRow | null
   fleet: RentalFleet | undefined
   dayKey: string
+  nowMs: number
   currency: CurrencyCode
   onClose: () => void
   onHandOut: (row: RentalRow) => void
-  onReturn: (row: RentalRow, kept: number, note: string) => void
+  /** `charged`: distance and late charges taken from the card on file. */
+  onReturn: (row: RentalRow, kept: number, note: string, charged: number) => void
 }) {
   const [checks, setChecks] = React.useState({ briefing: false, licence: false, deposit: false })
   const [damage, setDamage] = React.useState(false)
   const [kept, setKept] = React.useState(0)
   const [note, setNote] = React.useState('')
+  const [used, setUsed] = React.useState('')
 
   React.useEffect(() => {
     setChecks({ briefing: false, licence: false, deposit: row ? row.deposit === 0 : false })
     setDamage(false)
     setKept(0)
     setNote('')
+    setUsed('')
   }, [row])
 
-  const unitNoun = fleet?.unitNoun ?? 'Unit'
+  const money = (minor: number) => formatCurrency(minor, currency, { decimals: minor % 100 !== 0 })
   const depositTotal = row ? row.deposit : 0
-  const canHandOut = checks.briefing && checks.licence && checks.deposit
+  const terms = fleet?.terms
+  // The licence is checked only when the guest drives or operates it themselves, and it needs one.
+  const licenceCheck = Boolean(terms && terms.selfDriven && terms.licence !== 'none')
+  const checkList = [
+    { key: 'briefing' as const, label: 'Safety briefing done' },
+    ...(licenceCheck && terms ? [{ key: 'licence' as const, label: `${LICENCE_LABEL[terms.licence]} checked` }] : []),
+    { key: 'deposit' as const, label: depositTotal > 0 ? `Deposit of ${money(depositTotal)} held on card` : 'No deposit on this rental' },
+  ]
+  const canHandOut = checkList.every((item) => checks[item.key])
+
+  // Coming back: distance over the allowance, and late hours (or a full day) after the grace minutes.
+  const counted = Boolean(terms?.distance && !terms.distance.unlimited && terms.distance.extra > 0)
+  const word = terms?.distance ? DISTANCE_WORD[terms.distance.unit] : undefined
+  const usedValue = used.trim() === '' ? undefined : Math.max(0, Number(used) || 0)
+  const lateMinutes = row && (row.status === 'out' || row.status === 'late') ? Math.max(0, Math.round((nowMs - new Date(row.endsAt).getTime()) / 60_000)) : 0
+  const dayRate = row && fleet ? row.lines.reduce((sum, line) => sum + line.qty * (fleet.items.find((item) => item.tierId === line.tierId)?.dayRate ?? 0), 0) : 0
+  const charges =
+    row && fleet
+      ? [
+          ...returnCharges({ config: termsConfig(fleet), days: row.days, used: counted ? usedValue : undefined, units: Math.max(1, row.units.length) }),
+          ...returnCharges({ config: termsConfig(fleet), days: row.days, lateMinutes, dayRate }),
+        ]
+      : []
+  const charged = charges.reduce((sum, line) => sum + line.total, 0)
+  const termLines = fleet
+    ? [distanceLine(fleet.terms.distance, money), fleet.terms.fuel ? FUEL_LABEL[fleet.terms.fuel] : undefined, lateLine(termsConfig(fleet), money)].filter((line): line is string => Boolean(line))
+    : []
 
   return (
     <Sheet open={row !== null} onOpenChange={(open) => !open && onClose()}>
@@ -648,7 +695,7 @@ function RentalSheet({
                 {fleet?.name} · {row.reference}
               </SheetDescription>
             </SheetHeader>
-            <SheetBody className="flex flex-col gap-5">
+            <SheetBody className="flex flex-col gap-5 [&>*]:shrink-0">
               <dl className="grid grid-cols-2 gap-3 text-sm">
                 <div className="rounded-xl bg-surface-sunken/60 px-3 py-2.5">
                   <dt className="text-xs text-subtle">Goes out</dt>
@@ -686,6 +733,16 @@ function RentalSheet({
                     {formatCurrency(row.balance, currency)} still to collect before hand-out
                   </div>
                 ) : null}
+                {termLines.length > 0 ? (
+                  <div className="col-span-2 rounded-xl bg-surface-sunken/60 px-3 py-2.5">
+                    <dt className="text-xs text-subtle">Terms</dt>
+                    <dd className="mt-1 flex flex-col gap-0.5 text-sm">
+                      {termLines.map((line) => (
+                        <span key={line}>{line}</span>
+                      ))}
+                    </dd>
+                  </div>
+                ) : null}
               </dl>
 
               {row.phone ? (
@@ -697,11 +754,7 @@ function RentalSheet({
               {row.status === 'booked' ? (
                 <div className="flex flex-col gap-2.5">
                   <p className="text-sm font-semibold">Before you hand it out</p>
-                  {[
-                    { key: 'briefing', label: 'Safety briefing done' },
-                    { key: 'licence', label: 'ID or licence checked' },
-                    { key: 'deposit', label: depositTotal > 0 ? `Deposit of ${formatCurrency(depositTotal, currency)} held on card` : 'No deposit on this rental' },
-                  ].map((item) => (
+                  {checkList.map((item) => (
                     <label key={item.key} className="flex items-center gap-3 rounded-xl border border-line px-3.5 py-2.5 text-sm">
                       <Checkbox
                         checked={checks[item.key as keyof typeof checks]}
@@ -715,6 +768,30 @@ function RentalSheet({
 
               {row.status === 'out' || row.status === 'late' ? (
                 <div className="flex flex-col gap-3">
+                  {counted && word ? (
+                    <Field
+                      label={terms?.distance?.unit === 'hours' ? 'Engine hours run' : `${word.many.charAt(0).toUpperCase()}${word.many.slice(1)} driven`}
+                      description={distanceLine(terms?.distance, money)}
+                    >
+                      {(control) => <Input {...control} type="number" min={0} inputMode="numeric" value={used} placeholder="0" onChange={(e) => setUsed(e.target.value)} />}
+                    </Field>
+                  ) : null}
+                  {charges.length > 0 ? (
+                    <div className="rounded-xl border border-line px-3.5 py-3">
+                      <ul className="flex flex-col gap-1.5 text-sm">
+                        {charges.map((line) => (
+                          <li key={line.id} className="flex items-baseline justify-between gap-3">
+                            <span>{line.label}</span>
+                            <span className="font-medium tabular-nums">{money(line.total)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <p className="mt-2.5 flex items-baseline justify-between gap-3 border-t border-line-subtle pt-2.5 text-sm font-semibold">
+                        <span>Charged to the card on file</span>
+                        <span className="tabular-nums">{money(charged)}</span>
+                      </p>
+                    </div>
+                  ) : null}
                   <p className="text-sm font-semibold">How did it come back?</p>
                   <div className="grid grid-cols-2 gap-2">
                     {[false, true].map((value) => (
@@ -763,10 +840,10 @@ function RentalSheet({
                   <Button fullWidth leftIcon={<ArrowUpFromLine />} disabled={!canHandOut || row.units.length === 0} onClick={() => onHandOut(row)}>
                     Hand out {row.lines.length > 0 ? `${row.units.length} ${row.units.length === 1 ? 'item' : 'items'}` : `${row.units.length} ${row.units.length === 1 ? (fleet?.unitWord ?? 'unit') : (fleet?.unitsWord ?? 'units')}`}
                   </Button>
-                  {!canHandOut ? <p className="flex items-center justify-center gap-1.5 text-xs text-subtle"><Clock className="size-3.5" aria-hidden="true" />Tick the three checks first.</p> : null}
+                  {!canHandOut ? <p className="flex items-center justify-center gap-1.5 text-xs text-subtle"><Clock className="size-3.5" aria-hidden="true" />Tick the {checkList.length === 3 ? 'three' : 'two'} checks first.</p> : null}
                 </div>
               ) : row.status === 'out' || row.status === 'late' ? (
-                <Button fullWidth leftIcon={row.status === 'late' ? <AlarmClock /> : <ArrowDownToLine />} onClick={() => onReturn(row, damage ? kept : 0, note)}>
+                <Button fullWidth leftIcon={row.status === 'late' ? <AlarmClock /> : <ArrowDownToLine />} onClick={() => onReturn(row, damage ? kept : 0, note, charged)}>
                   Take back
                 </Button>
               ) : (

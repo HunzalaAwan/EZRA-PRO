@@ -1,9 +1,9 @@
 'use client'
 
 import * as React from 'react'
-import { Baby, Backpack, Camera, Car, Clock, Gift, GlassWater, Luggage, MapPin, Plus, Sandwich, ShoppingBag, Trash2 } from 'lucide-react'
+import { Baby, Backpack, Camera, Car, Clock, Fish, Fuel, Gift, GlassWater, HardHat, Lock, Luggage, MapPin, Navigation, Package, Plus, Sandwich, ShoppingBag, Snowflake, Trash2, Truck, Waves } from 'lucide-react'
 
-import type { CurrencyCode } from '@/types'
+import type { CurrencyCode, RentalCategory } from '@/types'
 import { cn, formatCurrency } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { IconButton } from '@/components/ui/icon-button'
@@ -78,6 +78,59 @@ export const TRANSFER_ADDON_PRESETS: AddOnPreset[] = [
   { label: 'Oversized item', price: 1000, description: 'A surfboard, golf bag or bike.', per: 'each', maxQty: 3, icon: Luggage },
   { label: 'Welcome drinks', price: 2000, description: 'Cold drinks and water on board.', per: 'booking', icon: GlassWater },
 ]
+
+/** Extras a rental usually sells, by what is rented. Charged once per booking; rename or reprice any. */
+export function rentalAddOnPresets(category: RentalCategory | undefined): AddOnPreset[] {
+  switch (category) {
+    case 'car':
+    case 'luxury':
+    case 'rv':
+    case 'vehicle':
+      return [
+        { label: 'Child seat', price: 1500, description: 'For the whole rental. Tell us the ages.', per: 'booking', icon: Baby },
+        { label: 'GPS', price: 1000, description: 'Loaded with local maps.', per: 'booking', icon: Navigation },
+        { label: 'Toll pass', price: 2500, description: 'Drive through toll lanes; tolls charged after.', per: 'booking', icon: MapPin },
+        { label: 'Roof box', price: 3000, description: 'Extra room for luggage.', per: 'booking', icon: Luggage },
+        { label: 'Snow chains', price: 2000, description: 'For mountain roads in winter.', per: 'booking', icon: Snowflake },
+      ]
+    case 'van_truck':
+      return [
+        { label: 'Hand truck (dolly)', price: 1000, description: 'For boxes and appliances.', per: 'booking', icon: Truck },
+        { label: 'Furniture pads (dozen)', price: 1500, description: 'Protect furniture on the move.', per: 'booking', icon: Package },
+        { label: 'Moving straps', price: 500, description: 'Keep the load in place.', per: 'booking', icon: Package },
+        { label: 'Toll pass', price: 2500, description: 'Tolls charged after.', per: 'booking', icon: MapPin },
+      ]
+    case 'motorbike':
+      return [
+        { label: 'Second helmet', price: 800, description: 'For a passenger.', per: 'booking', icon: HardHat },
+        { label: 'Phone mount', price: 500, description: 'For maps on the handlebars.', per: 'booking', icon: Navigation },
+        { label: 'Top box', price: 1000, description: 'Lockable storage.', per: 'booking', icon: Luggage },
+      ]
+    case 'watercraft':
+      return [
+        { label: 'Fuel package', price: 6000, description: 'A full tank, no refuelling.', per: 'booking', icon: Fuel },
+        { label: 'Tube or towable', price: 4500, description: 'Rope and life jackets included.', per: 'booking', icon: Waves },
+        { label: 'Cooler with ice', price: 2000, description: 'Ready on board.', per: 'booking', icon: GlassWater },
+        { label: 'Fishing gear', price: 3500, description: 'Rods, tackle and bait.', per: 'booking', icon: Fish },
+      ]
+    case 'equipment':
+      return [
+        { label: 'Safety kit', price: 1500, description: 'Gloves, goggles and ear protection.', per: 'booking', icon: HardHat },
+        { label: 'Extra fuel can', price: 2000, description: 'Filled, for longer jobs.', per: 'booking', icon: Fuel },
+        { label: 'Trailer', price: 4500, description: 'To tow it yourself.', per: 'booking', icon: Truck },
+      ]
+    case 'bike':
+    case 'gear':
+      return [
+        { label: 'Helmet', price: 500, description: 'Sized when you pick up.', per: 'guest', icon: HardHat },
+        { label: 'Lock', price: 500, description: 'A strong lock and key.', per: 'booking', icon: Lock },
+        { label: 'Child seat', price: 1000, description: 'For little riders.', per: 'booking', icon: Baby },
+        { label: 'Dry bag', price: 800, description: 'Keeps phones and keys dry.', per: 'booking', icon: Backpack },
+      ]
+    default:
+      return ADDON_PRESETS
+  }
+}
 
 const PER_CHOICES = [
   ['guest', 'Per guest'],

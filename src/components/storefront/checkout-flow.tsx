@@ -30,7 +30,10 @@ import {
   formatTime,
   pluralize,
 } from '@/lib/utils'
-import type { Activity, BookingPickup, GuestQuestion, PickupZone, Tenant, TransferBookingDetails, WaiverTemplate } from '@/types'
+import type { Activity, BookingPickup, GuestQuestion, Location, PickupZone, Tenant, TransferBookingDetails, WaiverTemplate } from '@/types'
+import { cleanRentalChoice, selfDriven, type RentalChoice } from '@/lib/rental-terms'
+import { LICENCE_LABEL } from '@/lib/activity-kinds'
+import { useLocations } from '@/hooks/use-locations'
 import { useIsHydrated, useReducedMotionSafe } from '@/hooks/use-reduced-motion-safe'
 import { useActivityWithDefaults, useBookingDefaults } from '@/hooks/use-booking-defaults'
 import type { CheckoutFields } from '@/lib/booking-defaults'
@@ -204,7 +207,13 @@ export interface CheckoutFlowProps {
   transferRequest?: TransferRequest
   /** Transfers: the seeded rides' vehicle holds, so the vehicles are checked again here. */
   transferHolds?: TransferHold[]
+  /** Rentals: the guest's choices from the widget's link (`ro`), cleaned here against the priced activity. */
+  rentalChoice?: RentalChoice
+  /** The business's locations, for a one-way return's name. */
+  locations?: Location[]
 }
+
+const NO_LOCATIONS: Location[] = []
 
 /* ==========================================================================
    VALIDATION
@@ -375,6 +384,8 @@ export function CheckoutFlow({
   rentalHours: rentalHoursGiven,
   rentalLength: rentalLengthGiven,
   rentalRequest,
+  rentalChoice: rentalChoiceGiven,
+  locations: seededLocations = NO_LOCATIONS,
   party: partyGiven,
   privateBooking: privateGiven = false,
   requestedPrivate,
@@ -567,6 +578,9 @@ export function CheckoutFlow({
   const bookedPickup: BookingPickup | undefined = transport && !rideRequest ? bookingPickupOf(transport, getThere, transportZones, departure.startsAt, departure.endsAt) : undefined
 
   const pricing = usePricing(tenant.slug)
+  // Location names (Settings → Locations edits included), for a rental's one-way return.
+  const { locations: liveLocations } = useLocations(tenant.id, seededLocations)
+  const locationName = React.useCallback((id: string) => liveLocations.find((entry) => entry.id === id)?.name, [liveLocations])
   // Who pays EZRA Pro's 4%: the business (nothing added) or the guest (a booking fee line).
   const feePayer = bookingDefaults.feePayer
   // The same engine and inputs as the widget: the slot's start, the clock, how full it is, its dynamic pricing and the business's rules.
@@ -596,9 +610,23 @@ export function CheckoutFlow({
       businessRules: pricing.rules,
       // Transport: one way or both ways from the pickup point, per guest or per booking.
       ...(transport ? { transport: { choice: getThere, zoneName: transportZoneName } } : {}),
+      // Rentals: driver, cover, drivers, delivery and a one-way return, cleaned against the saved edit by the quote.
+      ...(rentalChoiceGiven && (slotActivity.kind ?? 'trip') === 'rental' ? { rentalChoice: rentalChoiceGiven, locationName } : {}),
     }),
-    [slotActivity, tenant.slug, selection, departure.priceMultiplier, departure.slotStartsAt, departure.startsAt, capacity, booked, nowIso, pricing.rules, rentalDays, party, rentalMode, rentalHours, rentalLength, privateBooking, rideRequest, rideSelection, serverSelection, rideLegs, activity, transport, getThere, transportZoneName, feePayer],
+    [slotActivity, tenant.slug, selection, departure.priceMultiplier, departure.slotStartsAt, departure.startsAt, capacity, booked, nowIso, pricing.rules, rentalDays, party, rentalMode, rentalHours, rentalLength, privateBooking, rideRequest, rideSelection, serverSelection, rideLegs, activity, transport, getThere, transportZoneName, feePayer, rentalChoiceGiven, locationName],
   )
+  /* ---------- rentals: what the choice asks for at checkout ---------- */
+  const rentalChoice: RentalChoice | undefined = quote.rentalChoice
+  const delivering = Boolean(rentalChoice?.delivery)
+  const rentalLicence = (activity.kind ?? 'trip') === 'rental' && activity.rental?.licence && activity.rental.licence !== 'none' && selfDriven(activity.rental, rentalChoice) ? LICENCE_LABEL[activity.rental.licence] : undefined
+  const rentalNote = rentalLicence ? `Bring your ${rentalLicence.charAt(0).toLowerCase()}${rentalLicence.slice(1)} and the card you paid with.` : undefined
+  const returnName = rentalChoice?.returnTo ? locationName(rentalChoice.returnTo) : undefined
+  const [deliveryAddress, setDeliveryAddress] = React.useState('')
+  /** One line for the summary and the confirmation: where it is delivered, where it goes back, what to bring. */
+  const rentalSummaryNote =
+    [delivering && deliveryAddress.trim() ? `Delivered to ${deliveryAddress.trim()}` : null, returnName ? `Return to ${returnName}` : null, rentalNote ?? null]
+      .filter((entry): entry is string => Boolean(entry))
+      .join(' · ') || undefined
   /** A shared shuttle: a run with fewer seats left than the tickets, counting this browser's other bookings on it. */
   const runsFull =
     rideConfig?.service === 'shared' &&
@@ -767,6 +795,10 @@ export function CheckoutFlow({
         ...(departure.legs ? { packageSlug: activity.slug, packageName: activity.name } : {}),
         // Transport: on the first part, with its pickup and drop-off times.
         ...(index === 0 && bookedPickup ? { pickup: bookedPickup } : {}),
+        // Rentals: the guest's choices and the delivery address, for the Rentals board.
+        ...(index === 0 && rentalChoice && Object.keys(rentalChoice).length > 0
+          ? { rental: { choice: rentalChoice, ...(delivering && deliveryAddress.trim() ? { deliveryAddress: deliveryAddress.trim() } : {}) } }
+          : {}),
         name: `${guest.firstName} ${guest.lastName}`.trim(),
         email: guest.email,
         phone: guest.phone,
@@ -810,6 +842,7 @@ export function CheckoutFlow({
       }),
     )
     if (transport && !rideRequest) Object.assign(next, choiceErrors(transport, getThere))
+    if (delivering && deliveryAddress.trim().length < 5) next.deliveryAddress = 'Add the address to deliver to'
     if (transferRequest && rideConfig) Object.assign(next, validateTransfer(activity, transferRequest, rideForm, nowIso))
     if (scope === 'all' && displayQuote.total > 0) {
       const paymentResult = paymentSchema.safeParse(payment)
@@ -867,6 +900,7 @@ export function CheckoutFlow({
         departure={rideRequest ? rideDeparture : departure}
         ride={rideRequest && rideBooked ? { details: rideBooked, line: rideLine, trip: tripLabel(rideRequest.trip, rideConfig?.hub) } : undefined}
         pickup={bookedPickup}
+        note={rentalSummaryNote}
         quote={displayQuote}
         guest={guest}
         reference={reference}
@@ -986,6 +1020,30 @@ export function CheckoutFlow({
                   errors={errors}
                   wide
                 />
+              </section>
+            ) : null}
+            {delivering || rentalNote || returnName ? (
+              <section aria-labelledby="step-rental" className="space-y-4 border-t border-line-subtle pt-10">
+                <h2 id="step-rental" className="font-display text-xl font-semibold tracking-tight">
+                  Your rental
+                </h2>
+                {delivering ? (
+                  <Field
+                    label="Delivery address"
+                    required
+                    error={errors.deliveryAddress}
+                    description={activity.rental?.handover?.delivery?.per === 'each_way' ? 'We bring it here and collect it from here at the end.' : 'We bring it here.'}
+                  >
+                    <Input
+                      value={deliveryAddress}
+                      onChange={(event) => setDeliveryAddress(event.target.value.slice(0, 200))}
+                      placeholder="Hotel name or street address"
+                      autoComplete="street-address"
+                    />
+                  </Field>
+                ) : null}
+                {returnName ? <p className="text-sm text-muted">You return it to {returnName}.</p> : null}
+                {rentalNote ? <p className="text-sm text-muted">{rentalNote}</p> : null}
               </section>
             ) : null}
             <CheckoutDiscounts
@@ -1113,6 +1171,7 @@ export function CheckoutFlow({
               balanceWhen={balanceWhen}
               ride={rideRequest ? { line: rideLine, trip: tripLabel(rideRequest.trip, rideConfig?.hub) } : undefined}
               pickup={bookedPickup}
+              note={rentalSummaryNote}
             />
             {activity.customRequests ? <CustomQuoteCard activity={activity} tenantSlug={tenant.slug} departure={shown} guest={guest} /> : null}
           </div>
@@ -1731,6 +1790,7 @@ function OrderSummary({
   balanceWhen = 'later',
   ride,
   pickup,
+  note,
 }: {
   activity: Activity
   tenant: Tenant
@@ -1743,6 +1803,8 @@ function OrderSummary({
   ride?: { line: string; trip: string }
   /** Transport: the pickup and drop-off, with their times. */
   pickup?: BookingPickup
+  /** Rentals: delivery, a one-way return, what to bring. */
+  note?: string
 }) {
   const media = activity.media.find((m) => m.isPrimary) ?? activity.media[0]
 
@@ -1839,6 +1901,7 @@ function OrderSummary({
         ) : null}
       </div>
 
+      {note ? <p className="border-t border-line-subtle px-4 py-3 text-xs leading-relaxed text-muted">{note}</p> : null}
       <div className="flex items-center gap-2 border-t border-line-subtle bg-surface-sunken px-4 py-3">
         <ShieldCheck className="size-4 shrink-0 text-success" aria-hidden="true" />
         <p className="text-xs leading-relaxed text-muted">
@@ -1985,11 +2048,14 @@ function Confirmation({
   reducedMotion,
   ride,
   pickup,
+  note,
 }: {
   tenant: Tenant
   activity: Activity
   departure: CheckoutDeparture
   quote: QuoteShape
+  /** Rentals: delivery, a one-way return, what to bring. */
+  note?: string
   /** Transport: the pickup and drop-off, with their times. */
   pickup?: BookingPickup
   guest: GuestState
@@ -2255,6 +2321,12 @@ ${transportLines(pickup).map((line) => `<p>${line}</p>`).join('')}
             </dd>
             )}
           </div>
+          {note ? (
+            <div className="sm:col-span-2">
+              <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-faint">Your rental</dt>
+              <dd className="mt-1 text-sm leading-relaxed text-foreground">{note}</dd>
+            </div>
+          ) : null}
         </dl>
 
         <div className="flex flex-col gap-2.5 border-t border-line-subtle pt-5 sm:flex-row">

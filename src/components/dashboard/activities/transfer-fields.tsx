@@ -1,10 +1,10 @@
 'use client'
 
 import * as React from 'react'
-import { Bus, Car, Check, Clock, Plus, Trash2, type LucideIcon } from 'lucide-react'
+import { Check, Plus, Trash2 } from 'lucide-react'
 
-import type { TransferHubKind, TransferService } from '@/types'
-import { TRANSFER_SERVICES, hubWord } from '@/lib/transfers'
+import type { TransferHubKind } from '@/types'
+import { hubWord } from '@/lib/transfers'
 import { clockTime } from '@/lib/activity-schedule'
 import { cn } from '@/lib/utils'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -14,7 +14,6 @@ import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 
-import { DriverChoice } from './kind-fields'
 import { KIND_TIER_PRESETS, blankTier, type DraftTier } from './pricing-tier-editor'
 import {
   TRANSFER_VEHICLE_PRESETS,
@@ -29,15 +28,14 @@ import {
 export { TRANSFER_VEHICLE_PRESETS }
 
 /* ==========================================================================
-   TRANSFERS IN THE WIZARD — the Basics card (how it's charged, the vehicles
-   or tickets), the Booking step's ride timing and shuttle run directions,
-   and the Guests step's fixed checkout fields. Rides go from the guest's
-   pickup to their drop-off; no airport is asked for. Rides saved with an
-   airport keep it, and their airport timing still shows on Booking. The price table is on Pricing
-   (transfer-price-table.tsx); the model is in transfer-draft.ts.
+   RIDES IN THE WIZARD (a rental by trip or per seat) — the Basics rows
+   (vehicles or tickets; how it is charged is ChargeChoice above them), the
+   Booking step's ride timing and shuttle run directions, and the Guests
+   step's fixed checkout fields. Rides go from the guest's pickup to their
+   drop-off; rides saved with an airport keep its timing on Booking. The
+   price table is on Pricing (transfer-price-table.tsx); the model is in
+   transfer-draft.ts.
    ========================================================================== */
-
-const SERVICE_ICONS: Record<TransferService, LucideIcon> = { private: Car, shared: Bus, hourly: Clock }
 
 const whole = (value: string, min = 0, max = 999) => Math.min(max, Math.max(min, Math.floor(Number(value)) || 0))
 
@@ -71,67 +69,20 @@ function AddChip({ label, onClick }: { label: string; onClick: () => void }) {
   )
 }
 
-/* ---------- Basics: Rental settings, with a driver ---------- */
+/* ---------- Basics: the vehicles or tickets of a ride (by trip, per seat) ---------- */
 
 export interface TransferFieldsProps {
   value: DraftTransfer
-  /** The vehicle sizes (private, by the hour) or tickets (shared): the activity's price tiers. */
+  /** The vehicle sizes (by trip, by the hour) or tickets (per seat): the activity's price tiers. */
   tiers: DraftTier[]
   /** The settings changed; `tiers` when a vehicle or ticket row was added, renamed or removed. */
   onChange: (value: DraftTransfer, tiers?: DraftTier[]) => void
-  /** What is run changed: the wizard swaps the rows and the schedule with it. */
-  onService: (service: TransferService) => void
-  /** "Self-drive or gear": the wizard turns it back into a plain rental. */
-  onSelfDrive?: () => void
   errors: Record<string, string>
 }
 
-export function TransferFields({ value, tiers, onChange, onService, onSelfDrive, errors }: TransferFieldsProps) {
-  const service = value.service
-
-  return (
-    <div className="flex flex-col gap-4 rounded-xl border border-line bg-surface-sunken/40 p-4">
-      <p className="text-[0.8125rem] font-medium">Rental settings</p>
-      {onSelfDrive ? <DriverChoice driver onChange={(driver) => (driver ? undefined : onSelfDrive())} /> : null}
-
-      <Section title="How it’s charged">
-        <div role="radiogroup" aria-label="How it’s charged" className="grid gap-2 lg:grid-cols-3">
-          {TRANSFER_SERVICES.map((choice) => {
-            const on = choice.value === service
-            const Icon = SERVICE_ICONS[choice.value]
-            return (
-              <button
-                key={choice.value}
-                type="button"
-                role="radio"
-                aria-checked={on}
-                onClick={() => (on ? undefined : onService(choice.value))}
-                className={cn(
-                  'flex items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors duration-200',
-                  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
-                  on ? 'border-primary bg-primary-soft/30' : 'border-line bg-surface hover:border-line-strong',
-                )}
-              >
-                <span className={cn('grid size-8 shrink-0 place-items-center rounded-lg', on ? 'bg-primary-soft text-primary' : 'bg-surface-sunken text-faint')} aria-hidden="true">
-                  <Icon className="size-4" />
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium text-foreground">{choice.label}</span>
-                  <span className="block text-xs text-subtle">{choice.hint}</span>
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      </Section>
-
-      {service === 'shared' ? (
-        <TicketRows value={value} tiers={tiers} onChange={onChange} errors={errors} />
-      ) : (
-        <VehicleRows value={value} tiers={tiers} onChange={onChange} errors={errors} />
-      )}
-    </div>
-  )
+/** How it is charged is picked above it (ChargeChoice); this is the rows: vehicles, or a shuttle's tickets. */
+export function TransferFields({ value, tiers, onChange, errors }: TransferFieldsProps) {
+  return value.service === 'shared' ? <TicketRows value={value} tiers={tiers} onChange={onChange} errors={errors} /> : <VehicleRows value={value} tiers={tiers} onChange={onChange} errors={errors} />
 }
 
 /** The vehicle sizes: a name (the price tier), passengers, suitcases and how many the business has. */

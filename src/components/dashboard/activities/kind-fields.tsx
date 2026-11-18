@@ -1,16 +1,16 @@
 'use client'
 
 import * as React from 'react'
-import { Anchor, Car, GraduationCap, KeyRound, Layers, Lock, Route, Ticket, UsersRound, Zap, type LucideIcon } from 'lucide-react'
+import { Anchor, Bus, Car, Clock, GraduationCap, KeyRound, Layers, Lock, Route, Ticket, UsersRound, Zap, type LucideIcon } from 'lucide-react'
 
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { RadioGroup, RadioGroupCard } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
-import { ACTIVITY_KIND_META, isTimedKind, LESSON_LEVELS } from '@/lib/activity-kinds'
+import { ACTIVITY_KIND_META, isTimedKind, LESSON_LEVELS, PICKABLE_RENTAL_CATEGORIES, rentalCategoryMeta } from '@/lib/activity-kinds'
 import { cn } from '@/lib/utils'
-import type { ActivityKind, CharterConfig, DifficultyLevel, LessonConfig, RentalCategory, RentalConfig } from '@/types'
+import type { ActivityKind, CharterConfig, DifficultyLevel, LessonConfig, RentalCategory, RentalConfig, RentalDistance, RentalOperator, TransferService } from '@/types'
 
 import { DurationField, type DurationUnit } from './duration-field'
 import type { DraftTier } from './pricing-tier-editor'
@@ -54,8 +54,8 @@ export interface DraftKindSettings {
     lengths: { id: string; label: string; hours: number }[]
     minHours: number
     maxHours: number
-    /** Per tier: price per hour and per day, and per set length, minor units. */
-    rates: Record<string, { hour: number; day: number; lengths?: Record<string, number> }>
+    /** Per tier: price per hour, day, week and month, and per set length, minor units. Week and month 0 = not sold. */
+    rates: Record<string, DraftRate>
     /** Per tier: its own stock, how many people one fits, its deposit. */
     items: Record<string, DraftRentalItem>
     /** Charged per hour late, minor units. */
@@ -63,6 +63,22 @@ export interface DraftKindSettings {
     licence: NonNullable<RentalConfig['licence']>
     fuel: NonNullable<RentalConfig['fuel']>
     kmPerDay: number
+    /** Guests book this exact one, or one like it. */
+    match: NonNullable<RentalConfig['match']>
+    /** Who drives or operates it. */
+    operator: DraftOperator
+    /** Distance or engine hours: not mentioned, unlimited, an allowance a day, or every one charged. */
+    distance: DraftDistance
+    /** The youngest driver, young and extra drivers, licence years. */
+    renters: DraftRenters
+    /** Pick-up, delivery and collection, a one-way return. */
+    handover: DraftHandover
+    /** Damage cover guests can add, per day. */
+    protection: { plans: DraftPlan[]; required: boolean }
+    /** Minutes after the return time before it is late. */
+    graceMinutes: number
+    /** Late by more than this many hours: a full extra day. 0 = never. */
+    lateDayAfterHours: number
   }
   charter: {
     maxGuests: number
@@ -105,6 +121,14 @@ export function defaultKindSettings(): DraftKindSettings {
       licence: 'none',
       fuel: 'included',
       kmPerDay: 0,
+      match: 'similar',
+      operator: { mode: 'renter', label: 'Driver', price: 0, per: 'hour' },
+      distance: { mode: 'none', unit: 'mi', perDay: 0, extra: 0 },
+      renters: { minAge: 0, youngUnder: 0, youngFee: 0, licenceYears: 0, extraDrivers: false, extraDriverFee: 0, maxExtraDrivers: 2 },
+      handover: { pickup: true, delivery: false, deliveryFee: 0, deliveryPer: 'each_way', oneWay: false, oneWayFee: 0 },
+      protection: { plans: [], required: false },
+      graceMinutes: 0,
+      lateDayAfterHours: 0,
     },
     charter: { maxGuests: 6, requestToBook: false, noticeHours: 24, vessel: 'boat', vesselLabel: '', crewLabel: '', crewed: true, minutes: {} },
     // Not asked in setup any more: a new lesson or pass claims none of these on the storefront.
@@ -113,6 +137,57 @@ export function defaultKindSettings(): DraftKindSettings {
     activity: { minHeightCm: 0, maxWeightKg: 0 },
     transfer: defaultTransferDraft(),
   }
+}
+
+export interface DraftRate {
+  hour: number
+  day: number
+  week?: number
+  month?: number
+  lengths?: Record<string, number>
+}
+
+export interface DraftOperator {
+  mode: RentalOperator['mode']
+  label: string
+  /** Optional: minor units per `per`. */
+  price: number
+  per: NonNullable<RentalOperator['per']>
+}
+
+export interface DraftDistance {
+  mode: 'none' | 'unlimited' | 'allowance' | 'every'
+  unit: RentalDistance['unit']
+  perDay: number
+  /** Minor units per one over. */
+  extra: number
+}
+
+export interface DraftRenters {
+  /** Youngest driver or renter; 0 = no minimum. Saved as the activity's minimum age. */
+  minAge: number
+  youngUnder: number
+  youngFee: number
+  licenceYears: number
+  extraDrivers: boolean
+  extraDriverFee: number
+  maxExtraDrivers: number
+}
+
+export interface DraftHandover {
+  pickup: boolean
+  delivery: boolean
+  deliveryFee: number
+  deliveryPer: 'trip' | 'each_way'
+  oneWay: boolean
+  oneWayFee: number
+}
+
+export interface DraftPlan {
+  id: string
+  name: string
+  perDay: number
+  deductible: number
 }
 
 export interface DraftRentalItem {
@@ -135,13 +210,147 @@ export function draftItemOf(rental: DraftKindSettings['rental'], tierId: string)
 export function normalizeKindSettings(settings: Partial<DraftKindSettings> | undefined): DraftKindSettings {
   const base = defaultKindSettings()
   return {
-    rental: { ...base.rental, ...settings?.rental },
+    rental: (() => {
+      const saved = settings?.rental
+      return {
+        ...base.rental,
+        ...saved,
+        operator: { ...base.rental.operator, ...saved?.operator },
+        distance: { ...base.rental.distance, ...saved?.distance },
+        renters: { ...base.rental.renters, ...saved?.renters },
+        handover: { ...base.rental.handover, ...saved?.handover },
+        protection: { ...base.rental.protection, ...saved?.protection, plans: saved?.protection?.plans ?? base.rental.protection.plans },
+      }
+    })(),
     charter: { ...base.charter, ...settings?.charter },
     lesson: { ...base.lesson, ...settings?.lesson },
     pass: { ...base.pass, ...settings?.pass },
     activity: { ...base.activity, ...settings?.activity },
     transfer: normalizeTransferDraft(settings?.transfer),
   }
+}
+
+type DraftRental = DraftKindSettings['rental']
+
+const DEFAULT_LENGTHS = [
+  { id: 'len_4', label: 'Up to 4 hours', hours: 4 },
+  { id: 'len_8', label: 'Up to 8 hours', hours: 8 },
+]
+
+/** The draft distance for a saved one (or an older km-per-day). */
+function draftDistanceOf(distance: RentalDistance | undefined, kmPerDay?: number): DraftDistance {
+  if (distance) return { mode: distance.unlimited ? 'unlimited' : distance.perDay > 0 ? 'allowance' : 'every', unit: distance.unit, perDay: distance.perDay, extra: distance.extra }
+  if (kmPerDay && kmPerDay > 0) return { mode: 'allowance', unit: 'km', perDay: kmPerDay, extra: 0 }
+  return { mode: 'none', unit: 'mi', perDay: 0, extra: 0 }
+}
+
+/**
+ * Picking what is rented: its usual way of charging, licence, fuel,
+ * distance, who drives, exact or similar, seats and youngest driver. Items,
+ * prices and lengths already typed are kept.
+ */
+export function withRentalCategory(rental: DraftRental, category: RentalCategory): DraftRental {
+  const meta = rentalCategoryMeta(category)
+  const modes = [...meta.modes]
+  const distance: DraftDistance = meta.distance
+    ? draftDistanceOf(meta.distance)
+    : meta.mileage
+      ? { ...rental.distance, mode: 'unlimited' }
+      : { ...rental.distance, mode: 'none' }
+  return {
+    ...rental,
+    category,
+    modes,
+    billing: modes.length === 1 && modes[0] === 'day' ? 'day' : 'length',
+    lengths: modes.includes('length') && rental.lengths.length === 0 ? DEFAULT_LENGTHS.map((entry) => ({ ...entry })) : rental.lengths,
+    licence: meta.licence,
+    fuel: meta.fuel ? 'full_to_full' : 'included',
+    distance,
+    operator: { ...rental.operator, mode: meta.operator.mode, label: meta.operator.label },
+    match: meta.match,
+    seatsPerUnit: meta.seatsPerUnit,
+    renters: { ...rental.renters, minAge: meta.minAge ?? 0 },
+  }
+}
+
+/** The terms a saved rental carries, as the draft edits them. */
+export function draftTermsOf(rental: RentalConfig, minAge: number): Pick<DraftRental, 'match' | 'operator' | 'distance' | 'renters' | 'handover' | 'protection' | 'graceMinutes' | 'lateDayAfterHours'> {
+  const base = defaultKindSettings().rental
+  const renters = rental.renters
+  return {
+    match: rental.match ?? rentalCategoryMeta(rental.category).match,
+    operator: rental.operator
+      ? { mode: rental.operator.mode, label: rental.operator.label || 'Driver', price: rental.operator.price ?? 0, per: rental.operator.per ?? 'hour' }
+      : { ...base.operator, label: rentalCategoryMeta(rental.category).operator.label },
+    distance: draftDistanceOf(rental.distance, rental.kmPerDay),
+    renters: {
+      minAge: Math.max(0, minAge || 0),
+      youngUnder: renters?.youngUnder ?? 0,
+      youngFee: renters?.youngFee ?? 0,
+      licenceYears: renters?.licenceYears ?? 0,
+      extraDrivers: typeof renters?.extraDriverFee === 'number',
+      extraDriverFee: renters?.extraDriverFee ?? 0,
+      maxExtraDrivers: renters?.maxExtraDrivers ?? 2,
+    },
+    handover: {
+      pickup: rental.handover?.pickup ?? true,
+      delivery: Boolean(rental.handover?.delivery),
+      deliveryFee: rental.handover?.delivery?.fee ?? 0,
+      deliveryPer: rental.handover?.delivery?.per ?? 'each_way',
+      oneWay: Boolean(rental.handover?.oneWay),
+      oneWayFee: rental.handover?.oneWay?.fee ?? 0,
+    },
+    protection: {
+      plans: (rental.protection?.plans ?? []).map((plan) => ({ id: plan.id, name: plan.name, perDay: plan.perDay, deductible: plan.deductible })),
+      required: Boolean(rental.protection?.required),
+    },
+    graceMinutes: rental.graceMinutes ?? 0,
+    lateDayAfterHours: rental.lateDayAfterHours ?? 0,
+  }
+}
+
+/** The draft's terms as the rental saves them: only what is set. */
+export function rentalTermsOfDraft(r: DraftRental): Partial<RentalConfig> {
+  const out: Partial<RentalConfig> = { match: r.match, licence: r.licence, fuel: r.fuel }
+  if (r.operator.mode !== 'renter') {
+    out.operator = {
+      mode: r.operator.mode,
+      label: r.operator.label.trim() || 'Driver',
+      ...(r.operator.mode === 'optional' ? { price: Math.max(0, r.operator.price), per: r.operator.per } : {}),
+    }
+  }
+  if (r.distance.mode !== 'none') {
+    out.distance = {
+      unit: r.distance.unit,
+      unlimited: r.distance.mode === 'unlimited',
+      perDay: r.distance.mode === 'allowance' ? Math.max(1, r.distance.perDay) : 0,
+      extra: r.distance.mode === 'unlimited' ? 0 : Math.max(0, r.distance.extra),
+    }
+  }
+  const selfDriven = r.operator.mode !== 'included'
+  const renters: NonNullable<RentalConfig['renters']> = {}
+  if (selfDriven && r.renters.youngUnder > 0 && r.renters.youngFee > 0) {
+    renters.youngUnder = r.renters.youngUnder
+    renters.youngFee = r.renters.youngFee
+  }
+  if (selfDriven && r.renters.licenceYears > 0) renters.licenceYears = r.renters.licenceYears
+  if (selfDriven && r.renters.extraDrivers) {
+    renters.extraDriverFee = Math.max(0, r.renters.extraDriverFee)
+    renters.maxExtraDrivers = Math.max(1, r.renters.maxExtraDrivers)
+  }
+  if (Object.keys(renters).length > 0) out.renters = renters
+  if (!r.handover.pickup || r.handover.delivery || r.handover.oneWay) {
+    out.handover = {
+      pickup: r.handover.pickup || !r.handover.delivery,
+      ...(r.handover.delivery ? { delivery: { fee: Math.max(0, r.handover.deliveryFee), per: r.handover.deliveryPer } } : {}),
+      ...(r.handover.oneWay ? { oneWay: { fee: Math.max(0, r.handover.oneWayFee) } } : {}),
+    }
+  }
+  const plans = r.protection.plans.filter((plan) => plan.name.trim().length > 0)
+  if (plans.length > 0) out.protection = { plans: plans.map((plan) => ({ ...plan, name: plan.name.trim() })), required: r.protection.required }
+  if (r.graceMinutes > 0) out.graceMinutes = r.graceMinutes
+  if (r.lateDayAfterHours > 0) out.lateDayAfterHours = r.lateDayAfterHours
+  return out
 }
 
 /** A seeded distance or track, carried through an edit. Not edited any more: the track goes in Highlights. */
@@ -216,44 +425,134 @@ export function KindPicker({ value, onChange }: { value: ActivityKind; onChange:
   )
 }
 
-/* ---------- rental: self-drive or gear, or with a driver ---------- */
+/* ---------- rental: how it is charged, and what is rented ---------- */
 
-const DRIVER_CHOICES = [
-  { value: false, label: 'Self-drive or gear', hint: 'Guests take it out themselves', icon: KeyRound },
-  { value: true, label: 'With a driver', hint: 'You drive them: pickup and drop-off or by the hour', icon: Car },
-] as const
+/** By time is a rental; by trip and per seat are rides with a driver ('transfer'). */
+export type RentalCharge = 'time' | 'trip' | 'seat' | 'hourly'
 
-/** The first choice in Rental settings. With a driver saves as a 'transfer' (vehicles, a price table, ride details). */
-export function DriverChoice({ driver, onChange }: { driver: boolean; onChange: (driver: boolean) => void }) {
+export const rentalChargeOf = (kind: ActivityKind, service: TransferService | undefined): RentalCharge =>
+  kind !== 'transfer' ? 'time' : service === 'shared' ? 'seat' : service === 'hourly' ? 'hourly' : 'trip'
+
+const CHARGE_CHOICES: { value: RentalCharge; label: string; hint: string; icon: LucideIcon }[] = [
+  { value: 'time', label: 'By time', hint: 'By the hour, day, week or month. Any rental.', icon: Clock },
+  { value: 'trip', label: 'By trip', hint: 'You drive them from pickup to drop-off, priced by area.', icon: Car },
+  { value: 'seat', label: 'Per seat', hint: 'Shared rides on set times, priced per seat.', icon: Bus },
+]
+
+/** The first choice in Rental settings: how guests pay for it. By trip and per seat save as rides ('transfer'). */
+export function ChargeChoice({ value, onChange }: { value: RentalCharge; onChange: (value: RentalCharge) => void }) {
+  // A driver by the hour from before is still shown while it is picked; new ones are By time with a driver.
+  const choices = value === 'hourly' ? [...CHARGE_CHOICES, { value: 'hourly' as const, label: 'Driver by the hour', hint: 'Older setup. By time with a driver does this now.', icon: Clock }] : CHARGE_CHOICES
   return (
-    <div role="radiogroup" aria-label="Self-drive or with a driver" className="grid gap-2 sm:grid-cols-2">
-      {DRIVER_CHOICES.map((choice) => {
-        const on = choice.value === driver
-        const Icon = choice.icon
-        return (
-          <button
-            key={choice.label}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            onClick={() => (on ? undefined : onChange(choice.value))}
-            className={cn(
-              'flex items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors duration-200',
-              'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
-              on ? 'border-primary bg-primary-soft/30' : 'border-line bg-surface hover:border-line-strong',
-            )}
-          >
-            <span className={cn('grid size-8 shrink-0 place-items-center rounded-lg', on ? 'bg-primary-soft text-primary' : 'bg-surface-sunken text-faint')} aria-hidden="true">
-              <Icon className="size-4" />
-            </span>
-            <span className="min-w-0">
-              <span className="block text-sm font-medium text-foreground">{choice.label}</span>
-              <span className="block text-xs text-subtle">{choice.hint}</span>
-            </span>
-          </button>
-        )
-      })}
-    </div>
+    <Section title="How you charge">
+      <div role="radiogroup" aria-label="How you charge" className={cn('grid gap-2', choices.length > 3 ? 'sm:grid-cols-2 xl:grid-cols-4' : 'sm:grid-cols-3')}>
+        {choices.map((choice) => {
+          const on = choice.value === value
+          const Icon = choice.icon
+          return (
+            <button
+              key={choice.value}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              onClick={() => (on ? undefined : onChange(choice.value))}
+              className={cn(
+                'flex items-start gap-3 rounded-xl border px-3.5 py-3 text-left transition-colors duration-200',
+                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+                on ? 'border-primary bg-primary-soft/30' : 'border-line bg-surface hover:border-line-strong',
+              )}
+            >
+              <span className={cn('grid size-8 shrink-0 place-items-center rounded-lg', on ? 'bg-primary-soft text-primary' : 'bg-surface-sunken text-faint')} aria-hidden="true">
+                <Icon className="size-4" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-foreground">{choice.label}</span>
+                <span className="block text-xs text-subtle">{choice.hint}</span>
+              </span>
+            </button>
+          )
+        })}
+      </div>
+    </Section>
+  )
+}
+
+/** By time: what is rented, how guests book it, and the gap between rentals. Prices and terms are on the Pricing step. */
+export function RentalBasicsFields({
+  settings: raw,
+  onChange,
+  onCategory,
+}: {
+  settings: DraftKindSettings
+  onChange: (settings: DraftKindSettings) => void
+  /** A category was picked: its defaults are applied, and the youngest driver goes with them. */
+  onCategory: (category: RentalCategory) => void
+}) {
+  const settings = normalizeKindSettings(raw)
+  const rental = settings.rental
+  const set = (patch: Partial<DraftRental>) => onChange({ ...settings, rental: { ...rental, ...patch } })
+  const picked = rental.category === 'vehicle' ? 'car' : rental.category
+  return (
+    <>
+      <Section title="What you rent" hint="Sets sensible defaults for prices and terms. You can change all of them.">
+        <div role="radiogroup" aria-label="What you rent" className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {PICKABLE_RENTAL_CATEGORIES.map((entry) => {
+            const on = entry.value === picked
+            return (
+              <button
+                key={entry.value}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => (on ? undefined : onCategory(entry.value))}
+                className={cn(
+                  'rounded-xl border px-3.5 py-2.5 text-left transition-colors duration-200',
+                  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+                  on ? 'border-primary bg-primary-soft/30' : 'border-line bg-surface hover:border-line-strong',
+                )}
+              >
+                <span className="block text-sm font-medium text-foreground">{entry.label}</span>
+                <span className="block text-xs text-subtle">{entry.hint}</span>
+              </button>
+            )
+          })}
+        </div>
+      </Section>
+      <Section title="Guests book">
+        <div role="radiogroup" aria-label="Guests book" className="grid gap-2 sm:grid-cols-2">
+          {([
+            ['exact', 'This exact one', 'Each item is one model or one vehicle, as shown'],
+            ['similar', 'One like it', 'Any of that type: “or similar”'],
+          ] as const).map(([value, label, hint]) => {
+            const on = rental.match === value
+            return (
+              <button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => set({ match: value })}
+                className={cn(
+                  'rounded-xl border px-3.5 py-2.5 text-left transition-colors duration-200',
+                  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+                  on ? 'border-primary bg-primary-soft/30' : 'border-line bg-surface hover:border-line-strong',
+                )}
+              >
+                <span className="block text-sm font-medium text-foreground">{label}</span>
+                <span className="block text-xs text-subtle">{hint}</span>
+              </button>
+            )
+          })}
+        </div>
+      </Section>
+      <Section title="Between rentals" hint="Items, prices and rental terms are on the Pricing step.">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Gap between rentals" optional description="To clean, refuel or get it ready.">
+            {(control) => <Input {...control} type="number" min={0} step={5} suffix="min" placeholder="None" value={rental.bufferMinutes || ''} onChange={(e) => set({ bufferMinutes: num(e.target.value) })} />}
+          </Field>
+        </div>
+      </Section>
+    </>
   )
 }
 
@@ -370,19 +669,20 @@ export function DifficultyField({ value, onChange }: { value: DifficultyLevel; o
 
 /* ==========================================================================
    HOW A RENTAL IS CHARGED — by the hour, by length, by the day, with the
-   limits for each and the late return fee. Lives with the prices on the
-   Pricing step; the item rates themselves are in RentalRatesEditor.
+   limits for each. Lives with the prices on the Pricing step; the item
+   rates (week and month too) are in RentalRatesEditor, the late fee and
+   everything else that comes with a rental in RentalTermsEditor.
    ========================================================================== */
 
 export function RentalChargingFields({
   settings: raw,
   onSettings,
-  currencySymbol,
   errors,
 }: {
   settings: DraftKindSettings
   onSettings: (settings: DraftKindSettings) => void
-  currencySymbol: string
+  /** Not read here any more (the late fee is in Rental terms); kept so callers need not change. */
+  currencySymbol?: string
   errors: Record<string, string>
 }) {
   const settings = normalizeKindSettings(raw)
@@ -401,7 +701,7 @@ export function RentalChargingFields({
       billing: modes.length === 1 && modes[0] === 'day' ? 'day' : 'length',
       // Two common lengths to start from; each can be renamed or removed.
       ...(mode === 'length' && !on && rental.lengths.length === 0
-        ? { lengths: [{ id: 'len_4', label: 'Up to 4 hours', hours: 4 }, { id: 'len_8', label: 'Up to 8 hours', hours: 8 }] }
+        ? { lengths: DEFAULT_LENGTHS.map((entry) => ({ ...entry })) }
         : {}),
     })
   }
@@ -501,11 +801,6 @@ export function RentalChargingFields({
           </Button>
         </div>
       ) : null}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Field label={`Late return fee (${currencySymbol})`} optional description="Per hour late.">
-          {(control) => <Input {...control} type="number" min={0} placeholder="None" value={rental.lateFee ? Math.round(rental.lateFee / 100) : ''} onChange={(e) => set({ lateFee: num(e.target.value) * 100 })} />}
-        </Field>
-      </div>
     </section>
   )
 }
@@ -519,7 +814,6 @@ export function KindFields({
   errors,
   shared,
   onShared,
-  onDriver,
 }: {
   /** Not read here any more; kept so callers need not change. */
   tenantSlug?: string
@@ -533,15 +827,13 @@ export function KindFields({
   errors: Record<string, string>
   shared: SharedBasics
   onShared: (patch: Partial<SharedBasics>) => void
-  /** A rental's "With a driver": the wizard turns it into a rental with a driver. */
-  onDriver?: (driver: boolean) => void
 }) {
   const settings = normalizeKindSettings(raw)
   const set = <K extends keyof DraftKindSettings>(key: K, patch: Partial<DraftKindSettings[K]>) =>
     onChange({ ...settings, [key]: { ...settings[key], ...patch } })
 
-  // A transfer's card (TransferFields) edits its vehicle rows too, so the Basics step renders it itself.
-  if (isTimedKind(kind) || kind === 'transfer') return null
+  // A rental's and a ride's card (RentalBasicsFields, TransferFields) sit under How you charge, so the Basics step renders them itself.
+  if (isTimedKind(kind) || kind === 'transfer' || kind === 'rental') return null
 
   const shell = (children: React.ReactNode) => (
     <div className="flex flex-col gap-4 rounded-xl border border-line bg-surface-sunken/40 p-4">
@@ -549,24 +841,6 @@ export function KindFields({
       {children}
     </div>
   )
-
-  /* ---------- rental ---------- */
-  if (kind === 'rental') {
-    // No "what do you rent?" choice: a new rental keeps the default category, a seeded one its own.
-    const rental = settings.rental
-    return shell(
-      <>
-        {onDriver ? <DriverChoice driver={false} onChange={onDriver} /> : null}
-        <Section title="Between rentals" hint="Items, how they are charged and prices are on the Pricing step.">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Gap between rentals" optional description="To clean, check or get it ready.">
-              {(control) => <Input {...control} type="number" min={0} step={5} suffix="min" placeholder="None" value={rental.bufferMinutes || ''} onChange={(e) => set('rental', { bufferMinutes: num(e.target.value) })} />}
-            </Field>
-          </div>
-        </Section>
-      </>,
-    )
-  }
 
   /* ---------- lesson ---------- */
   if (kind === 'lesson') {
@@ -662,7 +936,7 @@ export function RentalRatesEditor({
   const daily = rental.modes.includes('day')
   const rateOf = (tier: DraftTier) => rental.rates[tier.id] ?? { hour: tier.price, day: Math.round((tier.price * 4) / 500) * 500 }
   const byLength = rental.modes.includes('length')
-  const setRate = (tier: DraftTier, patch: Partial<{ hour: number; day: number; lengths: Record<string, number> }>) =>
+  const setRate = (tier: DraftTier, patch: Partial<DraftRate>) =>
     onSettings({ ...settings, rental: { ...rental, rates: { ...rental.rates, [tier.id]: { ...rateOf(tier), ...patch } } } })
   const setItem = (tierId: string, patch: Partial<DraftRentalItem>) =>
     onSettings({ ...settings, rental: { ...rental, items: { ...rental.items, [tierId]: { ...draftItemOf(rental, tierId), ...patch } } } })
@@ -703,7 +977,7 @@ export function RentalRatesEditor({
                 <Field label="In stock" labelSize="sm" error={errors[`item.${tier.id}.stock`]}>
                   {(control) => <Input {...control} type="number" min={1} value={item.stock || ''} onChange={(e) => setItem(tier.id, { stock: whole(e.target.value) })} />}
                 </Field>
-                <Field label="People per item" labelSize="sm">
+                <Field label={rental.category && rentalCategoryMeta(rental.category).mileage ? 'Seats' : 'People per item'} labelSize="sm">
                   {(control) => <Input {...control} type="number" min={1} suffix={item.holds === 1 ? 'person' : 'people'} value={item.holds || ''} onChange={(e) => setItem(tier.id, { holds: whole(e.target.value, 1) })} />}
                 </Field>
                 {hourly ? (
@@ -712,9 +986,17 @@ export function RentalRatesEditor({
                   </Field>
                 ) : null}
                 {daily ? (
-                  <Field label="Per day" labelSize="sm" error={errors[`rate.${tier.id}.day`]}>
-                    {(control) => <Input {...control} type="number" min={0} leftIcon={<span className="text-sm font-medium">{currencySymbol}</span>} value={rate.day / 100 || ''} onChange={(e) => setRate(tier, { day: money(e.target.value) })} />}
-                  </Field>
+                  <>
+                    <Field label="Per day" labelSize="sm" error={errors[`rate.${tier.id}.day`]}>
+                      {(control) => <Input {...control} type="number" min={0} leftIcon={<span className="text-sm font-medium">{currencySymbol}</span>} value={rate.day / 100 || ''} onChange={(e) => setRate(tier, { day: money(e.target.value) })} />}
+                    </Field>
+                    <Field label="Per week" labelSize="sm" optional description="Used when cheaper than the days.">
+                      {(control) => <Input {...control} type="number" min={0} placeholder="None" leftIcon={<span className="text-sm font-medium">{currencySymbol}</span>} value={rate.week ? rate.week / 100 : ''} onChange={(e) => setRate(tier, { week: money(e.target.value) })} />}
+                    </Field>
+                    <Field label="Per month" labelSize="sm" optional description="30 days. Used when cheaper.">
+                      {(control) => <Input {...control} type="number" min={0} placeholder="None" leftIcon={<span className="text-sm font-medium">{currencySymbol}</span>} value={rate.month ? rate.month / 100 : ''} onChange={(e) => setRate(tier, { month: money(e.target.value) })} />}
+                    </Field>
+                  </>
                 ) : null}
                 {byLength
                   ? rental.lengths.map((length) => (

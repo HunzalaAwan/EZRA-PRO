@@ -38,14 +38,14 @@ export const TIMED_KINDS: ActivityKind[] = ['trip', 'activity', 'charter']
 export const isTimedKind = (kind: ActivityKind | undefined) => TIMED_KINDS.includes(kind ?? 'trip')
 
 /**
- * A rental with a driver (pickup and drop-off, by the hour, shared seats) is
- * set up under Rental and saves as a 'transfer'; owners and guests see one
- * Rental type, shelf and filter.
+ * A rental charged by trip or per seat (rides with a driver) is set up under
+ * Rental and saves as a 'transfer'; owners and guests see one Rental type,
+ * shelf and filter. A driver for a rental by time is a rental option.
  */
 export const RENTAL_KINDS: ActivityKind[] = ['rental', 'transfer']
 export const isRentalKind = (kind: ActivityKind | undefined) => RENTAL_KINDS.includes(kind ?? 'trip')
 
-/** The kind as one type: an older "activity" reads as an activity or tour (trip), a rental with a driver as a rental. */
+/** The kind as one type: an older "activity" reads as an activity or tour (trip), a ride (by trip, per seat) as a rental. */
 export const sharedKindOf = (kind: ActivityKind | undefined): ActivityKind => (kind === 'activity' ? 'trip' : kind === 'transfer' ? 'rental' : (kind ?? 'trip'))
 
 export const ACTIVITY_KIND_META: Record<ActivityKind, ActivityKindMeta> = {
@@ -85,8 +85,8 @@ export const ACTIVITY_KIND_META: Record<ActivityKind, ActivityKindMeta> = {
   rental: {
     label: 'Rental',
     short: 'Rental',
-    hint: 'Gear, vehicles, or vehicles with a driver.',
-    examples: 'Jet skis, cars, e-bikes, kayaks, airport transfers, private drivers',
+    hint: 'Anything rented for a time or a trip: cars, boats, trucks, gear.',
+    examples: 'Cars, luxury cars, trucks, jet skis, e-bikes, kayaks, airport rides',
     icon: 'KeyRound',
     unit: 'time slot',
     units: 'time slots',
@@ -127,9 +127,9 @@ export const ACTIVITY_KIND_META: Record<ActivityKind, ActivityKindMeta> = {
     defaultFormat: 'departures',
   },
   transfer: {
-    label: 'Rental with a driver',
+    label: 'Rental by trip',
     short: 'Rental',
-    hint: 'A vehicle and driver: pickup and drop-off, by the hour or shared seats.',
+    hint: 'A vehicle and driver: pickup to drop-off, or shared seats.',
     examples: 'Airport transfers, private drivers, shuttles',
     icon: 'Car',
     unit: 'ride',
@@ -256,9 +256,9 @@ export function kindChipLabel(
   switch (activity.kind ?? 'trip') {
     case 'transfer': {
       const service = serviceOf(activity)
-      if (service === 'shared') return 'Rental · shared seats'
-      if (service === 'hourly') return `Rental · driver from ${activity.transfer?.minHours ?? 1}h`
-      return 'Rental · with a driver'
+      if (service === 'shared') return 'Rental · per seat'
+      if (service === 'hourly') return 'Rental · driver by the hour'
+      return 'Rental · by trip'
     }
     case 'rental': {
       const modes = activity.rental?.modes
@@ -390,7 +390,11 @@ export function kindNote(
     case 'rental': {
       const r = activity.rental
       const returnBy = (r?.modes?.includes('day') || r?.billing === 'day') && r?.pickupTime && r?.returnTime ? `Pick up after ${r.pickupTime}, return before ${r.returnTime}.` : 'Bring it back by the end of your rental time.'
-      return { title: 'Before you rent.', body: join([age, returnBy]) }
+      // Driven by the business: no licence to bring. Driven by the guest: the licence, and how long it has been held.
+      const driven = r?.operator?.mode === 'included'
+      const licence = !driven && r?.licence && r.licence !== 'none' ? `Bring your ${LICENCE_LABEL[r.licence].replace(/^\w/, (c) => c.toLowerCase())}${r.renters?.licenceYears ? `, held ${r.renters.licenceYears}+ years` : ''}.` : null
+      const crew = driven ? `${r?.operator?.label?.trim() || 'A driver'} comes with it.` : null
+      return { title: 'Before you rent.', body: join([age, crew, licence, returnBy]) }
     }
     case 'charter': {
       return { title: 'Private.', body: join(['Only your group on this time slot.', age]) }
@@ -429,16 +433,16 @@ export const STOREFRONT_GROUPS: Record<ActivityKind, { label: string; blurb: str
   lesson: { label: 'Lessons & courses', blurb: 'Coached, with a level and a small class.' },
   pass: { label: 'Passes & tickets', blurb: 'Entry for the day. Come and go.' },
   package: { label: 'Packages & combos', blurb: 'More than one activity, one booking, a better price.' },
-  transfer: { label: 'Rentals', blurb: 'With a driver: pickup and drop-off, or by the hour.' },
+  transfer: { label: 'Rentals', blurb: 'Rides from pickup to drop-off, or a seat on a shared run.' },
 }
 
-/** A shelf's heading and line: the Rentals shelf says so when some of it comes with a driver. */
+/** A shelf's heading and line: the Rentals shelf says so when some of it is rides. */
 export function storefrontGroup(kind: ActivityKind, items: Pick<Activity, 'kind'>[]): { label: string; blurb: string } {
   if (kind !== 'rental') return STOREFRONT_GROUPS[kind]
   const driven = items.filter((activity) => activity.kind === 'transfer').length
   if (driven === 0) return STOREFRONT_GROUPS.rental
   if (driven === items.length) return STOREFRONT_GROUPS.transfer
-  return { label: 'Rentals', blurb: 'Take it out yourself, or with a driver.' }
+  return { label: 'Rentals', blurb: 'Rent it for a time, or book a ride.' }
 }
 
 /**
@@ -495,7 +499,9 @@ export function themeOf(activity: Pick<Activity, 'theme' | 'slug' | 'kind' | 're
   if (activity.kind === 'pass') return 'attractions'
   if (activity.kind === 'rental') {
     const category = activity.rental?.category
-    return category === 'bike' ? 'cycling' : category === 'watercraft' || category === 'gear' || category === undefined ? 'water' : isRoadRental(category) ? 'offroad' : 'sightseeing'
+    // Jeeps, ATVs and buggies are off-road; other cars, vans and trucks are transport.
+    if (category === 'vehicle' || category === 'motorbike' || /jeep|atv|buggy|utv|quad/.test(slug)) return 'offroad'
+    return category === 'bike' ? 'cycling' : category === 'watercraft' || category === 'gear' || category === undefined ? 'water' : isRoadRental(category) ? 'transfers' : 'sightseeing'
   }
   if (/horse|ranch/.test(slug)) return 'horse'
   if (/heli|parasail|skydiv|balloon|paraglid/.test(slug)) return 'air'

@@ -43,13 +43,26 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { hasItems, rentalItemsOf } from '@/lib/rental-items'
-import { cleanRentalChoice, rentalChoiceLines, type RentalChoice } from '@/lib/rental-terms'
+import {
+  cleanRentalChoice,
+  distanceLine,
+  encodeRentalChoice,
+  extraDriversMax,
+  hasRentalChoices,
+  lateLine,
+  operatorLine,
+  planLine,
+  rentalChoiceLines,
+  selfDriven,
+  youngOffered,
+  type RentalChoice,
+} from '@/lib/rental-terms'
 import { bookingOf, groupUnit, showsSchedule } from '@/lib/booking-method'
 import { EnquiryPanel, RequestForm, type RequestContext } from '@/components/storefront/booking-request'
 import type { BookingSettings } from '@/types'
 import { useRentalService } from '@/hooks/use-rental-service'
 import { priceUnit } from '@/lib/activity-kinds'
-import { LESSON_LEVELS, isDayRental, partyLabel, rateFor, rentalCategoryMeta, rentalModes, routeLabel, type RentalMode } from '@/lib/activity-kinds'
+import { FUEL_LABEL, LICENCE_LABEL, LESSON_LEVELS, isDayRental, isRoadRental, partyLabel, rateFor, rentalCategoryMeta, rentalModes, routeLabel, type RentalMode } from '@/lib/activity-kinds'
 import { bodyLimitLines } from '@/lib/guest-requirements'
 import type { PricingRule } from '@/lib/pricing'
 import {
@@ -362,6 +375,7 @@ export function checkoutHref(
   departureId: string,
   selection: QuoteSelection,
   extra: Record<string, string | number | undefined> = {},
+  rentalChoice?: RentalChoice,
 ) {
   const params = new URLSearchParams()
   params.set('activity', activitySlug)
@@ -371,6 +385,9 @@ export function checkoutHref(
   const addOns = selection.addOns.filter((a) => a.qty > 0)
   if (addOns.length > 0) params.set('a', addOns.map((a) => `${a.addOnId}:${a.qty}`).join('|'))
   for (const [key, value] of Object.entries(extra)) if (value !== undefined) params.set(key, String(value))
+  // Rentals: the guest's choices (driver, cover, drivers, delivery, one-way), priced again at checkout.
+  const ro = rentalChoice ? encodeRentalChoice(rentalChoice) : ''
+  if (ro) params.set('ro', ro)
   return `${checkoutPath}?${params.toString()}`
 }
 
@@ -643,6 +660,22 @@ function BookingWidgetInner({
     setRentDays((current) => clamp(current, minDays, maxDays))
   }, [minDays, maxDays])
   const showTime = kind !== 'pass' && !dayRental
+  /* ---------- rental choices: driver, cover, drivers, delivery, a one-way return ---------- */
+  const rentalTerms = kind === 'rental' ? activity.rental : undefined
+  const [rentalPick, setRentalPick] = React.useState<RentalChoice>({})
+  const rentalChoice = React.useMemo(() => cleanRentalChoice(rentalTerms, rentalPick, activity.minAge), [rentalTerms, rentalPick, activity.minAge])
+  const pickRental = (patch: Partial<RentalChoice>) => setRentalPick((current) => ({ ...current, ...patch }))
+  const pickupSite = sites.find((site) => site.locationId === locationId) ?? sites[0]
+  const locationName = React.useCallback(
+    (id: string) => sites.find((site) => site.locationId === id)?.location.name ?? locations.find((entry) => entry.id === id)?.name,
+    [sites, locations],
+  )
+  // A one-way return: the activity's other places, or the business's other locations.
+  const returnSpots = React.useMemo(() => {
+    const own = sites.map((site) => site.location)
+    const pool = own.length > 1 ? own : locations
+    return pool.filter((entry) => entry.id !== pickupSite?.locationId)
+  }, [sites, locations, pickupSite])
   /* ---------- transport: meet there, or pickup and drop-off (only what is offered) ---------- */
   const { setup: transport, zones: transportZones } = useTransport(activity, pickupZones)
   const [getThere, setGetThere] = React.useState<TransportChoice>(() => defaultChoice(transport))
@@ -989,8 +1022,9 @@ function BookingWidgetInner({
         booked: slotBooked,
         businessRules: rules,
         ...(transport ? { transport: { choice: getThere, zoneName: transportZones.find((zone) => zone.id === getThere.zoneId)?.name } } : {}),
+        ...(rentalTerms ? { rentalChoice, locationName } : {}),
       }),
-    [slotActivity, tenantSlug, selection, slot, slotBooked, nowIso, rules, dayRental, rentDays, party, rated, rentalMode, rentHours, byLength, length, goPrivate, transport, getThere, transportZones, feePayer],
+    [slotActivity, tenantSlug, selection, slot, slotBooked, nowIso, rules, dayRental, rentDays, party, rated, rentalMode, rentHours, byLength, length, goPrivate, transport, getThere, transportZones, feePayer, rentalTerms, rentalChoice, locationName],
   )
   /** What moved the price, as chips under the total; dynamic pricing shows as "Peak time" instead. */
   const priceChips = quote.appliedChanges.filter((change) => change.source !== 'dynamic')
@@ -1028,7 +1062,7 @@ function BookingWidgetInner({
         p: goPrivate ? 1 : undefined,
         // Transport: the trip, the pickup point and the drop-off point; checkout prices it again.
         ...(transport ? encodeChoice(getThere) : {}),
-      }),
+      }, rentalTerms ? rentalChoice : undefined),
     )
   }
 
@@ -1125,6 +1159,165 @@ function BookingWidgetInner({
     </div>
   )
 
+  /* ---------- rental terms and choices ---------- */
+
+  /** Money with cents only when there are any: "$95", "$0.45". */
+  const money = (minor: number) => formatCurrency(minor, currency, { decimals: minor % 100 !== 0 })
+  const drivesSelf = selfDriven(rentalTerms, rentalChoice)
+  /** The rental's terms in short lines: distance, fuel, who drives, licence and age, late returns. */
+  const rentalTermLines: string[] = rentalTerms
+    ? [
+        distanceLine(rentalTerms.distance, money),
+        rentalTerms.fuel && rentalTerms.fuel !== 'included' ? FUEL_LABEL[rentalTerms.fuel] : rentalTerms.fuel === 'included' && rentalMeta.fuel ? FUEL_LABEL.included : null,
+        rentalTerms.operator?.mode === 'included' ? operatorLine(rentalTerms.operator, money) : null,
+        drivesSelf && rentalTerms.licence && rentalTerms.licence !== 'none'
+          ? `${LICENCE_LABEL[rentalTerms.licence]}${rentalTerms.renters?.licenceYears ? `, held ${rentalTerms.renters.licenceYears}+ years` : ''}`
+          : null,
+        drivesSelf && activity.minAge ? `${isRoadRental(rentalTerms.category) ? 'Drivers' : 'Renters'} ${activity.minAge}+` : null,
+        lateLine(rentalTerms, money) ?? null,
+      ].filter((entry): entry is string => Boolean(entry))
+    : []
+  const rentalTermsList =
+    rentalTermLines.length > 0 ? (
+      <ul className="mt-2 flex list-none flex-wrap gap-1.5 p-0" aria-label="Rental terms">
+        {rentalTermLines.map((line) => (
+          <li key={line} className="rounded-full bg-surface-sunken px-2.5 py-1 text-xs font-medium text-muted">
+            {line}
+          </li>
+        ))}
+      </ul>
+    ) : null
+  /** Item names say "or similar" when guests book a type, not the exact one. */
+  const similar = rentalTerms?.match === 'similar'
+  /** Day rentals: the item's week and month prices, when set. */
+  const longPrices = (tierId: string) => {
+    if (!dayRental) return ''
+    const rate = rentalTerms?.rates?.find((entry) => entry.tierId === tierId)
+    return [rate?.week ? `${money(rate.week)} a week` : null, rate?.month ? `${money(rate.month)} a month` : null].filter(Boolean).join(' · ')
+  }
+
+  const rentalChoices = (() => {
+    if (!rentalTerms || !hasRentalChoices(activity)) return null
+    const operator = rentalTerms.operator
+    const plans = rentalTerms.protection?.plans ?? []
+    const required = Boolean(rentalTerms.protection?.required)
+    const delivery = rentalTerms.handover?.delivery
+    const oneWay = rentalTerms.handover?.oneWay
+    const extraMax = extraDriversMax(rentalTerms)
+    const per = operator?.per ?? 'hour'
+    const driverPrice = operator?.price && operator.price > 0 ? `${money(operator.price)} ${per === 'rental' ? 'per rental' : per === 'day' ? 'a day' : 'an hour'}` : 'Included'
+    const choiceRow = 'flex items-start justify-between gap-3 rounded-xl border px-3.5 py-3'
+    const optionButton = (on: boolean) =>
+      cn('flex w-full items-start justify-between gap-3 rounded-xl border px-3.5 py-2.5 text-left transition-colors', on ? 'border-primary bg-primary-soft/30' : 'border-line hover:border-line-strong')
+    return (
+      <div className="mt-4 flex flex-col gap-3 border-t border-line-subtle pt-4">
+        <p className="text-[0.8125rem] font-semibold tracking-tight text-foreground">Your rental</p>
+
+        {operator?.mode === 'optional' ? (
+          <label className={cn(choiceRow, rentalChoice.driver ? 'border-primary bg-primary-soft/30' : 'border-line')}>
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-foreground">Add a {(operator.label || 'driver').toLowerCase()}</span>
+              <span className="block text-xs text-subtle">{driverPrice}{rentalChoice.driver ? '. No licence needed for you.' : ''}</span>
+            </span>
+            <Switch checked={Boolean(rentalChoice.driver)} onCheckedChange={(on) => pickRental({ driver: on })} aria-label={`Add a ${(operator.label || 'driver').toLowerCase()}`} />
+          </label>
+        ) : null}
+
+        {plans.length > 0 ? (
+          <div>
+            <p className="text-xs font-medium text-muted">Damage cover</p>
+            <div className="mt-1.5 flex flex-col gap-1.5" role="radiogroup" aria-label="Damage cover">
+              {required ? null : (
+                <button type="button" role="radio" aria-checked={!rentalChoice.plan} onClick={() => pickRental({ plan: undefined })} className={optionButton(!rentalChoice.plan)}>
+                  <span className="text-sm font-medium text-foreground">No extra cover</span>
+                  <span className="shrink-0 text-xs text-subtle">You pay for any damage</span>
+                </button>
+              )}
+              {plans.map((plan) => {
+                const on = rentalChoice.plan === plan.id
+                return (
+                  <button key={plan.id} type="button" role="radio" aria-checked={on} onClick={() => pickRental({ plan: plan.id })} className={optionButton(on)}>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-foreground">{plan.name}</span>
+                      <span className="block text-xs text-subtle">{planLine(plan, money).split(' · ').slice(2).join(' · ')}{plan.note ? ` · ${plan.note}` : ''}</span>
+                    </span>
+                    <span className="shrink-0 text-sm font-medium text-foreground tabular">{money(plan.perDay)}<span className="text-xs font-normal text-subtle"> a day</span></span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        {drivesSelf && youngOffered(rentalTerms, activity.minAge) ? (
+          <label className={cn(choiceRow, rentalChoice.young ? 'border-primary bg-primary-soft/30' : 'border-line')}>
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-foreground">Main driver is under {rentalTerms.renters?.youngUnder}</span>
+              <span className="block text-xs text-subtle">+{money(rentalTerms.renters?.youngFee ?? 0)} a day</span>
+            </span>
+            <Switch checked={Boolean(rentalChoice.young)} onCheckedChange={(on) => pickRental({ young: on })} aria-label={`Main driver is under ${rentalTerms.renters?.youngUnder}`} />
+          </label>
+        ) : null}
+
+        {drivesSelf && extraMax > 0 ? (
+          <div className={cn(choiceRow, 'items-center border-line')}>
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-foreground">Extra drivers</span>
+              <span className="block text-xs text-subtle">{(rentalTerms.renters?.extraDriverFee ?? 0) > 0 ? `${money(rentalTerms.renters?.extraDriverFee ?? 0)} a day each` : 'Free'} · up to {extraMax}</span>
+            </span>
+            {stepper(rentalChoice.extraDrivers ?? 0, 0, extraMax, (next) => pickRental({ extraDrivers: next }), 'extra drivers')}
+          </div>
+        ) : null}
+
+        {delivery ? (
+          <div>
+            <p className="text-xs font-medium text-muted">Getting it</p>
+            <div className="mt-1.5 grid gap-1.5 sm:grid-cols-2" role="radiogroup" aria-label="Getting it">
+              {rentalTerms.handover?.pickup !== false ? (
+                <button type="button" role="radio" aria-checked={!rentalChoice.delivery} onClick={() => pickRental({ delivery: false })} className={optionButton(!rentalChoice.delivery)}>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-foreground">Pick it up</span>
+                    <span className="block text-xs text-subtle">{pickupSite?.location.name ?? 'At our location'}</span>
+                  </span>
+                </button>
+              ) : null}
+              <button type="button" role="radio" aria-checked={Boolean(rentalChoice.delivery)} onClick={() => pickRental({ delivery: true })} className={optionButton(Boolean(rentalChoice.delivery))}>
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-foreground">Deliver it to me</span>
+                  <span className="block text-xs text-subtle">
+                    {money(delivery.fee)} {delivery.per === 'each_way' ? 'each way' : 'per trip'}
+                    {delivery.note ? ` · ${delivery.note}` : ''}
+                  </span>
+                </span>
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {oneWay && returnSpots.length > 0 ? (
+          <div>
+            <label htmlFor={`${transportId}-return`} className="text-xs font-medium text-muted">
+              Return it to
+            </label>
+            <select
+              id={`${transportId}-return`}
+              value={rentalChoice.returnTo ?? ''}
+              onChange={(event) => pickRental({ returnTo: event.target.value || undefined })}
+              className="mt-1.5 h-10 w-full rounded-xl border border-line bg-surface px-3 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            >
+              <option value="">{pickupSite?.location.name ?? 'Where you picked it up'}</option>
+              {returnSpots.map((spot) => (
+                <option key={spot.id} value={spot.id}>
+                  {spot.name} · +{money(oneWay.fee)}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+      </div>
+    )
+  })()
+
   let kindBlock: React.ReactNode = null
   if (kind === 'rental' && itemMode) {
     const rental = activity.rental
@@ -1134,10 +1327,6 @@ function BookingWidgetInner({
     const fits = chosen.reduce((sum, item) => sum + (tierQty[item.tierId] ?? 0) * item.holds, 0)
     const deposit = chosen.reduce((sum, item) => sum + (tierQty[item.tierId] ?? 0) * item.deposit, 0)
     const per = dayRental ? ' a day' : hourRental ? ' an hour' : byLength && length ? ` · ${length.label.toLowerCase()}` : ''
-    const lateFee = rental?.lateFee ?? 0
-    const rules = [
-      lateFee > 0 ? `Late return ${formatCurrency(lateFee, currency)} an hour` : null,
-    ].filter((entry): entry is string => Boolean(entry))
     const setQty = (tierId: string, qty: number) => setTierQty((current) => ({ ...current, [tierId]: qty }))
     kindBlock = (
       <div>
@@ -1194,7 +1383,10 @@ function BookingWidgetInner({
               <li key={item.tierId} className={cn('rounded-xl border px-3.5 py-3 transition-colors', qty > 0 ? 'border-primary bg-primary-soft/20' : 'border-line', slot && left === 0 && qty === 0 && 'opacity-60')}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-foreground">{item.name}</p>
+                    <p className="text-sm font-semibold text-foreground">
+                      {item.name}
+                      {similar ? <span className="font-normal text-subtle"> or similar</span> : null}
+                    </p>
                     <p className="mt-0.5 text-xs text-subtle">{[item.description, `Fits ${item.holds}`].filter(Boolean).join(' · ')}</p>
                     <p className="mt-1 text-sm font-medium text-foreground tabular">
                       {formatCurrency(itemPrice.price, currency)}
@@ -1202,6 +1394,7 @@ function BookingWidgetInner({
                       {wasPrice(item.tierId, itemPrice) > 0 ? <> {wasTag(wasPrice(item.tierId, itemPrice))}</> : null}
                       {item.cap && (hourRental || dayRental) ? <span className="text-xs font-normal text-subtle"> · never more than {formatCurrency(item.cap, currency)}</span> : null}
                     </p>
+                    {longPrices(item.tierId) ? <p className="mt-0.5 text-xs text-subtle tabular">{longPrices(item.tierId)}</p> : null}
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1.5">
                     {stepper(qty, 0, Math.max(qty, max), (next) => setQty(item.tierId, next), item.name)}
@@ -1258,15 +1451,8 @@ function BookingWidgetInner({
             ? `${count} ${count === 1 ? 'item' : 'items'} · fits ${fits} ${fits === 1 ? 'person' : 'people'}${deposit > 0 ? ` · ${formatCurrency(deposit, currency)} refundable deposit held at pick-up` : ''}`
             : 'Add at least one item.'}
         </p>
-        {rules.length > 0 ? (
-          <ul className="mt-2 flex list-none flex-wrap gap-1.5 p-0">
-            {rules.map((rule) => (
-              <li key={rule} className="rounded-full bg-surface-sunken px-2.5 py-1 text-xs font-medium text-muted">
-                {rule}
-              </li>
-            ))}
-          </ul>
-        ) : null}
+        {rentalTermsList}
+        {rentalChoices}
       </div>
     )
 
@@ -1384,6 +1570,8 @@ function BookingWidgetInner({
         {deposit > 0 ? (
           <p className="mt-2 text-xs text-subtle">A refundable {formatCurrency(deposit, currency)} deposit per {rentalMeta.unit} is held when you collect.</p>
         ) : null}
+        {rentalTermsList}
+        {rentalChoices}
       </div>
     )
   } else if (privateOptions) {

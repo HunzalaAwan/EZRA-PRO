@@ -220,7 +220,7 @@ export const NICHES: Record<NicheSlug, Niche> = {
       ],
     },
     photo: 'pxMotorboatDock',
-    setupAs: 'Rental · Self-drive or gear',
+    setupAs: 'Rental · By time',
     chips: [
       { icon: 'Ship', title: 'Pontoon 2', detail: 'Out · back at 16:00' },
       { icon: 'Wallet', title: 'Deposit held', detail: '$250 · refundable' },
@@ -270,7 +270,7 @@ export const NICHES: Record<NicheSlug, Niche> = {
       quiet: { label: 'An off-season month', bookings: 0, avg: 0 },
     },
     steps: [
-      { wizard: 'Basics', title: 'Add your boats', text: 'Choose Rental, then Self-drive or gear. Add each boat type and how many you own.' },
+      { wizard: 'Basics', title: 'Add your boats', text: 'Choose Rental, then Boats and watercraft, charged by time. Add each boat type and how many you own.' },
       { wizard: 'Pricing', title: 'Set prices and rules', text: 'Sell by the hour, by the day or as a half day. Add the deposit, fuel rule and late fee.' },
       { wizard: 'Guests', then: 'Review', title: 'Ask, sign, publish', text: 'Ask for the boat licence, attach your waiver and publish. Share the link or add the button to your site.' },
     ],
@@ -312,7 +312,7 @@ export const NICHES: Record<NicheSlug, Niche> = {
       ],
     },
     photo: 'pxBikeRow',
-    setupAs: 'Rental · Self-drive or gear',
+    setupAs: 'Rental · By time',
     chips: [
       { icon: 'Bike', title: 'E-bike, medium', detail: '3 of 8 left today' },
       { icon: 'Store', title: 'Walk-in', detail: '2 bikes · paid by card' },
@@ -362,7 +362,7 @@ export const NICHES: Record<NicheSlug, Niche> = {
       quiet: { label: 'A winter month', bookings: 20, avg: 6_000 },
     },
     steps: [
-      { wizard: 'Basics', title: 'Add your bikes', text: 'Choose Rental, then Self-drive or gear. Add each model or size and how many you own.' },
+      { wizard: 'Basics', title: 'Add your bikes', text: 'Choose Rental, then Bikes and e-bikes, charged by time. Add each model or size and how many you own.' },
       { wizard: 'Pricing', title: 'Set lengths and prices', text: '2 hours, half day, full day, or a price per day. Add helmets and locks as extras.' },
       { wizard: 'Guests', then: 'Review', title: 'Ask, choose, publish', text: 'Ask for rider height, add a waiver if you use one, pick your locations and publish.' },
     ],
@@ -404,29 +404,29 @@ export const NICHES: Record<NicheSlug, Niche> = {
       ],
     },
     photo: 'pxAirportTraveller',
-    setupAs: 'Rental · With a driver',
+    setupAs: 'Rental · By trip',
     chips: [
       { icon: 'CarFront', title: 'Airport → Hotel zone', detail: 'SUV · $95 one way' },
-      { icon: 'Plane', title: 'AA 1234', detail: 'Lands 14:05 · 60 min free wait' },
+      { icon: 'Plane', title: 'AA 1234', detail: 'Lands 14:05 · on the ride' },
     ],
     problems: [
       {
         icon: 'Route',
         problem: 'Quoting every ride by hand',
-        fix: 'Set your zones and vehicles once. The price table prices each booking, and the vehicle is picked from passengers and bags.',
-        feature: 'Rental with a driver',
+        fix: 'Set your areas and vehicles once. The price table prices each ride from pickup to drop-off, and the vehicle is picked from passengers and bags.',
+        feature: 'Rental by trip',
       },
       {
         icon: 'Plane',
-        problem: 'Late flights, missed pickups',
-        fix: 'Checkout asks for the flight number. Arrivals get a free wait after landing, 60 minutes unless you change it.',
+        problem: 'Missed airport pickups',
+        fix: 'Turn on the flight number question. Every airport ride carries its flight, so the driver can check it before leaving.',
         feature: 'Flight details',
       },
       {
         icon: 'Users',
         problem: 'Half-empty shared shuttles',
-        fix: 'Sell shared seats on set run times each way. Seats are counted per run.',
-        feature: 'Shared seats',
+        fix: 'Sell shared seats on set run times between your areas. Seats are counted per run.',
+        feature: 'Per seat',
       },
       {
         icon: 'LayoutList',
@@ -443,7 +443,7 @@ export const NICHES: Record<NicheSlug, Niche> = {
         { lead: '09:30', title: 'Shared run to the hotel zone', detail: '9 of 12 seats · 3 stops', status: 'Luis', tone: 'info' },
         { lead: '11:15', title: 'Airport → Marina · SUV', detail: 'Flight AA 1234 · 3 guests, 4 bags', status: 'Ana', tone: 'info' },
         { lead: '14:05', title: 'Airport → Old town · van', detail: 'Flight lands 14:05 · 7 guests', status: 'No driver', tone: 'warning', action: 'Assign' },
-        { lead: '17:40', title: 'Hotel zone → Airport · sedan', detail: 'Leaves 2 hours before the flight', status: 'Marco', tone: 'info' },
+        { lead: '17:40', title: 'Hotel zone → Airport · sedan', detail: 'Flight AA 2210 · 2 guests', status: 'Marco', tone: 'info' },
       ],
       caption: 'The Pickups board: every ride for the next 7 days, by run, with its driver.',
     },
@@ -455,15 +455,15 @@ export const NICHES: Record<NicheSlug, Niche> = {
       quiet: { label: 'A month with no rides', bookings: 0, avg: 0 },
     },
     steps: [
-      { wizard: 'Basics', title: 'Pick how you sell', text: 'Choose Rental, then With a driver: by trip, by the hour or shared seats. Add your airport and the zones you drive to.' },
-      { wizard: 'Pricing', title: 'Fill the price table', text: 'A price for each zone and vehicle size, a price per hour, or a price per seat.' },
-      { wizard: 'Booking', then: 'Review', title: 'Set runs and publish', text: 'Set shared run times, the free wait after landing and the most vehicles one online booking can take.' },
+      { wizard: 'Basics', title: 'Pick how you charge', text: 'Choose Rental, then By trip for private rides or Per seat for a shared shuttle. Add your vehicles, with passengers and suitcases.' },
+      { wizard: 'Pricing', title: 'Fill the price table', text: 'A price for each area and vehicle size, or a price per seat. A ride costs the higher of its pickup and drop-off areas.' },
+      { wizard: 'Booking', then: 'Review', title: 'Set runs and publish', text: 'Set shared run times, turn on the flight number question and set the most vehicles one online booking can take.' },
     ],
     faqs: [
-      { q: 'Can guests book a return trip in one go?', a: 'Yes. A return books the airport pickup and the ride back together, and both rides show on the Pickups board.' },
-      { q: 'Can I hire out a driver by the hour?', a: 'Yes. Sell a vehicle and driver by the hour, next to your airport transfers.' },
+      { q: 'Can guests book the ride back too?', a: 'Yes, as a second ride from their hotel to the airport. Each ride shows on the Pickups board with its own driver.' },
+      { q: 'Can I hire out a car and driver by the hour?', a: 'Yes. Set it up as a rental charged by time, with a chauffeur included or offered as an option at an hourly price, next to your airport rides.' },
       { q: 'What about big groups?', a: 'When a group is too big for your vehicles, the booking becomes a request you can quote.' },
-      { q: 'Can I add transport to my tours?', a: 'Yes. Any activity can offer pickup and drop-off from your zones, with a price per zone.' },
+      { q: 'Can I add transport to my tours?', a: 'Yes. Any activity can offer pickup and drop-off from your areas, with a price per area.' },
     ],
     related: ['golf-cart-rental', 'boat-charters', 'bike-rental'],
     product: [
@@ -582,7 +582,7 @@ export const NICHES: Record<NicheSlug, Niche> = {
       secondary: ['kayak rental booking software', 'kayak rental app', 'watersports rental software', 'paddleboard rental software'],
     },
     photo: 'heroPaddler',
-    setupAs: 'Rental · Self-drive or gear',
+    setupAs: 'Rental · By time',
     chips: [
       { icon: 'Sailboat', title: 'Tandem kayak', detail: '4 of 10 left at 10:00' },
       { icon: 'Signature', title: 'Waivers', detail: '3 of 3 signed' },
@@ -632,7 +632,7 @@ export const NICHES: Record<NicheSlug, Niche> = {
       quiet: { label: 'A closed winter month', bookings: 0, avg: 0 },
     },
     steps: [
-      { wizard: 'Basics', title: 'Add your boats and boards', text: 'Choose Rental, then Self-drive or gear. Add singles, tandems, canoes and boards, with how many you own.' },
+      { wizard: 'Basics', title: 'Add your boats and boards', text: 'Choose Rental, then Sports and outdoor gear, charged by time. Add singles, tandems, canoes and boards, with how many you own.' },
       { wizard: 'Pricing', title: 'Set lengths and prices', text: '1 hour, 2 hours, half day. Add dry bags or other extras.' },
       { wizard: 'Guests', then: 'Review', title: 'Waiver on, publish', text: 'Attach your waiver, ask swimming ability if you want it, then publish and share the link.' },
     ],
@@ -667,7 +667,7 @@ export const NICHES: Record<NicheSlug, Niche> = {
       secondary: ['snowboard rental software', 'ski shop software'],
     },
     photo: 'pxSkiFlatlay',
-    setupAs: 'Rental · Self-drive or gear',
+    setupAs: 'Rental · By time',
     chips: [
       { icon: 'Ruler', title: '175 cm · shoe 42', detail: 'Intermediate' },
       { icon: 'Snowflake', title: '3 days', detail: 'Family of 4 · ready at 08:30' },
@@ -717,7 +717,7 @@ export const NICHES: Record<NicheSlug, Niche> = {
       quiet: { label: 'A summer month', bookings: 0, avg: 0 },
     },
     steps: [
-      { wizard: 'Basics', title: 'Add your sets', text: 'Choose Rental, then Self-drive or gear. Add each set (sport skis, performance skis, snowboard, kids) with how many you have.' },
+      { wizard: 'Basics', title: 'Add your sets', text: 'Choose Rental, then Sports and outdoor gear, charged by time. Add each set (sport skis, performance skis, snowboard, kids) with how many you have.' },
       { wizard: 'Pricing', title: 'Price by the day', text: 'Set a price per day with the fewest and most days. Add helmets as extras.' },
       { wizard: 'Guests', then: 'Review', title: 'Sizes on, publish', text: 'Turn on height, weight, shoe size and level for each guest, then publish. Add a lesson if you run a school.' },
     ],
@@ -752,7 +752,7 @@ export const NICHES: Record<NicheSlug, Niche> = {
       secondary: ['jet ski rental waiver', 'jet ski booking software', 'PWC rental software'],
     },
     photo: 'pxJetSkiShore',
-    setupAs: 'Rental · Self-drive or gear',
+    setupAs: 'Rental · By time',
     chips: [
       { icon: 'Users', title: '2 riders per ski', detail: '3 skis · 6 riders' },
       { icon: 'ClipboardCheck', title: 'Boater card ✓', detail: 'Waivers 6 of 6 signed' },
@@ -802,7 +802,7 @@ export const NICHES: Record<NicheSlug, Niche> = {
       quiet: { label: 'A closed month', bookings: 0, avg: 0 },
     },
     steps: [
-      { wizard: 'Basics', title: 'Add your skis', text: 'Choose Rental, then Self-drive or gear. Add your skis, how many you own and riders per ski.' },
+      { wizard: 'Basics', title: 'Add your skis', text: 'Choose Rental, then Boats and watercraft, charged by time. Add your skis, how many you own and riders per ski.' },
       { wizard: 'Pricing', title: 'Set lengths and rules', text: '30 minutes, 1 hour, 2 hours. Add the damage deposit, fuel rule and late fee.' },
       { wizard: 'Guests', then: 'Review', title: 'Checks on, publish', text: 'Turn on the boater card check and your waiver for each rider, set a minimum age and publish.' },
     ],
@@ -837,7 +837,7 @@ export const NICHES: Record<NicheSlug, Niche> = {
       secondary: ['golf cart rental booking software', 'golf cart rental management software'],
     },
     photo: 'pxGolfCart',
-    setupAs: 'Rental · Self-drive or gear',
+    setupAs: 'Rental · By time',
     chips: [
       { icon: 'CarFront', title: '6-seat cart', detail: 'Sat to Sat · one price' },
       { icon: 'IdCard', title: 'Driver’s licence ✓', detail: 'Deposit $200 held' },
@@ -888,7 +888,7 @@ export const NICHES: Record<NicheSlug, Niche> = {
       quiet: { label: 'A quiet month', bookings: 0, avg: 0 },
     },
     steps: [
-      { wizard: 'Basics', title: 'Add your carts', text: 'Choose Rental, then Self-drive or gear. Add each cart size, how many you have and the seats in each.' },
+      { wizard: 'Basics', title: 'Add your carts', text: 'Choose Rental, charged by time. Add each cart size, how many you have and the seats in each.' },
       { wizard: 'Pricing', title: 'Price by the day', text: 'A price per day and a cap so a week tops out. Add pick-up and return times, deposit and late fee.' },
       { wizard: 'Guests', then: 'Review', title: 'Checks on, publish', text: 'Turn on the licence check and minimum age, attach your waiver, pick your location and publish.' },
     ],
@@ -964,8 +964,8 @@ export const HUB_LONG: {
   kinds: [
     {
       label: 'Rentals',
-      setupAs: 'Rental · Self-drive or gear',
-      body: 'Guests take something out and bring it back: a boat, a bike, a kayak, skis or a golf cart. You sell by the hour, by the day or for set lengths, each item has its own stock, and the Rentals screen shows what is out, due back or late.',
+      setupAs: 'Rental · By time',
+      body: 'Guests take something out and bring it back: a car, a truck, a boat, a bike, a kayak or skis. You sell by the hour, day, week or month, each item has its own stock, guests can add a driver or cover, and the Rentals screen shows what is out, due back or late.',
     },
     {
       label: 'Private trips',
@@ -974,8 +974,8 @@ export const HUB_LONG: {
     },
     {
       label: 'Rides',
-      setupAs: 'Rental · With a driver',
-      body: 'Guests are taken from one place to another: airport transfers, shuttles, a driver by the hour. You price by zone and vehicle or sell shared seats on set runs, and every ride lands on the Pickups board with a driver.',
+      setupAs: 'Rental · By trip or per seat',
+      body: 'Guests are taken from one place to another: airport rides, hotel transfers, shared shuttles. You price by area and vehicle or sell shared seats on set runs, and every ride lands on the Pickups board with a driver.',
     },
   ],
   chooseTitle: 'How to choose rental booking software',

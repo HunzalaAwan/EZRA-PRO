@@ -9,9 +9,10 @@ import { cn, currencySymbol, formatCurrency, pluralize } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 
-import { AddonEditor, TRANSFER_ADDON_PRESETS, type DraftAddOn } from './addon-editor'
+import { AddonEditor, TRANSFER_ADDON_PRESETS, rentalAddOnPresets, type DraftAddOn } from './addon-editor'
 import { DINING_ADDON_PRESETS, DINING_TIER_PRESETS, DiningBookingFields, type DiningDraft } from './dining-fields'
 import { RentalChargingFields, RentalRatesEditor, draftItemOf, normalizeKindSettings, type DraftKindSettings } from './kind-fields'
+import { RentalTermsEditor } from './rental-terms-editor'
 import { KIND_PRICING, PRIVATE_PER_PERSON_PRICING, PrivateBookingFields, canBookPrivately } from './kind-pricing-extras'
 import { PaymentTermsEditor } from './payment-terms-editor'
 import { GuestPricePreview, KIND_TIER_PRESETS, MoneyInput, PricingTierEditor, TIER_PRESETS, blankTier, leadTierId, tierOfDraft, type DraftTier } from './pricing-tier-editor'
@@ -529,9 +530,11 @@ export interface PricingStepProps {
   activitySlug: string
   /** What guests pay: the activity's own terms, or the business default it follows. */
   payment: PaymentTerms
+  /** Where it runs from: a rental's one-way return needs two or more. */
+  locationCount?: number
 }
 
-export function PricingStep({ draft, patch, errors, currency, dining = false, activitySlug, payment }: PricingStepProps) {
+export function PricingStep({ draft, patch, errors, currency, dining = false, activitySlug, payment, locationCount = 1 }: PricingStepProps) {
   const kind = draft.kind ?? 'trip'
   const settings = normalizeKindSettings(draft.kindSettings)
   const chargeBy = dining ? 'person' : effectiveChargeBy(draft)
@@ -674,6 +677,19 @@ export function PricingStep({ draft, patch, errors, currency, dining = false, ac
         </Block>
       )}
 
+      {/* A rental's terms: who drives, distance, fuel, drivers, cover, pick-up and return, late returns */}
+      {kind === 'rental' ? (
+        <Block title="Rental terms" hint="What comes with each rental, and what guests can add.">
+          <RentalTermsEditor
+            settings={draft.kindSettings}
+            onSettings={(kindSettings) => patch({ kindSettings })}
+            currencySymbol={symbol}
+            errors={errors}
+            locationCount={locationCount}
+          />
+        </Block>
+      ) : null}
+
       {/* Private booking, the price cap and tips */}
       <Block>
         {privateShown ? (
@@ -701,7 +717,7 @@ export function PricingStep({ draft, patch, errors, currency, dining = false, ac
           onChange={(addOns) => patch({ addOns })}
           currency={currency}
           errors={errors}
-          {...(transfer ? { presets: TRANSFER_ADDON_PRESETS, allowEach: true } : {})}
+          {...(transfer ? { presets: TRANSFER_ADDON_PRESETS, allowEach: true } : kind === 'rental' ? { presets: rentalAddOnPresets(draft.kindSettings.rental.category) } : {})}
         />
       </Block>
 
