@@ -421,7 +421,7 @@ function kindOverride(draft: ActivityDraft) {
         ...(daily ? { minDays: r.minDays, maxDays: r.maxDays } : {}),
         pickupTime: hours.opensAt,
         returnTime: hours.closesAt,
-        // What comes with it and what guests can add: who drives, distance, fuel, drivers, cover, handover, late returns.
+        // What comes with it and what guests can add: who drives, distance, fuel, drivers, cover, late returns.
         ...rentalTermsOfDraft(r),
       },
       // The youngest driver or renter is the activity's minimum age (what checkout and the young-driver fee read).
@@ -2784,8 +2784,6 @@ function rentalTermFacts(r: DraftKindSettings['rental']): string[] {
     ...(r.distance.mode === 'unlimited' ? [`Unlimited ${unit === 'mi' ? 'miles' : unit}`] : r.distance.mode === 'allowance' ? [`${r.distance.perDay} ${unit} a day`] : r.distance.mode === 'every' ? [`Charged per ${unit === 'mi' ? 'mile' : unit === 'engine hours' ? 'engine hour' : unit}`] : []),
     ...(r.renters.minAge > 0 && r.operator.mode !== 'included' ? [`Drivers ${r.renters.minAge}+`] : []),
     ...(r.protection.plans.length > 0 ? [`${r.protection.plans.length} cover ${r.protection.plans.length === 1 ? 'plan' : 'plans'}${r.protection.required ? ', one required' : ''}`] : []),
-    ...(r.handover.delivery ? ['Delivery'] : []),
-    ...(r.handover.oneWay ? ['One-way returns'] : []),
     ...(r.lateFee > 0 || r.lateDayAfterHours > 0 ? ['Late return fee'] : []),
   ]
 }

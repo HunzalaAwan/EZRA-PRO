@@ -113,7 +113,6 @@ export function RentalTermsEditor({
   const setOperator = (patch: Partial<DraftOperator>) => set({ operator: { ...r.operator, ...patch } })
   const setDistance = (patch: Partial<DraftDistance>) => set({ distance: { ...r.distance, ...patch } })
   const setRenters = (patch: Partial<DraftRental['renters']>) => set({ renters: { ...r.renters, ...patch } })
-  const setHandover = (patch: Partial<DraftRental['handover']>) => set({ handover: { ...r.handover, ...patch } })
   const setPlans = (plans: DraftPlan[]) => set({ protection: { ...r.protection, plans } })
   const setPlan = (id: string, patch: Partial<DraftPlan>) => setPlans(r.protection.plans.map((plan) => (plan.id === id ? { ...plan, ...patch } : plan)))
 
@@ -315,44 +314,6 @@ export function RentalTermsEditor({
             onChange={(required) => set({ protection: { ...r.protection, required } })}
           />
         ) : null}
-      </Card>
-
-      <Card title="Pick-up and return">
-        <SwitchRow label="Guests pick it up" hint="From your location." checked={r.handover.pickup} onChange={(pickup) => setHandover({ pickup, ...(pickup ? {} : { delivery: true }) })} />
-        <div className="flex flex-col gap-3 border-t border-line-subtle pt-3">
-          <SwitchRow label="We deliver it" hint="Guests give an address at checkout." checked={r.handover.delivery} onChange={(delivery) => setHandover({ delivery, ...(delivery ? {} : { pickup: true }) })} />
-          {r.handover.delivery ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Delivery fee" labelSize="sm" optional description="Empty for free.">
-                {(control) => <Input {...control} type="number" min={0} placeholder="Free" leftIcon={sym} value={cash(r.handover.deliveryFee)} onChange={(e) => setHandover({ deliveryFee: money(e.target.value) })} />}
-              </Field>
-              <Field label="Charged" labelSize="sm">
-                <Select value={r.handover.deliveryPer} onValueChange={(per) => setHandover({ deliveryPer: per as DraftRental['handover']['deliveryPer'] })}>
-                  <SelectTrigger aria-label="Delivery fee charged">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="each_way">Each way</SelectItem>
-                    <SelectItem value="trip">Once, both ways</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-            </div>
-          ) : null}
-        </div>
-        <div className="flex flex-col gap-3 border-t border-line-subtle pt-3">
-          <SwitchRow
-            label="Return to another location"
-            hint={locationCount > 1 ? 'Guests pick where it comes back.' : 'Needs two or more locations in Where it runs from.'}
-            checked={r.handover.oneWay}
-            onChange={(oneWay) => setHandover({ oneWay })}
-          />
-          {r.handover.oneWay ? (
-            <Field label="One-way fee" labelSize="sm" optional description="Empty for free.">
-              {(control) => <Input {...control} type="number" min={0} placeholder="Free" leftIcon={sym} value={cash(r.handover.oneWayFee)} onChange={(e) => setHandover({ oneWayFee: money(e.target.value) })} />}
-            </Field>
-          ) : null}
-        </div>
       </Card>
 
       <Card title="Late returns" hint="Shown to guests, and worked out when it comes back.">

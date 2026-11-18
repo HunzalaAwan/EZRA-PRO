@@ -566,7 +566,6 @@ function rentalTermsAfter(seeded: RentalConfig, saved: RentalConfig): Partial<Re
     operator: saved.operator,
     distance: saved.distance,
     renters: saved.renters,
-    handover: saved.handover,
     protection: saved.protection,
     graceMinutes: saved.graceMinutes,
     lateDayAfterHours: saved.lateDayAfterHours,

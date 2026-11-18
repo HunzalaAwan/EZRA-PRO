@@ -312,13 +312,6 @@ export function rentalTermsOfDraft(r: DraftRental): Partial<RentalConfig> {
     renters.maxExtraDrivers = Math.max(1, r.renters.maxExtraDrivers)
   }
   if (Object.keys(renters).length > 0) out.renters = renters
-  if (!r.handover.pickup || r.handover.delivery || r.handover.oneWay) {
-    out.handover = {
-      pickup: r.handover.pickup || !r.handover.delivery,
-      ...(r.handover.delivery ? { delivery: { fee: Math.max(0, r.handover.deliveryFee), per: r.handover.deliveryPer } } : {}),
-      ...(r.handover.oneWay ? { oneWay: { fee: Math.max(0, r.handover.oneWayFee) } } : {}),
-    }
-  }
   const plans = r.protection.plans.filter((plan) => plan.name.trim().length > 0)
   if (plans.length > 0) out.protection = { plans: plans.map((plan) => ({ ...plan, name: plan.name.trim() })), required: r.protection.required }
   if (r.graceMinutes > 0) out.graceMinutes = r.graceMinutes
