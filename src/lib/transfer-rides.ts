@@ -1,5 +1,5 @@
 import type { Activity, BookingStatus, TransferBookingDetails, TransferDirection, TransferFlight } from '@/types'
-import { transferOf, zoneById } from '@/lib/transfers'
+import { transferOf, zoneById, isBetweenTrip } from '@/lib/transfers'
 
 /* ==========================================================================
    Transfer rides — the day-of list: one row per leg of a transfer booking
@@ -52,7 +52,7 @@ export function ridesOf(args: {
   const config = transferOf(activity)
   const zone = zoneById(config, details.zoneId)?.name ?? ''
   const toZone = zoneById(config, details.toZoneId)?.name ?? ''
-  const zoneName = details.trip === 'between' ? (zone && toZone ? `${zone} to ${toZone}` : zone || toZone) : details.trip === 'hourly' ? '' : zone
+  const zoneName = isBetweenTrip(details.trip) ? (zone && toZone ? `${zone} to ${toZone}` : zone || toZone) : details.trip === 'hourly' ? '' : zone
   const vehicles = details.vehicles
     .filter((line) => line.qty > 0)
     .map((line) => {

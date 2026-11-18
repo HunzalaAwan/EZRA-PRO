@@ -60,7 +60,7 @@ export interface DraftTransfer {
   keptOther?: { kind: ActivityKind; arrivalMode: 'meet' | 'venue' | 'pickup'; theme: ActivityTheme } | null
 }
 
-export const TRIP_ORDER: DraftTrip[] = ['from_hub', 'to_hub', 'round_trip', 'between']
+export const TRIP_ORDER: DraftTrip[] = ['from_hub', 'to_hub', 'round_trip', 'between', 'between_return']
 
 export function defaultTransferDraft(): DraftTransfer {
   return {
@@ -231,7 +231,7 @@ export function configOfDraft(transfer: DraftTransfer, tiers: Pick<DraftTier, 'i
   const hub: TransferHub | undefined = named
     ? { name: transfer.hub.name, ...(transfer.hub.code?.trim() ? { code: transfer.hub.code } : {}), kind: transfer.hub.kind, ...(note ? { meetingNote: note } : {}) }
     : undefined
-  const trips = service === 'hourly' ? [] : transfer.noHub ? transfer.trips.filter((trip) => trip === 'between') : TRIP_ORDER.filter((trip) => transfer.trips.includes(trip))
+  const trips = service === 'hourly' ? [] : transfer.noHub ? TRIP_ORDER.filter((trip) => (trip === 'between' || (trip === 'between_return' && service !== 'shared')) && transfer.trips.includes(trip)) : TRIP_ORDER.filter((trip) => transfer.trips.includes(trip))
   const zones = service === 'hourly' ? [] : transfer.zones.map((zone) => ({ ...zone, places: [...zone.places] }))
   const rates =
     service === 'hourly'
@@ -239,7 +239,7 @@ export function configOfDraft(transfer: DraftTransfer, tiers: Pick<DraftTier, 'i
       : zones.flatMap((zone) =>
           tiers.flatMap((tier) => {
             const rate = transfer.rates[rateKey(zone.id, tier.id)]
-            return rate && rate.oneWay > 0 ? [{ zoneId: zone.id, tierId: tier.id, oneWay: rate.oneWay, ...(rate.roundTrip > 0 ? { roundTrip: rate.roundTrip } : {}) }] : []
+            return rate && (rate.oneWay > 0 || rate.roundTrip > 0) ? [{ zoneId: zone.id, tierId: tier.id, oneWay: Math.max(0, rate.oneWay), ...(rate.roundTrip > 0 ? { roundTrip: rate.roundTrip } : {}) }] : []
           }),
         )
   // With no airport, every shared run simply runs: no ways to choose.

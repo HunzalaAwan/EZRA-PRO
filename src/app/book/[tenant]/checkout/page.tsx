@@ -6,7 +6,7 @@ import { NOW, getActivityById, getDepartureById, getStorefront, getStorefrontAva
 import { decodeRentalChoice } from '@/lib/rental-terms'
 import { locationAddress } from '@/lib/locations'
 import { buildDays, buildTransferAvailability, rentalItemsLeftFor } from '@/lib/storefront-availability'
-import { decodeTransferQuery, encodeTransferQuery, legsFor, vehiclesLeftAt } from '@/lib/transfers'
+import { decodeTransferQuery, encodeTransferQuery, legsFor, vehiclesLeftAt, hasReturnLeg } from '@/lib/transfers'
 import { isGeneratedSlotId, slotFromDeparture } from '@/lib/activity-schedule'
 import { bookingReference, seatsRemaining } from '@/lib/utils'
 import { decodeChoice } from '@/lib/transport'
@@ -86,11 +86,11 @@ export default async function CheckoutPage({
     if (!request) redirect(back)
     const ours = (row: Departure | undefined): row is Departure => Boolean(row && row.activityId === activity.id && row.tenantId === tenant.id && row.status !== 'cancelled')
     const outbound = typeof query.d === 'string' ? getDepartureById(query.d) : undefined
-    const inbound = request.trip === 'round_trip' && typeof query.d2 === 'string' ? getDepartureById(query.d2) : undefined
+    const inbound = hasReturnLeg(request.trip) && typeof query.d2 === 'string' ? getDepartureById(query.d2) : undefined
     if (!ours(outbound)) redirect(back)
-    if (request.trip === 'round_trip' && (!ours(inbound) || !request.returnAt || request.returnAt <= request.at)) redirect(back)
+    if (hasReturnLeg(request.trip) && (!ours(inbound) || !request.returnAt || request.returnAt <= request.at)) redirect(back)
     const legs = legsFor(activity, request)
-    if (legs.length === 0 || legs.length !== (request.trip === 'round_trip' ? 2 : 1)) redirect(back)
+    if (legs.length === 0 || legs.length !== (hasReturnLeg(request.trip) ? 2 : 1)) redirect(back)
     const ids = [outbound.id, ...(inbound ? [inbound.id] : [])]
     // Vehicles free for every leg, as the seeded rides leave them; a shared run counts its seats.
     const { holds } = buildTransferAvailability(activity)

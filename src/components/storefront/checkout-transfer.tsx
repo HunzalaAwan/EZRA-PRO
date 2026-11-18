@@ -9,16 +9,7 @@ import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { formatDateLong } from '@/lib/utils'
-import {
-  FLIGHT_NUMBER,
-  airlineOf,
-  directionLabel,
-  requestErrors,
-  timeFieldLabels,
-  transferOf,
-  type PlannedLeg,
-  type TransferRequest,
-} from '@/lib/transfers'
+import { FLIGHT_NUMBER, airlineOf, directionLabel, requestErrors, timeFieldLabels, transferOf, type PlannedLeg, type TransferRequest, hasReturnLeg, isBetweenTrip } from '@/lib/transfers'
 import { hhmm } from '@/lib/transfer-changes'
 import type { Activity, TransferDirection, TransferFlight } from '@/types'
 
@@ -66,11 +57,13 @@ const TIME = /^([01]\d|2[0-3]):[0-5]\d$/
 
 /** The ways of a request's legs, in trip order (a round trip: arrival, then departure). */
 export function directionsOf(request: Pick<TransferRequest, 'trip'>): TransferDirection[] {
-  return request.trip === 'round_trip' ? ['from_hub', 'to_hub'] : [request.trip]
+  if (request.trip === 'round_trip') return ['from_hub', 'to_hub']
+  if (request.trip === 'between_return') return ['between', 'between']
+  return [request.trip]
 }
 
 /** The time each leg was asked for, in trip order. */
-const askedAt = (request: TransferRequest) => (request.trip === 'round_trip' ? [request.at, request.returnAt ?? ''] : [request.at])
+const askedAt = (request: TransferRequest) => (hasReturnLeg(request.trip) ? [request.at, request.returnAt ?? ''] : [request.at])
 
 /**
  * The form as it starts, from the widget's request: each leg's time, the
@@ -94,7 +87,7 @@ export function transferFormFrom(activity: Pick<Activity, 'kind' | 'transfer'>, 
  */
 export function requestWithForm(activity: Pick<Activity, 'kind' | 'transfer'>, request: TransferRequest, form: TransferForm): TransferRequest {
   const config = transferOf(activity)
-  const flightLed = config?.service !== 'shared' && request.trip !== 'between' && request.trip !== 'hourly'
+  const flightLed = config?.service !== 'shared' && !isBetweenTrip(request.trip) && request.trip !== 'hourly'
   const at = askedAt(request)
   const timed = (index: number) => {
     const time = form.legs[index]?.time ?? ''
@@ -105,7 +98,7 @@ export function requestWithForm(activity: Pick<Activity, 'kind' | 'transfer'>, r
   return {
     ...request,
     at: timed(0),
-    ...(request.trip === 'round_trip' && request.returnAt ? { returnAt: timed(1) } : {}),
+    ...(hasReturnLeg(request.trip) && request.returnAt ? { returnAt: timed(1) } : {}),
     ...(place ? { place } : {}),
     ...(dropOff ? { dropOff } : {}),
   }
@@ -142,23 +135,23 @@ export function validateTransfer(activity: Activity, request: TransferRequest, f
   const arrives = request.trip === 'from_hub' || request.trip === 'round_trip'
   if (!form.place.trim()) {
     errors['transfer.place'] =
-      request.trip === 'between' || request.trip === 'hourly'
+      isBetweenTrip(request.trip) || request.trip === 'hourly'
         ? 'Add the address we collect you from.'
         : arrives
           ? 'Add the hotel or address we drop you at.'
           : 'Add the hotel or address we collect you from.'
   }
   if (request.trip === 'round_trip' && !form.sameHotel && !form.returnPlace.trim()) errors['transfer.returnPlace'] = 'Add the hotel or address we collect you from.'
-  if (request.trip === 'between' && !form.dropOff.trim()) errors['transfer.dropOff'] = 'Add the address we drop you at.'
-  if (nowIso && config.service !== 'shared' && request.trip !== 'between' && request.trip !== 'hourly') {
+  if (isBetweenTrip(request.trip) && !form.dropOff.trim()) errors['transfer.dropOff'] = 'Add the address we drop you at.'
+  if (nowIso && config.service !== 'shared' && !isBetweenTrip(request.trip) && request.trip !== 'hourly') {
     const found = requestErrors(activity, requestWithForm(activity, request, form), nowIso)
     if (found.at && !errors['transfer.time.0']) errors['transfer.time.0'] = found.at
     if (found.returnAt && !errors['transfer.time.1']) errors['transfer.time.1'] = found.returnAt
   }
   // Hotel to hotel and hourly: the pickup (and hours) came from the widget; an old link can be inside the notice or off the hours.
-  if (nowIso && (request.trip === 'between' || request.trip === 'hourly')) {
+  if (nowIso && (isBetweenTrip(request.trip) || request.trip === 'hourly')) {
     const found = requestErrors(activity, request, nowIso)
-    const when = found.hours ?? found.at
+    const when = found.hours ?? found.at ?? found.returnAt
     if (when) errors['transfer.when'] = when
   }
   return errors
@@ -207,7 +200,8 @@ export function CheckoutTransfer({
     }))
   const wait = config.freeWaitMinutes
   const waitWords = wait > 60 && wait % 60 === 0 ? `${wait / 60} hours` : `${wait} minutes`
-  const pickupOf = (direction: TransferDirection) => legs.find((leg) => leg.direction === direction)?.pickupAt
+  // A return has two pickups of the same way: the leg in its own place.
+  const pickupOf = (direction: TransferDirection, index: number) => (request.trip === 'between_return' ? legs[index]?.pickupAt : legs.find((leg) => leg.direction === direction)?.pickupAt)
   const arrives = request.trip === 'from_hub' || request.trip === 'round_trip'
 
   return (
@@ -227,12 +221,12 @@ export function CheckoutTransfer({
       {directions.map((direction, index) => {
         const leg = form.legs[index] ?? { flightNumber: '', airline: '', airlineTyped: false, time: '' }
         const hubLeg = direction === 'from_hub' || direction === 'to_hub'
-        const pickup = pickupOf(direction)
+        const pickup = pickupOf(direction, index)
         const day = at[index] ? formatDateLong(`${at[index].slice(0, 10)}T12:00:00`) : ''
         return (
-          <div key={direction} className="space-y-4 rounded-xl border border-line p-4">
+          <div key={`${direction}-${index}`} className="space-y-4 rounded-xl border border-line p-4">
             <p className="text-sm font-semibold text-foreground">
-              {directionLabel(direction, config.hub)}
+              {request.trip === 'between_return' ? (index === 0 ? 'Ride there' : 'Ride back') : directionLabel(direction, config.hub)}
               {day ? <span className="font-normal text-subtle"> · {day}</span> : null}
             </p>
             {hubLeg ? (
@@ -276,6 +270,8 @@ export function CheckoutTransfer({
                   <Input value={form.place} onChange={(e) => setForm((current) => ({ ...current, place: e.target.value }))} placeholder="Hotel name or address" autoComplete="off" />
                 </Field>
               )
+            ) : request.trip === 'between_return' ? (
+              <p className="text-sm text-muted">From where we dropped you, back to where we picked you up.</p>
             ) : (
               <div className="space-y-3">
                 <label className="flex items-center gap-2.5 text-sm text-foreground">

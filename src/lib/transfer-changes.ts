@@ -1,17 +1,5 @@
 import type { Activity, TransferBookingDetails, TransferDirection, TransferFlight, TransferLeg } from '@/types'
-import {
-  bookingDetailsOf,
-  busyMinutesFor,
-  directionLabel,
-  normalizeFlight,
-  transferOf,
-  transferSlotId,
-  vehiclesLeftAt,
-  zoneById,
-  type TransferHold,
-  type TransferRequest,
-  type TransferSource,
-} from '@/lib/transfers'
+import { bookingDetailsOf, busyMinutesFor, directionLabel, normalizeFlight, transferOf, transferSlotId, vehiclesLeftAt, zoneById, type TransferHold, type TransferRequest, type TransferSource, hasReturnLeg, tripLabel } from '@/lib/transfers'
 
 /* ==========================================================================
    Transfer changes — a booked ride changed after the fact (a new flight, a
@@ -72,7 +60,7 @@ export function requestOfDetails(activity: TransferSource, details: TransferBook
     passengers: details.passengers,
     bags: details.bags,
     at: first ? askedTimeOf(activity, details, first) : '',
-    ...(details.trip === 'round_trip' && second ? { returnAt: askedTimeOf(activity, details, second) } : {}),
+    ...(hasReturnLeg(details.trip) && second ? { returnAt: askedTimeOf(activity, details, second) } : {}),
     ...(details.hours !== undefined ? { hours: details.hours } : {}),
     ...(details.place ? { place: details.place } : {}),
     ...(details.dropOff ? { dropOff: details.dropOff } : {}),
@@ -103,7 +91,7 @@ export interface RideEdit {
 export function applyRideEdit(activity: TransferSource, details: TransferBookingDetails, edit: RideEdit): TransferBookingDetails {
   const base = requestOfDetails(activity, details)
   const firstAt = edit.legs[0]?.at || base.at
-  const secondAt = details.trip === 'round_trip' ? edit.legs[1]?.at || base.returnAt : undefined
+  const secondAt = hasReturnLeg(details.trip) ? edit.legs[1]?.at || base.returnAt : undefined
   const place = (edit.place ?? details.place).trim() || details.place
   const dropOff = (edit.dropOff ?? details.dropOff ?? '').trim() || details.dropOff
   const request: TransferRequest = { ...base, at: firstAt, ...(secondAt ? { returnAt: secondAt } : {}), place, ...(dropOff ? { dropOff } : {}) }
@@ -221,9 +209,11 @@ export function rideHeadline(activity: TransferSource, details: Pick<TransferBoo
   switch (details.trip) {
     case 'round_trip':
       return zone ? `Round trip · ${zone}` : 'Round trip'
-    case 'between': {
+    case 'between':
+    case 'between_return': {
       const to = zoneById(config, details.toZoneId)?.name ?? ''
-      return zone && to ? `Hotel to hotel · ${zone} to ${to}` : 'Hotel to hotel'
+      const word = tripLabel(details.trip, config?.hub)
+      return zone && to ? `${word} · ${zone} to ${to}` : word
     }
     case 'hourly':
       return details.hours ? `By the hour · ${details.hours} ${details.hours === 1 ? 'hour' : 'hours'}` : 'By the hour'

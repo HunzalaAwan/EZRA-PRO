@@ -67,11 +67,18 @@ export function tripLabel(trip: TransferTrip, hub?: TransferHub): string {
     case 'round_trip':
       return 'Round trip'
     case 'between':
-      return hub ? 'Hotel to hotel' : 'Pickup to drop-off'
+      return hub ? 'Hotel to hotel' : 'One way'
+    case 'between_return':
+      return hub ? 'Hotel to hotel and back' : 'Return'
     case 'hourly':
       return 'By the hour'
   }
 }
+
+/** Pickup to drop-off, one way or there and back: the guest picks both places. */
+export const isBetweenTrip = (trip: TransferTrip | undefined) => trip === 'between' || trip === 'between_return'
+/** The trip has a second ride back: a round trip, or a return between two places. */
+export const hasReturnLeg = (trip: TransferTrip | undefined) => trip === 'round_trip' || trip === 'between_return'
 
 /** One ride's way: "Arrival", "Departure" (ports and stations too), "Hotel to hotel" ("Pickup to drop-off" with no airport), "By the hour". */
 export function directionLabel(direction: TransferDirection, hub?: TransferHub): string {
@@ -127,14 +134,15 @@ export function serviceOf(activity: Pick<Activity, 'kind' | 'transfer'>): Transf
   return transferOf(activity)?.service ?? 'private'
 }
 
-const TRIP_ORDER: Exclude<TransferTrip, 'hourly'>[] = ['from_hub', 'to_hub', 'round_trip', 'between']
+const TRIP_ORDER: Exclude<TransferTrip, 'hourly'>[] = ['from_hub', 'to_hub', 'round_trip', 'between', 'between_return']
 const HUB_TRIPS = new Set<TransferTrip>(['from_hub', 'to_hub', 'round_trip'])
 
 /** What guests can book, in the usual order. Hourly: ['hourly']. Without a hub, only hotel to hotel. */
 export function tripsOffered(config: TransferConfig): TransferTrip[] {
   if (config.service === 'hourly') return ['hourly']
   const hub = Boolean(config.hub?.name?.trim())
-  return TRIP_ORDER.filter((trip) => config.trips.includes(trip) && (hub || !HUB_TRIPS.has(trip)))
+  // A shared shuttle runs one way per seat: no returns between two places.
+  return TRIP_ORDER.filter((trip) => config.trips.includes(trip) && (hub || !HUB_TRIPS.has(trip)) && !(trip === 'between_return' && config.service === 'shared'))
 }
 
 /** Destinations that are sold. */
@@ -150,7 +158,7 @@ export function activeZones(config: TransferConfig): TransferZone[] {
 export function zoneHasPrice(config: TransferConfig, zoneId: string | undefined): boolean {
   if (config.service === 'hourly') return true
   if (!zoneId) return false
-  return config.rates.some((rate) => rate.zoneId === zoneId && rate.oneWay > 0) || (config.pairRates ?? []).some((rate) => rate.oneWay > 0 && (rate.fromZoneId === zoneId || rate.toZoneId === zoneId))
+  return config.rates.some((rate) => rate.zoneId === zoneId && (rate.oneWay > 0 || (rate.roundTrip ?? 0) > 0)) || (config.pairRates ?? []).some((rate) => rate.oneWay > 0 && (rate.fromZoneId === zoneId || rate.toZoneId === zoneId))
 }
 
 export function zoneById(config: TransferConfig | undefined, zoneId: string | undefined): TransferZone | undefined {
@@ -278,10 +286,10 @@ export function cleanTransferConfig(config: TransferConfig, tiers: Pick<PriceTie
       : (config.rates ?? []).flatMap((rate) => {
           const key = `${rate.zoneId}|${rate.tierId}`
           const oneWay = money(rate.oneWay)
-          if (seen.has(key) || !zoneIds.has(rate.zoneId) || !tierIds.has(rate.tierId) || oneWay <= 0) return []
+          if (seen.has(key) || !zoneIds.has(rate.zoneId) || !tierIds.has(rate.tierId) || (oneWay <= 0 && money(rate.roundTrip ?? 0) <= 0)) return []
           seen.add(key)
           const roundTrip = money(rate.roundTrip)
-          return [{ zoneId: rate.zoneId, tierId: rate.tierId, oneWay, ...(roundTrip > 0 ? { roundTrip } : {}) }]
+          return [{ zoneId: rate.zoneId, tierId: rate.tierId, oneWay: Math.max(0, oneWay), ...(roundTrip > 0 ? { roundTrip } : {}) }]
         })
   const pairs = service === 'hourly' ? [] : (config.pairRates ?? []).filter((pair) => zoneIds.has(pair.fromZoneId) && zoneIds.has(pair.toZoneId) && pair.fromZoneId !== pair.toZoneId && tierIds.has(pair.tierId) && money(pair.oneWay) > 0)
   const hourly = service === 'hourly' ? (config.hourly ?? []).filter((entry) => tierIds.has(entry.tierId) && money(entry.hour) > 0).map((entry) => ({ tierId: entry.tierId, hour: money(entry.hour) })) : []
@@ -330,7 +338,7 @@ export function transferConfigErrors(config: TransferConfig, tiers: Pick<PriceTi
   if (zones.length === 0) errors['transfer.zones'] = 'Add at least one area'
   const priced = config.service === 'shared' ? tierIds : new Set((config.vehicles ?? []).map((vehicle) => vehicle.tierId).filter((id) => tierIds.has(id)))
   for (const zone of zones) {
-    if (!(config.rates ?? []).some((rate) => rate.zoneId === zone.id && priced.has(rate.tierId) && rate.oneWay > 0)) {
+    if (!(config.rates ?? []).some((rate) => rate.zoneId === zone.id && priced.has(rate.tierId) && (rate.oneWay > 0 || (rate.roundTrip ?? 0) > 0))) {
       errors[`transfer.rate.${zone.id}`] = config.service === 'shared' ? 'Set a price for at least one ticket' : 'Set a price for at least one vehicle'
     }
   }
@@ -423,6 +431,23 @@ export function transferRateFor(config: TransferConfig | undefined, tierId: stri
       if (pair && positive(pair.oneWay) !== undefined) return positive(pair.oneWay)
       const a = positive(rateIn(pricing.zoneId)?.oneWay)
       const b = positive(rateIn(pricing.toZoneId)?.oneWay)
+      return a === undefined || b === undefined ? undefined : Math.max(a, b)
+    }
+    case 'between_return': {
+      // There and back: the pair's one way twice, else the higher of the two places' return prices.
+      if (!sold(pricing.zoneId) || !sold(pricing.toZoneId)) return undefined
+      const pair = (config.pairRates ?? []).find(
+        (entry) =>
+          entry.tierId === tierId &&
+          ((entry.fromZoneId === pricing.zoneId && entry.toZoneId === pricing.toZoneId) || (entry.fromZoneId === pricing.toZoneId && entry.toZoneId === pricing.zoneId)),
+      )
+      if (pair && positive(pair.oneWay) !== undefined) return 2 * positive(pair.oneWay)!
+      const back = (zoneId: string | undefined) => {
+        const rate = rateIn(zoneId)
+        return rate ? positive(roundTripOf(rate)) : undefined
+      }
+      const a = back(pricing.zoneId)
+      const b = back(pricing.toZoneId)
       return a === undefined || b === undefined ? undefined : Math.max(a, b)
     }
   }
@@ -737,10 +762,14 @@ export function legsFor(activity: TransferSource, request: TransferRequest): Pla
         return { ...base, from: request.place?.trim() ?? '', to: request.dropOff?.trim() || request.place?.trim() || '' }
     }
   }
+  // A return between two places: the same ride, then back from the drop-off to the pickup.
+  const reversed = (entry: PlannedLeg | undefined): PlannedLeg | undefined => (entry ? { ...entry, from: entry.to, to: entry.from } : undefined)
   const legs: (PlannedLeg | undefined)[] =
     request.trip === 'round_trip'
       ? [leg('from_hub', request.at), request.returnAt ? leg('to_hub', request.returnAt) : undefined]
-      : [leg(request.trip, request.at)]
+      : request.trip === 'between_return'
+        ? [leg('between', request.at), request.returnAt ? reversed(leg('between', request.returnAt)) : undefined]
+        : [leg(request.trip, request.at)]
   return legs.filter((entry): entry is PlannedLeg => Boolean(entry)).sort((a, b) => (a.pickupAt < b.pickupAt ? -1 : a.pickupAt > b.pickupAt ? 1 : 0))
 }
 
@@ -763,8 +792,9 @@ export function requestErrors(activity: ErrorSource, request: TransferRequest, n
     const zone = zoneById(config, id)
     return Boolean(zone && zone.active !== false)
   }
-  if (!hourly && (!zoned(request.zoneId) || (request.trip === 'between' && !zoned(request.toZoneId)))) errors.zone = "Pick where you're going."
-  else if (!hourly && (!zoneHasPrice(config, request.zoneId) || (request.trip === 'between' && !zoneHasPrice(config, request.toZoneId)))) {
+  const between = isBetweenTrip(request.trip)
+  if (!hourly && (!zoned(request.zoneId) || (between && !zoned(request.toZoneId)))) errors.zone = "Pick where you're going."
+  else if (!hourly && (!zoneHasPrice(config, request.zoneId) || (between && !zoneHasPrice(config, request.toZoneId)))) {
     errors.zone = "We don't drive there yet. Pick the nearest area, or send us a request."
   }
   if (!(request.passengers >= 1)) errors.passengers = 'Add at least one passenger.'
@@ -775,15 +805,16 @@ export function requestErrors(activity: ErrorSource, request: TransferRequest, n
     if (!(hours >= min && hours <= max)) errors.hours = `Book between ${min} and ${max} hours.`
   }
   if (!dateOf(request.at)) errors.at = 'Pick a date and time.'
-  if (request.trip === 'round_trip') {
-    if (!request.returnAt || !dateOf(request.returnAt)) errors.returnAt = 'Pick when you leave.'
-    else if (dateOf(request.at) && normalIso(request.returnAt) <= normalIso(request.at)) errors.returnAt = 'Your return has to be after you arrive.'
+  if (hasReturnLeg(request.trip)) {
+    if (!request.returnAt || !dateOf(request.returnAt)) errors.returnAt = request.trip === 'between_return' ? 'Pick when to come back.' : 'Pick when you leave.'
+    else if (dateOf(request.at) && normalIso(request.returnAt) <= normalIso(request.at)) errors.returnAt = request.trip === 'between_return' ? 'The ride back has to be after the ride there.' : 'Your return has to be after you arrive.'
   }
 
   const now = normalIso(nowIso)
   const notice = Math.max(0, activity.noticeHours ?? 0)
   const opensAt = notice > 0 ? plus(now, notice * 60) : now
-  const timeKey = (direction: TransferDirection) => (request.trip === 'round_trip' && direction === 'to_hub' ? 'returnAt' : 'at')
+  // The second ride of a round trip or a return is checked against the return time.
+  const timeKey = (direction: TransferDirection, index: number) => (request.trip === 'round_trip' ? (direction === 'to_hub' ? 'returnAt' : 'at') : request.trip === 'between_return' && index > 0 ? 'returnAt' : 'at')
   const legs = legsFor(activity, request)
   // A round trip's return pickup comes after the arrival has reached the stay (landing, then the drive).
   if (request.trip === 'round_trip' && !errors.returnAt) {
@@ -792,8 +823,8 @@ export function requestErrors(activity: ErrorSource, request: TransferRequest, n
     const drive = Math.max(0, zoneById(config, request.zoneId)?.driveMinutes ?? 0)
     if (arrival && back && back.pickupAt < plus(arrival.pickupAt, drive)) errors.returnAt = 'Your return has to be after you arrive.'
   }
-  for (const leg of legs) {
-    const key = timeKey(leg.direction)
+  for (const [index, leg] of legs.entries()) {
+    const key = timeKey(leg.direction, index)
     if (errors[key]) continue
     if (leg.pickupAt < now) errors[key] = "Pick a time that hasn't passed."
     else if (leg.pickupAt < opensAt) errors[key] = `Book at least ${notice} hours ahead. Need it sooner? Send a request.`
@@ -859,7 +890,7 @@ export function bookingDetailsOf(
     service,
     trip: request.trip,
     ...(request.trip !== 'hourly' && request.zoneId ? { zoneId: request.zoneId } : {}),
-    ...(request.trip === 'between' && request.toZoneId ? { toZoneId: request.toZoneId } : {}),
+    ...(isBetweenTrip(request.trip) && request.toZoneId ? { toZoneId: request.toZoneId } : {}),
     passengers: Math.max(1, Math.floor(request.passengers || 1)),
     bags: Math.max(0, Math.floor(request.bags || 0)),
     vehicles: service === 'shared' ? [] : args.vehicles.filter((line) => line.qty > 0).map((line) => ({ tierId: line.tierId, qty: Math.floor(line.qty) })),
@@ -1010,7 +1041,7 @@ export function ledgerHolds(activity: TransferSource & Pick<Activity, 'slug'>, s
 
 /* ---------- links: the widget's request in a checkout URL ---------- */
 
-const TRIPS: TransferTrip[] = ['from_hub', 'to_hub', 'round_trip', 'between', 'hourly']
+const TRIPS: TransferTrip[] = ['from_hub', 'to_hub', 'round_trip', 'between', 'between_return', 'hourly']
 
 /**
  * A request as query keys: `tt` trip, `z` zone, `z2` to-zone, `px`
@@ -1044,7 +1075,7 @@ export function decodeTransferQuery(query: Record<string, string | string[] | un
   const zoneId = read('z')
   const toZoneId = read('z2')
   if (trip !== 'hourly' && !zoneRe.test(zoneId)) return undefined
-  if (trip === 'between' && !zoneRe.test(toZoneId)) return undefined
+  if (isBetweenTrip(trip) && !zoneRe.test(toZoneId)) return undefined
   const at = dateOf(read('at'))
   if (!at) return undefined
   const back = dateOf(read('rt'))
@@ -1057,11 +1088,11 @@ export function decodeTransferQuery(query: Record<string, string | string[] | un
   return {
     trip,
     ...(trip !== 'hourly' ? { zoneId } : {}),
-    ...(trip === 'between' ? { toZoneId } : {}),
+    ...(isBetweenTrip(trip) ? { toZoneId } : {}),
     passengers,
     bags: count('bg', 0, 99, 0),
     at: isoOf(at),
-    ...(trip === 'round_trip' && back ? { returnAt: isoOf(back) } : {}),
+    ...(hasReturnLeg(trip) && back ? { returnAt: isoOf(back) } : {}),
     ...(trip === 'hourly' ? { hours: count('hr', 1, 24, 1) } : {}),
     ...(text('pl') ? { place: text('pl') } : {}),
     ...(text('do') ? { dropOff: text('do') } : {}),

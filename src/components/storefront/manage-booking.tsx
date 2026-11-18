@@ -58,7 +58,7 @@ import { extraSpotPrice, groupPriced, guestLimitOf, priceTransport, privatePerPe
 import { changeBooking, changeStartOf, withLedger } from '@/lib/booking-ledger'
 import { changesSummary, hoursLabel, refundFor, splitPayment } from '@/lib/booking-policy'
 import { useTransferHolds } from '@/hooks/use-transfer-holds'
-import { FLIGHT_NUMBER, airlineOf, directionLabel, timeFieldLabels, transferOf, type TransferHold } from '@/lib/transfers'
+import { FLIGHT_NUMBER, airlineOf, directionLabel, timeFieldLabels, transferOf, type TransferHold, isBetweenTrip } from '@/lib/transfers'
 import { applyRideEdit, askedTimeOf, flightLine, hhmm, isHubLeg, movedToOf, partyLine, returnTooSoon, rideFits, rideHeadline, type RideEdit } from '@/lib/transfer-changes'
 import type { Activity, ActivityKind, BookingPickup, BookingStatus, CancellationPolicy, ChangeRules, CurrencyCode, GuestQuestion, PaymentTerms, PickupZone, TransferBookingDetails, WaiverTemplate } from '@/types'
 
@@ -749,7 +749,7 @@ function ManageBookingInner({ tenant, booking, guest, activity: given, departure
                   </fieldset>
                 )
               })}
-              <Field label={ride.trip === 'between' || ride.trip === 'hourly' ? 'Pick up from' : 'Hotel name'} required error={rideErrors.place}>
+              <Field label={isBetweenTrip(ride.trip) || ride.trip === 'hourly' ? 'Pick up from' : 'Hotel name'} required error={rideErrors.place}>
                 <Input value={rideForm.place} autoComplete="off" onChange={(e) => setRideForm((current) => ({ ...current, place: e.target.value }))} />
               </Field>
               {rideErrors.form ? (

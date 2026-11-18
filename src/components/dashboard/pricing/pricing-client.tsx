@@ -46,7 +46,7 @@ import {
 } from '@/lib/pricing'
 import { cn, formatCurrency, formatDateLong, pluralize } from '@/lib/utils'
 import type { Activity, CurrencyCode, TransferConfig, TransferTrip } from '@/types'
-import { activeZones, biggestVehicle, planVehicles, transferOf, transferRateFor, tripLabel, tripsOffered, type TransferPricing } from '@/lib/transfers'
+import { activeZones, biggestVehicle, planVehicles, transferOf, transferRateFor, tripLabel, tripsOffered, type TransferPricing, isBetweenTrip } from '@/lib/transfers'
 
 /* ==========================================================================
    PRICING
@@ -265,7 +265,7 @@ export function defaultTransferPricing(config: TransferConfig): TransferPricing 
   const trips = tripsOffered(config)
   const trip = trips.includes('from_hub') ? 'from_hub' : trips[0]
   if (!zone || !trip) return undefined
-  return trip === 'between' ? { trip, zoneId: zone.id, toZoneId: zone.id } : { trip, zoneId: zone.id }
+  return isBetweenTrip(trip) ? { trip, zoneId: zone.id, toZoneId: zone.id } : { trip, zoneId: zone.id }
 }
 
 /**
@@ -341,7 +341,7 @@ function PriceCheck({ tenantSlug, activities, currency, nowIso, rules, peaks, fi
     }
     const trip = ride.trip && tripsOffered(rideConfig).includes(ride.trip) ? ride.trip : first.trip
     const zoneId = activeZones(rideConfig).some((zone) => zone.id === ride.zoneId) ? ride.zoneId : first.zoneId
-    return trip === 'between' ? { trip, zoneId, toZoneId: zoneId } : { trip, zoneId }
+    return isBetweenTrip(trip) ? { trip, zoneId, toZoneId: zoneId } : { trip, zoneId }
   }, [rideConfig, ride])
   const time = times.includes(picked) ? picked : (times[0] ?? '')
 

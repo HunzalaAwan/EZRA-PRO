@@ -47,6 +47,7 @@ import {
   type TransferHold,
   type TransferRequest,
   type VehiclePlan,
+  isBetweenTrip,
 } from '@/lib/transfers'
 import type { TransferAvailability } from '@/lib/storefront-availability'
 import { cn, formatCurrency, fromDateKey } from '@/lib/utils'
@@ -261,12 +262,12 @@ export function TransferWidget({
   /* ---------- the request ---------- */
 
   const firstAt = shared ? (outRun ? `${outRun.slot.startsAt.slice(0, 16)}:00` : '') : isoAt(dateKey, time)
-  const returnAt = trip === 'round_trip' ? (shared ? (backRun ? `${backRun.slot.startsAt.slice(0, 16)}:00` : '') : isoAt(returnKey, returnTime)) : undefined
+  const returnAt = trip === 'round_trip' ? (shared ? (backRun ? `${backRun.slot.startsAt.slice(0, 16)}:00` : '') : isoAt(returnKey, returnTime)) : trip === 'between_return' ? isoAt(returnKey, returnTime) : undefined
   const request: TransferRequest = React.useMemo(
     () => ({
       trip: hourly ? 'hourly' : trip,
       ...(hourly ? {} : zoneId ? { zoneId } : {}),
-      ...(trip === 'between' && toZoneId ? { toZoneId } : {}),
+      ...(isBetweenTrip(trip) && toZoneId ? { toZoneId } : {}),
       passengers: Math.max(1, passengers),
       bags,
       at: firstAt,
@@ -292,7 +293,7 @@ export function TransferWidget({
   /* ---------- vehicles: free at every leg, the cheapest set that fits ---------- */
 
   const holds = useTransferHolds(activity, tenantSlug, availability?.holds ?? NO_HOLDS)
-  const located = hourly || Boolean(zone && (trip !== 'between' || zoneById(config, toZoneId)))
+  const located = hourly || Boolean(zone && (!isBetweenTrip(trip) || zoneById(config, toZoneId)))
   const { legs, left, plan } = React.useMemo(() => transferPlanFor(scheduled, request, holds), [scheduled, request, holds])
   const [chosen, setChosen] = React.useState<VehiclePlan['lines'] | null>(null)
   const [choosing, setChoosing] = React.useState(false)
@@ -363,7 +364,7 @@ export function TransferWidget({
 
   /* ---------- nearest free times (hotel to hotel and hourly) ---------- */
 
-  const flightLed = !hourly && trip !== 'between'
+  const flightLed = !hourly && !isBetweenTrip(trip)
   const suggestions = React.useMemo(() => {
     if (!vehiclesOut || flightLed) return []
     const times = openTimes.get(dateKey) ?? []
@@ -436,8 +437,8 @@ export function TransferWidget({
       />
     </div>
   )
-  const slotSelect = (id: string, label: string, value: string, onChange: (next: string) => void) => {
-    const times = openTimes.get(dateKey) ?? []
+  const slotSelect = (id: string, label: string, value: string, onChange: (next: string) => void, day = dateKey) => {
+    const times = openTimes.get(day) ?? []
     const options = times.includes(value) ? times : [value, ...times].sort()
     return (
       <div className="flex items-center justify-between gap-3">
@@ -542,7 +543,7 @@ export function TransferWidget({
 
         {/* ---------- 2 · where ---------- */}
         <div>
-          {heading('where', hourly ? 'Where we collect you' : trip === 'between' ? 'Where to' : 'Where are you staying?')}
+          {heading('where', hourly ? 'Where we collect you' : isBetweenTrip(trip) ? 'Where to' : 'Where are you staying?')}
           <div className="mt-3 flex flex-col gap-3">
             {hourly ? (
               <div>
@@ -555,8 +556,8 @@ export function TransferWidget({
               <>
                 <ZonePicker
                   id={`${activity.id}-zone`}
-                  label={trip === 'between' ? 'Pick up from' : 'Where are you staying?'}
-                  hideLabel={trip !== 'between'}
+                  label={isBetweenTrip(trip) ? 'Pick up from' : 'Where are you staying?'}
+                  hideLabel={!isBetweenTrip(trip)}
                   config={config}
                   zoneId={zoneId}
                   place={place}
@@ -567,7 +568,7 @@ export function TransferWidget({
                   }}
                   onAsk={() => setAsking('booking')}
                 />
-                {trip === 'between' ? (
+                {isBetweenTrip(trip) ? (
                   <ZonePicker
                     id={`${activity.id}-to-zone`}
                     label="Drop off at"
@@ -682,6 +683,15 @@ export function TransferWidget({
                 {dayStrip('Day', dateKey, pickDate)}
                 {runChips(outRuns, outRun?.slot.departureId, setRunId, 'Runs', false)}
                 {fieldError(errors.at)}
+              </>
+            ) : trip === 'between_return' ? (
+              <>
+                {dayStrip('Day', dateKey, pickDate)}
+                {slotSelect(`${activity.id}-pickup-at`, 'Pickup at', time, setTime)}
+                {fieldError(errors.at)}
+                {dayStrip('Coming back', returnKey, setReturnKey, dateKey)}
+                {slotSelect(`${activity.id}-return-at`, 'Pickup for the ride back', returnTime, setReturnTime, returnKey)}
+                {fieldError(errors.returnAt)}
               </>
             ) : trip === 'between' ? (
               <>

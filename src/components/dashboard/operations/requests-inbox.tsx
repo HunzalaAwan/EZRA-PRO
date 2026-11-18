@@ -63,7 +63,7 @@ const placeShort = (text: string) => /\(([A-Z0-9]{2,5})\)\s*$/.exec(text)?.[1] ?
  */
 export function rideRequestLine(details: TransferBookingDetails, tiers: { id: string; label: string }[] = []): string {
   const first = details.legs[0]
-  const way = details.trip === 'round_trip' ? 'Round trip' : directionLabel(first?.direction ?? (details.trip === 'hourly' ? 'hourly' : 'between'))
+  const way = details.trip === 'round_trip' ? 'Round trip' : details.trip === 'between_return' ? 'Return' : directionLabel(first?.direction ?? (details.trip === 'hourly' ? 'hourly' : 'between'))
   const route = first && (first.from || first.to) ? `${placeShort(first.from) || '…'} → ${placeShort(first.to) || '…'}` : details.place
   const day = (iso: string) => new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(new Date(iso))
   const flights = details.legs.flatMap((leg) => (leg.flight ? [`${leg.flight.number} ${leg.direction === 'to_hub' ? 'takes off' : 'lands'} ${day(leg.flight.at)} ${hhmm(leg.flight.at)}`] : []))

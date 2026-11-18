@@ -16,7 +16,7 @@ import { fetchTransferHolds } from '@/lib/actions/transfers'
 import { changeBooking, type BookingChange } from '@/lib/booking-ledger'
 import { RIDE_STAGE_LABEL } from '@/lib/transfer-rides'
 import { applyRideEdit, askedTimeOf, flightLine, hhmm, isHubLeg, movedToOf, partyLine, returnTooSoon, rideFits, rideHeadline, type LegEdit } from '@/lib/transfer-changes'
-import { FLIGHT_NUMBER, airlineOf, directionLabel, timeFieldLabels, vehiclesSentence, type TransferHold } from '@/lib/transfers'
+import { FLIGHT_NUMBER, airlineOf, directionLabel, timeFieldLabels, vehiclesSentence, type TransferHold, isBetweenTrip } from '@/lib/transfers'
 import { cn, formatDateLong } from '@/lib/utils'
 import type { Activity, TransferBookingDetails, User } from '@/types'
 
@@ -203,7 +203,7 @@ function EditRideDialog({
     ...(shared || !leg.date || !leg.time ? {} : { at: `${leg.date}T${leg.time}:00` }),
   }))
   const next = React.useMemo(
-    () => applyRideEdit(activity, details, { legs: edits, place, dropOff: details.trip === 'between' ? dropOff : undefined }),
+    () => applyRideEdit(activity, details, { legs: edits, place, dropOff: isBetweenTrip(details.trip) ? dropOff : undefined }),
     // edits is rebuilt from legs on each render
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [activity, details, legs, place, dropOff],
@@ -279,10 +279,10 @@ function EditRideDialog({
               </fieldset>
             )
           })}
-          <Field label={details.trip === 'between' || details.trip === 'hourly' ? 'Pick up from' : 'Hotel or address'} error={tried ? errors.place : undefined}>
+          <Field label={isBetweenTrip(details.trip) || details.trip === 'hourly' ? 'Pick up from' : 'Hotel or address'} error={tried ? errors.place : undefined}>
             <Input value={place} onChange={(event) => setPlace(event.target.value)} />
           </Field>
-          {details.trip === 'between' ? (
+          {isBetweenTrip(details.trip) ? (
             <Field label="Drop off at">
               <Input value={dropOff} onChange={(event) => setDropOff(event.target.value)} />
             </Field>

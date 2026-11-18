@@ -40,6 +40,8 @@ import {
   type TransferHold,
   type TransferRequest,
   type VehiclePlan,
+  isBetweenTrip,
+  hasReturnLeg,
 } from '@/lib/transfers'
 import { EMPTY_GUEST, type WalkInRecord } from '@/lib/walk-ins'
 import { cn, formatCurrency, pluralize } from '@/lib/utils'
@@ -89,7 +91,7 @@ export function deskPlan(
   const legs = legsFor(activity, request)
   const config = transferOf(activity)
   // Nothing to plan until it is priced: a destination (and a drop-off for hotel to hotel), or the hours.
-  const unpriced = request.trip !== 'hourly' && (!request.zoneId || (request.trip === 'between' && !request.toZoneId))
+  const unpriced = request.trip !== 'hourly' && (!request.zoneId || (isBetweenTrip(request.trip) && !request.toZoneId))
   if (!config || config.service === 'shared' || legs.length === 0 || unpriced) return { legs, left: {}, best: null, tooBig: false, busy: false }
   const left: Record<string, number> = {}
   for (const leg of legs) {
@@ -263,7 +265,7 @@ export function TransferTill({
   // Shared runs: the run times today that go this way, from now on.
   const runs = React.useMemo(() => {
     if (!shared) return []
-    const way = trip === 'between' ? undefined : trip === 'to_hub' ? config?.shared?.toHubTimes : config?.shared?.fromHubTimes
+    const way = isBetweenTrip(trip) ? undefined : trip === 'to_hub' ? config?.shared?.toHubTimes : config?.shared?.fromHubTimes
     const today = days.find((day) => day.dateKey === todayKey)?.slots ?? []
     const known = [...new Set([...(way ?? []), ...today.map((slot) => slot.startsAt.slice(11, 16))])].sort()
     return known
@@ -282,11 +284,11 @@ export function TransferTill({
   const request: TransferRequest = {
     trip,
     ...(trip !== 'hourly' && zoneId ? { zoneId } : {}),
-    ...(trip === 'between' && toZoneId ? { toZoneId } : {}),
+    ...(isBetweenTrip(trip) && toZoneId ? { toZoneId } : {}),
     passengers: people,
     bags,
     at: `${todayKey}T${time}:00`,
-    ...(trip === 'round_trip' && returnDate ? { returnAt: `${returnDate}T${returnTime}:00` } : {}),
+    ...(hasReturnLeg(trip) && returnDate ? { returnAt: `${returnDate}T${returnTime}:00` } : {}),
     ...(trip === 'hourly' ? { hours } : {}),
     ...(place.trim() ? { place: place.trim() } : {}),
     ...(dropOff.trim() ? { dropOff: dropOff.trim() } : {}),
@@ -422,7 +424,7 @@ export function TransferTill({
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
               <ZonePicker
-                label={trip === 'between' ? 'Pick up from' : 'Where to'}
+                label={isBetweenTrip(trip) ? 'Pick up from' : 'Where to'}
                 config={config}
                 zoneId={zoneId}
                 onPick={(id, hotel) => {
@@ -430,7 +432,7 @@ export function TransferTill({
                   if (hotel) setPlace(hotel)
                 }}
               />
-              {trip === 'between' ? (
+              {isBetweenTrip(trip) ? (
                 <ZonePicker
                   label="Drop off at"
                   config={config}
@@ -538,12 +540,12 @@ export function TransferTill({
                 <div className="mt-2">{stepper(hours, Math.max(1, config?.minHours ?? 1), Math.max(1, config?.maxHours ?? 10), setHours, 'hours')}</div>
               </div>
             ) : null}
-            {trip === 'round_trip' ? (
+            {hasReturnLeg(trip) ? (
               <>
-                <Field label="Leaving on" error={touched ? sale.errors.returnAt : undefined}>
+                <Field label={trip === 'between_return' ? 'Coming back on' : 'Leaving on'} error={touched ? sale.errors.returnAt : undefined}>
                   <Input type="date" min={todayKey} value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />
                 </Field>
-                <Field label={labels.leaves}>
+                <Field label={trip === 'between_return' ? 'Pickup for the ride back' : labels.leaves}>
                   {(control) => (
                     <Select value={returnTime} onValueChange={setReturnTime}>
                       <SelectTrigger id={control.id}>
@@ -612,11 +614,11 @@ export function TransferTill({
             {(control) => <Input {...control} type="tel" value={phone} placeholder="+1 555 0134" autoComplete="off" onChange={(e) => setPhone(e.target.value)} />}
           </Field>
           {!hourly ? (
-            <Field label={trip === 'between' ? 'Pick up address' : 'Hotel'} description={zone && !place ? zone.name : undefined}>
+            <Field label={isBetweenTrip(trip) ? 'Pick up address' : 'Hotel'} description={zone && !place ? zone.name : undefined}>
               {(control) => <Input {...control} value={place} placeholder="Hotel name or address" autoComplete="off" onChange={(e) => setPlace(e.target.value)} />}
             </Field>
           ) : null}
-          {trip === 'between' ? (
+          {isBetweenTrip(trip) ? (
             <Field label="Drop off address">
               {(control) => <Input {...control} value={dropOff} placeholder="Hotel name or address" autoComplete="off" onChange={(e) => setDropOff(e.target.value)} />}
             </Field>

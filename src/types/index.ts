@@ -678,10 +678,11 @@ export type ActivityKind = 'trip' | 'activity' | 'charter' | 'rental' | 'lesson'
 export type TransferService = 'private' | 'shared' | 'hourly'
 
 /** What guests book. 'hourly' is only used by the hourly service; a config's `trips` never lists it. */
-export type TransferTrip = 'from_hub' | 'to_hub' | 'round_trip' | 'between' | 'hourly'
+/** 'between': pickup to drop-off, one way. 'between_return': there and back again later (two 'between' legs). */
+export type TransferTrip = 'from_hub' | 'to_hub' | 'round_trip' | 'between' | 'between_return' | 'hourly'
 
-/** One ride's way: a round trip is a 'from_hub' leg and a 'to_hub' leg. */
-export type TransferDirection = Exclude<TransferTrip, 'round_trip'>
+/** One ride's way: a round trip is a 'from_hub' leg and a 'to_hub' leg; a return is two 'between' legs. */
+export type TransferDirection = Exclude<TransferTrip, 'round_trip' | 'between_return'>
 
 export type TransferHubKind = 'airport' | 'port' | 'station' | 'other'
 

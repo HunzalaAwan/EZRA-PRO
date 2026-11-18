@@ -57,20 +57,7 @@ import { bookingPickupOf, choiceErrors, cleanChoice, defaultChoice, transportLin
 import { bookedOn, checkoutParty, resolveRental, resolveSelection, resolveTransferSelection, spotsBeyondStrip, transferCheckoutLegs, type RentalRequest } from '@/components/storefront/checkout-selection'
 import { CheckoutTransfer, EMPTY_TRANSFER_FORM, flightsOf, requestWithForm, transferFormFrom, validateTransfer, type TransferForm } from '@/components/storefront/checkout-transfer'
 import { useTransferHolds } from '@/hooks/use-transfer-holds'
-import {
-  bookingDetailsOf,
-  legsFor,
-  pricingOf,
-  slotStartOf,
-  transferOf,
-  transferSlotId,
-  tripLabel,
-  vehiclesLeftAt,
-  vehiclesSentence,
-  zoneById,
-  type TransferHold,
-  type TransferRequest,
-} from '@/lib/transfers'
+import { bookingDetailsOf, legsFor, pricingOf, slotStartOf, transferOf, transferSlotId, tripLabel, vehiclesLeftAt, vehiclesSentence, zoneById, type TransferHold, type TransferRequest, isBetweenTrip } from '@/lib/transfers'
 import { flightLine, hhmm, partyLine } from '@/lib/transfer-changes'
 import {
   EMPTY_WAIVER,
@@ -529,7 +516,7 @@ export function CheckoutFlow({
   }
   const rideZoneGone =
     transferRequest !== undefined &&
-    (!rideConfig || (transferRequest.trip !== 'hourly' && (!zoneSold(transferRequest.zoneId) || (transferRequest.trip === 'between' && !zoneSold(transferRequest.toZoneId)))))
+    (!rideConfig || (transferRequest.trip !== 'hourly' && (!zoneSold(transferRequest.zoneId) || (isBetweenTrip(transferRequest.trip) && !zoneSold(transferRequest.toZoneId)))))
   // The vehicles, checked again with this browser's bookings and the saved prices (the link's vehicles while they still fit the group).
   const rideHolds = useTransferHolds(activity, tenant.slug, transferHolds)
   const rideSelection = React.useMemo(

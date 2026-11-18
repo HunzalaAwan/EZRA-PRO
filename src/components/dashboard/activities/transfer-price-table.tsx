@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { ChevronDown, ClipboardPaste, Plus, Trash2 } from 'lucide-react'
+import { Check, ChevronDown, ClipboardPaste, Plus, Trash2 } from 'lucide-react'
 
 import type { CurrencyCode, TransferZone } from '@/types'
 import { cn, currencySymbol } from '@/lib/utils'
@@ -65,7 +65,7 @@ export function parsePastedPrices(text: string): { name: string; prices: number[
 }
 
 /** The table with pasted rows laid in: a destination with the same name is updated, a new one added (the empty starter row is used first). */
-export function withPastedPrices(value: DraftTransfer, tiers: Pick<DraftTier, 'id'>[], rows: { name: string; prices: number[] }[], roundTrips: boolean): DraftTransfer {
+export function withPastedPrices(value: DraftTransfer, tiers: Pick<DraftTier, 'id'>[], rows: { name: string; prices: number[] }[], roundTrips: boolean, returnOnly = false): DraftTransfer {
   let zones = [...value.zones]
   const rates = { ...value.rates }
   const step = roundTrips ? 2 : 1
@@ -77,8 +77,9 @@ export function withPastedPrices(value: DraftTransfer, tiers: Pick<DraftTier, 'i
       zones = blank ? zones.map((entry) => (entry.id === blank.id ? zone! : entry)) : [...zones, zone]
     }
     tiers.forEach((tier, index) => {
-      const oneWay = row.prices[index * step] ?? 0
-      const roundTrip = roundTrips ? (row.prices[index * step + 1] ?? 0) : (rates[rateKey(zone!.id, tier.id)]?.roundTrip ?? 0)
+      const kept = rates[rateKey(zone!.id, tier.id)]
+      const oneWay = returnOnly ? (kept?.oneWay ?? 0) : (row.prices[index * step] ?? 0)
+      const roundTrip = returnOnly ? (row.prices[index] ?? 0) : roundTrips ? (row.prices[index * step + 1] ?? 0) : (kept?.roundTrip ?? 0)
       if (oneWay > 0 || roundTrip > 0) rates[rateKey(zone!.id, tier.id)] = { oneWay, roundTrip }
     })
   }
@@ -92,8 +93,21 @@ export function TransferPriceTable(props: TransferPriceTableProps) {
 /** Private and shared: destinations × vehicles (or tickets) × one way and round trip. */
 function ZonePrices({ value, tiers, onChange, currency, errors }: TransferPriceTableProps) {
   const shared = value.service === 'shared'
-  const roundTrips = !value.noHub && value.trips.includes('round_trip')
   const between = value.trips.includes('between')
+  // Rides between areas: one way, a return (there and back), or both; shared seats are one way.
+  const area = value.noHub && !shared
+  const sellOne = !area || between
+  const sellReturn = area ? value.trips.includes('between_return') : value.trips.includes('round_trip')
+  const roundTrips = sellOne && sellReturn
+  const returnWord = area ? 'Return' : 'Round trip'
+  const cols = (sellOne ? 1 : 0) + (sellReturn ? 1 : 0)
+  const subHead = roundTrips || (area && cols > 0)
+  const setTrips = (trip: 'between' | 'between_return', on: boolean) => {
+    const next = on ? [...new Set([...value.trips, trip])] : value.trips.filter((entry) => entry !== trip)
+    // Something is always sold.
+    if (!next.some((entry) => entry === 'between' || entry === 'between_return')) return
+    onChange({ ...value, trips: next })
+  }
   const [open, setOpen] = React.useState<Record<string, boolean>>({})
   const [pasting, setPasting] = React.useState(false)
   const [pasted, setPasted] = React.useState('')
@@ -121,7 +135,20 @@ function ZonePrices({ value, tiers, onChange, currency, errors }: TransferPriceT
     const rate = rateOf(zone.id, tier.id)
     const where = `${tierName(tier, tierIndex)}, ${zoneName(zone, zoneIndex)}`
     const oneWay = <MoneyInput key="one" value={rate.oneWay} onValueChange={(next) => setRate(zone.id, tier.id, { oneWay: next })} currency={currency} size="sm" allowEmpty placeholder="—" ariaLabel={`One way, ${where}`} />
-    if (!roundTrips) return [oneWay]
+    const back = (
+      <MoneyInput
+        key="round"
+        value={rate.roundTrip}
+        onValueChange={(next) => setRate(zone.id, tier.id, { roundTrip: next })}
+        currency={currency}
+        size="sm"
+        allowEmpty
+        placeholder={sellOne && rate.oneWay > 0 ? String((rate.oneWay * 2) / 100) : '—'}
+        ariaLabel={`${returnWord}, ${where}`}
+      />
+    )
+    if (!sellReturn) return [oneWay]
+    if (!sellOne) return [back]
     return [
       oneWay,
       <MoneyInput
@@ -132,7 +159,7 @@ function ZonePrices({ value, tiers, onChange, currency, errors }: TransferPriceT
         size="sm"
         allowEmpty
         placeholder={rate.oneWay > 0 ? String((rate.oneWay * 2) / 100) : '—'}
-        ariaLabel={`Round trip, ${where}`}
+        ariaLabel={`${returnWord}, ${where}`}
       />,
     ]
   }
@@ -148,36 +175,76 @@ function ZonePrices({ value, tiers, onChange, currency, errors }: TransferPriceT
 
   return (
     <div className="flex flex-col gap-3">
+      {area ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-medium text-foreground">Trips guests can book</p>
+          <div role="group" aria-label="Trips guests can book" className="flex flex-wrap gap-2">
+            {(
+              [
+                ['between', 'One way', 'Pickup to drop-off'],
+                ['between_return', 'Return', 'There and back again later'],
+              ] as const
+            ).map(([trip, label, hint]) => {
+              const on = value.trips.includes(trip)
+              return (
+                <button
+                  key={trip}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => setTrips(trip, !on)}
+                  className={cn(
+                    'inline-flex items-center gap-2 rounded-xl border px-3.5 py-2 text-left transition-colors duration-150',
+                    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+                    on ? 'border-primary bg-primary-soft/30' : 'border-line bg-surface hover:border-line-strong',
+                  )}
+                >
+                  <span className={cn('grid size-4 place-items-center rounded border', on ? 'border-primary bg-primary text-white' : 'border-line-strong bg-surface')} aria-hidden="true">
+                    {on ? <Check className="size-3" strokeWidth={3} /> : null}
+                  </span>
+                  <span>
+                    <span className="block text-sm font-medium text-foreground">{label}</span>
+                    <span className="block text-xs text-subtle">{hint}</span>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
       {/* ---- sm and up: the sheet ---- */}
       <div className="hidden overflow-x-auto sm:block">
         <table className="w-full min-w-max border-separate border-spacing-x-1.5 border-spacing-y-1 text-left">
           <thead>
             <tr className="text-xs text-subtle">
-              <th scope="col" rowSpan={roundTrips ? 2 : 1} className="w-40 align-bottom font-medium">
+              <th scope="col" rowSpan={subHead ? 2 : 1} className="w-40 align-bottom font-medium">
                 {Place}
               </th>
-              <th scope="col" rowSpan={roundTrips ? 2 : 1} className="w-24 align-bottom font-medium">
+              <th scope="col" rowSpan={subHead ? 2 : 1} className="w-24 align-bottom font-medium">
                 Drive
               </th>
               {tiers.map((tier, index) => (
-                <th key={tier.id} scope="colgroup" colSpan={roundTrips ? 2 : 1} className="font-semibold text-foreground">
+                <th key={tier.id} scope="colgroup" colSpan={cols} className="font-semibold text-foreground">
                   {tierName(tier, index)}
                 </th>
               ))}
-              <th rowSpan={roundTrips ? 2 : 1} className="w-9">
+              <th rowSpan={subHead ? 2 : 1} className="w-9">
                 <span className="sr-only">Remove</span>
               </th>
             </tr>
-            {roundTrips ? (
+            {subHead ? (
               <tr className="text-xs text-subtle">
                 {tiers.map((tier) => (
                   <React.Fragment key={tier.id}>
-                    <th scope="col" className="w-[5.25rem] font-medium">
-                      One way
-                    </th>
-                    <th scope="col" className="w-[5.25rem] font-medium">
-                      Round trip
-                    </th>
+                    {sellOne ? (
+                      <th scope="col" className="w-[5.25rem] font-medium">
+                        One way
+                      </th>
+                    ) : null}
+                    {sellReturn ? (
+                      <th scope="col" className="w-[5.25rem] font-medium">
+                        {returnWord}
+                      </th>
+                    ) : null}
                   </React.Fragment>
                 ))}
               </tr>
@@ -204,14 +271,14 @@ function ZonePrices({ value, tiers, onChange, currency, errors }: TransferPriceT
                 </tr>
                 {open[zone.id] ? (
                   <tr>
-                    <td colSpan={2 + tiers.length * (roundTrips ? 2 : 1) + 1}>
+                    <td colSpan={2 + tiers.length * cols + 1}>
                       <PlacesEditor zone={zone} onPlaces={(places) => setZone(zone.id, { places })} />
                     </td>
                   </tr>
                 ) : null}
                 {rowError(zone) ? (
                   <tr>
-                    <td colSpan={2 + tiers.length * (roundTrips ? 2 : 1) + 1} className="text-xs font-medium text-danger">
+                    <td colSpan={2 + tiers.length * cols + 1} className="text-xs font-medium text-danger">
                       {zoneName(zone, zoneIndex)}: {rowError(zone)}
                     </td>
                   </tr>
@@ -236,15 +303,15 @@ function ZonePrices({ value, tiers, onChange, currency, errors }: TransferPriceT
               </IconButton>
             </div>
             <div className="flex flex-col gap-2">
-              {roundTrips ? (
-                <div aria-hidden="true" className="grid grid-cols-[minmax(0,1fr)_6.5rem_6.5rem] gap-2 text-xs text-subtle">
+              {subHead ? (
+                <div aria-hidden="true" className={cn('grid gap-2 text-xs text-subtle', cols === 2 ? 'grid-cols-[minmax(0,1fr)_6.5rem_6.5rem]' : 'grid-cols-[minmax(0,1fr)_7rem]')}>
                   <span />
-                  <span>One way</span>
-                  <span>Round trip</span>
+                  {sellOne ? <span>One way</span> : null}
+                  {sellReturn ? <span>{returnWord}</span> : null}
                 </div>
               ) : null}
               {tiers.map((tier, tierIndex) => (
-                <div key={tier.id} className={cn('grid items-center gap-2', roundTrips ? 'grid-cols-[minmax(0,1fr)_6.5rem_6.5rem]' : 'grid-cols-[minmax(0,1fr)_7rem]')}>
+                <div key={tier.id} className={cn('grid items-center gap-2', cols === 2 ? 'grid-cols-[minmax(0,1fr)_6.5rem_6.5rem]' : 'grid-cols-[minmax(0,1fr)_7rem]')}>
                   <span className="truncate text-sm">{tierName(tier, tierIndex)}</span>
                   {priceCells(zone, zoneIndex, tier, tierIndex)}
                 </div>
@@ -271,7 +338,7 @@ function ZonePrices({ value, tiers, onChange, currency, errors }: TransferPriceT
         <div className="flex flex-col gap-2 rounded-xl border border-line p-3">
           <Field
             label="Rows from your price sheet"
-            description={`One ${place} per line: the name, then ${tiers.map((tier, index) => (roundTrips ? `${tierName(tier, index)} one way and round trip` : tierName(tier, index))).join(', then ')}. Copy them from a spreadsheet.`}
+            description={`One ${place} per line: the name, then ${tiers.map((tier, index) => (roundTrips ? `${tierName(tier, index)} one way and ${returnWord.toLowerCase()}` : !sellOne ? `${tierName(tier, index)} ${returnWord.toLowerCase()}` : tierName(tier, index))).join(', then ')}. Copy them from a spreadsheet.`}
           >
             <Textarea rows={4} value={pasted} placeholder={`Playa del Carmen\t75\t140\t95\t180`} onChange={(event) => setPasted(event.target.value)} />
           </Field>
@@ -281,7 +348,7 @@ function ZonePrices({ value, tiers, onChange, currency, errors }: TransferPriceT
               size="sm"
               disabled={parsePastedPrices(pasted).length === 0}
               onClick={() => {
-                onChange(withPastedPrices(value, tiers, parsePastedPrices(pasted), roundTrips))
+                onChange(withPastedPrices(value, tiers, parsePastedPrices(pasted), roundTrips, !sellOne))
                 setPasted('')
                 setPasting(false)
               }}
@@ -297,10 +364,10 @@ function ZonePrices({ value, tiers, onChange, currency, errors }: TransferPriceT
 
       <p className="text-xs text-subtle">
         {shared ? 'Leave a price empty to not sell that ticket there.' : 'Guests see the price for the vehicle that fits their group. Leave a price empty to not offer it there.'}
-        {roundTrips ? ' An empty round trip is twice the one way.' : ''}
+        {roundTrips ? ` An empty ${returnWord.toLowerCase()} is twice the one way.` : ''}
       </p>
       {value.noHub ? (
-        <p className="text-xs text-subtle">A ride costs the higher of its pickup and drop-off areas.</p>
+        <p className="text-xs text-subtle">A ride costs the higher of its pickup and drop-off areas.{sellReturn && !shared ? ' A return is there and back again later, with its own price.' : ''}</p>
       ) : between && !shared ? (
         <p className="text-xs text-subtle">Hotel to hotel costs the higher of the two destinations.</p>
       ) : null}

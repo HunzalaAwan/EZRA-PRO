@@ -4,7 +4,7 @@ import { rateFor, rentalModes, type RentalMode } from '@/lib/activity-kinds'
 import { spanPrice } from '@/lib/rental-terms'
 import { extraSpotsOf, privateMostOf, slotExtraSpotsOf, spotsPlanOf } from '@/lib/extra-spots'
 import { peopleOf, placesOf } from '@/lib/places'
-import { activeZones, transferOf, transferRateFor, tripsOffered, zoneById, type TransferPricing } from '@/lib/transfers'
+import { activeZones, transferOf, transferRateFor, tripsOffered, zoneById, type TransferPricing, isBetweenTrip } from '@/lib/transfers'
 import { TRIP_WORDS, fareOf, transportOf, type TransportChoice } from '@/lib/transport'
 import { formatCurrency } from '@/lib/utils'
 
@@ -619,7 +619,7 @@ function transferCandidates(activity: PricedActivity, transfer?: TransferPricing
   const trip = offered.includes('from_hub') ? 'from_hub' : offered.includes('to_hub') ? 'to_hub' : offered.includes('between') ? 'between' : (offered[0] ?? 'from_hub')
   const out: LeadCandidate[] = []
   for (const zone of activeZones(config)) {
-    const pricing: TransferPricing = trip === 'between' ? { trip, zoneId: zone.id, toZoneId: zone.id } : { trip, zoneId: zone.id }
+    const pricing: TransferPricing = isBetweenTrip(trip) ? { trip, zoneId: zone.id, toZoneId: zone.id } : { trip, zoneId: zone.id }
     for (const tier of tiers) if (priced(tier.id, pricing)) out.push({ tierId: tier.id, transfer: pricing })
   }
   return out
@@ -695,9 +695,10 @@ export function slotLeadPrice(activity: PricedActivity, slot: { priceOverride?: 
 function transferLineLabel(activity: PricedActivity, label: string, ride: TransferPricing, hours: number): string {
   if (ride.trip === 'hourly') return `${label} · ${hours} ${hours === 1 ? 'hour' : 'hours'}`
   const zone = zoneById(activity.transfer, ride.zoneId)?.name
-  if (ride.trip === 'between') {
+  if (isBetweenTrip(ride.trip)) {
     const to = zoneById(activity.transfer, ride.toZoneId)?.name
-    return zone && to ? `${label} · ${zone} to ${to}` : label
+    const named = zone && to ? `${label} · ${zone} to ${to}` : label
+    return ride.trip === 'between_return' ? `${named} · Return` : named
   }
   const named = zone ? `${label} · ${zone}` : label
   return ride.trip === 'round_trip' ? `${named} · Round trip` : named
