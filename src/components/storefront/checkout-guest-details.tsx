@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Eraser, FileSignature } from 'lucide-react'
+import { Eraser, FileSignature, ImagePlus } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -151,6 +151,14 @@ export function AnswerField({
 }) {
   const label = question.unit ? `${question.label} (${question.unit})` : question.label
   const options = question.kind === 'yesno' ? ['Yes', 'No'] : (question.options ?? [])
+  // An image: picked from the phone or computer, shrunk to a small JPEG and kept as a data URL.
+  if (question.kind === 'image') {
+    return (
+      <Field label={label} required={question.required} optional={!question.required} error={error} description={question.help ?? 'A photo or screenshot, JPG or PNG.'}>
+        {(control) => <ImageAnswer id={control.id} value={value} onChange={onChange} invalid={Boolean(error)} />}
+      </Field>
+    )
+  }
   // Pick several: one tick box per option, kept as "A, B".
   if (question.kind === 'multi') {
     const picked = value ? value.split(', ').filter(Boolean) : []
@@ -200,7 +208,8 @@ export function AnswerField({
         ) : (
           <Input
             {...control}
-            type={question.kind === 'number' ? 'number' : question.kind === 'date' ? 'date' : 'text'}
+            type={question.kind === 'number' ? 'number' : question.kind === 'date' ? 'date' : question.kind === 'time' ? 'time' : 'text'}
+            step={question.kind === 'time' ? 300 : undefined}
             inputMode={question.kind === 'number' ? 'decimal' : undefined}
             min={question.min}
             max={question.max}
@@ -210,6 +219,98 @@ export function AnswerField({
         )
       }
     </Field>
+  )
+}
+
+/** Shrinks a picked image to at most 1200 px on its long side, as a JPEG data URL. */
+async function shrinkImage(file: File): Promise<string> {
+  const url = URL.createObjectURL(file)
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image()
+      img.onload = () => resolve(img)
+      img.onerror = reject
+      img.src = url
+    })
+    const scale = Math.min(1, 1200 / Math.max(image.width, image.height))
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round(image.width * scale))
+    canvas.height = Math.max(1, Math.round(image.height * scale))
+    const ctx = canvas.getContext('2d')
+    if (!ctx) throw new Error('no canvas')
+    ctx.fillStyle = '#fff'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height)
+    return canvas.toDataURL('image/jpeg', 0.78)
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
+function ImageAnswer({ id, value, onChange, invalid }: { id: string; value: string; onChange: (value: string) => void; invalid: boolean }) {
+  const inputRef = React.useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = React.useState(false)
+  const [problem, setProblem] = React.useState('')
+  const pick = async (file: File | undefined) => {
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      setProblem('Pick an image file: JPG or PNG.')
+      return
+    }
+    setProblem('')
+    setBusy(true)
+    try {
+      onChange(await shrinkImage(file))
+    } catch {
+      setProblem('That image could not be read. Try another one.')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="flex flex-col gap-2">
+      <input
+        ref={inputRef}
+        id={id}
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        aria-invalid={invalid ? true : undefined}
+        onChange={(event) => {
+          void pick(event.target.files?.[0])
+          event.target.value = ''
+        }}
+      />
+      {value ? (
+        <div className="flex items-center gap-3 rounded-lg border border-line bg-surface p-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={value} alt="Your upload" className="size-16 shrink-0 rounded-md object-cover" />
+          <div className="flex min-w-0 flex-1 flex-wrap gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={() => inputRef.current?.click()}>
+              Replace
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => onChange('')}>
+              Remove
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={busy}
+          className={cn(
+            'flex h-20 w-full flex-col items-center justify-center gap-1 rounded-lg border border-dashed bg-surface text-sm text-muted transition-colors hover:border-line-strong hover:text-foreground',
+            'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary',
+            invalid ? 'border-danger' : 'border-line-strong',
+          )}
+        >
+          <ImagePlus className="size-5" aria-hidden="true" />
+          {busy ? 'Adding…' : 'Upload an image'}
+        </button>
+      )}
+      {problem ? <p className="text-xs font-medium text-danger">{problem}</p> : null}
+    </div>
   )
 }
 

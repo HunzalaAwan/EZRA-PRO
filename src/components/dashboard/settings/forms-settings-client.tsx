@@ -498,7 +498,9 @@ function Preview({ draft, selected }: { draft: BookingDefaults; selected: Select
                   ))}
                 </div>
               ) : (
-                <div className="flex h-10 items-center rounded-lg border border-line bg-surface px-3 text-xs text-subtle">{row.kind}</div>
+                <div className={cn('flex items-center rounded-lg border border-line bg-surface px-3 text-xs text-subtle', row.kind === 'Image upload' ? 'h-16 justify-center border-dashed' : 'h-10')}>
+                  {row.kind === 'Image upload' ? 'Upload an image' : row.kind === 'Time' ? '--:--' : row.kind}
+                </div>
               )}
             </div>
           ))}

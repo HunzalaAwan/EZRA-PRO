@@ -116,6 +116,8 @@ export const QUESTION_KIND_LABEL: Record<GuestQuestionKind, string> = {
   yesno: 'Yes / no',
   size: 'Size',
   date: 'Date',
+  time: 'Time',
+  image: 'Image upload',
 }
 
 /** A preset as a question on an activity. */
@@ -145,6 +147,7 @@ export function answerProblem(question: GuestQuestion, raw: string | undefined):
 /** "M", "72 kg", "Yes". */
 export function formatAnswer(question: GuestQuestion, value: string | undefined): string {
   if (!value) return ''
+  if (question.kind === 'image' || value.startsWith('data:image/')) return 'Photo added'
   return question.kind === 'number' && question.unit ? `${value} ${question.unit}` : value
 }
 

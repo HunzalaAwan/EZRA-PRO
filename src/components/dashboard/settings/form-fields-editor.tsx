@@ -26,6 +26,8 @@ export const FIELD_KINDS: { value: KindValue; label: string }[] = [
   { value: 'yesno', label: 'Yes or no' },
   { value: 'number', label: 'Number' },
   { value: 'date', label: 'Date' },
+  { value: 'time', label: 'Time' },
+  { value: 'image', label: 'Image upload' },
 ]
 
 export const kindValue = (field: GuestQuestion): KindValue => (field.kind === 'text' && !field.short ? 'long' : field.kind)

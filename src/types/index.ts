@@ -439,8 +439,8 @@ export interface ChangeRules {
    GUEST REQUIREMENTS (questions, waivers)
    ========================================================================== */
 
-/** 'multi': pick any of the options (answers kept as "A, B"). */
-export type GuestQuestionKind = 'text' | 'number' | 'choice' | 'multi' | 'yesno' | 'size' | 'date'
+/** 'multi': pick any of the options (answers kept as "A, B"). 'time': "14:30". 'image': a photo, kept as a small JPEG data URL. */
+export type GuestQuestionKind = 'text' | 'number' | 'choice' | 'multi' | 'yesno' | 'size' | 'date' | 'time' | 'image'
 
 /** Something an activity needs to know from each guest, or once per booking. */
 export interface GuestQuestion {

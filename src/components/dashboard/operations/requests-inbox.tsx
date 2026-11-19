@@ -303,7 +303,16 @@ export function RequestsInbox({
                 {selected.answers.map((answer, index) => (
                   <div key={`${answer.label}-${index}`} className="grid gap-1 px-4 py-2.5 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] sm:gap-4">
                     <dt className="text-xs text-muted">{answer.label}</dt>
-                    <dd className="text-sm text-foreground">{answer.value}</dd>
+                    <dd className="text-sm text-foreground">
+                      {answer.value.startsWith('data:image/') ? (
+                        <a href={answer.value} target="_blank" rel="noreferrer" className="inline-block">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={answer.value} alt={answer.label} className="max-h-40 rounded-lg border border-line object-cover" />
+                        </a>
+                      ) : (
+                        answer.value
+                      )}
+                    </dd>
                   </div>
                 ))}
               </dl>
