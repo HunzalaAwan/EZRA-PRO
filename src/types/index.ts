@@ -439,12 +439,17 @@ export interface ChangeRules {
    GUEST REQUIREMENTS (questions, waivers)
    ========================================================================== */
 
-export type GuestQuestionKind = 'text' | 'number' | 'choice' | 'yesno' | 'size' | 'date'
+/** 'multi': pick any of the options (answers kept as "A, B"). */
+export type GuestQuestionKind = 'text' | 'number' | 'choice' | 'multi' | 'yesno' | 'size' | 'date'
 
 /** Something an activity needs to know from each guest, or once per booking. */
 export interface GuestQuestion {
   id: string
   label: string
+  /** Checkout: the heading it is asked under (one of the business's own forms). Absent: "For the whole booking". */
+  section?: string
+  /** Checkout: a line under that heading. */
+  sectionNote?: string
   kind: GuestQuestionKind
   scope: 'guest' | 'booking'
   required: boolean
@@ -648,6 +653,8 @@ export interface CharterRequest {
   transfer?: TransferBookingDetails
   /** Transport on the activity the guest asked for: the trip, their pickup point and drop-off point. */
   transport?: RequestTransport
+  /** Answers to the business's own fields on the request form (Settings → Forms). */
+  answers?: { label: string; value: string }[]
 }
 
 /** Transport asked for on a request: the times follow the time slot the business confirms. */

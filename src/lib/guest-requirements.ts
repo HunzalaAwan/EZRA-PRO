@@ -112,6 +112,7 @@ export const QUESTION_KIND_LABEL: Record<GuestQuestionKind, string> = {
   text: 'Text',
   number: 'Number',
   choice: 'Choice',
+  multi: 'Pick several',
   yesno: 'Yes / no',
   size: 'Size',
   date: 'Date',

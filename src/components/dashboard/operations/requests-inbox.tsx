@@ -298,6 +298,16 @@ export function RequestsInbox({
             {selected.message ? (
               <blockquote className="mt-4 rounded-xl bg-surface-sunken px-4 py-3 text-sm leading-relaxed text-foreground">{selected.message}</blockquote>
             ) : null}
+            {selected.answers && selected.answers.length > 0 ? (
+              <dl className="mt-4 divide-y divide-line-subtle rounded-xl border border-line">
+                {selected.answers.map((answer, index) => (
+                  <div key={`${answer.label}-${index}`} className="grid gap-1 px-4 py-2.5 sm:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] sm:gap-4">
+                    <dt className="text-xs text-muted">{answer.label}</dt>
+                    <dd className="text-sm text-foreground">{answer.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : null}
 
             {selected.lines && selected.lines.length > 0 ? (
               <ul className="mt-4 list-none space-y-1.5 rounded-xl border border-line p-0 px-4 py-3 text-sm">

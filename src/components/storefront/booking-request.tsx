@@ -10,6 +10,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { TransportPicker } from '@/components/storefront/transport-picker'
 import { useTransport } from '@/hooks/use-transport'
 import { REASON_LABEL, TIME_WINDOWS } from '@/lib/booking-method'
+import { requestFormOf } from '@/lib/booking-defaults'
+import { answerProblem } from '@/lib/guest-requirements'
+import { useBookingDefaults } from '@/hooks/use-booking-defaults'
+import { AnswerField } from '@/components/storefront/checkout-guest-details'
 import { priceTransport } from '@/lib/price-engine'
 import { choiceErrors, cleanChoice, defaultChoice, requestTransportLine, requestTransportOf, type TransportChoice, type TransportSetup } from '@/lib/transport'
 import { cn, formatCurrency } from '@/lib/utils'
@@ -90,6 +94,11 @@ export function RequestForm({
   transport?: RequestFormTransport
 }) {
   const transportId = React.useId()
+  // The business's settings for this form (Settings → Forms): mobile and message on or off, its own fields.
+  const { defaults } = useBookingDefaults(tenantSlug)
+  const settings = requestFormOf(defaults, context.reason)
+  const extraFields = settings.fields.filter((field) => field.label.trim())
+  const [answers, setAnswers] = React.useState<Record<string, string>>({})
   const [form, setForm] = React.useState({
     date: '',
     when: 'Any time' as string,
@@ -121,12 +130,20 @@ export function RequestForm({
   const asking = transport && choice ? requestTransportOf(transport.setup, choice, transport.zones) : undefined
   const transportProblem = transport && choice ? Object.values(choiceErrors(transport.setup, choice))[0] : undefined
   const estimate = lines.reduce((sum, line) => sum + line.qty * line.unit, 0)
+  const fieldProblems = Object.fromEntries(extraFields.flatMap((field) => {
+    const problem = answerProblem(field, answers[field.id])
+    return problem ? [[field.id, problem]] : []
+  }))
   const problems = {
     name: form.name.trim().length < 2,
     email: !EMAIL.test(form.email.trim()),
+    phone: settings.phone === 'required' && form.phone.replace(/[^\d+]/g, '').length < 7,
+    message: settings.message === 'required' && form.message.trim().length < 2,
+    fields: Object.keys(fieldProblems).length > 0,
     date: Boolean(context.askDate) && !form.date,
     transport: Boolean(transportProblem),
   }
+  const blocked = Object.values(problems).some(Boolean)
   const reply = replyHours <= 1 ? 'within the hour' : replyHours < 24 ? `within ${replyHours} hours` : replyHours === 24 ? 'within a day' : `within ${Math.round(replyHours / 24)} days`
 
   if (sent) {
@@ -150,7 +167,7 @@ export function RequestForm({
       onSubmit={(event) => {
         event.preventDefault()
         setTried(true)
-        if (problems.name || problems.email || problems.date || problems.transport) return
+        if (blocked) return
         try {
           const key = `ezra:charter-requests:${tenantSlug}`
           const list = JSON.parse(window.localStorage.getItem(key) ?? '[]') as unknown[]
@@ -167,8 +184,12 @@ export function RequestForm({
             ...(asking ? { transport: asking } : {}),
             name: form.name.trim(),
             email: form.email.trim(),
-            phone: form.phone.trim(),
-            message: form.message.trim(),
+            phone: settings.phone === 'off' ? '' : form.phone.trim(),
+            message: settings.message === 'off' ? '' : form.message.trim(),
+            // The business's own fields, with the question as asked.
+            ...(extraFields.some((field) => answers[field.id]?.trim())
+              ? { answers: extraFields.flatMap((field) => (answers[field.id]?.trim() ? [{ label: field.label.trim(), value: answers[field.id].trim() }] : [])) }
+              : {}),
             createdAt: new Date().toISOString(),
           })
           window.localStorage.setItem(key, JSON.stringify(list.slice(0, 50)))
@@ -186,6 +207,7 @@ export function RequestForm({
           </button>
         ) : null}
       </div>
+      {settings.intro?.trim() ? <p className="-mt-1 text-xs text-muted">{settings.intro.trim()}</p> : null}
       {lines.length > 0 || (asking && transport?.choice) ? (
         <p className="rounded-lg bg-surface-sunken px-3 py-2 text-xs text-muted">
           {lines.map((line) => `${line.qty} × ${line.label}`).join(', ')}
@@ -240,18 +262,53 @@ export function RequestForm({
         </div>
       ) : null}
       <Input placeholder="Your name" aria-label="Your name" autoComplete="name" value={form.name} aria-invalid={tried && problems.name ? true : undefined} onChange={(e) => set({ name: e.target.value })} />
-      <div className="grid grid-cols-2 gap-2">
+      <div className={cn('grid gap-2', settings.phone !== 'off' && 'grid-cols-2')}>
         <Input type="email" placeholder="Email" aria-label="Email" autoComplete="email" value={form.email} aria-invalid={tried && problems.email ? true : undefined} onChange={(e) => set({ email: e.target.value })} />
-        <Input type="tel" placeholder="Mobile (optional)" aria-label="Mobile" autoComplete="tel" value={form.phone} onChange={(e) => set({ phone: e.target.value })} />
+        {settings.phone !== 'off' ? (
+          <Input
+            type="tel"
+            placeholder={settings.phone === 'required' ? 'Mobile' : 'Mobile (optional)'}
+            aria-label="Mobile"
+            autoComplete="tel"
+            value={form.phone}
+            aria-invalid={tried && problems.phone ? true : undefined}
+            onChange={(e) => set({ phone: e.target.value })}
+          />
+        ) : null}
       </div>
-      <Textarea rows={3} placeholder={PROMPT[context.reason]} aria-label="Message" value={form.message} onChange={(e) => set({ message: e.target.value })} />
-      {tried && (problems.name || problems.email || problems.date || problems.transport) ? (
+      {settings.message !== 'off' ? (
+        <Textarea
+          rows={3}
+          placeholder={settings.messagePrompt?.trim() || PROMPT[context.reason]}
+          aria-label="Message"
+          value={form.message}
+          aria-invalid={tried && problems.message ? true : undefined}
+          onChange={(e) => set({ message: e.target.value })}
+        />
+      ) : null}
+      {extraFields.length > 0 ? (
+        <div className="grid grid-cols-1 gap-3 pt-1">
+          {extraFields.map((field) => (
+            <AnswerField
+              key={field.id}
+              question={field}
+              value={answers[field.id] ?? ''}
+              onChange={(value) => setAnswers((current) => ({ ...current, [field.id]: value }))}
+              error={tried ? fieldProblems[field.id] : undefined}
+            />
+          ))}
+        </div>
+      ) : null}
+      {tried && blocked ? (
         <p className="text-xs font-medium text-danger">
           {problems.date ? 'Pick a date. ' : ''}
           {/* Chosen on the Getting there step above: say where to fix it. */}
           {transportProblem ? `${transportProblem}${transport?.choice ? ' under Getting there' : ''}. ` : ''}
           {problems.name ? 'Add your name. ' : ''}
-          {problems.email ? 'Add a valid email.' : ''}
+          {problems.email ? 'Add a valid email. ' : ''}
+          {problems.phone ? 'Add your mobile number. ' : ''}
+          {problems.message ? 'Add a message. ' : ''}
+          {problems.fields ? 'Answer the questions marked.' : ''}
         </p>
       ) : null}
       <Button type="submit" size="lg" fullWidth>

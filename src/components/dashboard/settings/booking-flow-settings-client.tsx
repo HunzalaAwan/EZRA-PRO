@@ -2,33 +2,31 @@
 
 import * as React from 'react'
 import Link from 'next/link'
-import { ArrowRight, CalendarClock, CreditCard, FormInput, Lock, Plus, RotateCcw, Save, ShieldCheck, Trash2 } from 'lucide-react'
+import { ArrowRight, CalendarClock, CreditCard, FormInput, RotateCcw, Save, ShieldCheck } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Field } from '@/components/ui/field'
-import { IconButton } from '@/components/ui/icon-button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Segmented } from '@/components/ui/segmented'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { toast } from '@/components/ui/toaster'
 import { BeforeInput } from '@/components/dashboard/activities/changes-policy-editor'
 import { PaymentTermsEditor } from '@/components/dashboard/activities/payment-terms-editor'
 import { useBookingDefaults } from '@/hooks/use-booking-defaults'
-import { DEFAULT_BOOKING_DEFAULTS, type BookingDefaults, type FieldMode } from '@/lib/booking-defaults'
+import { DEFAULT_BOOKING_DEFAULTS, type BookingDefaults } from '@/lib/booking-defaults'
 import { policySummary } from '@/lib/booking-policy'
 import type { BookingRow } from '@/lib/demo'
 import { cn } from '@/lib/utils'
-import type { GuestQuestion, GuestQuestionKind, Payment, Tenant } from '@/types'
+import type { Payment, Tenant } from '@/types'
 
 type SampleBooking = (BookingRow & { payments: Payment[] }) | undefined
 
 /* ==========================================================================
    BOOKING FLOW — the business-wide rules: the calendar window and
-   waitlists, what checkout asks for (and your own questions), and the
-   default payment and cancellation terms. An activity can set its own
+   waitlists, and the default payment and cancellation terms. What
+   checkout asks for is on Settings → Forms. An activity can set its own
    payment or cancellation terms; when it does, those win.
    ========================================================================== */
 
@@ -36,23 +34,6 @@ export interface BookingFlowSettingsClientProps {
   tenant: Tenant
   sampleBooking: SampleBooking
 }
-
-const MODES: { value: FieldMode; label: string }[] = [
-  { value: 'required', label: 'Required' },
-  { value: 'optional', label: 'Optional' },
-  { value: 'off', label: 'Off' },
-]
-
-const QUESTION_KINDS: { value: GuestQuestionKind | 'long'; label: string }[] = [
-  { value: 'text', label: 'Short answer' },
-  { value: 'long', label: 'Long answer' },
-  { value: 'yesno', label: 'Yes or no' },
-  { value: 'choice', label: 'Pick one' },
-  { value: 'number', label: 'Number' },
-  { value: 'date', label: 'Date' },
-]
-
-const kindValue = (question: GuestQuestion) => (question.kind === 'text' && !question.short ? 'long' : question.kind)
 
 export function BookingFlowSettingsClient({ tenant }: BookingFlowSettingsClientProps) {
   const { defaults, save } = useBookingDefaults(tenant.slug)
@@ -69,12 +50,12 @@ export function BookingFlowSettingsClient({ tenant }: BookingFlowSettingsClientP
   }
   const set = <K extends keyof BookingDefaults>(key: K, value: BookingDefaults[K]) => update({ ...draft, [key]: value })
   // Closed days and holidays are edited on Availability, so they never count as a change here.
-  const comparable = (value: BookingDefaults) => JSON.stringify({ ...value, closures: undefined, holidays: undefined })
+  const comparable = (value: BookingDefaults) => JSON.stringify({ ...value, closures: undefined, holidays: undefined, checkout: undefined, questions: undefined, requestForms: undefined, customForms: undefined })
   const dirty = comparable(draft) !== comparable(defaults)
 
   const onSave = () => {
     // Closed days and holidays are set on Availability: always save the latest ones.
-    const clean = { ...draft, questions: draft.questions.filter((question) => question.label.trim()), closures: defaults.closures, holidays: defaults.holidays }
+    const clean = { ...draft, checkout: defaults.checkout, questions: defaults.questions, requestForms: defaults.requestForms, customForms: defaults.customForms, closures: defaults.closures, holidays: defaults.holidays }
     if (save(clean)) {
       touched.current = false
       setDraft(clean)
@@ -82,94 +63,21 @@ export function BookingFlowSettingsClient({ tenant }: BookingFlowSettingsClientP
     }
   }
 
-  const addQuestion = () =>
-    set('questions', [...draft.questions, { id: `q_biz_${Date.now().toString(36)}`, label: '', kind: 'text', short: true, scope: 'booking', required: false }])
-  const setQuestion = (id: string, patch: Partial<GuestQuestion>) => set('questions', draft.questions.map((question) => (question.id === id ? { ...question, ...patch } : question)))
-
   return (
     <div className="flex min-w-0 flex-col gap-6">
-      {/* ---------- checkout fields ---------- */}
+      {/* ---------- checkout fields: on Forms ---------- */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FormInput className="size-4 text-primary" aria-hidden="true" />
-            Checkout fields
-          </CardTitle>
-          <CardDescription>What guests fill in when they book. The same on every activity.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-5 pt-0">
-          <ul className="divide-y divide-line-subtle overflow-hidden rounded-xl border border-line">
-            <FixedRow label="First and last name" />
-            <FixedRow label="Email" note="The confirmation goes here" />
-            <ModeRow label="Mobile number" value={draft.checkout.phone} onChange={(phone) => set('checkout', { ...draft.checkout, phone })} />
-            <ModeRow label="Country" value={draft.checkout.country} onChange={(country) => set('checkout', { ...draft.checkout, country })} />
-            <ModeRow label="Anything we should know?" value={draft.checkout.requests} onChange={(requests) => set('checkout', { ...draft.checkout, requests })} />
-          </ul>
-
-          <div className="flex flex-col gap-3">
+        <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <FormInput className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
             <div>
-              <h3 className="text-sm font-semibold text-foreground">Your own questions</h3>
-              <p className="mt-0.5 text-xs text-subtle">Asked once per booking, on every activity. Questions for one activity only go on that activity’s Guests step.</p>
+              <p className="text-sm font-semibold text-foreground">Checkout and request forms</p>
+              <p className="mt-0.5 text-xs text-muted">The fields guests fill in, your own questions and your own forms are on Forms.</p>
             </div>
-            {draft.questions.length > 0 ? (
-              <ul className="flex flex-col gap-2">
-                {draft.questions.map((question) => (
-                  <li key={question.id} className="flex flex-col gap-3 rounded-xl border border-line p-3 sm:flex-row sm:items-start">
-                    <Input
-                      aria-label="Question"
-                      value={question.label}
-                      onChange={(event) => setQuestion(question.id, { label: event.target.value })}
-                      placeholder="e.g. How did you hear about us?"
-                      className="sm:flex-1"
-                    />
-                    <Select
-                      value={kindValue(question)}
-                      onValueChange={(value) =>
-                        setQuestion(question.id, value === 'long' ? { kind: 'text', short: false } : { kind: value as GuestQuestionKind, short: value === 'text' ? true : undefined })
-                      }
-                    >
-                      <SelectTrigger aria-label="Answer type" className="sm:w-40">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {QUESTION_KINDS.map((kind) => (
-                          <SelectItem key={kind.value} value={kind.value}>
-                            {kind.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {question.kind === 'choice' ? (
-                      <Input
-                        aria-label="Choices"
-                        value={(question.options ?? []).join(', ')}
-                        onChange={(event) => setQuestion(question.id, { options: event.target.value.split(',').map((option) => option.trimStart()) })}
-                        onBlur={() => setQuestion(question.id, { options: (question.options ?? []).map((option) => option.trim()).filter(Boolean) })}
-                        placeholder="Choices, separated by commas"
-                        className="sm:w-56"
-                      />
-                    ) : null}
-                    <label className="flex h-10 shrink-0 items-center gap-2 text-sm text-muted">
-                      <Switch checked={question.required} onCheckedChange={(required) => setQuestion(question.id, { required })} aria-label="Required" />
-                      Required
-                    </label>
-                    <IconButton
-                      variant="ghost"
-                      size="sm"
-                      aria-label="Remove question"
-                      className="self-end text-muted hover:text-danger sm:self-center"
-                      onClick={() => set('questions', draft.questions.filter((entry) => entry.id !== question.id))}
-                    >
-                      <Trash2 />
-                    </IconButton>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-            <Button size="sm" variant="secondary" leftIcon={<Plus />} className="self-start" onClick={addQuestion}>
-              Add a question
-            </Button>
           </div>
+          <Button asChild size="sm" variant="secondary" rightIcon={<ArrowRight />}>
+            <Link href="/dashboard/settings/forms">Open Forms</Link>
+          </Button>
         </CardContent>
       </Card>
 
@@ -306,30 +214,6 @@ export function BookingFlowSettingsClient({ tenant }: BookingFlowSettingsClientP
         </div>
       </div>
     </div>
-  )
-}
-
-function FixedRow({ label, note }: { label: string; note?: string }) {
-  return (
-    <li className="flex items-center justify-between gap-4 bg-surface px-4 py-3">
-      <span className="min-w-0">
-        <span className="block text-sm font-medium text-foreground">{label}</span>
-        {note ? <span className="block text-xs text-subtle">{note}</span> : null}
-      </span>
-      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-subtle">
-        <Lock className="size-3.5" aria-hidden="true" />
-        Always asked
-      </span>
-    </li>
-  )
-}
-
-function ModeRow({ label, value, onChange }: { label: string; value: FieldMode; onChange: (value: FieldMode) => void }) {
-  return (
-    <li className={cn('flex flex-col gap-2 bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between', value === 'off' && 'bg-surface-sunken/40')}>
-      <span className={cn('text-sm font-medium', value === 'off' ? 'text-muted' : 'text-foreground')}>{label}</span>
-      <Segmented label={label} size="sm" value={value} onValueChange={onChange} options={MODES} />
-    </li>
   )
 }
 

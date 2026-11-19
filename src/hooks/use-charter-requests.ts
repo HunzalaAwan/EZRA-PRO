@@ -69,6 +69,7 @@ export function useCharterRequests(slug: string, tenantId: string, seeded: Chart
         ...(entry.phone ? { phone: entry.phone } : {}),
         ...(entry.transfer ? { transfer: entry.transfer } : {}),
         ...(entry.transport ? { transport: entry.transport } : {}),
+        ...(Array.isArray(entry.answers) && entry.answers.length > 0 ? { answers: entry.answers } : {}),
         name: entry.name ?? 'Guest',
         email: entry.email ?? '',
         message: entry.message ?? '',

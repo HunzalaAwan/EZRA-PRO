@@ -138,7 +138,7 @@ export function validateGuestDetails({
    One answer control per question kind
    -------------------------------------------------------------------------- */
 
-function AnswerField({
+export function AnswerField({
   question,
   value,
   onChange,
@@ -151,6 +151,32 @@ function AnswerField({
 }) {
   const label = question.unit ? `${question.label} (${question.unit})` : question.label
   const options = question.kind === 'yesno' ? ['Yes', 'No'] : (question.options ?? [])
+  // Pick several: one tick box per option, kept as "A, B".
+  if (question.kind === 'multi') {
+    const picked = value ? value.split(', ').filter(Boolean) : []
+    const toggle = (option: string, on: boolean) => onChange(options.filter((entry) => (entry === option ? on : picked.includes(entry))).join(', '))
+    return (
+      <fieldset className="flex flex-col gap-2 sm:col-span-2">
+        <legend className="mb-2 text-sm font-medium text-foreground">
+          {label}
+          {question.required ? <span className="text-danger"> *</span> : <span className="font-normal text-subtle"> · optional</span>}
+        </legend>
+        <div className="flex flex-wrap gap-2">
+          {options.map((option) => {
+            const on = picked.includes(option)
+            return (
+              <label key={option} className={cn('inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm', on ? 'border-primary/50 bg-primary-soft/30' : 'border-line bg-surface')}>
+                <Checkbox checked={on} onCheckedChange={(checked) => toggle(option, checked === true)} />
+                {option}
+              </label>
+            )
+          })}
+        </div>
+        {question.help ? <p className="text-xs text-subtle">{question.help}</p> : null}
+        {error ? <p className="text-xs font-medium text-danger">{error}</p> : null}
+      </fieldset>
+    )
+  }
   return (
     <Field label={label} required={question.required} optional={!question.required} error={error} description={question.help}>
       {(control) =>
@@ -224,6 +250,14 @@ export function GuestDetailsStep({
 }) {
   const guestQs = questions.filter((question) => question.scope === 'guest')
   const bookingQs = questions.filter((question) => question.scope === 'booking')
+  // Once-per-booking questions: the activity's and the business's own first, then one card per form of the business's.
+  const groups: { title: string; note?: string; questions: GuestQuestion[] }[] = []
+  for (const question of bookingQs) {
+    const title = question.section ?? 'For the whole booking'
+    const group = groups.find((entry) => entry.title === title)
+    if (group) group.questions.push(question)
+    else groups.push({ title, ...(question.sectionNote ? { note: question.sectionNote } : {}), questions: [question] })
+  }
   const field = (key: GuestFieldKey) => fields.find((entry) => entry.key === key)
   const setField = (index: number, key: GuestFieldKey, value: string) =>
     setTravellers((list) =>
@@ -321,10 +355,13 @@ export function GuestDetailsStep({
       </ol>
       ) : null}
 
-      {bookingQs.length > 0 ? (
-        <div className="grid grid-cols-1 gap-4 rounded-2xl border border-line bg-surface p-4 sm:grid-cols-2 sm:p-5">
-          <p className="text-sm font-semibold text-foreground sm:col-span-2">For the whole booking</p>
-          {bookingQs.map((question) => (
+      {groups.map((group) => (
+        <div key={group.title} className="grid grid-cols-1 gap-4 rounded-2xl border border-line bg-surface p-4 sm:grid-cols-2 sm:p-5">
+          <div className="sm:col-span-2">
+            <p className="text-sm font-semibold text-foreground">{group.title}</p>
+            {group.note ? <p className="mt-0.5 text-xs text-muted">{group.note}</p> : null}
+          </div>
+          {group.questions.map((question) => (
             <AnswerField
               key={question.id}
               question={question}
@@ -334,7 +371,7 @@ export function GuestDetailsStep({
             />
           ))}
         </div>
-      ) : null}
+      ))}
     </section>
   )
 }

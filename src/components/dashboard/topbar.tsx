@@ -45,6 +45,8 @@ const NAV_LABEL_BY_HREF: Record<string, string> = Object.fromEntries(
     getWorkspaceProfile(vertical).nav.flatMap((section) => section.items.map((item) => [item.href, item.label] as const)),
   ),
 )
+// Settings pages whose last segment means something else elsewhere ("forms" is also the marketing sign-up forms).
+NAV_LABEL_BY_HREF['/dashboard/settings/forms'] = 'Forms'
 
 const EXTRA_SEGMENT_LABEL: Record<string, string> = {
   channels: 'Domains & numbers',

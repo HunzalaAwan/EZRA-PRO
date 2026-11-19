@@ -8,6 +8,7 @@ import {
   Building2,
   Bus,
   ChevronRight,
+  ClipboardList,
   CreditCard,
   FileSignature,
   Globe,
@@ -58,9 +59,15 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
   },
   {
     href: '/dashboard/settings/waivers',
-    label: 'Waivers & forms',
-    description: 'Waivers, guest questions and sizes',
+    label: 'Waivers',
+    description: 'Waivers and the question library',
     icon: FileSignature,
+  },
+  {
+    href: '/dashboard/settings/forms',
+    label: 'Forms',
+    description: 'Checkout, request and your own forms',
+    icon: ClipboardList,
   },
   {
     href: '/dashboard/marketing/automations',
@@ -77,7 +84,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
   {
     href: '/dashboard/settings/booking',
     label: 'Booking flow',
-    description: 'Checkout fields, deposits and cancellations',
+    description: 'Deposits, cancellations and the calendar',
     icon: TicketCheck,
   },
   {
